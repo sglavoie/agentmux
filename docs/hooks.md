@@ -110,15 +110,10 @@ permission priority, remains below errors, and outranks warnings and activity.
 A run inside a managed runtime session is placed by that session's identity,
 not by the terminal. Its lifecycle and mailbox hooks carry
 `AMX_RUNTIME_SESSION_ID` like any managed hook, so the lease, the question
-icon, its notification, and an F8 clear all land on the session's own slot —
-a tmux pane or a Kitty window alike — with no Kitty snapshot consulted, and
-therefore also when Kitty or every viewer is closed. Workspace matching
-(same directory, compatible harness) remains the route for legacy hooks only,
-and a run a runtime session has claimed is excluded from it: reconciliation
-attributes that run to the claiming slot and withdraws a lease that matching
-had placed on a Kitty tab sharing its directory. A notification for a session
-with no Kitty window is delivered as usual but is not navigable; its companion
-notice names `runtime_session_id` and `backend` and carries no window ID.
+icon, its notification, and an F8 clear all land on the session's own tmux slot,
+even when every viewer is closed. Reconciliation attributes the run to that
+runtime session. Its notification names `runtime_session_id` and `backend` so
+the connected workspace or tmux client can focus it.
 
 ASL supervisor lease schema v2 remains the fixed-size, text-free compatibility
 path (`run_id`, mailbox projection sequence, count, latest question ID, and
@@ -135,7 +130,7 @@ After ASL's post-append snapshot proves no open questions remain for the run,
 either the text-free `AgentSessionLoopMailboxReply` or
 `AgentSessionLoopMailboxResolution` marker retracts the aggregate probe
 immediately. Sequence cutoffs prevent an in-flight stale projection from
-restoring it while preserving any genuinely newer question; Kitty and the
+restoring it while preserving any genuinely newer question; the session and the
 dashboard return to the underlying live loop state. A fresh zero count or run
 completion remains the compatibility fallback. No question, reply, resolution
 note, or notice body crosses this notification path.
@@ -148,17 +143,16 @@ disables the emission entirely; the ASL test suite forces it off so nested
 test runs never leak events into a live daemon (also verified live). Start payloads use the run's
 top-level harness; turn-start payloads use `active_turn.harness`; finish
 payloads use the last completed turn harness when present. A mid-run harness
-switch moves and clears the loop marker on the matching project tab. Agent Mux
+switch moves and clears the loop marker on the matching project session. Agent Mux
 also reads `state_path` when a lifecycle payload needs to recover `cwd` or
 harness, using `active_turn.harness` before top-level `harness`.
 
 Copilot and Codex hook files are user-level for a given harness home, so any CLI
-surface that reuses that home — including VS Code or another non-Kitty session
+surface that reuses that home — including VS Code or another terminal session
 — will run the same hook commands. Only managed sessions update state: a hook
-whose environment carries `AMX_RUNTIME_SESSION_ID` (every tmux launch) is
-routed by that runtime session alone (`hook.runtime_session`), and a hook
-without one is routed by its Kitty window (`KITTY_LISTEN_ON`). An invocation
-with neither is a silent no-op.
+whose environment carries `AMX_RUNTIME_SESSION_ID` is routed by that runtime
+session alone (`hook.runtime_session`). A hook without a registered runtime
+session is rejected and does not change daemon state.
 
 Copilot hook entries use the documented `{"bash": ..., "powershell": ...}`
 schema. If you installed hooks with an older Agent Mux build that wrote a
@@ -222,9 +216,8 @@ clearer. `notification_type = permission_prompt` and
 `notification_type = elicitation_dialog` are the explicit user-blocking signals
 that resolve to different sticky icons: `permission_prompt` uses the
 permission-needed key icon (🔑), while `elicitation_dialog` uses the question
-icon (❓) for plan approvals and similar user-input prompts. Because the managed
-Kitty snippet disables tab bell markers and audible bells globally, these icons
-become the visible attention signal instead of Kitty's bell state. If Copilot
+icon (❓) for plan approvals and similar user-input prompts. These icons are
+the visible attention signal in the dashboard and workspace. If Copilot
 has already continued the turn after a speculative `permissionRequest`, a later
 trailing `notification.permission_prompt` is treated as stale noise and does
 not replace the current icon.

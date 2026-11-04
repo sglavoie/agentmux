@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -30,9 +29,7 @@ func pickerModel(t *testing.T) Model {
 			{Title: "notes", Directory: "/home/user/notes", Account: "personal"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
-	m := NewModel(cfg, client)
+	m := NewModel(cfg, nil)
 	m = loadSessions(m, nil)
 	m = pressKeyIO(m, "l")
 	if m.mode != ModePicker {

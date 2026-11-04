@@ -16,7 +16,7 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work", changedAtMS: 540_000),
         F.tmux(2, project: "api", profile: "personal", icon: "key", attention: true, changedAtMS: 300_000),
-        F.kitty(4, project: "web"),
+        F.tmux(4, project: "web"),
     ]
 
     override func setUp() async throws {
@@ -204,10 +204,7 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         workspace.closeSession(work.key)
         XCTAssertFalse(try end().isEnabled)
 
-        let kitty = workspace.contextMenuItems(forRow: try index(of: try row("web", "work").key))
-        XCTAssertEqual(kitty.first { $0.title == WorkspaceWindowController.nameSessionTitle }?.isEnabled, false,
-                       "a Kitty session is named in Kitty")
-        XCTAssertEqual(kitty.first { $0.title == WorkspaceWindowController.showInKittyTitle }?.isEnabled, true)
+        XCTAssertFalse(workspace.contextMenuItems(forRow: try index(of: try row("web", "work").key)).isEmpty)
     }
 
     func testTheWordsNameTheWindowAndPastSessions() throws {

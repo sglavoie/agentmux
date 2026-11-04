@@ -82,16 +82,6 @@ func doctorRemediation(f doctorFinding) string {
 	case "asl_read_only":
 		return "wait for a fresh snapshot; if the `asl:` line's snapshot age keeps growing, run `amx daemon restart` to replace the bridge"
 
-	// Kitty.
-	case "kitty":
-		if strings.Contains(f.Message, "kitten @ ls failed") {
-			return "confirm kitty.conf has `allow_remote_control yes` and a `listen_on` socket, then restart Kitty; or set [defaults] launch_backend = \"tmux\""
-		}
-		return "run doctor in a Kitty window to check it, or set [defaults] launch_backend = \"tmux\""
-	case checkKittySnapshotStale:
-		return "check that `kitten @ ls` answers; if it does, run `amx daemon restart`"
-	case "renderer_drift":
-		return "confirm `kitten @ ls` answers, then run `amx daemon restart`; render failures on a `fd:` socket mean a stale binary (`just install`, then `amx daemon restart`)"
 	case checkCompanionBuildMismatch:
 		return "rebuild or reinstall the app from the same checkout as amx (`just mac-install`)"
 
@@ -127,7 +117,7 @@ func doctorRemediation(f doctorFinding) string {
 	case checkShadowCurrentMismatch, checkRenderCausalBound:
 		return reportBug
 	case checkRenderGenerationDrift:
-		return "a stuck terminal write is the usual cause: confirm the backend answers (the kitty and backend lines above); then " + reportBug
+		return "a stuck terminal write is the usual cause: confirm the backend answers; then " + reportBug
 	case checkQueueSaturation:
 		return "the counter is cumulative since the daemon started: find the burst with `amx debug tail` and `amx daemon audit --duration 10m`; `amx daemon restart` resets it"
 	case checkActiveAfterTerminal:

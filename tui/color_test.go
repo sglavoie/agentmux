@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -30,8 +29,7 @@ func TestPickerRowProfileColor(t *testing.T) {
 			{Title: "backend", Directory: "/home/user/backend", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
@@ -81,8 +79,7 @@ func TestPickerRowOverrideSplitsColor(t *testing.T) {
 			{Title: "api", Directory: "/home/user/api", Account: "personal"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
@@ -139,8 +136,7 @@ func TestConfigPickerHarnessEmojiAndColor(t *testing.T) {
 			{Name: "copilot", Color: "green", Harness: "copilot", HomeDir: "~/.copilot"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m.mode = ModeConfigPicker
 	m.targetSession = session.RunningSession{Base: "dotfiles", Project: "dotfiles", Harness: "claude"}
@@ -212,8 +208,7 @@ func TestPickerPreviewOverrideHeaderColor(t *testing.T) {
 			{Title: "api", Directory: "/home/user/api", Account: "personal"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")

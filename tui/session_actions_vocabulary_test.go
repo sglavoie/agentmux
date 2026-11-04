@@ -72,7 +72,7 @@ func TestPaletteOffersEverySessionDefinition(t *testing.T) {
 	t.Parallel()
 
 	target := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work", State: "bolt"}
-	m, ctx, _ := commandTestModel(target)
+	m, ctx := commandTestModel(target)
 
 	definitions := sessionactions.Definitions()
 	catalog := commandCatalog()

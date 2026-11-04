@@ -23,9 +23,9 @@ import (
 // picker such as fzf has something to match on. Every field added since was
 // appended, so each one before it kept its position: the title (empty when the
 // harness named the conversation nothing), then the message count and the
-// LIVE field the table shows — "here" for the conversation open in the window
-// the command runs in, "live" for one open in another tab, empty for a closed
-// one, and "?" on every row when the daemon or Kitty could not be asked — and
+// LIVE field the table shows — "here" for the conversation open in the session
+// the command runs in, "live" for one open in another session, empty for a closed
+// one, and "?" on every row when the daemon could not be asked — and
 // last the opening of the agent's final reply, empty when it never replied in
 // prose.
 func writeSessionLines(out io.Writer, views []sessionView, liveKnown bool) {
@@ -137,8 +137,8 @@ func writeSessionTable(out io.Writer, views []sessionView, ids sessionIDAbbrevia
 }
 
 // liveMark is a list row's LIVE cell: a dot for a conversation open in a
-// Kitty tab, where `session continue` focuses rather than resumes, and "here"
-// for the one open in the window the command runs in, which is otherwise
+// tmux session, where `session continue` focuses rather than resumes, and "here"
+// for the one open in the session the command runs in, which is otherwise
 // indistinguishable from its siblings when they share an opening prompt.
 func liveMark(live *liveConversation) string {
 	if live == nil {

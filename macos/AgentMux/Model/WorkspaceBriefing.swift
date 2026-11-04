@@ -42,10 +42,10 @@ final class WorkspaceBriefingModel: ObservableObject {
     /// History's project filter. The CLI owns canonical project matching,
     /// including its existing worktree and ambiguous-metadata rules.
     func update(projects configured: [ProjectEntry], sessions: [CompanionSession], asl: [CompanionASLWaiting] = [],
-                socket: String = "", live: Bool, order: WorkspaceOrder = WorkspaceOrder()) {
+                live: Bool, order: WorkspaceOrder = WorkspaceOrder()) {
         feedLive = live
-        allRows = WorkspaceSidebar.rows(sessions, snapshotSocket: socket)
-        allWaiting = WorkspaceInspector.waiting(sessions, asl: asl, snapshotSocket: socket, order: order)
+        allRows = WorkspaceSidebar.rows(sessions)
+        allWaiting = WorkspaceInspector.waiting(sessions, asl: asl, order: order)
         var names = Set(configured.map(\.title).filter { !$0.isEmpty })
         names.formUnion(allRows.map(\.project))
         if !project.isEmpty { names.insert(project) }

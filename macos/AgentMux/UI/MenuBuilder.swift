@@ -3,15 +3,12 @@ import AppKit
 /// One session row as the menu shows it.
 struct MenuSessionRow: Equatable {
     let title: String
-    let windowID: Int
-    let kittySocket: String
     let toolTip: String
     /// Whether the session is muted, which names its ⌥ alternate.
     var muted = false
     /// Why the ⌥ Mute alternate is greyed out; nil when it works.
     var muteUnavailable: String?
-    /// Set for a session the workspace embeds: focusing it shows its terminal
-    /// there, and it has no Kitty window to name.
+    /// Focusing this session shows its terminal in the workspace.
     var runtimeSessionID = ""
     /// What VoiceOver says of the item: the workspace sidebar's words for the
     /// same session, so the state glyph is said as a state, not an emoji name.
@@ -19,8 +16,7 @@ struct MenuSessionRow: Equatable {
 
     /// The row a click on `session` focuses, with nothing to display.
     static func focusing(_ session: CompanionSession, title: String? = nil) -> MenuSessionRow {
-        MenuSessionRow(title: title ?? session.project, windowID: session.windowID, kittySocket: session.kittySocket,
-                       toolTip: "", runtimeSessionID: session.embeddedRuntimeSessionID ?? "")
+        MenuSessionRow(title: title ?? session.project, toolTip: "", runtimeSessionID: session.embeddedRuntimeSessionID ?? "")
     }
 }
 
@@ -93,9 +89,6 @@ enum MenuBuilder {
         var sessions: [CompanionSession]
         var snapshot: CompanionSnapshot?
         var notice: String?
-        /// Whether any Kitty socket is known to try; false means `listen_on`
-        /// is missing everywhere.
-        var kittyReachable = true
         var now = Date()
         var glyphs: Glyphs = .bundled
         /// What the resolved amx can do, for the per-row Mute alternates.
@@ -111,8 +104,7 @@ enum MenuBuilder {
     /// What the action items and their submenus are built from.
     struct ActionsInput: Equatable {
         var gate = ActionGate()
-        /// Where Open Dashboard shows it; only Kitty needs `open-dashboard`.
-        var dashboardPlace: DashboardPlacePreference = .workspace
+        /// Where Open Dashboard shows it.
         var launchBackend: LaunchBackendPreference = .workspace
         var cliLaunchBackend: String?
         var cliLaunchBackendSource: String?
@@ -172,21 +164,17 @@ enum MenuBuilder {
         }
         guard input.feed == .live, input.snapshot != nil else { return entries }
 
-        if !input.sessions.isEmpty, !input.kittyReachable {
-            entries.append(.info(KittyEndpoint.listenOnMissing))
-        }
 
-        let snapshotSocket = input.snapshot?.kitty.socket ?? ""
         // The order the next-attention shortcut visits them in.
-        let attention = AttentionCycler.ordered(input.sessions, snapshotSocket: snapshotSocket, order: input.order)
+        let attention = AttentionCycler.ordered(input.sessions, order: input.order)
         let working = input.sessions.filter { !$0.attention && $0.isWorking }
         let idle = input.sessions.filter { !$0.attention && !$0.isWorking }
 
-        let waiting = waitingBySession(input.snapshot?.asl.waiting ?? [], sessions: input.sessions, snapshotSocket: snapshotSocket)
+        let waiting = waitingBySession(input.snapshot?.asl.waiting ?? [], sessions: input.sessions)
         /// A session row, then the Answer… item for its waiting run.
         func rowEntries(_ session: CompanionSession, showReason: Bool) -> [MenuEntry] {
             var out: [MenuEntry] = [.session(row(session, showReason: showReason, input: input))]
-            if let run = waiting.bySession[AttentionCycler.key(session, snapshotSocket: snapshotSocket)] {
+            if let run = waiting.bySession[AttentionCycler.key(session)] {
                 out.append(.answer(target(run), answerTitle(run), indented: true))
             }
             return out
@@ -215,7 +203,7 @@ enum MenuBuilder {
                 entries.append(.submenu("Idle (\(rows.count))", rows))
                 // A collapsed idle row keeps its Answer… in the menu itself.
                 entries += idle.compactMap { session in
-                    waiting.bySession[AttentionCycler.key(session, snapshotSocket: snapshotSocket)].map {
+                    waiting.bySession[AttentionCycler.key(session)].map {
                         MenuEntry.answer(target($0), "\(answerTitle($0)) · \(name(of: session))", indented: false)
                     }
                 }
@@ -243,10 +231,8 @@ enum MenuBuilder {
 
     /// The waiting runs keyed by the listed session each belongs to, and the
     /// ones no listed session claims. A run binds to a session that names it,
-    /// then to the session its runtime session ID names; otherwise to the one
-    /// session with its window ID that names no run — window IDs repeat across
-    /// Kitty instances, so an ambiguous ID binds nothing.
-    static func waitingBySession(_ waiting: [CompanionASLWaiting], sessions: [CompanionSession], snapshotSocket: String = "")
+    /// then to the session its runtime session ID names.
+    static func waitingBySession(_ waiting: [CompanionASLWaiting], sessions: [CompanionSession])
         -> (bySession: [AttentionCycler.Key: CompanionASLWaiting], unmatched: [CompanionASLWaiting]) {
         var bySession: [AttentionCycler.Key: CompanionASLWaiting] = [:]
         var unmatched: [CompanionASLWaiting] = []
@@ -255,11 +241,7 @@ enum MenuBuilder {
             if owner == nil, !run.runtimeSessionID.isEmpty {
                 owner = sessions.first { $0.runtime?.sessionID == run.runtimeSessionID && $0.aslRunID.isEmpty }
             }
-            if owner == nil, run.windowID > 0 {
-                let sameWindow = sessions.filter { $0.windowID == run.windowID }
-                if sameWindow.count == 1, sameWindow[0].aslRunID.isEmpty { owner = sameWindow[0] }
-            }
-            let key = owner.map { AttentionCycler.key($0, snapshotSocket: snapshotSocket) }
+            let key = owner.map { AttentionCycler.key($0) }
             if let key, bySession[key] == nil {
                 bySession[key] = run
             } else {
@@ -270,7 +252,7 @@ enum MenuBuilder {
     }
 
     static func target(_ run: CompanionASLWaiting) -> ASLAnswerTarget {
-        ASLAnswerTarget(runID: run.runID, planDir: run.planDir, windowID: run.windowID)
+		ASLAnswerTarget(runID: run.runID, planDir: run.planDir)
     }
 
     /// `Answer…`, or `Answer… (3 questions)`.
@@ -303,36 +285,28 @@ enum MenuBuilder {
         if session.muted { title += " \(input.glyphs.mute)" }
 
         let embedded = session.embeddedRuntimeSessionID
-        var tip = [embedded == nil ? "window \(session.windowID)" : place(of: session)]
+        var tip = [place(of: session)]
         if !session.profile.isEmpty { tip.append("profile \(session.profile)") }
         if !session.branch.isEmpty { tip.append("branch \(session.branch)\(session.dirty ? "*" : "")") }
-        if (input.snapshot?.kitty.sockets.count ?? 0) > 1, !session.kittySocket.isEmpty {
-            tip.append(session.kittySocket)
-        }
         return MenuSessionRow(
             title: title,
-            windowID: session.windowID,
-            kittySocket: session.kittySocket,
             toolTip: tip.joined(separator: " · "),
             muted: session.muted,
             muteUnavailable: input.gate.unavailableReason(.muteToggle),
             runtimeSessionID: embedded ?? "",
             accessibilityLabel: WorkspaceRowCellView.accessibilityLabel(
-                WorkspaceSidebar.row(session, snapshotSocket: input.snapshot?.kitty.socket ?? "", now: input.now, glyphs: input.glyphs))
+                WorkspaceSidebar.row(session, now: input.now, glyphs: input.glyphs))
         )
     }
 
     static func name(of session: CompanionSession) -> String {
         if !session.project.isEmpty { return session.project }
-        if !session.baseTitle.isEmpty { return session.baseTitle }
         return place(of: session)
     }
 
-    /// Where a session runs, in a few words: `window 4`, or `tmux %7`.
+    /// Where a session runs, in a few words: `tmux %7`.
     static func place(of session: CompanionSession) -> String {
-        guard session.embeddedRuntimeSessionID != nil, let runtime = session.runtime else {
-            return "window \(session.windowID)"
-        }
+        guard let runtime = session.runtime else { return "tmux" }
         return runtime.pane.isEmpty ? runtime.backend : "\(runtime.backend) \(runtime.pane)"
     }
 
@@ -343,11 +317,7 @@ enum MenuBuilder {
     /// Notifications submenus.
     static func actionEntries(_ input: ActionsInput) -> [MenuEntry] {
         var entries: [MenuEntry] = [.separator, .action(.openWorkspace, "Open Workspace")]
-        if input.dashboardPlace == .kitty, let reason = input.gate.unavailableReason(.openDashboard) {
-            entries.append(.unavailable("Open Dashboard", reason: reason))
-        } else {
-            entries.append(.action(.openDashboard, "Open Dashboard"))
-        }
+        entries.append(.action(.openDashboard, "Open Dashboard"))
         if !input.feedLive {
             entries.append(.unavailableAction(.nextAttention, HotKeyPreference.nextAttention.label, reason: DaemonPhrase.notConnected))
         } else if input.waiting == 0 {

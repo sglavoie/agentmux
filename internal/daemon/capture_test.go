@@ -42,7 +42,7 @@ func TestDaemonCapturesLegacyHookPayloadAndTrustsClientCaptureMarker(t *testing.
 	}
 }
 
-func TestDaemonMaintenanceExpiresCaptureWithoutKittyOrFurtherHooks(t *testing.T) {
+func TestDaemonMaintenanceExpiresCaptureWithoutFurtherHooks(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC)

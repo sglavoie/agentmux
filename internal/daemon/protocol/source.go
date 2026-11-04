@@ -120,8 +120,8 @@ var reducerIconPrecedence = map[string]int{
 }
 
 // SourceFactSnapshot is the exported, durable view of one source fact. Field
-// names mirror sourceFact; the compact JSON tags are the schema-v4 user-var
-// wire form (amx_state must stay small), so this one struct is both the
+// names mirror sourceFact; the compact JSON tags are the schema-v4 checkpoint
+// wire form, so this one struct is both the
 // snapshot seam and the persisted shape.
 type SourceFactSnapshot struct {
 	Kind   SourceKind `json:"k"`
@@ -146,7 +146,7 @@ type SourceFactSnapshot struct {
 
 	// Harness process ownership is safe lifecycle metadata, never command-line
 	// content. The three fields are deliberately flat and compact because this
-	// snapshot is persisted in Kitty's size-sensitive amx_state user var.
+	// snapshot is persisted in the runtime checkpoint.
 	// Partial or source-incompatible triples are discarded during restoration
 	// without invalidating the containing fact.
 	HarnessProcessHarness    string `json:"ph,omitempty"`

@@ -15,7 +15,7 @@ final class LaunchEnvironmentTests: XCTestCase {
     func testResolveForwardsXDGAndAMXFromTheShellOverTheProcess() {
         let process = [
             "HOME": "/Users/me", "PATH": "/usr/bin", "AMX_DEBUG": "1", "XDG_CONFIG_HOME": "/old",
-            "EDITOR": "vi", "KITTY_LISTEN_ON": "unix:/tmp/k",
+            "EDITOR": "vi",
         ]
         let reported = [
             "PATH": "/opt/homebrew/bin:/usr/bin", "XDG_CONFIG_HOME": "/Users/me/.config", "AMX_CONFIG": "/c.toml",

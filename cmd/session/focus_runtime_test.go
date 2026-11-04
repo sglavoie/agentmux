@@ -13,11 +13,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sglavoie/agentmux/internal/backend"
-	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -26,7 +24,7 @@ import (
 
 // focusWorld is three stand-in agents on a private tmux server, titled so the
 // list order is alpha, bravo, charlie, with every seam of the focus and mute
-// commands pointed at it and every Kitty seam failing the test if reached.
+// commands pointed at it and every obsolete terminal seam failing the test if reached.
 type focusWorld struct {
 	f        *tmuxtest.Fixture
 	launched map[string]session.LaunchResult
@@ -53,7 +51,7 @@ func newFocusWorld(t *testing.T) *focusWorld {
 	}
 	previousPath, previousTmux, previousConfig := attachRegistryPath, attachNewTmux, focusLoadConfig
 	previousCurrent, previousHosted, previousView := currentRuntimeSession, focusWorkspaceHosted, focusWorkspaceView
-	previousDaemon, previousKitty, previousMuteKitty := sessionCommandsDaemon, sessionCommandsNewKitty, muteToggleClient
+	previousDaemon := sessionCommandsDaemon
 	attachRegistryPath = f.Registry.Path
 	attachNewTmux = func() (backend.TargetLauncher, error) { return f.Backend, nil }
 	focusLoadConfig = func() (*config.Config, error) { return cfg, nil }
@@ -73,16 +71,10 @@ func newFocusWorld(t *testing.T) *focusWorld {
 		}
 		return response, nil
 	}
-	noKitty := func() kitty.KittyClient {
-		t.Error("a command about a tmux session reached for Kitty")
-		return cli.NewKittyClient()
-	}
-	sessionCommandsNewKitty = noKitty
-	muteToggleClient = noKitty
 	t.Cleanup(func() {
 		attachRegistryPath, attachNewTmux, focusLoadConfig = previousPath, previousTmux, previousConfig
 		currentRuntimeSession, focusWorkspaceHosted, focusWorkspaceView = previousCurrent, previousHosted, previousView
-		sessionCommandsDaemon, sessionCommandsNewKitty, muteToggleClient = previousDaemon, previousKitty, previousMuteKitty
+		sessionCommandsDaemon = previousDaemon
 	})
 	return w
 }
@@ -479,7 +471,7 @@ func TestFocusHostedPaneUsesWorkspaceOwner(t *testing.T) {
 func TestMuteToggleWithoutAFlagMutesTheCurrentRuntimeSession(t *testing.T) {
 	w := newFocusWorld(t)
 	currentRuntimeSession = func() string { return string(w.id("bravo")) }
-	muteToggleWindowID, muteToggleRuntimeSession, muteToggleJSON = 0, "", false
+	muteToggleRuntimeSession, muteToggleJSON = "", false
 
 	if err := runMuteToggle(muteToggleCmd, nil); err != nil {
 		t.Fatal(err)

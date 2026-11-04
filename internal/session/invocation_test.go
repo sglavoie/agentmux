@@ -9,8 +9,6 @@ import (
 )
 
 func TestBuildInvocation_ResolvesProfileAndProjectContext(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "")
-
 	sess := config.Session{
 		Directory: "/tmp/project with space",
 		Args:      []string{"--project-flag", "project value"},

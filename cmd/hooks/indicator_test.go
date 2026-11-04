@@ -11,24 +11,21 @@ import (
 
 func TestHookIndicatorParsesProducerHarness(t *testing.T) {
 	oldRun := runHookIndicator
-	oldWindowID := hookWindowID
 	oldHarness := hookHarness
 	oldRequestID := hookRequestID
 	oldJSON := hookJSON
 	oldStrict := hookStrict
 	t.Cleanup(func() {
 		runHookIndicator = oldRun
-		hookWindowID = oldWindowID
 		hookHarness = oldHarness
 		hookRequestID = oldRequestID
 		hookJSON = oldJSON
 		hookStrict = oldStrict
-		_ = hookIndicatorCmd.Flags().Set("window-id", "0")
 		_ = hookIndicatorCmd.Flags().Set("harness", "")
 		_ = hookIndicatorCmd.Flags().Set("request-id", "")
 		_ = hookIndicatorCmd.Flags().Set("json", "false")
 		_ = hookIndicatorCmd.Flags().Set("strict", "false")
-		for _, name := range []string{"window-id", "harness", "request-id", "json", "strict"} {
+		for _, name := range []string{"harness", "request-id", "json", "strict"} {
 			hookIndicatorCmd.Flags().Lookup(name).Changed = false
 		}
 	})
@@ -42,7 +39,7 @@ func TestHookIndicatorParsesProducerHarness(t *testing.T) {
 		gotRequestID = options.RequestID
 		return indicator.DeliveryResult{Status: indicator.DeliveryAccepted}
 	}
-	if err := hookIndicatorCmd.ParseFlags([]string{"Stop", "--window-id=42", "--harness=future-harness", "--request-id=req-42"}); err != nil {
+	if err := hookIndicatorCmd.ParseFlags([]string{"Stop", "--harness=future-harness", "--request-id=req-42"}); err != nil {
 		t.Fatalf("parse generated hook command flags: %v", err)
 	}
 	args := hookIndicatorCmd.Flags().Args()
@@ -53,7 +50,7 @@ func TestHookIndicatorParsesProducerHarness(t *testing.T) {
 		t.Fatalf("RunE: %v", err)
 	}
 
-	if gotEvent != "Stop" || gotWindowID != 42 || gotHarness != "future-harness" || gotRequestID != "req-42" {
+	if gotEvent != "Stop" || gotWindowID != 0 || gotHarness != "future-harness" || gotRequestID != "req-42" {
 		t.Fatalf("indicator args = event %q window %d harness %q request %q", gotEvent, gotWindowID, gotHarness, gotRequestID)
 	}
 }

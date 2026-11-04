@@ -22,7 +22,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -33,7 +32,6 @@ import (
 var (
 	attachRegistryPath = runtimesession.DefaultRegistryPath
 	attachNewTmux      = func() (backend.TargetLauncher, error) { return cli.NewTmuxBackend() }
-	attachNewKitty     = func() kitty.KittyClient { return cli.NewKittyClient() }
 	attachIsTerminal   = func() bool { return term.IsTerminal(os.Stdin.Fd()) && term.IsTerminal(os.Stdout.Fd()) }
 	attachRunClient    = runAttachedClient
 	attachFingerprint  = session.ProcessFingerprint
@@ -71,8 +69,7 @@ attached to the same agent is detached, and the agent's size follows this
 terminal. Detaching (closing the terminal, or another attach taking over)
 leaves the agent running; ` + "`amx attach`" + ` again picks it back up.
 
-A tmux runtime session is attached through Agent Mux's private tmux server. A
-Kitty runtime session has its window focused instead.
+A runtime session is attached through Agent Mux's private tmux server.
 
 --json does not attach, since its output is the JSON document: it checks that
 the runtime session is live and reports the command a terminal runs to attach.
@@ -166,8 +163,6 @@ func runAttach(cmd *cobra.Command, args []string) error {
 	switch record.Target.Instance.Kind {
 	case runtimesession.BackendTmux:
 		return attachTmux(cmd, store, record, data)
-	case runtimesession.BackendKitty:
-		return attachKitty(cmd, record, data)
 	default:
 		return cli.CommandFailure(cmd, attachJSON, "unsupported_backend", fmt.Errorf("runtime session %s runs on unknown backend %q", id, record.Target.Instance.Kind))
 	}
@@ -280,17 +275,6 @@ func validateTmux(store *runtimesession.Store, server tmuxAttacher, record runti
 		return err
 	})
 	return survey, current, err
-}
-
-func attachKitty(cmd *cobra.Command, record runtimesession.Record, data attachData) error {
-	if attachJSON {
-		return cli.WriteJSON(cmd, data)
-	}
-	if err := kitty.NewBackend(attachNewKitty()).Focus(backend.PaneID(record.Target.Ref)); err != nil {
-		return fmt.Errorf("focusing Kitty window %s: %w", record.Target.Ref, err)
-	}
-	_, err := fmt.Fprintf(cmd.OutOrStdout(), "Focused %s.\n", record.Project)
-	return err
 }
 
 func newAttachment() (runtimesession.Attachment, error) {

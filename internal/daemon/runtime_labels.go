@@ -14,12 +14,9 @@ import (
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
-// A Kitty session says which project and profile it runs in its tab's user
-// vars, which every Kitty snapshot carries. A session on another backend has
-// no tab: its label is the project its registry record names and the profile
-// its pane metadata holds, read once per binding and kept beside the slot
-// table. Without it a companion could only list such a session by its
-// harness, with nothing to group it by.
+// A runtime session's registry record names its project. The tmux pane carries
+// its profile and harness metadata. The daemon reads the pane once per binding
+// and keeps the label beside the slot table so companion views can group it.
 
 // runtimeLabelRetry is how long a failed pane read waits before it is tried
 // again. A read fails while the pane's server is briefly unreachable; the
@@ -97,7 +94,7 @@ func (h *Handler) SetSessionSort(mode string) {
 	h.sessionSort = mode
 }
 
-// runtimeColorLocked is the palette color a non-Kitty session is shown in:
+// runtimeColorLocked is the palette color a runtime session is shown in:
 // the one picked for it, else its profile's. Callers hold stateMu.
 func (h *Handler) runtimeColorLocked(label runtimeLabel) string {
 	if label.color != "" {
@@ -107,7 +104,7 @@ func (h *Handler) runtimeColorLocked(label runtimeLabel) string {
 }
 
 // noteRuntimeProjectLocked records the registry's project for a session that
-// has just claimed a non-Kitty slot, so it is grouped correctly from its first
+// has just claimed a runtime slot, so it is grouped correctly from its first
 // snapshot; the profile follows on the next labeling pass. Callers hold
 // stateMu.
 func (h *Handler) noteRuntimeProjectLocked(runtime, project string) {
@@ -120,7 +117,7 @@ func (h *Handler) noteRuntimeProjectLocked(runtime, project string) {
 	h.runtimeLabels[runtime] = runtimeLabel{project: project}
 }
 
-// labelRuntimeSessions reads the label of every non-Kitty binding that has
+// labelRuntimeSessions reads the label of every tmux binding that has
 // none yet, off stateMu, and forgets the labels of sessions no longer bound.
 // It runs after the checkpoint restore, before the socket binds, so a
 // restarted daemon's first snapshot already groups its sessions as the last
@@ -133,7 +130,7 @@ func (h *Handler) labelRuntimeSessions(now time.Time) {
 	bound := make(map[string]struct{}, len(h.runtimeRoutes.bySlot))
 	var wanted []string
 	for _, b := range h.runtimeRoutes.bySlot {
-		if b.target.backend == string(runtimesession.BackendKitty) {
+		if b.target.backend != string(runtimesession.BackendTmux) {
 			continue
 		}
 		bound[b.runtime] = struct{}{}

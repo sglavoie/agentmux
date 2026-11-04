@@ -189,21 +189,6 @@ func (h *Handler) enrichNotificationEvent(windowID int, event protocol.SessionEv
 	return event
 }
 
-func (h *Handler) linkProbeChild(parentTraceID, childTraceID string, windowIDs []int) {
-	if h == nil || parentTraceID == "" || childTraceID == "" {
-		return
-	}
-	h.stateMu.Lock()
-	for _, windowID := range windowIDs {
-		st, ok := h.windowStateLocked(windowID)
-		if !ok {
-			continue
-		}
-		eventlog.LinkProbeTrace(st, parentTraceID, childTraceID)
-	}
-	h.stateMu.Unlock()
-}
-
 func (h *Handler) recordProbeStage(
 	traceID, parentTraceID string,
 	req protocol.Request,
@@ -229,21 +214,4 @@ func (h *Handler) recordProbeStage(
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	h.decisionJournal.TryAppend(ctx, envelope)
-}
-
-func (h *Handler) recordProbeStageBounded(
-	traceID, parentTraceID string,
-	req protocol.Request,
-	windowID int,
-	stage, outcome, reason string,
-	evidence map[string]string,
-) {
-	if h == nil || h.decisionJournal == nil {
-		return
-	}
-	copyEvidence := make(map[string]string, len(evidence))
-	for key, value := range evidence {
-		copyEvidence[key] = value
-	}
-	h.recordProbeStage(traceID, parentTraceID, req, windowID, stage, outcome, reason, copyEvidence)
 }

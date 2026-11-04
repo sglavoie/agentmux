@@ -4,7 +4,6 @@ default:
     @just --list
 
 prefix_bin := home_directory() / ".local/bin"
-prefix_kitty := home_directory() / ".config/kitty"
 prefix_config := home_directory() / ".config/agent-mux"
 root := justfile_directory()
 
@@ -55,22 +54,21 @@ vet:
 #
 # The file list comes from git rather than from a directory walk. An operator's
 # checkout carries agent worktrees and other untracked Go sources under
-# .claude/, and a gate that failed on a stale copy of a file nobody is editing
-# would be a gate people learn to ignore.
+# .claude/. Skip tracked files deleted in the worktree during a refactor.
 #
 # Fail when any tracked Go file is not gofmt-clean
 fmt-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    unformatted="$(git ls-files -z '*.go' | xargs -0 gofmt -l)"
+    unformatted="$(git ls-files -z '*.go' | while IFS= read -r -d '' path; do if [ -f "$path" ]; then printf '%s\0' "$path"; fi; done | xargs -0 gofmt -l)"
     if [ -n "$unformatted" ]; then
         echo "gofmt would rewrite these files; run 'gofmt -w' on them:" >&2
         echo "$unformatted" >&2
         exit 1
     fi
 
-# The concurrency-sensitive filesystem persistence, continuity, Kitty
-# read-coordination, daemon, and TUI suites.
+# The concurrency-sensitive filesystem persistence, continuity, tmux,
+# daemon, and TUI suites.
 #
 # `./tui` does not include its subpackages. `./tui/commands` owns the live
 # topology reads and the package-level seams tests swap, and `./tui/overview`
@@ -84,7 +82,7 @@ fmt-check:
 #
 # Run the concurrency-sensitive suites under the race detector
 race-core:
-    go test -race -tags {{ harness_tags }} ./internal/transcript ./internal/plans ./internal/handoff ./internal/recap ./internal/worktree ./internal/kitty ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
+    go test -race -tags {{ harness_tags }} ./internal/transcript ./internal/plans ./internal/handoff ./internal/recap ./internal/worktree ./internal/tmux ./internal/daemon ./internal/daemon/ipc ./tui ./tui/commands ./tui/overview ./tui/sessionactions
 
 # `just test` already runs the same set through the same CLI path (see the
 # acceptance recipe), so this is for running them by hand.
@@ -101,9 +99,8 @@ tui-scenarios:
 # never actually checked.
 #
 # Two packages hold a half each. internal/aslbridge checks the bridge protocol
-# against a state corpus. internal/daemon drives real `asl run`s — one inside a
-# private tmux session, one inside a Kitty runtime session — through this
-# checkout's hook client and daemon handler, so it additionally needs tmux.
+# against a state corpus. internal/daemon drives real `asl run`s inside the
+# private tmux server through this checkout's hook client and daemon handler.
 #
 # Check the installed agent-session-loop bridge end to end (opt-in; needs asl and tmux)
 asl-integration:
@@ -375,7 +372,7 @@ crash-restart:
 # recipe is the one place the installed amx, the tmux it would start agents
 # on, a real daemon, and a real ASL pairing preflight are all required at
 # once, which is why it belongs to the release gate rather than to
-# `just check`. It runs from any terminal and needs no Kitty. A missing or
+# `just check`. It runs from any terminal. A missing or
 # unusable tmux is a failure: a cockpit smoke that quietly passes because
 # there was no backend to observe is worse than no smoke.
 #
@@ -446,42 +443,6 @@ cockpit-smoke: installed-amx daemon-ready
     "$amx" config asl-sync --check
 
     echo "cockpit-smoke: ok"
-
-# For an operator who launches into Kitty. Opt-in: no gate runs it, since
-# Kitty is an optional backend. Like the cockpit smoke it observes and never
-# mutates, and it fails when there is no Kitty to observe.
-#
-# Smoke the installed amx against a real Kitty, from a Kitty window (opt-in)
-kitty-smoke: installed-amx daemon-ready
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    amx="{{ prefix_bin }}/amx"
-
-    if [ -z "${KITTY_WINDOW_ID:-}" ]; then
-        echo "KITTY_WINDOW_ID is unset: run the Kitty smoke from a Kitty window" >&2
-        exit 1
-    fi
-
-    echo "== kitty =="
-    kitty --version
-    kitten @ ls > /dev/null
-    echo "kitten @ ls: ok"
-
-    # daemon-ready, a dependency, has already required `ready: true`.
-    echo "== daemon =="
-    "$amx" daemon status
-
-    # Proves the daemon is reducing facts for this real window, not merely
-    # answering its socket.
-    echo "== live window events =="
-    "$amx" daemon export-events --current-window --last 50 > /dev/null
-    echo "export-events --current-window: ok"
-
-    echo "== invariants =="
-    "$amx" doctor --strict
-
-    echo "kitty-smoke: ok"
 
 #   just paired-release-gate asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release
 #   just paired-release-gate asl_root=~/1_dev_projects/sglavoie_agent-session-loop signing_key=~/.ssh/amx_release tag=yes
@@ -649,8 +610,7 @@ lint:
 # Run the full repository gate: acceptance plus golangci-lint
 check: acceptance lint
 
-# Nothing of Kitty's is created or linked; `just install-kitty` does that for
-# the Kitty backend. The binary is staged beside the destination and renamed into place so the
+# The binary is staged beside the destination and renamed into place so the
 # replacement is atomic: no window where amx is absent or half-copied, and a
 # running daemon keeps its already-open executable.
 #
@@ -661,12 +621,6 @@ install: build
     mv -f "{{prefix_bin}}/.amx.staging" "{{prefix_bin}}/amx"
     @if [ ! -f "{{prefix_config}}/config.toml" ]; then "{{prefix_bin}}/amx" config init >/dev/null; echo "Seeded {{prefix_config}}/config.toml"; fi
     @echo "Installed {{prefix_bin}}/amx"
-
-# Link the Kitty snippet for the optional Kitty backend (include it from kitty.conf)
-install-kitty:
-    @mkdir -p "{{prefix_kitty}}"
-    ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"
-    @echo "Symlinked {{prefix_kitty}}/agent-mux.conf"
 
 # Strict doctor verifies the CLI and daemon are the same artifact by
 # hash/revision and that no invariant is violated.
@@ -679,10 +633,7 @@ install-restart-smoke: install restart-verify
 # will run, and a bundled amx from another revision shows up as
 # companion_build_mismatch. Needs Xcode; without it, use install-restart-smoke.
 #
-# It runs from any terminal: outside Kitty the restarted daemon keeps the
-# Kitty its predecessor read, and with none running it is ready without one.
-# The Kitty snippet is a link into this checkout, so one made by
-# `just install-kitty` already follows it.
+# It runs from any terminal.
 #
 # Update everything from this checkout: amx, hooks, menu bar app, daemon
 update: install sync-hooks mac-install restart-verify
@@ -809,13 +760,11 @@ mac-release-gate *flags:
 mac-uninstall *flags:
     ./macos/scripts/uninstall-app.sh {{ flags }}
 
-# Stop the daemon, then remove the binary and the Kitty snippet if linked (config.toml and data are kept)
+# Stop the daemon, then remove the binary (config.toml and data are kept)
 uninstall:
     -"{{prefix_bin}}/amx" daemon stop
     rm -f "{{prefix_bin}}/amx"
-    rm -f "{{prefix_kitty}}/agent-mux.conf"
     @echo "Removed {{prefix_bin}}/amx"
-    @echo "Removed {{prefix_kitty}}/agent-mux.conf"
 
 # Bump version in cmd/root.go (e.g. just bump 0.4.0)
 bump version:

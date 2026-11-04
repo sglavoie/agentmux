@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -57,7 +56,7 @@ func rebuildTestModel() Model {
 			{Name: "personal", Color: "yellow"},
 		},
 	}
-	m := NewModel(cfg, kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""))
+	m := NewModel(cfg, nil)
 	m.width, m.height = 120, 40
 	return loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "api", Account: "work", State: "key"},

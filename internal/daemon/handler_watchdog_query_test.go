@@ -11,7 +11,7 @@ import (
 
 // TestHandler_TracksLastSessionTitle verifies that the session title from
 // each state_update is recorded so the future stale-active sweep can fall
-// back to it when the live kitten lookup fails.
+// back to it when the live session lookup fails.
 func TestHandler_TracksLastSessionTitle(t *testing.T) {
 	t.Parallel()
 

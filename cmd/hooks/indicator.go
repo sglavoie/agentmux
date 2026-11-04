@@ -1,5 +1,5 @@
 // Package hooks holds harness hook files and hook delivery: the
-// `hook-indicator` entry point harness hooks call, with its fail-open legacy
+// `hook-indicator` entry point harness hooks call, with its fail-open
 // path and its strict 75/2 exit mapping (75 for a retryable failure, 2 for
 // permanent non-delivery), and the `hooks-sync`/`hooks-status` maintenance
 // leaves that the cmd/config family surfaces under `amx config`.
@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var hookWindowID int
 var hookHarness string
 var hookRequestID string
 var hookRuntimeSession string
@@ -38,22 +37,17 @@ The daemon updates session state and triggers notifications based on it.
 
 The first argument must be a harness event name (e.g. Stop, PermissionRequest,
 UserPromptSubmit). Unknown events are recorded as permanent non-delivery
-evidence while legacy hook invocations remain fail-open.
+evidence while hook invocations remain fail-open.
 
 Agents launched by Agent Mux inherit AMX_RUNTIME_SESSION_ID (or receive
---runtime-session), and their hooks route by that runtime session alone, on
-any terminal backend; Kitty variables are ignored for them.
+--runtime-session), and their hooks route by that runtime session alone.
 
 Codex managed shared app-server hooks instead resolve their native session_id
 against live registered conversations, because the server's inherited runtime
 environment belongs to only one of its clients. --runtime-session explicitly
 overrides that lookup. Unbound or ambiguous conversations are not delivered.
 
-Other hooks are legacy Kitty hooks. Those that fire outside Kitty (for example
-from another Copilot or Codex CLI surface sharing the same harness home) are
-treated as successful no-ops. For hooks running inside Kitty, KITTY_WINDOW_ID
-must be set in the environment (provided automatically by harness hooks), or
-supplied via --window-id.`,
+Hooks without a managed runtime session are not delivered.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Non-fatal: on failure AmxBinary yields the bare command name and the
@@ -62,7 +56,7 @@ supplied via --window-id.`,
 		if err != nil {
 			ccerrors.Print(err)
 		}
-		result := runHookIndicator(args[0], hookWindowID, hookHarness, amxBin, indicator.DeliveryOptions{
+		result := runHookIndicator(args[0], 0, hookHarness, amxBin, indicator.DeliveryOptions{
 			RequestID:        hookRequestID,
 			RuntimeSessionID: hookRuntimeSession,
 		})
@@ -87,8 +81,6 @@ supplied via --window-id.`,
 }
 
 func init() {
-	hookIndicatorCmd.Flags().IntVar(&hookWindowID, "window-id", 0,
-		"Kitty window ID (defaults to $KITTY_WINDOW_ID)")
 	hookIndicatorCmd.Flags().StringVar(&hookHarness, "harness", "",
 		"event-producing harness (claude, codex, or copilot)")
 	hookIndicatorCmd.Flags().StringVar(&hookRuntimeSession, "runtime-session", "",

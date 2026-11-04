@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/backend"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -19,40 +18,29 @@ func (stubTmux) AttachCommand(pane backend.Ref, _ tmux.AttachView) (*exec.Cmd, e
 	return exec.Command("tmux", "attach-session", "-t", pane.ID), nil
 }
 
-type stubKitty struct{ kitty.KittyClient }
-
 func TestSelectTerminals(t *testing.T) {
 	unavailable := errors.New("tmux is not installed")
 	cases := map[string]struct {
-		requested     string
-		hosted        bool
-		serverPresent bool
-		tmuxErr       error
+		requested string
+		tmuxErr   error
 
 		wantErr    bool
-		wantKitty  bool
 		wantTmux   bool
 		wantLaunch runtimesession.BackendKind
 	}{
-		"inside Kitty defaults to tmux":                {hosted: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
-		"inside Kitty lists a running tmux server":     {hosted: true, serverPresent: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
-		"inside Kitty with --backend tmux":             {requested: "tmux", hosted: true, wantKitty: true, wantTmux: true, wantLaunch: runtimesession.BackendTmux},
-		"another terminal defaults to tmux":            {wantTmux: true, wantLaunch: runtimesession.BackendTmux},
-		"another terminal without tmux is refused":     {tmuxErr: unavailable, wantErr: true},
-		"another terminal asked for Kitty":             {requested: "kitty", wantKitty: true, wantLaunch: runtimesession.BackendKitty},
-		"explicit tmux that cannot open is refused":    {requested: "tmux", hosted: true, tmuxErr: unavailable, wantErr: true},
-		"an unknown backend is refused":                {requested: "screen", hosted: true, wantErr: true},
-		"missing default tmux inside Kitty is refused": {hosted: true, serverPresent: true, tmuxErr: unavailable, wantErr: true},
-		"explicit Kitty survives tmux listing failure": {requested: "kitty", hosted: true, serverPresent: true, tmuxErr: unavailable, wantKitty: true, wantLaunch: runtimesession.BackendKitty},
+		"defaults to tmux":           {wantTmux: true, wantLaunch: runtimesession.BackendTmux},
+		"explicit tmux":              {requested: "tmux", wantTmux: true, wantLaunch: runtimesession.BackendTmux},
+		"missing tmux is refused":    {tmuxErr: unavailable, wantErr: true},
+		"unsupported backend":        {requested: "unsupported", wantErr: true},
+		"explicit tmux unavailable":  {requested: "tmux", tmuxErr: unavailable, wantErr: true},
+		"unknown backend is refused": {requested: "screen", wantErr: true},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			previousHosted, previousOpen, previousPresent, previousPortable := insideKitty, openTmux, tmuxServerPresent, commands.Portable
+			previousOpen, previousPortable := openTmux, commands.Portable
 			t.Cleanup(func() {
-				insideKitty, openTmux, tmuxServerPresent, commands.Portable = previousHosted, previousOpen, previousPresent, previousPortable
+				openTmux, commands.Portable = previousOpen, previousPortable
 			})
-			insideKitty = func() bool { return tc.hosted }
-			tmuxServerPresent = func() bool { return tc.serverPresent }
 			openTmux = func() (backend.TargetLauncher, error) {
 				if tc.tmuxErr != nil {
 					return nil, tc.tmuxErr
@@ -60,15 +48,12 @@ func TestSelectTerminals(t *testing.T) {
 				return stubTmux{}, nil
 			}
 
-			client, err := selectTerminalsWith(tc.requested, func() kitty.KittyClient { return stubKitty{} })
+			err := selectTerminalsWith(tc.requested)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("error = %v, want error %v", err, tc.wantErr)
 			}
 			if tc.wantErr {
 				return
-			}
-			if (client != nil) != tc.wantKitty {
-				t.Fatalf("Kitty client present = %v, want %v", client != nil, tc.wantKitty)
 			}
 			if (commands.Portable.Tmux != nil) != tc.wantTmux || commands.Portable.Launch != tc.wantLaunch {
 				t.Fatalf("portable = tmux %v launch %q, want tmux %v launch %q",

@@ -13,6 +13,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -21,7 +22,7 @@ import (
 
 // TestCommandActionDispatchesThroughThePalette is the happy path stated as the
 // UI path: the palette opens, the cursor lands on the named row, enter runs it,
-// and the palette closes. The Kitty call is the proof the operation itself ran
+// and the palette closes. The terminal command is the proof the operation itself ran
 // rather than the mode merely changing.
 func TestCommandActionDispatchesThroughThePalette(t *testing.T) {
 	t.Parallel()
@@ -30,7 +31,7 @@ func TestCommandActionDispatchesThroughThePalette(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, client := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	if err := d.Apply(UITestAction{Type: UITestActionCommand, CommandID: string(commands.FocusSession)}); err != nil {
@@ -39,8 +40,8 @@ func TestCommandActionDispatchesThroughThePalette(t *testing.T) {
 	if got := d.Model().mode; got != ModeList {
 		t.Fatalf("palette left open: mode = %q", got.String())
 	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 1 {
-		t.Fatalf("FocusTab calls = %d, want 1", len(calls))
+	if !errors.Is(d.Model().actionErr, commands.ErrNoTerminal) {
+		t.Fatalf("focus command result = %v, want fixture's missing terminal", d.Model().actionErr)
 	}
 }
 
@@ -55,7 +56,7 @@ func TestCommandActionWalksTheCursorWithNavigationKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	if err := d.Key(keyColon); err != nil {
@@ -91,7 +92,7 @@ func TestCommandActionFailsForAbsentCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	err = d.Command(commands.ID("session.no-such-command"))
@@ -110,7 +111,7 @@ func TestCommandActionFailsForHiddenCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	if !d.Model().activeFilter.IsEmpty() {
@@ -137,7 +138,7 @@ func TestCommandActionFailsForDisabledCommandWithoutIssuingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, client := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	sel, ok := d.Model().selectedSession()
@@ -148,8 +149,8 @@ func TestCommandActionFailsForDisabledCommandWithoutIssuingIt(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), commands.ReasonPeekInactive) {
 		t.Fatalf("disabled command error = %v", err)
 	}
-	if calls := client.CallsFor("LaunchOverlayPager"); len(calls) != 0 {
-		t.Fatalf("refused peek still issued %d pager call(s)", len(calls))
+	if got := len(d.pagedText); got != 0 {
+		t.Fatalf("refused peek still issued %d pager call(s)", got)
 	}
 }
 
@@ -194,7 +195,7 @@ func TestCommandActionRefusesWhileTheProjectSwitcherIsOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	if err := d.Key(keyProjectSwitcher); err != nil {
@@ -219,7 +220,7 @@ func TestCommandActionRefusesOutsideTheDashboard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	if err := d.Command(commands.SearchPlans); err != nil {

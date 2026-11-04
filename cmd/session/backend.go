@@ -42,10 +42,9 @@ var backendCmd = &cobra.Command{
 	Short: "Show or stop the terminal backend agents run on",
 	Long: `Show or stop the terminal backend agents run on.
 
-Agents launch into Kitty tabs or into Agent Mux's private tmux server, whose
-agents outlive every terminal and the desktop app. ` + "`amx backend status`" + ` says
-which one a launch uses, which tmux the private server runs, and what to do
-when something is missing.`,
+Agents launch into Agent Mux's private tmux server, whose agents outlive every
+terminal and the desktop app. ` + "`amx backend status`" + ` says which tmux the
+private server runs and what to do when something is missing.`,
 	Example: `  amx backend status
   amx backend status --check && echo "tmux launches will work"
   amx backend stop --yes`,

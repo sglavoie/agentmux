@@ -182,11 +182,7 @@ enum AMXEnvelope {
 
 /// Runs the resolved `amx` with the login-shell environment.
 ///
-/// The app runs outside Kitty, and amx learns which Kitty to talk to only from
-/// `KITTY_LISTEN_ON`, so every invocation names it explicitly: inherited
-/// `KITTY_*` variables are always stripped (an app started from a Kitty shell
-/// would otherwise aim every command at that one window), and
-/// `KITTY_LISTEN_ON` is set only from the caller's argument.
+/// Commands inherit the app environment with the resolved launch values applied.
 struct AMXCommand {
     typealias Runner = (_ executable: String, _ arguments: [String], _ environment: [String: String], _ timeout: TimeInterval) -> ProcessRun
 
@@ -209,26 +205,21 @@ struct AMXCommand {
     /// The child's whole environment.
     static func childEnvironment(
         inherited: [String: String],
-        launch: LaunchEnvironment,
-        kittyListenOn: String?
+        launch: LaunchEnvironment
     ) -> [String: String] {
-        var environment = inherited.filter { !$0.key.hasPrefix("KITTY_") }
+        var environment = inherited
         environment.merge(launch.commandEnvironment) { _, launched in launched }
-        if let kittyListenOn, !kittyListenOn.isEmpty {
-            environment["KITTY_LISTEN_ON"] = kittyListenOn
-        }
         return environment
     }
 
-    func environment(kittyListenOn: String?) -> [String: String] {
-        Self.childEnvironment(inherited: inheritedEnvironment, launch: launchEnvironment, kittyListenOn: kittyListenOn)
+    func environment() -> [String: String] {
+        Self.childEnvironment(inherited: inheritedEnvironment, launch: launchEnvironment)
     }
 
     /// One run, undecoded. `mutates` says the command changes something, so
     /// a timeout leaves its outcome unknown.
     func run(
         _ arguments: [String],
-        kittyListenOn: String? = nil,
         timeout: TimeInterval = defaultTimeout,
         mutates: Bool = false,
         cancellation: ProcessCancellation? = nil
@@ -237,8 +228,8 @@ struct AMXCommand {
         let token = mutates ? nil : cancellation
         if token?.isCancelled == true { return .failure(.cancelled) }
         let result = usesDefaultRunner
-            ? ProcessOutput.execute(binary.path, arguments: arguments, environment: environment(kittyListenOn: kittyListenOn), timeout: timeout, cancellation: token)
-            : runner(binary.path, arguments, environment(kittyListenOn: kittyListenOn), timeout)
+            ? ProcessOutput.execute(binary.path, arguments: arguments, environment: environment(), timeout: timeout, cancellation: token)
+            : runner(binary.path, arguments, environment(), timeout)
         switch result {
         case .cancelled: return .failure(.cancelled)
         case let .finished(output):
@@ -255,7 +246,6 @@ struct AMXCommand {
     func json<T: Decodable>(
         _ type: T.Type,
         _ arguments: [String],
-        kittyListenOn: String? = nil,
         timeout: TimeInterval = defaultTimeout,
         mutates: Bool = false,
         cancellation: ProcessCancellation? = nil
@@ -265,7 +255,7 @@ struct AMXCommand {
         if !full[..<optionsEnd].contains("--json") {
             full.insert("--json", at: optionsEnd)
         }
-        switch run(full, kittyListenOn: kittyListenOn, timeout: timeout, mutates: mutates, cancellation: cancellation) {
+        switch run(full, timeout: timeout, mutates: mutates, cancellation: cancellation) {
         case let .failure(error):
             return .failure(error)
         case let .success(output):

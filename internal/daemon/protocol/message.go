@@ -215,10 +215,10 @@ type Request struct {
 	HarnessProcess *HarnessProcessIdentity `json:"harness_process,omitempty"`
 	// RuntimeSessionID is the AgentMux runtime session a managed hook runs in
 	// (runtimesession.EnvVar). When present it is the routing identity and
-	// WindowID/KittyListenOn are provenance only; the daemon resolves the
+	// WindowID is an internal reducer slot; the daemon resolves the
 	// session's registered target and rewrites WindowID to its reducer slot.
 	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
-	WindowID         int    `json:"window_id,omitempty"`         // KITTY_WINDOW_ID, or the daemon-assigned slot after translation
+	WindowID         int    `json:"window_id,omitempty"`         // daemon-assigned slot after translation
 	Action           string `json:"action,omitempty"`            // active|stop|permission|failure|stop_failure|idle|clear|user_clear|user_active
 	Event            string `json:"event,omitempty"`             // raw Claude hook event name (e.g. UserPromptSubmit)
 	PayloadJSON      string `json:"payload_json,omitempty"`      // raw hook stdin payload for TypeHookEvent
@@ -230,7 +230,6 @@ type Request struct {
 	Harness          string `json:"harness,omitempty"`           // event-producing harness; unknown/legacy producers may be empty
 	SessionTitle     string `json:"session_title,omitempty"`     // tab base title (e.g. "W:api")
 	PipeMode         bool   `json:"pipe_mode,omitempty"`         // suppress notifications when claude -p
-	KittyListenOn    string `json:"kitty_listen_on,omitempty"`   // KITTY_LISTEN_ON for daemon-side Kitty writes
 	NotificationType string `json:"notification_type,omitempty"` // normalized notification_type / notificationType payload field
 	StopReason       string `json:"stop_reason,omitempty"`       // normalized stop_reason / stopReason payload field
 	Reason           string `json:"reason,omitempty"`            // normalized reason payload field
@@ -248,7 +247,6 @@ type Request struct {
 	// they are typed structs rather than flat fields, so none of them can be
 	// mistaken for hook-event state by a generic consumer.
 	Subscribe   *SubscribeRequest   `json:"subscribe,omitempty"`
-	FocusWindow *FocusWindowRequest `json:"focus_window,omitempty"`
 	Snooze      *SnoozeRequest      `json:"snooze,omitempty"`
 	Disposition *DispositionRequest `json:"disposition,omitempty"`
 	// WorkspaceView is the view a TypeWorkspaceView request asks a desktop
@@ -296,11 +294,6 @@ type RuntimeSlot struct {
 	Backend          string `json:"backend"`
 }
 
-type KittySlot struct {
-	Socket   string `json:"socket"`
-	WindowID int    `json:"window_id"`
-}
-
 type Response struct {
 	OverviewCompact *bool `json:"overview_compact,omitempty"`
 	// OverviewCompactExplicit reports whether OverviewCompact was set by an
@@ -322,12 +315,9 @@ type Response struct {
 	States   map[int]WindowStateSnapshot `json:"states,omitempty"`   // window_id → daemon-owned visible state
 	// RuntimeSlots names the runtime session bound to each slot that has one,
 	// so a client can find a session's entry in the three maps above by its
-	// runtime-session ID instead of by a Kitty window ID. Omitted when no slot
+	// runtime-session ID by its runtime session ID. Omitted when no slot
 	// is bound, which is also the shape older daemons answer with.
 	RuntimeSlots map[int]RuntimeSlot `json:"runtime_slots,omitempty"`
-	// KittySlots identifies a Kitty reducer slot by both its instance socket
-	// and the window number local to that instance. Older daemons omit it.
-	KittySlots map[int]KittySlot `json:"kitty_slots,omitempty"`
 	// Fields populated for TypeSessionDetail:
 	Events []SessionEvent `json:"events,omitempty"` // per-window hook event ring buffer (oldest first)
 	// Fields populated for TypeEventsExport. Mutually exclusive with Events:
@@ -338,7 +328,7 @@ type Response struct {
 	EventsByWindow map[int][]SessionEvent `json:"events_by_window,omitempty"`
 	// WindowMetadata carries durable debug state for export consumers. It is
 	// returned by TypeEventsExport alongside EventsByWindow so future exports can
-	// identify windows even after live Kitty lookups stop working.
+	// identify windows after a session closes.
 	WindowMetadata map[int]WindowDebugMetadata `json:"window_metadata,omitempty"`
 	// Fields populated for TypeHealth:
 	PID           int   `json:"pid,omitempty"`
@@ -375,14 +365,6 @@ type Response struct {
 	ScreenPatterns *ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
 	// ASL is populated for the ASL message types.
 	ASL *ASLResponse `json:"asl_result,omitempty"`
-	// KittySnapshot is the daemon's cached window tree and its freshness. It is
-	// populated for both TypeStateQuery (with Windows) and TypeHealth (status
-	// only), and omitted entirely by daemons that predate it — which is what
-	// lets a new client fall back to its own direct Kitty I/O against an old
-	// daemon instead of rendering an empty dashboard. A new daemon always
-	// publishes a non-nil block, cold or not, so nil means "old daemon" rather
-	// than "no snapshot yet".
-	KittySnapshot *KittySnapshot `json:"kitty_snapshot,omitempty"`
 	// Runtime reports the runtime sessions and the backend work done for
 	// them: reconciliation, attachment, screen reads, and tmux client
 	// activity. Populated for TypeHealth and omitted by daemons that predate
@@ -391,8 +373,6 @@ type Response struct {
 	// Subscription acknowledges TypeSubscribe; the stream's frames follow it on
 	// the same connection.
 	Subscription *SubscriptionAck `json:"subscription,omitempty"`
-	// Focused answers TypeFocusWindow with where the focused window lives.
-	Focused *FocusWindowResult `json:"focused,omitempty"`
 	// Snooze answers TypeNotificationSnooze with the snooze now in force.
 	Snooze *SnoozeState `json:"snooze,omitempty"`
 	// NotificationTest answers TypeNotificationTest with the backend that

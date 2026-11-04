@@ -256,7 +256,7 @@ func TestHandler_StateUpdateBlockedDoesNotRecordActivity(t *testing.T) {
 }
 
 // TestHandler_StateUpdateUsesSnapshotDerivedMute verifies that state updates do
-// not affect the daemon's Kitty-derived mute cache.
+// not affect the daemon's session mute cache.
 func TestHandler_StateUpdateUsesSnapshotDerivedMute(t *testing.T) {
 	t.Parallel()
 

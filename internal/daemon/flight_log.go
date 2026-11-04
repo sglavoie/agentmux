@@ -33,40 +33,8 @@ func (h *Handler) flightEventLocked(slot int, st *state.WindowState, at time.Tim
 		}
 		return e
 	}
-	view := h.snapshots.View()
-	windowID := slot
-	socket := h.kittySockets[slot]
-	if key, ok := h.runtimeRoutes.kittyBySlot[slot]; ok {
-		windowID = key.windowID
-		socket = key.socket
-	}
-	windows := view.Windows()
-	if socket != "" && socket != view.Socket() {
-		windows = h.otherKittyTrees[socket]
-	}
-	for _, osw := range windows {
-		for _, tab := range osw.Tabs {
-			for _, window := range tab.Windows {
-				if window.ID != windowID {
-					continue
-				}
-				e.LaunchID = window.UserVars.LaunchID
-				e.Project = window.UserVars.Project
-				if e.Profile == "" {
-					e.Profile = window.UserVars.EffectiveProfile()
-				}
-				if e.Harness == "" {
-					e.Harness = window.UserVars.EffectiveHarness()
-				}
-			}
-		}
-	}
-	if e.LaunchID != "" {
-		e.Key = "launch:" + e.LaunchID
-	} else {
-		e.Key = fmt.Sprintf("observed:%s:%d", h.flightLog.Epoch, slot)
-		e.Partial = true
-	}
+	e.Key = fmt.Sprintf("observed:%s:%d", h.flightLog.Epoch, slot)
+	e.Partial = true
 	return e
 }
 

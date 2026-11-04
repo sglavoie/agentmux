@@ -44,9 +44,8 @@ import (
 const version = "0.10.1"
 
 var (
-	dashboardSourceWindowID int
-	dashboardBackend        string
-	dashboardView           dashboard.View
+	dashboardBackend string
+	dashboardView    dashboard.View
 )
 
 var rootCmd = &cobra.Command{
@@ -54,11 +53,10 @@ var rootCmd = &cobra.Command{
 	Short: "Agent Mux multi-harness session manager",
 	Long: `Agent Mux is a multi-harness session manager. It manages Claude Code,
 Copilot, Codex, and other supported harness sessions with an interactive
-dashboard, on its own tmux server from any terminal or Agent Mux.app, or as
-color-coded Kitty tabs.
+dashboard, on its own tmux server from any terminal or Agent Mux.app.
 
 Run with no command to open the dashboard. It takes the flags ` + "`amx overview`" + `
-documents (--backend, --select, --client, --popup, --window-id).`,
+documents (--backend, --select, --client, --popup).`,
 	// A failed command reports its error; it does not reprint its own usage.
 	// The usage block is longer than most errors and pushed the one line that
 	// says what went wrong — and how to answer it — off the top of the screen.
@@ -71,7 +69,7 @@ documents (--backend, --select, --client, --popup, --window-id).`,
 		cli.ConfigureLogging(cli.DebugEnabled())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return dashboard.Run(dashboardSourceWindowID, dashboardBackend, dashboardView)
+		return dashboard.Run(dashboardBackend, dashboardView)
 	},
 }
 
@@ -188,7 +186,6 @@ func init() {
 	rootCmd.Version = buildinfo.Current().String()
 	rootCmd.PersistentFlags().BoolVar(&cli.DebugFlag, "debug", false, "enable verbose debug output")
 	rootCmd.Flags().StringVar(&dashboardBackend, cli.BackendFlag, "", "dashboard only: "+dashboard.BackendFlagUsage)
-	rootCmd.Flags().IntVar(&dashboardSourceWindowID, "window-id", 0, "dashboard only: start with this Kitty window's tab selected (open-dashboard passes it)")
 	dashboard.AddViewFlags(rootCmd, &dashboardView, "dashboard only: ")
 	// Help groups exist so `amx --help` reads by purpose rather than as one
 	// alphabetical run of two dozen names. Hidden commands take no group.
@@ -198,7 +195,7 @@ func init() {
 		&cobra.Group{ID: groupSetup, Title: "Setup and diagnostics:"},
 	)
 	addGrouped(groupSessions, session.Command(), project.Command(), session.AttachCommand(), session.SendCommand(), session.CloseCommand(), worktree.Command(), plans.Command(), dashboard.OverviewCommand(), dashboard.PastSessionsCommand(), dashboard.OpenDashboardCommand())
-	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.NameSessionCommand(), session.PinSessionCommand(), session.ResortCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
+	addGrouped(groupTabs, session.FocusNextCommand(), session.FocusNextManagedCommand(), session.FocusPrevManagedCommand(), session.MuteToggleCommand(), session.NameSessionCommand(), session.PinSessionCommand(), dashboard.ColorPickerCommand(), dashboard.IconPickerCommand(), dashboard.KeybindingsCommand())
 	addGrouped(groupSetup, config.Command(), daemon.Command(), debug.Command(), debug.DoctorCommand(), session.BackendCommand(), notifications.Command(), transcripts.Command(), overseer.Command())
 	rootCmd.AddCommand(hooks.IndicatorCommand(), release.Command(), release.DesktopCommand(), scenarioHarnessCommand(), dashboard.WorkspaceViewCommand())
 	rootCmd.AddCommand(versionCmd)
@@ -208,14 +205,13 @@ func init() {
 	guardInvocations(rootCmd)
 	completeNoFilesByDefault(rootCmd)
 	completeSharedFlags(rootCmd)
-	aliasWindowFlags(rootCmd)
 	completeFlagsWithoutFiles(rootCmd)
 	wrapLongHelp(rootCmd)
 	// The dashboard's own flags are accepted as before but left out of
 	// `amx --help`, where they read as flags of every command; the
 	// description names them, and `amx overview --help` documents the same
 	// ones.
-	for _, name := range []string{cli.BackendFlag, "window-id", "select", "client", "popup"} {
+	for _, name := range []string{cli.BackendFlag, "select", "client", "popup"} {
 		_ = rootCmd.Flags().MarkHidden(name)
 	}
 }
@@ -317,29 +313,6 @@ func helpWords(text string) []string {
 		words = append(words, current.String())
 	}
 	return words
-}
-
-// aliasWindowFlags makes --window and --window-id, which name the same Kitty
-// window on different commands, both work wherever either does: the other
-// spelling is a hidden flag sharing the same value, so help shows one name and
-// scripts written with either keep working.
-func aliasWindowFlags(command *cobra.Command) {
-	for _, flags := range []*pflag.FlagSet{command.LocalNonPersistentFlags(), command.PersistentFlags()} {
-		for name, alias := range map[string]string{"window-id": "window", "window": "window-id"} {
-			flag := flags.Lookup(name)
-			if flag == nil || command.Flags().Lookup(alias) != nil || command.InheritedFlags().Lookup(alias) != nil {
-				continue
-			}
-			target := command.Flags()
-			if flags == command.PersistentFlags() {
-				target = command.PersistentFlags()
-			}
-			target.AddFlag(&pflag.Flag{Name: alias, Value: flag.Value, DefValue: flag.DefValue, Usage: "same as --" + name, Hidden: true})
-		}
-	}
-	for _, child := range command.Commands() {
-		aliasWindowFlags(child)
-	}
 }
 
 // completeSharedFlags gives the flags that mean the same thing on every

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
@@ -22,7 +21,7 @@ func projectViewModel(view dashboard.ViewMode) Model {
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		Accounts: []config.Account{{Name: "work", Color: "blue"}},
 	}
-	m := NewModel(cfg, kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""))
+	m := NewModel(cfg, nil)
 	m.width, m.height = 120, 40
 	m.listView = view
 	return loadSessions(m, []session.RunningSession{

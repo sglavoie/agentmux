@@ -6,9 +6,7 @@ a session from a menu row or a global shortcut, shows the daemon's
 notifications as native banners, and answers ASL supervisor questions in a
 native panel. Sessions run on the tmux backend and open in the app's own
 [workspace window](#workspace), which is also where Launch Project starts a
-new one. The app needs no Kitty; a session that runs as a Kitty tab is focused
-in Kitty ([Kitty](#kitty-optional)). The
-daemon stays the source of truth: the app subscribes to the daemon's companion
+new one. The daemon stays the source of truth: the app subscribes to the daemon's companion
 stream and runs the `amx` CLI for actions. Nothing in Agent Mux depends on it,
 and quitting it returns every behavior to what it was without it; agents on
 tmux keep running and `amx attach` reaches them from any terminal.
@@ -139,37 +137,6 @@ the `DerivedData` copies with the same certificate: an ad-hoc copy answering a
 prompt would otherwise take the grant from the installed app. See
 [Signing](../macos/README.md#signing).
 
-## Kitty (optional)
-
-Nothing in the app needs Kitty. **Launch projects in** (Preferences ›
-Workspace) defaults to **Workspace (tmux)**. **Follow CLI configuration**
-reads the effective `config.toml` destination again before launching a project
-or resuming a closed conversation from Recent. **Kitty** explicitly launches into Kitty;
-if it cannot be reached the app reports the failure. The retired **Automatic**
-preference migrates to Workspace, preserving its destination. **Show in Kitty**
-and the Kitty socket preference are unchanged.
-
-For sessions that do run as Kitty tabs, focus, Recent, Mute, a dashboard shown
-in Kitty, and Launch Project sent to Kitty all reach it through its
-remote-control socket, so `kitty.conf` needs:
-
-```conf
-allow_remote_control yes
-listen_on unix:/tmp/kitty
-```
-
-Kitty appends its PID, so each instance listens on `unix:/tmp/kitty-<pid>`;
-that is how the app tells two Kitty instances apart and brings the right one
-forward. When the app cannot find any socket to try, its menu says so in place
-of acting: "Kitty has no remote-control socket: add `allow_remote_control yes`
-and `listen_on unix:/tmp/kitty` to kitty.conf, then restart Kitty." A changed
-`listen_on` needs a Kitty restart, not a reload. If you use another socket
-path, set it in Preferences › Kitty socket.
-
-The daemon accepts a `focus_window` only for a socket it learned itself, so a
-Kitty instance that has never run a managed session is not focusable until it
-has.
-
 ## Workspace
 
 Lifecycle labels match the TUI: **Detach Terminal** leaves the agent running,
@@ -215,9 +182,6 @@ attention lead the list.
   Conversation** rechecks the source before opening it; a conversation already
   running is focused. Changed source details require review and refresh. Otherwise
   starting or resuming is done from the Dashboard.
-- A click on a **Kitty** session brings Kitty forward on its window, as the
-  menu does. Its row is marked `Kitty`. Moving through the sidebar with the
-  arrow keys only selects; it never switches apps.
 - If the daemon stops, the sidebar keeps its sessions, dimmed, and says so at
   the bottom; the terminals keep working. Everything is current again when
   the daemon is back.
@@ -235,7 +199,7 @@ middle to retain their distinguishing suffix.
 ### Dashboard and utility views
 
 Above the projects the sidebar lists the workspace's own views. They are
-terminals of their own beside the agents, and none of them needs Kitty.
+terminals of their own beside the agents.
 
 - **Dashboard** (⌘D) is the `amx` dashboard, embedded. The workspace opens on
   it. Everything the dashboard does in a terminal it does here: launching,
@@ -261,8 +225,7 @@ terminals of their own beside the agents, and none of them needs Kitty.
 - The × on a session row and **Session › End Session…** (⌘⇧W), also in the
   row's context menu, end the agent through the same confirmation policy. Its
   conversation remains on disk. ⌘W **detaches its terminal**, leaving the agent
-  running and listed; click its row or choose **Reattach** to return. A Kitty
-  session has no ×; manage its terminal in Kitty.
+  running and listed; click its row or choose **Reattach** to return.
 - **Session › New Terminal Below** (⌘↩) opens a shell where the session you
   are on is working and lists it right under that session; pressed again, it
   adds another. Click one to go back to it, or step to it: ⌘] and ⌘[
@@ -270,11 +233,7 @@ terminals of their own beside the agents, and none of them needs Kitty.
   Terminal**, also ⌘⇧→ and ⌘⇧←) stop at every session and every terminal
   under one, in sidebar order; F9 and F7 (**Next Session Only** and
   **Previous Session Only**) go from session to session, passing over the
-  terminals, and ⌘⇧] and ⌘⇧[ do the same but bring a Kitty session forward
-  in Kitty (**Next Session, Raising Kitty**, shown while a Kitty session is
-  listed). The digits
-  (⌘1 to ⌘0) count sessions only. It applies to sessions whose terminal
-  is in the workspace, not to Kitty sessions; with no such session shown
+  terminals. The digits (⌘1 to ⌘0) count sessions only. With no session shown
   the item is greyed out. If the session ends first, the
   shell keeps running and moves up to the **Workspace** section.
 
@@ -293,11 +252,8 @@ view is not mistaken for a managed agent. Closing the window detaches the
 session terminals but leaves a running shell, editor, or the Dashboard alone;
 they end when they exit, when their view is closed, or when the app quits.
 
-The global dashboard shortcut shows the workspace's Dashboard. Preferences ›
-Show the dashboard in can send it to Kitty instead: it then focuses the
-dashboard there, or opens one, and shows the workspace's only when there is no
-Kitty to ask. **Launch Project** in the menu launches on tmux and
-shows the new session in the workspace.
+The global dashboard shortcut shows the workspace's Dashboard. **Launch Project**
+in the menu launches on tmux and shows the new session in the workspace.
 
 ### Keys, history, and the mouse in a terminal
 
@@ -332,8 +288,7 @@ Whatever has the keyboard decides where a key goes.
   an **Answer…** button, which opens the panel a banner's Answer… opens and
   leaves the pane on the session it shows: the supervisor question of an
   agent-session-loop run, or the prompt a session in the workspace is
-  showing. A stopped agent, an error, and a prompt in a Kitty session have
-  no button; go there. Its **Session** tab says what the daemon knows
+  showing. A stopped agent and an error have no button. Its **Session** tab says what the daemon knows
   about the session the pane is on (state, reason, times, flags, profile,
   conversation and runtime-session IDs, branch), copies an identifier when
   its line is clicked, and has buttons for what ⌘R and F5, F6, F8, F10, and
@@ -352,12 +307,8 @@ Whatever has the keyboard decides where a key goes.
   and **⌘⇧←** do the same; **⌘⇧]**
   and **⌘⇧[** step to the next and the previous session, skipping the
   terminals. From a terminal, the previous session is the one it is under.
-- Without Shift those keys never leave the app: a session that lives in
-  Kitty is selected and its pane says where it is. Add Shift (**⌘⇧1** to **⌘⇧0**, **⌘⇧]**,
-  **⌘⇧[**) and such a session comes forward in Kitty instead, as a click on
-  its row does. A session embedded here is focused here either way. macOS
-  takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for screenshots before any app sees them, unless
-  those are turned off in System Settings › Keyboard › Keyboard Shortcuts.
+- These keys stay in the workspace. macOS takes ⌘⇧3, ⌘⇧4, and ⌘⇧5 for
+  screenshots before any app sees them, unless disabled in System Settings.
 - **⌘←** and **⌘→** cycle through the current project's sessions and the
   terminals beneath them, wrapping at either end in sidebar order. Pinned
   sessions still belong to their original project, and collapsed groups
@@ -383,7 +334,7 @@ Whatever has the keyboard decides where a key goes.
   order they were pinned and can be dragged among themselves; **Unpin** puts
   one back under its project. The digits, the next-attention shortcut, and
   the inspector follow the list, so the first visible pinned session is ⌘1. Pins are
-  kept across launches, and any session can be pinned, a Kitty one too.
+  kept across launches, and any session can be pinned.
   The order sessions were dragged into within a project is kept too; a
   session that ended, or a project with none left, is dropped from it once
   the daemon lists the sessions again.
@@ -391,9 +342,8 @@ Whatever has the keyboard decides where a key goes.
   **Expand Project**; **Collapse Pinned** on the Pinned group). A collapsed
   project lists its header only, marked ▸, which still counts its sessions
   waiting on you; the digits and the next-attention shortcut still reach its
-  sessions. Collapsed projects are kept across launches. A Kitty session's
-  menu has **Show in Kitty**, and a detached session's **Reattach**, which do
-  what a click on the line does.
+  sessions. Collapsed projects are kept across launches. A detached session's
+  menu has **Reattach**, which does what a click on the line does.
 - A right-click in a terminal offers **Copy**, **Paste**, and **Select All**,
   and **Open Link** and **Copy Link** while the pointer is on a link (hold ⌘
   to find one). A program that tracks the mouse is sent the click instead,
@@ -402,8 +352,8 @@ Whatever has the keyboard decides where a key goes.
   with two exceptions: Shift+Page Up and Shift+Page Down, and the function
   keys below. The global shortcuts work whatever has the keyboard.
 
-**Function keys.** F1 to F11 do here what they do in Kitty, on the
-workspace's sessions instead of tabs (**Session › Function Keys**). The ones
+**Function keys.** F1 to F11 act on the workspace's sessions
+(**Session › Function Keys**). The ones
 about a session act on the one shown, or on the one a terminal beside it, a
 pager, or a picker is about. F12 stays the key that detaches.
 
@@ -419,8 +369,7 @@ pager, or a picker is about. F12 stays the key that detaches.
 | F10 | Mutes or unmutes the session's notifications |
 | F11 | Marks the session active (⚡) until its next real event |
 
-F5 and F6 are for sessions embedded here; a session that lives in Kitty has
-its pickers in Kitty. F8, F10, and F11 work for both. With no session shown
+With no session shown
 the keys about one are greyed out in **Session › Function Keys**.
 
 A key or item that cannot act says why at the top of the pane for a few
@@ -830,8 +779,8 @@ Refreshes retain selection and focus; toggling a sidebar retains reading positio
 
 | Default | Does |
 | --- | --- |
-| ⌃⌥⌘A | Shows the workspace's Dashboard. Sent to Kitty in Preferences, it brings the dashboard running there forward, or opens one (`amx open-dashboard`). |
-| ⌃⌥⌘N | Focuses the next session needing attention, in the order the workspace lists sessions (projects by name, then each project's sessions as arranged there), across Kitty instances and the workspace: a tmux session opens in the workspace and is revealed in its sidebar as ⌘J does, a Kitty session in Kitty. Beeps when nothing waits. |
+| ⌃⌥⌘A | Shows the workspace's Dashboard. |
+| ⌃⌥⌘N | Focuses the next session needing attention in sidebar order. Beeps when nothing waits. |
 
 Change or clear them in Preferences. They are Carbon hotkeys and need no
 Accessibility permission. Preferences warns when a shortcut is taken by the
@@ -843,8 +792,7 @@ beeps and leaves the reason in the menu.
 
 With the app running and allowed, the daemon still applies every gate (quiet
 hours, mute, snooze, cooldown) and then hands each notification to the app,
-which shows it through Notification Center. Clicking it focuses a Kitty pane
-the way an Alerter click does, and shows a tmux session in the workspace,
+which shows it through Notification Center. Clicking it shows the tmux session in the workspace,
 opening the window if it is closed; the banner's actions mute the session, snooze for an
 hour, or open the ASL answer panel. A permission prompt's banner offers no
 approval. For a session in the workspace it offers **Answer…**, which opens a
@@ -913,18 +861,6 @@ tried and why it was refused; `amx backend status` prints the same.
 (`project`, `open-dashboard`, `mute-toggle --json`); the tooltip says which.
 Install a current `amx`.
 
-**Kitty does not come forward, or shows the wrong Space.** The app is an
-accessory app and activates Kitty cooperatively: it yields activation to the
-Kitty process that owns the socket and asks it to activate. macOS 14 and later
-may decline a cooperative activation when the app itself was not active, and
-when only one Kitty runs the app also opens it through Launch Services, which
-macOS does honor. With several Kitty instances that fallback cannot name one,
-so it is skipped. Kitty focuses the tab and window either way; whether macOS
-switches to the Space holding that OS window is governed by System Settings ›
-Desktop & Dock › "When switching to an application, switch to a Space with
-open windows for the application". The app deliberately does not use
-AppleScript or Accessibility to force a Space switch.
-
 **Notifications never arrive in the app.** Check System Settings ›
 Notifications › Agent Mux and Preferences › Use app notifications. After an
 ad-hoc install the permission resets; allow it again. `amx debug tail` names
@@ -940,25 +876,8 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 
 - **Find in a full-screen agent** reaches only the visible screen; the rest
   of the conversation is in the agent's own transcript and search.
-- **Mute lag.** A mute made from the app (or `amx mute-toggle`) is written to
-  Kitty at once, but the daemon learns it on its next Kitty listing, at most
-  one render cadence (2 seconds) later. A notification raised inside that
-  window is not yet suppressed. The menu row shows a mute made from the app
-  at once and keeps showing it until a snapshot agrees, for up to 5 seconds,
-  so reopening the menu right away does not offer the toggle again. See
-  [Daemon › Mute lag](daemon.md#mute-lag) for why there is no `mute_set`
-  request.
 - **Paused ASL runs** appear in Waiting for answering only when their pause left
   an open supervisor question. **View › ASL Runs…** also lists pauses without one.
-- **One Kitty per window ID.** Window IDs mean something only inside the Kitty
-  that issued them, so Mute never tries another instance's socket.
-- **Other Kitty instances.** The daemon lists the instance whose hook it heard
-  last and, on the same cadence, each other instance that has a session, so
-  those sessions are named from their own tabs. Each is kept until its own
-  instance stops reporting the window or that Kitty exits, never because a
-  listing of another instance could not see it. The daemon keys state by the
-  instance socket and window number, so reused numbers retain independent
-  attention and completion state.
 - **Codex completion visibility.** Managed interactive launches select `--no-daemon`
   when the launched CLI advertises support, preserving the terminal's hook environment
   across resume and `/new`. Explicit remote transport choices and older CLIs retain
@@ -966,7 +885,7 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
   they are not borrowed from another terminal. The mitigation requires an updated
   installation and a newly launched managed client. Existing clients are not rebound.
   The operator confirmed the installed-build resume, `/new`, app-reopen, and physical
-  sleep/wake checks on 2026-10-18; see the [F-001 observation record](acceptance/workspace-consistency/observations.json).
+  sleep/wake checks on 2026-10-18.
 
 ### Waiting controls and update times
 

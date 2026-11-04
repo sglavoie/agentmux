@@ -152,7 +152,7 @@ func TestClearStatusUnavailableOnNonAttentionRow(t *testing.T) {
 
 // TestLockActionTogglesFromTheOverlay verifies the lock entry dispatches a
 // toggle command and returns to the list. The cmd itself is opaque (it bridges
-// to session.Lock/Unlock via the kitty client), so we only assert it was
+// to session.Lock/Unlock via the session backend), so we only assert it was
 // returned and the overlay closed behind it.
 func TestLockActionTogglesFromTheOverlay(t *testing.T) {
 	t.Parallel()

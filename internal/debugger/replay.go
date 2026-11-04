@@ -1,6 +1,6 @@
 package debugger
 
-// This file intentionally contains no daemon client or Kitty dependency.
+// This file intentionally contains no daemon client or terminal dependency.
 // Replay reads immutable diagnostic artifacts and drives only state.Reducer,
 // whose inputs and clock are explicit and side-effect free.
 
@@ -132,7 +132,7 @@ type ReplayReport struct {
 
 // Replay opens one immutable journal, bundle, or export artifact and compares
 // its recorded causal outcomes with a fresh pure reducer. It never discovers a
-// daemon, opens a socket, reconciles a journal, or creates a Kitty client.
+// daemon, opens a socket, reconciles a journal, or creates a terminal client.
 func Replay(ctx context.Context, inputPath string, options ReplayOptions) (ReplayReport, error) {
 	if ctx == nil {
 		ctx = context.Background()

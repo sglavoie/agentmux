@@ -90,7 +90,7 @@ type Origin struct {
 	PaletteOffset  int
 }
 
-// Host is the Kitty tab and window the dashboard itself is running in.
+// Host is the session tab and window IDs the dashboard itself is running in.
 //
 // It is tracked separately from every selection the dashboard makes because it
 // answers a different question: not "which row is the operator acting on" but
@@ -421,7 +421,7 @@ func ConfirmPromptFor(id commands.ID, profile string) (ConfirmPrompt, bool) {
 	return ConfirmPrompt{}, false
 }
 
-// SameSession reports whether two readings of a Kitty tab describe the same
+// SameSession reports whether two readings of a session describe the same
 // conversation.
 //
 // It is deliberately conservative in both directions. Identity evidence is used

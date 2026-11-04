@@ -22,7 +22,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -39,12 +38,6 @@ func Run(ctx context.Context, cfg *config.Config) error {
 type runDependencies struct {
 	beforeStartupConfirmation func(context.Context)
 	afterStartupPublication   func()
-	afterRenderWorkerShutdown func()
-	// kittyRunner replaces the kitten subprocess runner. Tests inject a
-	// deterministic runner so a startup path can be driven against a Kitty that
-	// fails or blocks on demand instead of whichever Kitty the test host
-	// happens to be running; production leaves it nil.
-	kittyRunner kitty.CommandRunner
 	// startupProbeBudget bounds the wait for the daemon's own health answer
 	// at startup. Zero is production's: ipc.NormalAckBudget, what a hook
 	// would wait. A lifecycle test that asserts something else gives the
@@ -128,25 +121,8 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// report what the daemon is actually executing.
 	handler.SetBuildInfo(buildinfo.Current())
 
-	var kittyRunner kitty.CommandRunner = kitty.NewRealRunner()
-	if deps.kittyRunner != nil {
-		kittyRunner = deps.kittyRunner
-	}
-	kittyClient := newDaemonKittyClient(kittyRunner)
-	// Install the list-health observer before the client is used for anything,
-	// so the very first read — the bounded startup restore below — is already
-	// covered. The observer is a single slot shared by every WithSocket clone,
-	// and this is the only place in the daemon that claims it.
-	kittyClient.SetListObserver(recorder.kittySnapshotObserver())
-	// Assign the Kitty client on the startup goroutine before any server
-	// goroutine can read it. Set the field directly rather than via
-	// SetKittyClient: SetKittyClient primes the cache with an UNBOUNDED
-	// ListWindows, which a wedged Kitty could hang on before the bounded restore
-	// even runs. The bounded restore below is the authoritative initial snapshot.
-	handler.useKittyClient(kittyClient)
-	focusClient := notification.NewKittyFocus(kittyClient)
-	notifier.SetFocus(focusClient)
-	handler.SetFocusClient(focusClient)
+	// Runtime sessions are hosted by the private tmux server. No external
+	// terminal client is installed in the daemon.
 	// Managed hooks route through the runtime-session registry. The reader
 	// never writes or locks it; a missing file is an empty registry.
 	if store, err := runtimesession.NewStore(runtimesession.DefaultRegistryPath()); err == nil {
@@ -184,9 +160,8 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	)
 	handler.SetCopilotTranscriptHomes(copilotProfileHomes(cfg), config.ExpandTilde(harness.DefaultHomeDir(harness.Copilot)))
 	// Screen-pattern sets are a package-level registry read lock-free by every
-	// probe goroutine, so the load must happen here on the startup goroutine —
-	// ahead of restoreStateFromKittyBounded below and well ahead of
-	// runScreenProbes. It never fails: a missing, unreadable or invalid override
+	// probe goroutine, so the load must happen here on the startup goroutine,
+	// ahead of runScreenProbes. It never fails: a missing, unreadable or invalid override
 	// degrades to the embedded default and comes back as warnings, which the
 	// health response carries and `amx doctor` turns into a finding. Reporting
 	// them here as log lines only would make a stale override invisible to
@@ -196,8 +171,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// starts, since its first tick performs the startup reconciliation. The
 	// bridge itself starts much later; discovery does not depend on it.
 	handler.SetASLStateRoot(cfg.Defaults.ASL.StateRoot)
-	// The shadow reducer mirrors the same projections the legacy paths already
-	// consume: guard_duration for the legacy trailing-event grace and the
+	// The shadow reducer uses guard_duration for trailing-event grace and the
 	// watchdog thresholds for active-class staleness.
 	handler.SetReducerConfig(state.ReducerConfig{
 		GuardDuration: int64(cfg.Defaults.GuardDuration),
@@ -206,27 +180,12 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 		StaleCompact:  int64(cfg.Defaults.Watchdog.Compact),
 	})
 
-	// Take one bounded initial Kitty snapshot and restore durable state BEFORE
-	// binding the public socket, so the first client request already sees
-	// restored state. A slow or wedged Kitty must not delay startup: past the
-	// budget the daemon comes up degraded and the maintenance loop reconciles.
-	if !handler.kittyKnown() {
-		handler.MarkReadyWithoutKitty()
-		slog.Info("daemon: no Kitty socket in the environment; ready without a Kitty snapshot", "socket", socketPath)
-		recorder.record("daemon.snapshot", "success", "no_kitty", nil)
-	} else if ready, reason := handler.restoreStateFromKittyBounded(time.Now(), initialSnapshotBudget); ready {
-		handler.MarkReady()
-		slog.Info("daemon: initial snapshot restored", "socket", socketPath)
-		recorder.record("daemon.snapshot", "success", "restored", nil)
-	} else {
-		handler.MarkDegraded(reason)
-		slog.Warn("daemon: starting degraded; initial snapshot did not complete in time", "reason", reason)
-		recorder.record("daemon.snapshot", "degraded", reason, nil)
-	}
+	handler.MarkReady()
+	slog.Info("daemon: ready for tmux sessions", "socket", socketPath)
+	recorder.record("daemon.snapshot", "success", "tmux", nil)
 
-	// Runtime-session slots restore after Kitty's, so a Kitty slot whose state
-	// amx_state just rebuilt is rebound to its session, and before the socket
-	// binds, so no event can land in a slot before its checkpoint does.
+	// Runtime-session slots restore before the socket binds, so no event can
+	// land in a slot before its checkpoint does.
 	handler.SetRuntimeCheckpointPath(DefaultRuntimeCheckpointPath())
 	handler.enableConversationThreads()
 	// The registry is reconciled first: an agent that exited or was lost
@@ -284,12 +243,10 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	}
 	slog.Info("daemon: started", "socket", socketPath, "guard_duration", guardDur)
 	recorder.record("daemon.started", "success", "socket_published", map[string]string{"socket": socketPath})
-	// Independent loops: snapshot maintenance (the periodic lister), the
-	// watchdog (the 1s staleness evaluator on in-process elapsed time), harness
-	// process lifecycle reconciliation, the render worker (the single Kitty
-	// writer), and the screen probes. A slow Kitty write, process-table query, or
-	// wedged screen read stalls only its own loop — never snapshot publication,
-	// watchdog expiry, or event ingestion.
+	// Independent loops: runtime maintenance, the watchdog (the 1s staleness
+	// evaluator on in-process elapsed time), harness process lifecycle
+	// reconciliation, and screen probes. A slow process-table query or screen
+	// read stalls only its own loop, never watchdog expiry or event ingestion.
 	//
 	// Every loop is owned: run tracks all of them in one wait group and joins
 	// that group before returning. A returned Run therefore means the daemon's
@@ -307,12 +264,6 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	startLoop(handler.runMaintenance)
 	startLoop(handler.runWatchdog)
 	startLoop(handler.runHarnessProcessLifecycle)
-	startLoop(func(loopCtx context.Context) {
-		handler.runRenderWorker(loopCtx)
-		if deps.afterRenderWorkerShutdown != nil {
-			deps.afterRenderWorkerShutdown()
-		}
-	})
 	startLoop(handler.runScreenProbes)
 	startLoop(handler.runCompanionHub)
 	// The ASL bridge is started only here, after the socket is published and
@@ -328,9 +279,8 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	slog.Info("daemon: ready", "socket", socketPath)
 	recorder.record("daemon.ready", "success", "maintenance_loops_started", nil)
 	// waitForLoops cancels every loop and joins the group. The budget is a
-	// safety valve, not a schedule: a loop wedged inside an in-flight Kitty
-	// round-trip must not hold the process open forever, so an exceeded budget
-	// is reported and shutdown continues.
+	// safety valve for a loop delayed by external I/O: an exceeded budget is
+	// reported and shutdown continues.
 	waitForLoops := func() {
 		cancel()
 		drained := make(chan struct{})
@@ -392,15 +342,6 @@ func confirmDaemonServing(ctx context.Context, socketPath string, budget time.Du
 		return fmt.Errorf("health probe reached pid %d, want startup pid %d", resp.PID, os.Getpid())
 	}
 	return nil
-}
-
-// newDaemonKittyClient builds the daemon's Kitty client from the current
-// environment, normalizing KITTY_LISTEN_ON so a daemon auto-started by an F8
-// `launch --allow-remote-control` child does not inherit an unusable
-// process-local "fd:" descriptor. An empty normalized address leaves the
-// client without a socket, matching kitty.NewClient's behavior outside Kitty.
-func newDaemonKittyClient(runner kitty.CommandRunner) *kitty.SubprocessClient {
-	return kitty.NewClientWithSocket(runner, kitty.NormalizedListenAddressFromEnv())
 }
 
 // buildStaleThresholds projects cfg.Defaults.Watchdog and each per-profile

@@ -155,61 +155,19 @@ extension AppDelegate {
         preferencesModel.hotKeyProblems = problems
     }
 
-    /// ⌃⌥⌘A: shows the workspace's Dashboard, or, when Preferences sends it
-    /// to Kitty, focuses the dashboard running there or opens one, then
-    /// brings that Kitty forward. With no Kitty to ask, the dashboard is the
-    /// workspace's own either way.
+    /// ⌃⌥⌘A shows the workspace's Dashboard.
     func openDashboard() {
-        guard preferencesModel.preferences.dashboardPlace == .kitty else {
-            showWorkspaceView(.dashboard)
-            return
-        }
-        guard let command else {
-            refuse(AMXWording.unavailable(notFound: preferences.binaryMenuProblem))
-            return
-        }
-        if let capabilities = preferences.capabilities, !capabilities.openDashboard {
-            refuse("\(command.binary.path) has no open-dashboard command; run just install.")
-            return
-        }
-        let candidates = DashboardOpener.candidates(
-            override: preferencesModel.preferences.kittySocketOverride,
-            snapshot: store.snapshot,
-            kittyPIDs: KittyEndpoint.runningKittyPIDs()
-        )
-        amxRunner.run({
-            DashboardOpener.open(candidates: candidates) { socket in
-                command.json(OpenDashboardResult.self, ["open-dashboard"], kittyListenOn: socket)
-            }
-        }, onMain: { [weak self] outcome in
-            self?.finishOpenDashboard(outcome)
-        })
-    }
-
-    func finishOpenDashboard(_ outcome: DashboardOpener.Outcome) {
-        switch DashboardOpener.destination(for: outcome) {
-        case let .kitty(result, socket):
-            Self.logger.notice("dashboard \(result.opened ? "opened" : "focused", privacy: .public) (window \(result.windowID))")
-            if !KittyActivator.activate(socket: socket) {
-                refuse("Kitty is not running.")
-            }
-        case .workspace:
-            Self.logger.notice("dashboard: no Kitty socket to ask; showing the workspace's own")
-            showWorkspaceView(.dashboard)
-        case let .failed(message):
-            refuse("Could not open the dashboard: \(message)")
-        }
+        showWorkspaceView(.dashboard)
     }
 
     /// ⌃⌥⌘N: focuses the first waiting session in the workspace sidebar's
-    /// order, then the next on each press, across every Kitty instance and
-    /// the workspace's own sessions.
+    /// order, then the next on each press.
     func focusNextAttention() {
         guard store.feed == .live, let snapshot = store.snapshot else {
             refuse(DaemonPhrase.notConnected + ".")
             return
         }
-        guard let session = cycler.advance(in: store.sessions, snapshotSocket: snapshot.kitty.socket, order: attentionOrder) else {
+        guard let session = cycler.advance(in: store.managedSessions, order: attentionOrder) else {
             Self.logger.notice("next attention: nothing is waiting")
             NSSound.beep()
             return

@@ -155,7 +155,6 @@ func TestCompactHookPayloadCanonicalizesSemanticAllowlist(t *testing.T) {
 		Trigger:               "manual",
 		CWD:                   "/work/project",
 		Harness:               "codex",
-		WindowID:              52,
 		PlanDir:               "/plans/run",
 		RunIDCamel:            "run-7",
 		StatePath:             "/plans/run/state.json",
@@ -189,7 +188,7 @@ func TestCompactHookPayloadCanonicalizesSemanticAllowlist(t *testing.T) {
 		decoded.EffectiveNotificationType() != "permission_prompt" || decoded.EffectiveStopReason() != "end_turn" ||
 		decoded.Reason != "blocked" || decoded.EffectivePauseReason() != "question" || decoded.Source != original.Source ||
 		decoded.Trigger != original.Trigger || decoded.CWD != original.CWD || decoded.Harness != original.Harness ||
-		decoded.EffectiveKittyWindowID() != 52 || decoded.PlanDir != original.PlanDir || decoded.EffectiveRunID() != "run-7" ||
+		decoded.PlanDir != original.PlanDir || decoded.EffectiveRunID() != "run-7" ||
 		decoded.StatePath != original.StatePath || decoded.RunFinishedAt != original.RunFinishedAt ||
 		decoded.EffectiveToolName() != "Bash" || decoded.EffectiveSessionID() != "session-7" ||
 		decoded.EffectiveTurnID() != "turn-8" || decoded.EffectiveToolUseID() != "tool-9" ||

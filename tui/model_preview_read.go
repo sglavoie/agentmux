@@ -1,5 +1,5 @@
 // This file is the inspector's read controller: the one place that decides when
-// the pane asks Kitty for scrollback, how many of those reads may be outstanding
+// the pane asks tmux for scrollback, how many of those reads may be outstanding
 // at once, and which of the answers that come back is allowed to paint.
 //
 // Two identities travel with every read and they answer different questions. The
@@ -16,9 +16,8 @@
 // The concurrency contract is one read at a time, one coalesced catch-up behind
 // it. A burst of cursor moves, ticks, and refreshes costs one extra read in
 // total rather than one each, and nothing here ever blocks the update loop: the
-// read runs inside a tea.Cmd and its worst case is the Kitty runner's own
-// subprocess deadline (internal/kitty/exec.go), which this file reuses as its
-// timeout boundary rather than adding a second one.
+// read runs inside a tea.Cmd, so a slow pane capture cannot block the update
+// loop.
 
 package tui
 
@@ -56,7 +55,7 @@ func (m *Model) startPreviewRead() tea.Cmd {
 	if read := m.backgroundCommands.scrollback; read != nil {
 		return fetchPreviewWith(read, m.previewWindowID, m.previewTargetSeq, m.previewReadActiveSeq)
 	}
-	return fetchPreviewCmd(m.client, m.previewWindowID, m.previewTargetSeq, m.previewReadActiveSeq)
+	return fetchPreviewCmd(m.previewWindowID, m.previewTargetSeq, m.previewReadActiveSeq)
 }
 
 // settlePreviewRead reports whether a reply carrying this request identity is

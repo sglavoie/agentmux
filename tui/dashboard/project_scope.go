@@ -149,7 +149,7 @@ func FilterProjectScopes(scopes []ProjectScope, query string) []ProjectScope {
 // the heading it sits under — need, act, idle — so the numbers line up with the
 // words at every label length, and the column is padded rather than clipped.
 // Four, three and four digits is far more live sessions in one urgency bucket of
-// one project than a Kitty instance holds.
+// one project than one tmux server holds.
 //
 // It must stay equal to the width projectSwitcherHeader reserves on the right
 // and to the width renderProjectScopeRow's tally actually renders at: the row

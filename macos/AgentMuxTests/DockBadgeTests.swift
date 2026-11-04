@@ -32,7 +32,14 @@ final class DockBadgeTests: XCTestCase {
         let delegate = AppDelegate()
         delegate.store.onChange = { [weak delegate] in delegate?.storeChanged() }
         var snapshot = CompanionSnapshot()
-        snapshot.attention = CompanionAttention(total: 2, key: 2)
+        func waiting(_ id: String) -> CompanionSession {
+            var session = CompanionSession()
+            session.runtime = CompanionRuntime(sessionID: id, backend: "tmux", pane: "%1")
+            session.iconState = "key"
+            session.attention = true
+            return session
+        }
+        snapshot.sessions = [waiting("rs-one"), waiting("rs-two")]
         delegate.store.apply(snapshot: snapshot)
         XCTAssertEqual(NSApp.dockTile.badgeLabel, "2")
 
@@ -48,14 +55,14 @@ final class DockBadgeTests: XCTestCase {
         delegate.syncActivationPolicy()
         assertDockBadge("2")
 
-        snapshot.attention = CompanionAttention(total: 1, key: 1)
+        snapshot.sessions = [waiting("rs-one")]
         delegate.store.apply(snapshot: snapshot)
         assertDockBadge("1")
         delegate.store.apply(.disconnected(.heartbeatLost, retryIn: 1))
         assertDockBadge(nil)
         delegate.store.apply(snapshot: snapshot)
         assertDockBadge("1")
-        snapshot.attention = CompanionAttention()
+        snapshot.sessions = []
         delegate.store.apply(snapshot: snapshot)
         assertDockBadge(nil)
     }

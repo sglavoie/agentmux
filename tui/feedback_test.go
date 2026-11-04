@@ -74,7 +74,7 @@ func TestFeedbackSelectDismissAndOutcomeKeepNoticeIdentity(t *testing.T) {
 func TestFeedbackInspectDoesNotAttachOrRepeatAndRejectsReusedSession(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.mode = ModeFeedback
 	row, ok := m.selectedSession()

@@ -1,71 +1,10 @@
 package daemon
 
 import (
-	"encoding/json"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
-
-// screenProbeMutationFingerprint captures every state family a discarded
-// screen/transcript observation is forbidden to touch. Encoding the value
-// gives tests a simple exact comparison while retaining reducer facts, audit
-// rows, durable metadata, mute state, notification state, and render state.
-func screenProbeMutationFingerprint(t *testing.T, h *Handler, windowID int) string {
-	t.Helper()
-	type fingerprint struct {
-		WindowState         string
-		Events              []protocol.SessionEvent
-		EventSeq            uint64
-		Metadata            protocol.WindowDebugMetadata
-		Guard               string
-		RenderPending       bool
-		PendingNotification bool
-		IdleSamples         [3]int
-		IdleGenerations     [3]int64
-	}
-
-	h.stateMu.Lock()
-	st := h.store[windowID]
-	if st == nil {
-		h.stateMu.Unlock()
-		t.Fatalf("window %d has no state", windowID)
-	}
-	windowState, err := st.MarshalUserVar()
-	if err != nil {
-		h.stateMu.Unlock()
-		t.Fatalf("marshal window %d state: %v", windowID, err)
-	}
-	refs := [3]activity.Ref{
-		{WindowID: windowID, Key: screenPromptProbeSource},
-		{WindowID: windowID, Key: claudeScreenStopProbeSource},
-		{WindowID: windowID, Key: copilotTranscriptStopProbeSource},
-	}
-	got := fingerprint{
-		WindowState: windowState,
-		Events:      append([]protocol.SessionEvent(nil), st.EventLog...),
-		EventSeq:    h.eventSeq.Value(),
-		Metadata:    h.windowMetadata[windowID],
-	}
-	for i, ref := range refs {
-		got.IdleSamples[i] = h.idleSamples.Streak(ref)
-		got.IdleGenerations[i] = h.idleSamples.Generation(ref)
-	}
-	h.stateMu.Unlock()
-
-	got.Guard = h.guard.Current(windowID)
-	got.RenderPending = h.renderQueue.Pending(windowID)
-	if h.notifier != nil {
-		got.PendingNotification = h.notifier.HasPending(windowID)
-	}
-
-	encoded, err := json.Marshal(got)
-	if err != nil {
-		t.Fatalf("marshal screen-probe fingerprint: %v", err)
-	}
-	return string(encoded)
-}
 
 // idleSeedHarness folds a harness event into a window through the normal state
 // path so the window has a live reducer and effective state before an

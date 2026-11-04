@@ -64,6 +64,11 @@ final class StatusItemControllerTests: XCTestCase {
 
         var live = snapshot()
         live.attention = CompanionAttention(total: 1, question: 1)
+        var session = CompanionSession()
+        session.runtime = CompanionRuntime(sessionID: "rs-status", backend: "tmux", pane: "%1")
+        session.iconState = "question"
+        session.attention = true
+        live.sessions = [session]
         store.apply(snapshot: live)
         XCTAssertEqual(controller.statusItem.button?.accessibilityLabel(), "Agent Mux, 1 waiting")
     }
@@ -93,14 +98,14 @@ final class StatusItemControllerTests: XCTestCase {
         controller.menuWillOpen(controller.menu)
         XCTAssertTrue(controller.isMenuOpen)
 
-        store.show(notice: "Kitty is not running.")
-        XCTAssertTrue(titles.contains("Kitty is not running."), "the open menu shows a notice set while it is open")
+        store.show(notice: "Terminal is not running.")
+        XCTAssertTrue(titles.contains("Terminal is not running."), "the open menu shows a notice set while it is open")
 
         // Seen while open: once the hold passes, a snapshot clears it, and the
         // open menu drops the line.
         clock += SessionStore.noticeHold
         store.apply(snapshot: snapshot())
-        XCTAssertFalse(titles.contains("Kitty is not running."))
+        XCTAssertFalse(titles.contains("Terminal is not running."))
 
         controller.menuDidClose(controller.menu)
         XCTAssertFalse(controller.isMenuOpen)
@@ -119,12 +124,12 @@ final class StatusItemControllerTests: XCTestCase {
         controller.menuWillOpen(submenu)
         let parents = controller.menu.items.filter { $0.submenu != nil }
 
-        store.show(notice: "Kitty is not running.")
-        XCTAssertFalse(titles.contains("Kitty is not running."), "the items an open submenu hangs from stay")
+        store.show(notice: "Terminal is not running.")
+        XCTAssertFalse(titles.contains("Terminal is not running."), "the items an open submenu hangs from stay")
         XCTAssertEqual(controller.menu.items.filter { $0.submenu != nil }.map(ObjectIdentifier.init),
                        parents.map(ObjectIdentifier.init))
 
         controller.menuDidClose(submenu)
-        XCTAssertTrue(titles.contains("Kitty is not running."), "shown once the submenu closes")
+        XCTAssertTrue(titles.contains("Terminal is not running."), "shown once the submenu closes")
     }
 }

@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // pickerScrollFixtureModel builds a picker-mode model with rows config
@@ -31,8 +30,7 @@ func pickerScrollFixtureModel(t *testing.T, rows, height int) Model {
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      sessions,
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
@@ -280,8 +278,7 @@ func TestRenderPickerList_UnboundedRendersAllRows(t *testing.T) {
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      sessions,
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")

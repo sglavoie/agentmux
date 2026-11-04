@@ -108,7 +108,7 @@ var debugBundleCmd = &cobra.Command{
 	Short: "Create an atomic always-redacted diagnostic archive",
 	Long: `Write a .tar.gz of the journal records the selectors match, the same live
 health status reports, and a doctor snapshot, for attaching to a report or
-replaying later. It may ask the daemon and Kitty, and changes neither.
+replaying later. It may ask the daemon and changes nothing.
 
 Either mode is redacted. --mode share (the default) can be passed on;
 --mode forensic keeps broader diagnostic text and is for this machine only.
@@ -282,7 +282,7 @@ func runDebugBundle(cmd *cobra.Command, _ []string) error {
 	}
 	status, err := debugger.CollectStatus(cmd.Context(), debugger.StatusOptions{
 		Config: cfg, ConfigError: configErr, Paths: paths, Journal: journal,
-		Daemon: debugDaemon(), Kitty: debugKitty(), AMXBin: bin,
+		Daemon: debugDaemon(), AMXBin: bin,
 		CLIBuild: buildinfo.Current(), Now: now, Selector: selector,
 		Backend: doctorBackendStatus(),
 	})

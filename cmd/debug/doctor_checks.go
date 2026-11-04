@@ -16,8 +16,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/hooks"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
 
@@ -190,7 +188,7 @@ func writeDoctorASLCapability(out io.Writer, status *aslbridge.Status, addFindin
 	return nil
 }
 
-func writeDoctorNativeLogs(out io.Writer, windows []kitty.OSWindow, kittyOK bool, reportWarning func(string, ...any)) error {
+func writeDoctorNativeLogs(out io.Writer, reportWarning func(string, ...any)) error {
 	cfg, err := doctorLoadConfig()
 	if err != nil {
 		if _, writeErr := fmt.Fprintf(out, "native logs: config unavailable (%s)\n", err); writeErr != nil {
@@ -212,7 +210,7 @@ func writeDoctorNativeLogs(out io.Writer, windows []kitty.OSWindow, kittyOK bool
 		reportWarning("native logging state path unavailable: %s", err)
 		return nil
 	}
-	native := debugger.InspectNative(paths, policy, windows, kittyOK, debugger.Selector{}, doctorNow())
+	native := debugger.InspectNative(paths, policy, doctorNow())
 	if native.Error != "" {
 		if _, writeErr := fmt.Fprintf(out, "native logs: unavailable (%s)\n", native.Error); writeErr != nil {
 			return writeErr
@@ -228,25 +226,6 @@ func writeDoctorNativeLogs(out io.Writer, windows []kitty.OSWindow, kittyOK bool
 		return err
 	}
 
-	if !kittyOK {
-		if _, err := fmt.Fprintln(out, "native coverage: unavailable (Kitty is unreachable)"); err != nil {
-			return err
-		}
-	} else {
-		if _, err := fmt.Fprintf(out, "native coverage: managed=%d external=%d degraded=%d disabled=%d unmanaged=%d\n",
-			native.Coverage.Managed, native.Coverage.External, native.Coverage.Degraded, native.Coverage.Disabled, native.Coverage.Unmanaged); err != nil {
-			return err
-		}
-		if native.Coverage.Degraded > 0 {
-			n := native.Coverage.Degraded
-			reportWarning("%s %s degraded native logging controls", cli.CountOf(n, "managed session", "managed sessions"), cli.ByCount(n, "has", "have"))
-		}
-		if native.Coverage.Unmanaged > 0 {
-			n := native.Coverage.Unmanaged
-			reportWarning("%s %s externally launched or %s Agent Mux native logging metadata; coverage cannot be guaranteed",
-				cli.CountOf(n, "harness session", "harness sessions"), cli.ByCount(n, "is", "are"), cli.ByCount(n, "lacks", "lack"))
-		}
-	}
 	if native.Storage.ActiveExcessBytes > 0 {
 		reportWarning("active native log writers exceed per-launch targets by %s; pruning is deferred until exit", formatDoctorBytes(native.Storage.ActiveExcessBytes))
 	}
@@ -764,111 +743,6 @@ func doctorHookState(sync hooks.SyncStatus, activation hooks.ActivationVerdict) 
 		return "in sync and active"
 	}
 	return syncWords + ", " + activationWords
-}
-
-func writeDoctorRenderer(out io.Writer, snapshot protocol.EventsExport, liveByID map[int]protocol.WindowLiveMetadata, kittyOK, inUse bool, reportIssue func(string, ...any)) error {
-	sockets := make(map[string]struct{})
-	ids := ExportWindowIDs(snapshot, 0)
-	for _, id := range ids {
-		if socket := strings.TrimSpace(snapshot.WindowMetadata[id].Renderer.KittyListenOn); socket != "" {
-			sockets[socket] = struct{}{}
-		}
-	}
-	if len(sockets) == 0 {
-		if _, err := fmt.Fprintln(out, "kitty sockets: none reported"); err != nil {
-			return err
-		}
-	} else {
-		values := make([]string, 0, len(sockets))
-		for socket := range sockets {
-			values = append(values, socket)
-		}
-		sort.Strings(values)
-		if _, err := fmt.Fprintf(out, "kitty sockets: %s\n", strings.Join(values, ", ")); err != nil {
-			return err
-		}
-	}
-
-	if !inUse {
-		// The renderer writes Kitty tab titles; with no Kitty in use there is
-		// no tab for a desired state to have drifted from.
-		_, err := fmt.Fprintln(out, "renderer drift: not checked (Kitty is not in use)")
-		return err
-	}
-	if !kittyOK {
-		_, err := fmt.Fprintln(out, "renderer drift: unavailable (Kitty is unreachable)")
-		return err
-	}
-	type tabKey struct {
-		osWindowID int
-		tabID      int
-	}
-	// Kitty exposes one title per tab, not per pane. When multiple exported
-	// windows share a tab, independent renderer states can legitimately differ;
-	// the visible title is converged if it matches any asserted pane state.
-	convergedTabs := make(map[tabKey]bool)
-	for _, id := range ids {
-		renderer := snapshot.WindowMetadata[id].Renderer
-		live := liveByID[id]
-		if !live.Found || !renderer.StateSet && !renderer.LoopingSet {
-			continue
-		}
-		stateMatches := !renderer.StateSet || renderer.DesiredIcon == live.IconState
-		loopingMatches := !renderer.LoopingSet || renderer.Looping == live.Looping
-		if stateMatches && loopingMatches {
-			convergedTabs[tabKey{osWindowID: live.OSWindowID, tabID: live.TabID}] = true
-		}
-	}
-	drift := make([]string, 0)
-	for _, id := range ids {
-		// A session on another backend holds a slot only the daemon names. It
-		// is never a Kitty window and is rendered by no tab, so there is
-		// nothing in Kitty for its state to have drifted from.
-		if slot, ok := snapshot.RuntimeSlots[id]; ok && slot.Backend != string(runtimesession.BackendKitty) {
-			continue
-		}
-		renderer := snapshot.WindowMetadata[id].Renderer
-		live := liveByID[id]
-		if !live.Found {
-			// A tombstoned window was garbage-collected by the daemon after
-			// Kitty stopped reporting it; its metadata is retained purely for
-			// post-mortem export and never counts as renderer drift.
-			if snapshot.WindowMetadata[id].Watchdog.ClosedAt != 0 {
-				continue
-			}
-			if (renderer.StateSet && renderer.DesiredIcon != "") || (renderer.LoopingSet && renderer.Looping) {
-				drift = append(drift, fmt.Sprintf("window %d is no longer live", id))
-			}
-			continue
-		}
-		tabConverged := convergedTabs[tabKey{osWindowID: live.OSWindowID, tabID: live.TabID}]
-		if !tabConverged && ((renderer.StateSet && renderer.DesiredIcon != live.IconState) || (renderer.LoopingSet && renderer.Looping != live.Looping)) {
-			drift = append(drift, fmt.Sprintf("window %d wants icon=%q looping=%t; has icon=%q looping=%t", id, renderer.DesiredIcon, renderer.Looping, live.IconState, live.Looping))
-		}
-		if renderer.RenderFailures > 0 {
-			detail := fmt.Sprintf("window %d has %d consecutive render failures", id, renderer.RenderFailures)
-			if renderer.LastRenderError != "" {
-				detail += ": " + renderer.LastRenderError
-			}
-			drift = append(drift, detail)
-		}
-	}
-	if len(drift) == 0 {
-		if _, err := fmt.Fprintln(out, "renderer drift: none"); err != nil {
-			return err
-		}
-		return nil
-	}
-	if _, err := fmt.Fprintln(out, "renderer drift:"); err != nil {
-		return err
-	}
-	for _, detail := range drift {
-		if _, err := fmt.Fprintf(out, "- %s\n", detail); err != nil {
-			return err
-		}
-		reportIssue("renderer drift: %s", detail)
-	}
-	return nil
 }
 
 // suppressionSummary is the one-line form of the suppression counts: the

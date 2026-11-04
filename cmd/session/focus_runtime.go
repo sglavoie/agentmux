@@ -1,7 +1,6 @@
 package session
 
-// The focus commands outside Kitty. A session on the tmux backend is not a
-// tab: "the next one" is its neighbour in the order every surface lists
+// A session's neighbour is determined by the order every surface lists
 // sessions in (session.Order), and going there moves a terminal. Hosted by
 // the desktop workspace that is a workspace_view request, which the workspace
 // answers by showing the session itself; in any other terminal it is a tmux
@@ -34,14 +33,8 @@ const (
 // desktop workspace hosts it, the configuration the order is read from, and
 // the daemon's workspace.
 var (
-	// currentRuntimeSession is the runtime session this command runs in, for
-	// a session with no Kitty window. In a Kitty window the window is what a
-	// command with nothing named means, as it always was: a runtime session
-	// on the Kitty backend is not found on tmux.
+	// currentRuntimeSession is the runtime session this command runs in.
 	currentRuntimeSession = func() string {
-		if cli.WindowIDFromEnv() != 0 {
-			return ""
-		}
 		return strings.TrimSpace(os.Getenv(runtimesession.EnvVar))
 	}
 	// focusWorkspaceHosted is whether this command itself was started by the
@@ -64,23 +57,12 @@ func addFocusRuntimeFlags(cmd *cobra.Command) {
 }
 
 // focusRuntimeSession reports the runtime session a focus command starts
-// from, when it has one. A session named by flag wins; a Kitty window, named
-// by flag or the one this command runs in, is Kitty's; otherwise the session
-// this command runs in decides.
-func focusRuntimeSession(cmd *cobra.Command, windowID int) (string, bool) {
+// from. A session named by flag wins over the current session.
+func focusRuntimeSession(cmd *cobra.Command) string {
 	if named, _ := cmd.Flags().GetString(focusRuntimeSessionFlag); strings.TrimSpace(named) != "" {
-		return strings.TrimSpace(named), true
+		return strings.TrimSpace(named)
 	}
-	if windowID != 0 {
-		return "", false
-	}
-	if client, _ := cmd.Flags().GetString(focusClientFlag); strings.TrimSpace(client) != "" {
-		// A terminal was named, so this is tmux even with no session to
-		// start from; that is reported rather than handed to Kitty.
-		return currentRuntimeSession(), true
-	}
-	current := currentRuntimeSession()
-	return current, current != ""
+	return currentRuntimeSession()
 }
 
 // focusChoice picks where to go from the session at index current of the

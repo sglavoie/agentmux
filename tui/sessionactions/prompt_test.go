@@ -50,7 +50,7 @@ func TestPromptBoxWidthLeavesTwoCellsOnEitherSide(t *testing.T) {
 // about what saying yes destroys is a different warning, not a shorter one, and
 // the operator answers y or n to whichever sentence they read.
 func TestRenderPromptWrapsTheConsequence(t *testing.T) {
-	consequence := "Ends the harness process running in this tab and closes the Kitty window; unsaved work in the pane is lost."
+	consequence := "Ends the harness process running in this tab and closes the tmux session; unsaved work in the pane is lost."
 	in := PromptInput{Verb: "End Session", Subject: "api", Consequence: consequence, Width: 60}
 	out := RenderPrompt(in)
 	lines := strings.Split(out, "\n")

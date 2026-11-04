@@ -6,36 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/gitstate"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// gitStateWindows builds a snapshot placing each windowID in the directory it
-// maps to, using the same cc_cwd user var a real managed pane carries.
-func gitStateWindows(directories map[int]string) []kitty.OSWindow {
-	tab := kitty.Tab{ID: 1, IsActive: true}
-	for windowID, directory := range directories {
-		tab.Windows = append(tab.Windows, kitty.Window{
-			ID:       windowID,
-			IsActive: true,
-			UserVars: kitty.UserVars{CWD: directory},
-		})
-	}
-	return []kitty.OSWindow{{ID: 1, IsFocused: true, Tabs: []kitty.Tab{tab}}}
-}
-
-// scriptedGitState answers rev-parse per directory and reports dirt for the
-// directories named dirty. before runs inside the subprocess seam, which is
-// where the lock-discipline assertions live.
+// scriptedGitState records every command and can change daemon state at the
+// subprocess boundary, where a refresh must hold no daemon lock.
 type scriptedGitState struct {
 	branches map[string]string
 	dirty    map[string]bool
 	before   func(directory string)
-
-	mu    sync.Mutex
-	calls []string
+	mu       sync.Mutex
+	calls    []string
 }
 
 func (s *scriptedGitState) run(_ context.Context, directory string, _ time.Duration, args ...string) ([]byte, error) {
@@ -60,273 +42,85 @@ func (s *scriptedGitState) calledDirectories() []string {
 	return append([]string(nil), s.calls...)
 }
 
-// seedGitStateHandler tracks each window in the store and publishes a snapshot
-// that places it, which is the state one watchdog tick sees.
-func seedGitStateHandler(t *testing.T, git *scriptedGitState, directories map[int]string) *Handler {
-	t.Helper()
-	h := newTestHandler()
-	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
-	for windowID := range directories {
-		h.store[windowID] = &state.WindowState{}
-	}
-	h.publishSnapshot(gitStateWindows(directories), time.Unix(1_700_000_000, 0))
-	return h
-}
-
-func windowGitState(t *testing.T, h *Handler, windowID int) state.WindowState {
+func windowGitState(t *testing.T, h *Handler, slot int) state.WindowState {
 	t.Helper()
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	st, ok := h.store[windowID]
+	st, ok := h.store[slot]
 	if !ok {
-		t.Fatalf("window %d is not tracked", windowID)
+		t.Fatalf("slot %d is not tracked", slot)
 	}
 	return *st
 }
 
-// THE lock-discipline test. The refresh must never hold stateMu across a git
-// subprocess: stateMu guards every reducer mutation and every query answer, so
-// a probe that waits out its timeout under it would stall hook acknowledgement
-// behind a slow filesystem. TryLock inside the executor is the direct evidence
-// — it can only succeed if no lock is held at the moment git would have run.
-func TestGitStateRefreshTakesNoLockAcrossASubprocess(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
-	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one", 43: "/repo/two"})
-	// Refresh probes directories concurrently. Serialize the assertions so one
-	// callback's successful TryLock cannot make a sibling callback falsely
-	// report that the refresh itself held stateMu across the subprocess seam.
-	var assertionMu sync.Mutex
+func TestGitRefreshReadsTmuxDirectoryOffLock(t *testing.T) {
+	w := newRuntimeWatchdogWorld(t, RuntimeSessionLabel{Project: "API", Profile: "work", Harness: "claude", Directory: "/repo/api"})
+	git := &scriptedGitState{branches: map[string]string{"/repo/api": "main"}, dirty: map[string]bool{"/repo/api": true}}
+	h := w.h
+	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
 	git.before = func(directory string) {
-		assertionMu.Lock()
-		defer assertionMu.Unlock()
 		if !h.stateMu.TryLock() {
-			t.Errorf("stateMu was held across the git subprocess for %s", directory)
+			t.Errorf("stateMu held across Git for %s", directory)
 			return
 		}
 		h.stateMu.Unlock()
 	}
-
-	h.runGitStateRefresh(gitStateWindows(map[int]string{42: "/repo/one", 43: "/repo/two"}))
-
-	if len(git.calledDirectories()) == 0 {
-		t.Fatal("no git command ran, so the lock assertion never executed")
+	h.runGitStateRefresh()
+	got := windowGitState(t, h, w.slot)
+	if got.GitDirectory != "/repo/api" || got.GitBranch != "main" || !got.GitDirty || len(git.calledDirectories()) != 2 {
+		t.Fatalf("state = %+v, calls = %v", got, git.calledDirectories())
 	}
 }
 
-func TestGitStateRefreshStampsTrackedWindows(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{
-		branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"},
-		dirty:    map[string]bool{"/repo/two": true},
-	}
-	directories := map[int]string{42: "/repo/one", 43: "/repo/two"}
-	h := seedGitStateHandler(t, git, directories)
-
-	h.runGitStateRefresh(gitStateWindows(directories))
-
-	clean := windowGitState(t, h, 42)
-	if clean.GitBranch != "main" || clean.GitDirty || clean.GitDirectory != "/repo/one" {
-		t.Fatalf("window 42 = %+v, want main/clean in /repo/one", clean)
-	}
-	dirty := windowGitState(t, h, 43)
-	if dirty.GitBranch != "amx/feature" || !dirty.GitDirty || dirty.GitDirectory != "/repo/two" {
-		t.Fatalf("window 43 = %+v, want amx/feature/dirty in /repo/two", dirty)
-	}
-}
-
-func TestGitStateRefreshKeepsCollidingKittyInstancesSeparate(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{
-		"/repo/first": "first", "/repo/second": "second",
-	}}
-	h := newTestHandler()
+func TestGitRefreshSkipsEndedSlot(t *testing.T) {
+	w := newRuntimeWatchdogWorld(t, RuntimeSessionLabel{Project: "API", Profile: "work", Harness: "claude", Directory: "/repo/api"})
+	git := &scriptedGitState{branches: map[string]string{"/repo/api": "main"}}
+	h := w.h
 	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
-	const first, second = "unix:/kitty-first", "unix:/kitty-second"
-	h.stateMu.Lock()
-	firstSlot := h.kittySlotLocked(first, 7)
-	secondSlot := h.kittySlotLocked(second, 7)
-	h.ensureWindowStateLocked(firstSlot)
-	h.ensureWindowStateLocked(secondSlot)
-	h.rememberKittySocketLocked(firstSlot, first)
-	h.rememberKittySocketLocked(secondSlot, second)
-	h.stateMu.Unlock()
-	if firstSlot == secondSlot {
-		t.Fatal("colliding Kitty windows share a reducer slot")
-	}
-	firstWindows := gitStateWindows(map[int]string{7: "/repo/first"})
-	h.publishSnapshotFrom(probes.Publication{Windows: firstWindows, Socket: first, CapturedAt: time.Now()})
-	h.setOtherKittyTrees(map[string][]kitty.OSWindow{
-		second: gitStateWindows(map[int]string{7: "/repo/second"}),
-	}, nil)
-
-	h.runGitStateRefresh(firstWindows)
-	if got := windowGitState(t, h, firstSlot); got.GitBranch != "first" || got.GitDirectory != "/repo/first" {
-		t.Fatalf("first Kitty slot = %+v", got)
-	}
-	if got := windowGitState(t, h, secondSlot); got.GitBranch != "second" || got.GitDirectory != "/repo/second" {
-		t.Fatalf("second Kitty slot = %+v", got)
-	}
-
-	// A foreign tree can change while Git runs; the old branch cannot land on
-	// the new directory even though both windows still carry raw ID 7.
-	git.before = func(directory string) {
-		if directory == "/repo/second" {
-			h.setOtherKittyTrees(map[string][]kitty.OSWindow{
-				second: gitStateWindows(map[int]string{7: "/repo/moved"}),
-			}, nil)
-		}
-	}
-	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
-	h.runGitStateRefresh(firstWindows)
-	if got := windowGitState(t, h, secondSlot); got.GitDirectory != "" || got.GitBranch != "" {
-		t.Fatalf("foreign slot kept stale Git state after moving: %+v", got)
-	}
-}
-
-// An untracked pane is not a session, so nothing about it is worth a
-// subprocess. Only windows in the store are probed.
-func TestGitStateRefreshProbesOnlyTrackedWindows(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
-	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one"})
-	windows := gitStateWindows(map[int]string{42: "/repo/one", 43: "/repo/two"})
-	h.publishSnapshot(windows, time.Unix(1_700_000_000, 0))
-
-	h.runGitStateRefresh(windows)
-
-	for _, call := range git.calledDirectories() {
-		if call == "/repo/two rev-parse" || call == "/repo/two status" {
-			t.Fatalf("probed an untracked window's directory: %v", git.calledDirectories())
-		}
-	}
-}
-
-// The probe runs off-lock, so a pane can move — or a window ID be reused by a
-// new pane — while git is running. The write-back must not stamp the answer
-// onto a directory it does not describe, and must not leave the previous
-// answer standing either, because the daemon now knows it is wrong.
-func TestGitStateRefreshDropsAResultForAPaneThatMoved(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main", "/repo/two": "amx/feature"}}
-	collected := gitStateWindows(map[int]string{42: "/repo/one"})
-	h := seedGitStateHandler(t, git, map[int]string{42: "/repo/one"})
-	h.runGitStateRefresh(collected)
-	if got := windowGitState(t, h, 42); got.GitBranch != "main" {
-		t.Fatalf("precondition: window 42 = %+v, want main", got)
-	}
-
-	// The pane is now somewhere else, and only the write-back can notice.
-	git.before = func(string) {
-		h.publishSnapshot(gitStateWindows(map[int]string{42: "/repo/two"}), time.Unix(1_700_000_100, 0))
-	}
-	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
-	h.runGitStateRefresh(collected)
-
-	got := windowGitState(t, h, 42)
-	if got.GitBranch != "" || got.GitDirty || got.GitDirectory != "" {
-		t.Fatalf("window 42 = %+v, want the stale facts cleared after the pane moved", got)
-	}
-}
-
-// A window closed while the probes ran has no state to write back to, and the
-// refresh must not resurrect an entry for it.
-func TestGitStateRefreshSkipsAWindowThatClosed(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
-	directories := map[int]string{42: "/repo/one"}
-	h := seedGitStateHandler(t, git, directories)
 	git.before = func(string) {
 		h.stateMu.Lock()
-		delete(h.store, 42)
+		delete(h.store, w.slot)
 		h.stateMu.Unlock()
 	}
-
-	h.runGitStateRefresh(gitStateWindows(directories))
-
+	h.runGitStateRefresh()
 	h.stateMu.Lock()
-	_, resurrected := h.store[42]
+	_, resurrected := h.store[w.slot]
 	h.stateMu.Unlock()
 	if resurrected {
-		t.Fatal("the refresh recreated a closed window's state")
+		t.Fatal("Git refresh recreated a closed runtime slot")
 	}
 }
 
-// The toggle must cost nothing when it is off: no cache, no goroutine, and
-// above all no git.
-func TestGitStateDisabledRunsNoProbe(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
-	directories := map[int]string{42: "/repo/one"}
-	h := seedGitStateHandler(t, git, directories)
-	h.SetGitProbe(false, 0, 0)
-	if h.gitState != nil {
-		t.Fatal("SetGitProbe(false) left a cache installed")
-	}
-
-	h.refreshGitState(gitStateWindows(directories))
-
-	if calls := git.calledDirectories(); len(calls) != 0 {
-		t.Fatalf("a disabled probe ran git: %v", calls)
-	}
-	if got := windowGitState(t, h, 42); got.GitBranch != "" {
-		t.Fatalf("a disabled probe stamped %+v", got)
-	}
-}
-
-// A round already in flight wins: ticks arrive every second and a round that
-// hits several probe timeouts can outlast several of them.
-func TestGitStateRefreshSingleFlightsRounds(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
-	directories := map[int]string{42: "/repo/one"}
-	h := seedGitStateHandler(t, git, directories)
-	windows := gitStateWindows(directories)
-	// A synchronous probe runner keeps the assertion deterministic; the reentrant
-	// call below stands in for the next watchdog tick arriving mid-round.
+func TestGitRefreshSingleFlightsRounds(t *testing.T) {
+	w := newRuntimeWatchdogWorld(t, RuntimeSessionLabel{Project: "API", Profile: "work", Harness: "claude", Directory: "/repo/api"})
+	git := &scriptedGitState{branches: map[string]string{"/repo/api": "main"}}
+	h := w.h
+	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
 	h.probeRunner = func(fn func()) { fn() }
 	reentered := false
 	git.before = func(string) {
-		if reentered {
-			return
+		if !reentered {
+			reentered = true
+			h.refreshGitState()
 		}
-		reentered = true
-		h.refreshGitState(windows)
 	}
-
-	h.refreshGitState(windows)
-
-	// Two commands: the branch and the dirty bit of one round. A second round
-	// would have doubled them.
+	h.refreshGitState()
 	if calls := git.calledDirectories(); len(calls) != 2 {
-		t.Fatalf("git calls = %v, want exactly one round's worth", calls)
+		t.Fatalf("Git calls = %v, want one round", calls)
 	}
 	if h.gitStateRefreshing.Load() {
-		t.Fatal("the single-flight latch was not released")
+		t.Fatal("single-flight latch was not released")
 	}
 }
 
-// watchdogTick is the integration point named by the design: the refresh runs
-// from the watchdog loop, never from the render path or the TUI.
-func TestWatchdogTickStartsTheGitStateRefresh(t *testing.T) {
-	t.Parallel()
-
-	git := &scriptedGitState{branches: map[string]string{"/repo/one": "main"}}
-	directories := map[int]string{42: "/repo/one"}
-	h := seedGitStateHandler(t, git, directories)
-	h.probeRunner = func(fn func()) { fn() }
-
-	h.watchdogTick(time.Unix(1_700_000_001, 0), time.Second)
-
-	if got := windowGitState(t, h, 42); got.GitBranch != "main" {
-		t.Fatalf("window 42 = %+v after a watchdog tick, want main", got)
+func TestGitDisabledRunsNoProbe(t *testing.T) {
+	w := newRuntimeWatchdogWorld(t, RuntimeSessionLabel{Project: "API", Profile: "work", Harness: "claude", Directory: "/repo/api"})
+	git := &scriptedGitState{branches: map[string]string{"/repo/api": "main"}}
+	h := w.h
+	h.setGitStateCache(gitstate.New(gitstate.Options{Git: git.run}))
+	h.SetGitProbe(false, 0, 0)
+	h.refreshGitState()
+	if len(git.calledDirectories()) != 0 || h.gitState != nil {
+		t.Fatal("disabled Git probe ran")
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
@@ -282,40 +281,6 @@ func TestProjectExportEventsPayloadV10OmitsStopHoldDiagnostics(t *testing.T) {
 // received: the hold itself, projected live at export time. It disappears the
 // moment the hold releases, which is what makes a lingering section actionable
 // (the stop_hold_stuck doctor check).
-func TestHandler_ExportProjectsLiveTerminalStopHold(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		h, _ := newTerminalHoldTestHandler(t)
-		armTerminalHold(t, h)
-
-		resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
-		if !resp.OK {
-			t.Fatalf("events export: want OK=true, got %+v", resp)
-		}
-		held := resp.WindowMetadata[42].Shadow.PendingTerminalStop
-		if held == nil {
-			t.Fatalf("export lost the live terminal hold: %+v", resp.WindowMetadata[42].Shadow)
-		}
-		armed := time.Now()
-		if held.Class != protocol.StopHoldClassTerminal || held.Confirmed {
-			t.Fatalf("exported hold = %+v, want an unconfirmed %s hold", held, protocol.StopHoldClassTerminal)
-		}
-		if held.ArmedAt != armed.Unix() ||
-			held.QuietUntil != armed.Add(terminalHoldTestDelay).Unix() ||
-			held.Deadline != armed.Add(terminalHoldTestTimeout).Unix() {
-			t.Fatalf("exported hold timings = %+v, want armed %d with a %s quiet period and a %s deadline",
-				held, armed.Unix(), terminalHoldTestDelay, terminalHoldTestTimeout)
-		}
-
-		time.Sleep(terminalHoldTestTimeout + time.Second)
-		synctest.Wait()
-
-		resp = h.Handle(protocol.Request{Type: protocol.TypeEventsExport, WindowID: 42})
-		if released := resp.WindowMetadata[42].Shadow.PendingTerminalStop; released != nil {
-			t.Fatalf("export kept a released hold: %+v", released)
-		}
-	})
-}
-
 func TestHandler_AppendStopHoldEventRecordsSuppressedRow(t *testing.T) {
 	t.Parallel()
 

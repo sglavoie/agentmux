@@ -50,7 +50,7 @@ func ConfigureTmux(cfg *config.Config) {
 }
 
 // BackendFlagUsage is --backend's help on a launch entrypoint.
-const BackendFlagUsage = "backend new agents launch on: kitty or tmux (default: [defaults] launch_backend; unset, tmux)"
+const BackendFlagUsage = "backend new agents launch on: tmux (default: tmux)"
 
 // AddBackendFlag registers --backend on a launch entrypoint.
 func AddBackendFlag(cmd *cobra.Command) {
@@ -75,16 +75,15 @@ func SelectedBackend(cmd *cobra.Command, cfg *config.Config) (runtimesession.Bac
 	switch kind := runtimesession.BackendKind(strings.ToLower(strings.TrimSpace(value))); kind {
 	case "":
 		return runtimesession.BackendKind(cfg.LaunchBackendOrDefault()), nil
-	case runtimesession.BackendKitty, runtimesession.BackendTmux:
+	case runtimesession.BackendTmux:
 		return kind, nil
 	default:
-		return "", &actions.Error{Code: "invalid_backend", Message: fmt.Sprintf("unknown --backend %q: use kitty or tmux", value)}
+		return "", &actions.Error{Code: "invalid_backend", Message: fmt.Sprintf("unsupported --backend %q: use tmux", value)}
 	}
 }
 
 // SelectBackend points deps at the backend --backend names, or the configured
-// one. Selecting tmux opens the private server; a Kitty client already in deps
-// is kept for the lookups that read Kitty topology.
+// one. Selecting tmux opens the private server.
 func SelectBackend(cmd *cobra.Command, deps *actions.Dependencies) error {
 	kind, err := SelectedBackend(cmd, deps.Config)
 	if err != nil {

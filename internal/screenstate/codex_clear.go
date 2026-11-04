@@ -5,7 +5,7 @@ import (
 	"unicode"
 )
 
-// ClassifyCodexClearScreen reports whether Kitty text extents look like Codex's
+// ClassifyCodexClearScreen reports whether pane text looks like Codex's
 // idle UI immediately after `/clear` or `/new`.
 //
 // False negatives are acceptable here: this probe only exists because Codex
@@ -30,7 +30,7 @@ func ClassifyCodexClearScreen(screen, allText string) bool {
 
 // CodexScreenLooksCleared reports whether the CURRENT screen alone looks
 // cleared. It is exported for the clear probe's cheap first pass, which uses it
-// to decide whether the second, more expensive `--extent=all` read is worth
+// to decide whether the second, more expensive scrollback read is worth
 // making at all.
 func CodexScreenLooksCleared(screen string) bool {
 	return codexClausesFor(codexPatterns()).screenLooksCleared(screen)

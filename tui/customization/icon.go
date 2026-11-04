@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -18,13 +17,9 @@ import (
 
 // IconContext holds the inputs needed by the harness icon picker overlay.
 type IconContext struct {
-	Client        kitty.KittyClient
-	TabID         int
 	CurrentTitle  string
 	HarnessEmojis map[string]string
-	// SetTitle, when set, writes the new title somewhere other than a Kitty
-	// tab: the picker then never touches Client, and CurrentTitle is the
-	// title it edits.
+	// SetTitle writes the updated session title.
 	SetTitle func(title string) error
 }
 
@@ -96,43 +91,17 @@ func (m iconPickerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *iconPickerModel) apply() bool {
-	if m.ctx.SetTitle != nil {
-		parts := palette.ParseTitleParts(m.ctx.CurrentTitle)
-		parts.Base = removeConfiguredHarnessPrefix(parts.Base, m.ctx.HarnessEmojis)
-		parts.Base = m.items[m.cursor].emoji + parts.Base
-		title := palette.BuildTitleParts(parts)
-		if err := m.ctx.SetTitle(title); err != nil {
-			m.err = fmt.Errorf("couldn't apply the icon to this session's title: %w", err)
-			return false
-		}
-		m.ctx.CurrentTitle, m.err, m.applied = title, nil, true
-		return true
-	}
-	if m.ctx.Client == nil {
-		m.err = errors.New("couldn't apply the icon: Kitty isn't reachable from this overlay")
+	if m.ctx.SetTitle == nil {
+		m.err = errors.New("couldn't apply the icon: no session title writer is available")
 		return false
 	}
-
-	currentTitle := m.ctx.CurrentTitle
-	if osWindows, err := m.ctx.Client.ListWindows(); err == nil {
-		for i := range osWindows {
-			for j := range osWindows[i].Tabs {
-				tab := &osWindows[i].Tabs[j]
-				if tab.ID == m.ctx.TabID {
-					currentTitle = tab.Title
-					m.ctx.CurrentTitle = currentTitle
-				}
-			}
-		}
-	}
-
-	parts := palette.ParseTitleParts(currentTitle)
+	parts := palette.ParseTitleParts(m.ctx.CurrentTitle)
 	parts.Base = removeConfiguredHarnessPrefix(parts.Base, m.ctx.HarnessEmojis)
 	parts.Base = m.items[m.cursor].emoji + parts.Base
 	title := palette.BuildTitleParts(parts)
 
-	if err := m.ctx.Client.SetTabTitle(kitty.MatchTabByID(m.ctx.TabID), title); err != nil {
-		m.err = fmt.Errorf("couldn't apply the icon to this tab: %w", err)
+	if err := m.ctx.SetTitle(title); err != nil {
+		m.err = fmt.Errorf("couldn't apply the icon to this session's title: %w", err)
 		return false
 	}
 
@@ -198,7 +167,7 @@ func (m iconPickerModel) View() tea.View {
 }
 
 // RunIconOverlay renders the harness icon picker and blocks until the
-// user dismisses it. It is designed to run inside a Kitty overlay window.
+// user dismisses it.
 func RunIconOverlay(ctx IconContext) error {
 	model, err := newIconPickerModel(ctx)
 	if err != nil {

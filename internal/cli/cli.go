@@ -13,8 +13,7 @@
 //     pipes (table.go), with the shared wording of counts and byte sizes
 //     (plural.go, bytes.go);
 //   - how a command assembles the runtime it acts on — the validated
-//     configuration (config.go), the Kitty client and the window the CLI was
-//     invoked from (kitty.go), the private tmux backend and the --backend
+//     configuration (config.go), the private tmux backend and the --backend
 //     flag a launch entrypoint takes (backend.go), the daemon export-client
 //     seam (daemon.go), the harness transcript readers it discovers sources
 //     with (transcripts.go), and the context its work runs under (context.go);

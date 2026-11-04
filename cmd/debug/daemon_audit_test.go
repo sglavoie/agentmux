@@ -56,7 +56,6 @@ func TestDaemonAuditSamplesOnCadenceAndExitsNonzeroOnViolations(t *testing.T) {
 			},
 		}
 	}
-	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
@@ -98,7 +97,6 @@ func TestDaemonAuditCleanRunExitsZeroAndJSONReports(t *testing.T) {
 			export: func(int) (protocol.EventsExport, error) { return protocol.EventsExport{}, nil },
 		}
 	}
-	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
@@ -132,7 +130,6 @@ func TestDaemonAuditOwnerMismatchTraceUsesSharedFindingsAndFails(t *testing.T) {
 			},
 		}
 	}
-	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)
@@ -168,7 +165,6 @@ func TestDaemonAuditUnreachableDaemonIsAViolation(t *testing.T) {
 	newDoctorDaemonClient = func() cli.DaemonExportClient {
 		return &fakeDaemonExportClient{health: ipc.Health{}}
 	}
-	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 
 	var out bytes.Buffer
 	daemonAuditCmd.SetOut(&out)

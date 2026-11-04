@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"maps"
 	"os"
 	"slices"
 	"sort"
@@ -56,12 +55,10 @@ type companionHub struct {
 	// dirty is the one-slot doorbell companionDirty rings.
 	dirty chan struct{}
 
-	mu    sync.Mutex
-	sinks map[*ipc.StreamSink]protocol.CompanionClient
-	// latest and digest hold the last published snapshot of each negotiated
-	// snapshot version; a sink receives only its own version's.
-	latest  map[int]json.RawMessage
-	digest  map[int]string
+	mu      sync.Mutex
+	sinks   map[*ipc.StreamSink]protocol.CompanionClient
+	latest  json.RawMessage
+	digest  string
 	publish uint64
 
 	// backendMu guards the notification backend role and the deliveries
@@ -82,8 +79,6 @@ func newCompanionHub() *companionHub {
 	return &companionHub{
 		dirty:      make(chan struct{}, 1),
 		sinks:      make(map[*ipc.StreamSink]protocol.CompanionClient),
-		latest:     make(map[int]json.RawMessage),
-		digest:     make(map[int]string),
 		claimants:  make(map[*ipc.StreamSink]uint64),
 		deliveries: make(map[string]*appDelivery),
 	}
@@ -145,18 +140,8 @@ func (h *Handler) runCompanionHub(ctx context.Context) {
 // clones and does nothing else.
 func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 	states, _ := h.copyStateLocked(now.Unix())
-	view := h.snapshots.View()
 	return companion.Input{
-		States:     states,
-		Sockets:    maps.Clone(h.kittySockets),
-		KittySlots: h.companionKittySlotsLocked(),
-		Kitty: companion.KittyTree{
-			Ready:   view.Ready(),
-			Stale:   protocol.KittySnapshotStale(view.Ready(), view.Age(now)),
-			Socket:  view.Socket(),
-			Windows: view.Windows(),
-		},
-		Others:       maps.Clone(h.otherKittyTrees),
+		States:       states,
 		Runtime:      h.companionRuntimeSlotsLocked(),
 		HarnessIcons: h.harnessIcons,
 		Sort:         h.sessionSort,
@@ -164,17 +149,6 @@ func (h *Handler) copyCompanionStateLocked(now time.Time) companion.Input {
 		ASLPending:   h.aslSupervisors.Pending(),
 		Now:          now,
 	}
-}
-
-func (h *Handler) companionKittySlotsLocked() map[companion.KittyWindowKey]int {
-	if len(h.runtimeRoutes.kittyByKey) == 0 {
-		return nil
-	}
-	out := make(map[companion.KittyWindowKey]int, len(h.runtimeRoutes.kittyByKey))
-	for key, slot := range h.runtimeRoutes.kittyByKey {
-		out[companion.KittyWindowKey{Socket: key.socket, WindowID: key.windowID}] = slot
-	}
-	return out
 }
 
 // companionRuntimeSlotsLocked copies the runtime binding of every slot for the
@@ -203,19 +177,8 @@ func (h *Handler) companionRuntimeSlotsLocked() map[int]companion.RuntimeSlot {
 	return out
 }
 
-// companionSnapshotVersions are the snapshot shapes the hub publishes, oldest
-// first.
-var companionSnapshotVersions = []int{protocol.CompanionSnapshotVersion, protocol.CompanionSnapshotVersionRuntime}
-
-// buildCompanionSnapshot builds the v1 snapshot every pre-runtime client reads.
+// buildCompanionSnapshot copies under stateMu, then projects outside it.
 func (h *Handler) buildCompanionSnapshot(now time.Time) protocol.CompanionSnapshot {
-	return h.buildCompanionSnapshots(now)[protocol.CompanionSnapshotVersion]
-}
-
-// buildCompanionSnapshots copies under stateMu once and projects every
-// snapshot version from that one copy outside it, so the versions a hub
-// publishes together always describe the same moment.
-func (h *Handler) buildCompanionSnapshots(now time.Time) map[int]protocol.CompanionSnapshot {
 	h.stateMu.Lock()
 	in := h.copyCompanionStateLocked(now)
 	h.stateMu.Unlock()
@@ -242,12 +205,7 @@ func (h *Handler) buildCompanionSnapshots(now time.Time) map[int]protocol.Compan
 	if h.companion != nil {
 		in.Notification.AppConnected = h.companion.health().NotificationBackendConnected
 	}
-	out := make(map[int]protocol.CompanionSnapshot, len(companionSnapshotVersions))
-	for _, version := range companionSnapshotVersions {
-		in.SnapshotVersion = version
-		out[version] = companion.Project(in)
-	}
-	return out
+	return companion.Project(in)
 }
 
 // publishCompanionSnapshot builds a snapshot and hands it to every subscriber
@@ -257,56 +215,34 @@ func (h *Handler) publishCompanionSnapshot(now time.Time) {
 	if hub == nil {
 		return
 	}
-	publications := make(map[int]companionPublication, len(companionSnapshotVersions))
-	for version, snapshot := range h.buildCompanionSnapshots(now) {
-		data, err := json.Marshal(snapshot)
-		if err != nil {
-			slog.Warn("daemon: companion snapshot marshal failed", "err", err, "version", version)
-			return
-		}
-		publications[version] = companionPublication{data: data, digest: companion.Digest(snapshot)}
+	snapshot := h.buildCompanionSnapshot(now)
+	data, err := json.Marshal(snapshot)
+	if err != nil {
+		slog.Warn("daemon: companion snapshot marshal failed", "err", err)
+		return
 	}
-	hub.store(publications)
+	hub.store(companionPublication{data: data, digest: companion.Digest(snapshot)})
 }
 
-// companionPublication is one encoded snapshot version and its digest.
+// companionPublication is an encoded snapshot and its digest.
 type companionPublication struct {
 	data   json.RawMessage
 	digest string
 }
 
-// store records each version's snapshot as its latest and fans it out to that
-// version's subscribers, skipping a version whose digest matches what was last
-// published. publish counts moments that changed anything, not versions.
-func (hub *companionHub) store(publications map[int]companionPublication) {
+// store records the latest snapshot and fans out changed content.
+func (hub *companionHub) store(p companionPublication) {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
-	changed := false
-	for version, p := range publications {
-		if hub.latest[version] != nil && p.digest == hub.digest[version] {
-			continue
-		}
-		changed = true
-		hub.latest[version] = p.data
-		hub.digest[version] = p.digest
-		for sink, client := range hub.sinks {
-			if sinkSnapshotVersion(client) == version {
-				sink.SetSnapshot(p.data)
-			}
-		}
+	if hub.latest != nil && p.digest == hub.digest {
+		return
 	}
-	if changed {
-		hub.publish++
+	hub.latest = p.data
+	hub.digest = p.digest
+	for sink := range hub.sinks {
+		sink.SetSnapshot(p.data)
 	}
-}
-
-// sinkSnapshotVersion is the snapshot version a subscriber negotiated; a
-// client recorded without one is a v1 client.
-func sinkSnapshotVersion(client protocol.CompanionClient) int {
-	if client.SnapshotVersion == 0 {
-		return protocol.CompanionSnapshotVersion
-	}
-	return client.SnapshotVersion
+	hub.publish++
 }
 
 // heartbeat sends one heartbeat frame to every subscriber. A full queue ends
@@ -328,8 +264,8 @@ func (hub *companionHub) heartbeat() {
 func (hub *companionHub) add(sink *ipc.StreamSink, client protocol.CompanionClient) {
 	hub.mu.Lock()
 	hub.sinks[sink] = client
-	if latest := hub.latest[sinkSnapshotVersion(client)]; latest != nil {
-		sink.SetSnapshot(latest)
+	if hub.latest != nil {
+		sink.SetSnapshot(hub.latest)
 	}
 	if client.NotificationBackend {
 		hub.claimBackend(sink)
@@ -364,18 +300,6 @@ func (hub *companionHub) health() protocol.CompanionHealth {
 	return out
 }
 
-// latestSnapshot returns the last published v1 snapshot bytes, for tests.
-func (hub *companionHub) latestSnapshot() json.RawMessage {
-	return hub.latestSnapshotVersion(protocol.CompanionSnapshotVersion)
-}
-
-// latestSnapshotVersion returns the last published snapshot bytes of version.
-func (hub *companionHub) latestSnapshotVersion(version int) json.RawMessage {
-	hub.mu.Lock()
-	defer hub.mu.Unlock()
-	return hub.latest[version]
-}
-
 // Subscribe implements ipc.SubscriptionHandler. It registers the sink, replays
 // the latest snapshot, and acknowledges. It takes no daemon lock and never
 // blocks: the sink's lifetime is watched from its own goroutine.
@@ -392,14 +316,8 @@ func (h *Handler) Subscribe(req protocol.Request, sink *ipc.StreamSink) protocol
 	if sub.Protocol > 0 && sub.Protocol < negotiated {
 		negotiated = sub.Protocol
 	}
-	// The mixed-backend snapshot is opt-in: a client that did not ask for it
-	// was written against v1 and keeps receiving v1, Kitty sessions only.
 	snapshotVersion := protocol.CompanionSnapshotVersion
-	features := append([]string(nil), companionFeatures...)
-	if slices.Contains(sub.Features, protocol.CompanionFeatureRuntimeSessions) {
-		snapshotVersion = protocol.CompanionSnapshotVersionRuntime
-		features = append(features, protocol.CompanionFeatureRuntimeSessions)
-	}
+	features := append(append([]string(nil), companionFeatures...), protocol.CompanionFeatureRuntimeSessions)
 	// Workspace view requests go only to a client that said it hosts them.
 	workspaceViews := slices.Contains(sub.Features, protocol.CompanionFeatureWorkspaceViews)
 	if workspaceViews {

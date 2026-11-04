@@ -12,8 +12,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-
-	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 // ReadProjection reads the projection nested in the state file at path.
@@ -110,9 +108,7 @@ func requireSupportedContract(members map[string]json.RawMessage) (string, error
 	if err != nil {
 		return "", projectionErrorf(ReasonUnsupportedContract, "%v", err)
 	}
-	// Match reviewed exact identities. A change to unrelated bridge methods
-	// does not invalidate identical loop components; unknown peers stay refused.
-	if !aslcontract.SupportsLoopContract(contractSetID) {
+	if contractSetID != ContractSetID {
 		return "", projectionErrorf(ReasonUnsupportedContract,
 			"contract set %q is not %q", contractSetID, ContractSetID)
 	}
@@ -138,9 +134,6 @@ func decodeProjectionMembers(members map[string]json.RawMessage, contractSetID s
 		return Projection{}, invalidProjection(err)
 	}
 	if projection.Harness, err = projectionNullableString(members, "harness", maxHarnessChars); err != nil {
-		return Projection{}, invalidProjection(err)
-	}
-	if projection.KittyWindowID, err = projectionNullableInt(members, "kitty_window_id", 1, maxProjectionWindowID); err != nil {
 		return Projection{}, invalidProjection(err)
 	}
 	if projection.Phase, err = projectionPhase(members); err != nil {

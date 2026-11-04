@@ -14,55 +14,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-func TestDaemonExportEventsCommand_CurrentWindowResolvesKittyEnv(t *testing.T) {
-	resetDaemonExportTestState(t)
-	t.Setenv("KITTY_WINDOW_ID", "77")
-	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-current")
-
-	client := &fakeDaemonExportClient{
-		health: ipc.Health{Alive: true, PID: 7, Uptime: 7 * time.Second},
-		export: func(windowID int) (protocol.EventsExport, error) {
-			if windowID != 77 {
-				return protocol.EventsExport{}, fmt.Errorf("windowID = %d; want 77", windowID)
-			}
-			return protocol.EventsExport{
-				EventsByWindow: map[int][]protocol.SessionEvent{
-					77: {{At: 7, Event: "Stop", Action: "stop", ResultIconState: "stop"}},
-				},
-				KittySlots: map[int]protocol.KittySlot{77: {Socket: "unix:/kitty-current", WindowID: 77}},
-			}, nil
-		},
-	}
-
-	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
-	daemonExportNow = func() time.Time { return time.Unix(700, 0) }
-	daemonExportEventsWindow = 0
-	daemonExportEventsCurrentWindow = true
-	daemonExportEventsLast = 0
-	daemonExportEventsOutput = ""
-	daemonExportEventsPretty = false
-
-	var out bytes.Buffer
-	daemonExportEventsCmd.SetOut(&out)
-
-	if err := daemonExportEventsCmd.RunE(daemonExportEventsCmd, nil); err != nil {
-		t.Fatalf("RunE: %v", err)
-	}
-
-	if len(client.calls) != 0 || len(client.scopedCalls) != 1 || client.scopedCalls[0] != "unix:/kitty-current:77" {
-		t.Fatalf("ExportEvents calls bare=%v scoped=%v; want the current Kitty pair", client.calls, client.scopedCalls)
-	}
-
-	var payload protocol.ExportEventsPayload
-	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
-		t.Fatalf("Unmarshal payload: %v\n%s", err, out.String())
-	}
-	if len(payload.Windows) != 1 || payload.Windows[0].WindowID != 77 {
-		t.Fatalf("payload windows = %+v; want one window_id=77", payload.Windows)
-	}
-}
-
 // TestDaemonExportEventsCommand_OutputExpandsTilde pins the fix for the
 // `--output` bug where a leading "~/" was treated as a literal path
 // component. Users typing `amx daemon export-events --output ~/events.json`
@@ -84,7 +35,6 @@ func TestDaemonExportEventsCommand_OutputExpandsTilde(t *testing.T) {
 	}
 
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = false
@@ -146,7 +96,6 @@ func TestDaemonExportEventsCommand_LastTrimsPerWindowEvents(t *testing.T) {
 	}
 
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = false

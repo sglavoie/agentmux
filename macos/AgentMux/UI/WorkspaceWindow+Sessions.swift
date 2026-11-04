@@ -10,7 +10,7 @@ extension WorkspaceWindowController {
 
     static let nameTerminalTitle = "Name Terminal…"
 
-    static let namingNeedsEmbedded = "Only a session the workspace embeds can be named here; a Kitty session is named by its tab, in Kitty."
+    static let namingNeedsEmbedded = "Select a running session to name it."
 
     var nameShownTitle: String {
         views.view(viewSelection)?.canName == true ? Self.nameTerminalTitle : Self.nameSessionTitle
@@ -176,7 +176,6 @@ extension WorkspaceWindowController {
 
     static let expandSectionTitle = "Expand Section"
 
-    static let showInKittyTitle = "Show in Kitty"
 
     static let reattachTitle = "Reattach"
 
@@ -238,28 +237,16 @@ extension WorkspaceWindowController {
     }
 
     private func sessionMenuItems(_ row: WorkspaceRow) -> [NSMenuItem] {
+        guard let id = row.embeddedRuntimeSessionID else { return [] }
         let name = NSMenuItem(title: Self.nameSessionTitle, action: #selector(nameClickedSession(_:)), keyEquivalent: "")
         name.representedObject = row.key
-        if row.embeddedRuntimeSessionID != nil {
-            name.target = self
-        } else {
-            // No target and no action: the item is listed, greyed out.
-            name.action = nil
-            name.isEnabled = false
-            name.toolTip = Self.namingNeedsEmbedded
-        }
+        name.target = self
         // The inspector's Color…, Icon…, and Mute, for the line under the
         // pointer rather than the session the pane is on.
         let looks = [WorkspaceInspectorAction.color, .icon, .mute].map { action in
             let item = NSMenuItem(title: action.title(muted: row.muted), action: #selector(clickedSessionAction(_:)), keyEquivalent: "")
             item.representedObject = [row.key, action] as [Any]
-            if row.embeddedRuntimeSessionID != nil || !action.needsEmbedded {
-                item.target = self
-            } else {
-                item.action = nil
-                item.isEnabled = false
-                item.toolTip = WorkspaceInspectorView.kittyOnly
-            }
+            item.target = self
             return item
         }
         let pin = NSMenuItem(title: row.pinned ? Self.unpinSessionTitle : Self.pinSessionTitle,
@@ -269,13 +256,6 @@ extension WorkspaceWindowController {
         let handoff = NSMenuItem(title: WorkspaceHandoffModel.title, action: #selector(handoffClickedSession(_:)), keyEquivalent: "")
         handoff.representedObject = row.key; handoff.target = self
         handoff.isEnabled = row.conversation != nil
-        guard let id = row.embeddedRuntimeSessionID else {
-            // What a click on the line does: the window comes forward in Kitty.
-            let show = NSMenuItem(title: Self.showInKittyTitle, action: #selector(activateClickedSession(_:)), keyEquivalent: "")
-            show.representedObject = row.key
-            show.target = self
-            return [name] + looks + [pin, .separator(), handoff, show]
-        }
         // Session actions for the line under the pointer.
         let terminal = NSMenuItem(title: Self.newTerminalTitle, action: #selector(openTerminalBesideClickedSession(_:)), keyEquivalent: "")
         terminal.representedObject = id
@@ -380,7 +360,7 @@ extension WorkspaceWindowController {
 
     /// Pins a listed session, which then leaves its project for the Pinned
     /// group above them all, or unpins it, which puts it back. Any session
-    /// can be pinned, a Kitty one too. The pin is the session's own (the ★
+    /// can be pinned. The pin is the session's own (the ★
     /// in its title), so the dashboard lists it above Needs you as well;
     /// what is kept here is only where it goes among the pinned.
     func setPinned(_ key: AttentionCycler.Key, _ pinned: Bool) {
@@ -408,8 +388,7 @@ extension WorkspaceWindowController {
     }
 
     /// F5 and F6: opens the icon or color picker for the embedded session the
-    /// pane is on, and reports whether there was one. A Kitty session has its
-    /// pickers in Kitty.
+    /// pane is on, and reports whether there was one.
     @discardableResult
     func openPicker(_ kind: WorkspaceUtilityView.Kind) -> Bool {
         guard let row = shownSessionRow, openPicker(kind, for: row) else {
@@ -507,13 +486,11 @@ extension WorkspaceWindowController {
 
     /// Moves `offset` places through the sessions and the terminals listed
     /// under them, in sidebar order, wrapping; from anywhere else, to the
-    /// first (or last) of them. A Kitty row is selected, not raised: stepping
-    /// through the sidebar never leaves the app.
+    /// first (or last) of them. Stepping through the sidebar stays in the app.
     ///
     /// With `raising` the step is from session to session: terminals are
     /// passed over, one of them counts as standing just below its session,
-    /// and a Kitty row comes forward in Kitty. With `sessionsOnly` the step
-    /// is the same one and stays in the app, as F7 and F9 do.
+    /// With `sessionsOnly` the step is the same one, as F7 and F9 do.
     func selectNeighbor(_ offset: Int, raising: Bool = false, sessionsOnly: Bool = false) {
         switch neighborStop(offset, skipping: raising || sessionsOnly) {
         case let .row(row)?: go(to: row, raising: raising)
@@ -629,7 +606,7 @@ extension WorkspaceWindowController {
     }
 
     /// Goes to the session at `index` in sidebar order; nothing when fewer
-    /// sessions are listed. A Kitty row stays in the app unless `raising`.
+    /// sessions are listed.
     /// Sessions in collapsed groups follow the visible ones; going to one
     /// expands what holds it.
     func selectSession(at index: Int, raising: Bool = false) {
@@ -646,26 +623,6 @@ extension WorkspaceWindowController {
         return state.groups.first { $0.rows.contains { $0.key == key } }
     }
 
-    /// Whether the session at `index` in sidebar order lives in Kitty, which
-    /// ⌘⇧ and that digit bring forward there.
-    func sessionIsInKitty(at index: Int) -> Bool {
-        let rows = sessionShortcutRows
-        guard rows.indices.contains(index), case .kitty = rows[index].target else { return false }
-        return true
-    }
-
-    /// Whether any of the sessions the digits go to lives in Kitty: without
-    /// one, the Session menu has nothing to show in Kitty.
-    var digitsReachKitty: Bool {
-        WorkspaceMenu.sessionKeys.indices.contains { sessionIsInKitty(at: $0) }
-    }
-
-    /// Whether any listed session lives in Kitty: without one, ⌘} and ⌘{
-    /// would only repeat F9 and F7, so the menu hides them.
-    var listsKittySession: Bool {
-        state.rows.contains { if case .kitty = $0.target { return true } else { return false } }
-    }
-
     /// The name of the session at `index` in sidebar order, which ⌘ and
     /// that digit go to; nil when fewer sessions are listed.
     func sessionName(at index: Int) -> String? {
@@ -675,8 +632,8 @@ extension WorkspaceWindowController {
 
     /// What the Session menu's place items say: the session they go to, or
     /// only their number when there is none there.
-    static func sessionItemTitle(at index: Int, name: String?, inKitty: Bool = false) -> String {
-        let place = "Session \(index + 1)" + (inKitty ? " in Kitty" : "")
+    static func sessionItemTitle(at index: Int, name: String?) -> String {
+        let place = "Session \(index + 1)"
         guard let name else { return place }
         return "\(place): \(name)"
     }
@@ -689,8 +646,7 @@ extension WorkspaceWindowController {
         return WorkspaceMenu.sessionKeys[index]
     }
 
-    /// An embedded session takes the keyboard either way. A Kitty session is
-    /// only selected here, or with `raising` focused as a click does.
+    /// A session takes the keyboard either way.
     func go(to row: WorkspaceRow, raising: Bool) {
         if raising {
             activate(row)

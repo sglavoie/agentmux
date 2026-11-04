@@ -7,8 +7,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -509,51 +507,6 @@ func TestDeprecationBannerIsDismissedByNameNotByAKey(t *testing.T) {
 // TestBindingsShareOneCapturedTarget is the captured-target review item: a
 // keypress is gated and executed against one snapshot, so it cannot be checked
 // against one row and run against another.
-func TestBindingsShareOneCapturedTarget(t *testing.T) {
-	t.Parallel()
-
-	m := withListRows(testModelWithSessions(),
-		session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", Directory: "/home/user/api", State: "bolt"},
-		session.RunningSession{TabID: 2, WindowID: 12, Base: "backend", Account: "work", Directory: "/home/user/backend", State: "bolt"},
-	)
-	m.cursor = 1
-
-	ctx := dashboardBindingContext(m)
-	if !ctx.HasTarget || ctx.Target.TabID != 2 {
-		t.Fatalf("captured context = %+v, want the second row", ctx)
-	}
-
-	// Enter is the one row-targeted key left, so it is the one that can carry
-	// this claim. The command it reaches focuses the captured tab; running the
-	// returned cmd against a recording client is what shows which row the
-	// execution actually got.
-	client := kittytest.NewClient(nil)
-	m.client = client
-
-	updated, cmd := m.Update(dashboardKeyPress(keyEnter))
-	if out := updated.(Model); out.mode != ModeList {
-		t.Errorf("enter left mode %v", out.mode)
-	}
-	if cmd == nil {
-		t.Fatal("enter issued no command on a session row")
-	}
-	cmd()
-
-	calls := client.CallsFor("FocusTab")
-	if len(calls) != 1 {
-		t.Fatalf("FocusTab calls = %v, want exactly one", calls)
-	}
-	if want := kitty.MatchTabByID(2); calls[0].Match != want {
-		t.Errorf("enter focused %q, want the captured row's %q", calls[0].Match, want)
-	}
-}
-
-// TestProjectSwitcherIsNotADashboardBindingState is what replaced the rail's
-// "a scope row is not a session" guard. The rail was a pane inside ModeList, so
-// the binding context had to answer for a state in which the keyboard was on a
-// project scope rather than a session. The switcher is its own mode, so no
-// dashboard binding is dispatched while a scope is being chosen at all — and the
-// binding context has exactly one answer again.
 func TestProjectSwitcherIsNotADashboardBindingState(t *testing.T) {
 	t.Parallel()
 

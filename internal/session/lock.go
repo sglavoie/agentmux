@@ -9,8 +9,7 @@ func Lock(term backend.MetadataWriter, pane backend.Ref) error {
 }
 
 // Unlock clears the lock state on the session anchored at pane. The metadata
-// key is set to empty rather than deleted because Kitty's set-user-vars
-// surface only supports set, not unset.
+// key is set to empty to clear it through the metadata writer.
 func Unlock(term backend.MetadataWriter, pane backend.Ref) error {
 	return term.SetMetadata(pane, map[string]string{"amx_locked": ""})
 }

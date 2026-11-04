@@ -35,7 +35,7 @@ type host struct {
 
 // hostEffects wires the seams. Every action named in run gets an effect that
 // records its dispatch and returns a command, so a dispatch is observable
-// without any real Kitty, harness, or clipboard work.
+// without any real terminal, harness, or clipboard work.
 func hostEffects(run ...commands.ID) Effects[host] {
 	effects := Effects[host]{
 		Env: func(h host) Env { return h.env },
@@ -698,7 +698,7 @@ func TestCompleteCorrelatesWithItsDispatch(t *testing.T) {
 		t.Fatalf("in flight = %+v, want only the close dispatch %d", remaining, first.Request)
 	}
 
-	failure := errors.New("kitty refused")
+	failure := errors.New("tmux refused")
 	h, result, ok = c.Complete(h, first.Request, Completion{Err: failure})
 	if !ok {
 		t.Fatal("failing completion was not correlated")
@@ -735,7 +735,7 @@ func TestUnconfirmedCompletionIsNeitherSuccessNorFailure(t *testing.T) {
 	}
 
 	// A failure is the stronger answer and wins.
-	failure := errors.New("kitty refused")
+	failure := errors.New("tmux refused")
 	if got := (Completion{Err: failure, Unconfirmed: true}).Outcome(); got != OutcomeFailed {
 		t.Fatalf("outcome = %q, want %q", got, OutcomeFailed)
 	}
@@ -1137,7 +1137,7 @@ func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
 	t.Run("a reported completion frees the tab", func(t *testing.T) {
 		completions := map[string]Completion{
 			"succeeded":   {},
-			"failed":      {Err: errors.New("kitty refused")},
+			"failed":      {Err: errors.New("tmux refused")},
 			"unconfirmed": {Unconfirmed: true},
 		}
 		for name, completion := range completions {
@@ -1430,7 +1430,7 @@ func TestReviewLifecycleGuardSurvivesCorrelationPressure(t *testing.T) {
 	t.Run("a reported completion frees the tab", func(t *testing.T) {
 		for name, completion := range map[string]Completion{
 			"succeeded":   {},
-			"failed":      {Err: errors.New("kitty refused")},
+			"failed":      {Err: errors.New("tmux refused")},
 			"unconfirmed": {Unconfirmed: true},
 		} {
 			t.Run(name, func(t *testing.T) {

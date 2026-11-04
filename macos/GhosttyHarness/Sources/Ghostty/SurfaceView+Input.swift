@@ -4,7 +4,7 @@ import GhosttyKit
 
 // Keyboard, IME, mouse, and the Edit menu, kept as close to upstream's
 // SurfaceView_AppKit as one window over one surface allows: tt binds keys only
-// the kitty keyboard protocol can tell apart (ctrl+m, ctrl+i, shift+enter,
+// the extended keyboard protocol can tell apart (ctrl+m, ctrl+i, shift+enter,
 // ctrl+j), so every key reaches `ghostty_surface_key` with the mods, consumed
 // mods, and unshifted codepoint Ghostty.app would send.
 extension Ghostty.SurfaceView {

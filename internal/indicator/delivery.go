@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -285,9 +284,7 @@ func (r *deliveryRecorder) captureRawPayload(event string, windowID int, produce
 		return
 	}
 	r.payloadCaptureAttempted = true
-	// A managed hook is its runtime session and nothing else: a pane in a
-	// tmux server started from a Kitty window inherits that window's ID,
-	// which names the wrong place, so it is not captured under it.
+	// Managed captures are keyed by runtime session ID.
 	runtimeSessionID := r.runtimeSessionID
 	if runtimeSessionID == "" {
 		runtimeSessionID = strings.TrimSpace(getenv(runtimesession.EnvVar))
@@ -295,12 +292,8 @@ func (r *deliveryRecorder) captureRawPayload(event string, windowID int, produce
 	if _, err := runtimesession.ParseID(runtimeSessionID); err != nil {
 		runtimeSessionID = ""
 	}
-	resolvedWindowID := 0
 	if runtimeSessionID == "" {
-		resolvedWindowID = windowID
-		if candidate, err := resolveHookWindowID(windowID); err == nil {
-			resolvedWindowID = candidate
-		}
+		return
 	}
 	rawProducer := strings.TrimSpace(producerHarness)
 	if known := harness.NormalizeKnown(rawProducer); known != "" {
@@ -310,7 +303,7 @@ func (r *deliveryRecorder) captureRawPayload(event string, windowID int, produce
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	result, err := captureHookPayload(ctx, diagnostics.CapturePayloadRequest{
-		WindowID: resolvedWindowID, RuntimeSessionID: runtimeSessionID,
+		WindowID: 0, RuntimeSessionID: runtimeSessionID,
 		Harness: producerHarness, Event: event, TraceID: r.traceID,
 		RequestID: r.requestID, Payload: []byte(payloadJSON), Truncated: truncated,
 	})
@@ -366,10 +359,7 @@ func deliverPayloadWithDeps(
 	recorder *deliveryRecorder,
 	started time.Time,
 ) DeliveryResult {
-	// A managed hook identifies its runtime session and routes by it alone; the
-	// daemon resolves where that session runs. Kitty variables are not read for
-	// it at all: a pane in a tmux server started from some Kitty window
-	// inherits that window's KITTY_WINDOW_ID, which names the wrong place.
+	// A managed hook identifies its runtime session and routes by it alone.
 	runtimeSessionID := ""
 	if recorder != nil {
 		runtimeSessionID = recorder.runtimeSessionID
@@ -377,31 +367,15 @@ func deliverPayloadWithDeps(
 	if runtimeSessionID == "" {
 		runtimeSessionID = strings.TrimSpace(getenv(runtimesession.EnvVar))
 	}
-	resolvedWindowID, listenOn := 0, ""
-	if runtimeSessionID != "" {
-		if _, err := runtimesession.ParseID(runtimeSessionID); err != nil {
-			recorder.record("hook.runtime_session", "rejected", "invalid_runtime_session", nil, 0)
-			return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_runtime_session", nil)
-		}
-		recorder.record("hook.runtime_session", "success", "runtime_session_identified", nil, 0)
-	} else {
-		rawListenOn := strings.TrimSpace(getenv("KITTY_LISTEN_ON"))
-		if rawListenOn == "" {
-			recorder.record("hook.kitty_detection", "rejected", "outside_kitty", nil, 0)
-			return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "outside_kitty", nil)
-		}
-		recorder.record("hook.kitty_detection", "success", "kitty_detected", nil, 0)
-
-		var err error
-		resolvedWindowID, err = resolveHookWindowID(windowID)
-		if err != nil {
-			recorder.record("hook.window_resolution", "rejected", "invalid_window", map[string]string{"error": err.Error()}, 0)
-			return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_window", nil)
-		}
-		recorder.windowID = resolvedWindowID
-		recorder.record("hook.window_resolution", "success", "window_resolved", nil, 0)
-		listenOn = kitty.NormalizedListenAddressFromEnv()
+	if runtimeSessionID == "" {
+		recorder.record("hook.runtime_session", "rejected", "missing_runtime_session", nil, 0)
+		return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "missing_runtime_session", nil)
 	}
+	if _, err := runtimesession.ParseID(runtimeSessionID); err != nil {
+		recorder.record("hook.runtime_session", "rejected", "invalid_runtime_session", nil, 0)
+		return resultFor(started, traceID, requestID, DeliveryPermanentFailure, "invalid_runtime_session", nil)
+	}
+	recorder.record("hook.runtime_session", "success", "runtime_session_identified", nil, 0)
 
 	rawProducer := strings.TrimSpace(producerHarness)
 	producerHarness = harness.NormalizeKnown(rawProducer)
@@ -410,7 +384,7 @@ func deliverPayloadWithDeps(
 	}
 	recorder.harness = canonicalHarness(producerHarness)
 	if recorder.capture && !recorder.payloadCaptureAttempted {
-		recorder.captureRawPayload(event, resolvedWindowID, producerHarness, payloadJSON, false)
+		recorder.captureRawPayload(event, 0, producerHarness, payloadJSON, false)
 	}
 
 	req := protocol.Request{
@@ -426,11 +400,10 @@ func deliverPayloadWithDeps(
 		ProducerConfigDir: recorder.producerConfigDir(),
 		HarnessProcess:    harnessProcess,
 		RuntimeSessionID:  runtimeSessionID,
-		WindowID:          resolvedWindowID,
+		WindowID:          0,
 		Event:             event,
 		Harness:           producerHarness,
 		PayloadJSON:       payloadJSON,
-		KittyListenOn:     listenOn,
 		PipeMode:          pipeMode,
 		ContextLimit:      contextLimit,
 		ResetFlow:         resetFlow,

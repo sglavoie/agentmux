@@ -11,7 +11,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) {
@@ -59,7 +58,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 						},
 						Renderer: protocol.WindowDebugRenderer{
 							DesiredIcon: "question", StateSet: true, Looping: true, LoopingSet: true, RenderFailures: 3,
-							LastRenderError: "set title: unavailable", KittyListenOn: "unix:/tmp/kitty-42",
+							LastRenderError: "set title: unavailable",
 						},
 						Shadow: protocol.WindowDebugShadow{
 							EffectiveIcon: "question", EffectiveGen: 4,
@@ -101,28 +100,6 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 	}
 
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister {
-		return fakeKittyWindowLister{
-			windows: []kitty.OSWindow{{
-				ID: 900,
-				Tabs: []kitty.Tab{{
-					ID:    91,
-					Title: "⚡W:api",
-					Windows: []kitty.Window{{
-						ID:    42,
-						Title: "api window",
-						CWD:   "/work/api",
-						UserVars: kitty.UserVars{
-							Profile:      "work",
-							Harness:      "codex",
-							Project:      "api",
-							AMXDirectory: "/work/api",
-						},
-					}},
-				}},
-			}},
-		}
-	}
 	daemonExportNow = func() time.Time { return now }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = false
@@ -182,8 +159,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 		t.Fatalf("window 42 durable.session_title = %q; want W:api", window42.Durable.SessionTitle)
 	}
 	if window42.Renderer.DesiredIcon != "question" || !window42.Renderer.StateSet || !window42.Renderer.Looping || !window42.Renderer.LoopingSet ||
-		window42.Renderer.RenderFailures != 3 || window42.Renderer.LastRenderError != "set title: unavailable" ||
-		window42.Renderer.KittyListenOn != "unix:/tmp/kitty-42" {
+		window42.Renderer.RenderFailures != 3 || window42.Renderer.LastRenderError != "set title: unavailable" {
 		t.Fatalf("window 42 renderer = %+v", window42.Renderer)
 	}
 	if got := window42.Stats.SuppressionReasons["guard_blocked"]; got != 2 {
@@ -206,10 +182,7 @@ func TestDaemonExportEventsCommand_AllWindowsUsesSchemaV10Payload(t *testing.T) 
 		window42.Watchdog.Reconciles != 3 {
 		t.Fatalf("window 42 watchdog = %+v", window42.Watchdog)
 	}
-	if !window42.Live.Found || window42.Live.TabID != 91 || window42.Live.OSWindowID != 900 || window42.Live.TabTitle != "⚡W:api" ||
-		window42.Live.BaseTitle != "W:api" || window42.Live.IconState != "bolt" || window42.Live.WindowTitle != "api window" ||
-		window42.Live.Project != "api" || window42.Live.Profile != "work" || window42.Live.Harness != "codex" ||
-		window42.Live.Directory != "/work/api" {
+	if window42.Live.Found {
 		t.Fatalf("window 42 live = %+v", window42.Live)
 	}
 
@@ -258,28 +231,6 @@ func TestDaemonExportEventsCommand_SingleWindowUsesFilteredExportShape(t *testin
 	}
 
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister {
-		return fakeKittyWindowLister{
-			windows: []kitty.OSWindow{{
-				ID: 5,
-				Tabs: []kitty.Tab{{
-					ID:    6,
-					Title: "⚡W:api",
-					Windows: []kitty.Window{{
-						ID:    42,
-						Title: "api window",
-						CWD:   "/work/api",
-						UserVars: kitty.UserVars{
-							Profile:      "work",
-							Harness:      "claude",
-							Project:      "api",
-							AMXDirectory: "/work/api",
-						},
-					}},
-				}},
-			}},
-		}
-	}
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 42
 	daemonExportEventsCurrentWindow = false
@@ -324,22 +275,6 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 	}
 
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister {
-		return fakeKittyWindowLister{
-			windows: []kitty.OSWindow{{
-				ID: 5,
-				Tabs: []kitty.Tab{{
-					ID:    6,
-					Title: "W:api",
-					Windows: []kitty.Window{{
-						ID:    42,
-						Title: "api window",
-						CWD:   "/work/api",
-					}},
-				}},
-			}},
-		}
-	}
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 42
 	daemonExportEventsCurrentWindow = false
@@ -362,8 +297,8 @@ func TestDaemonExportEventsCommand_SingleWindowKeepsEmptyEventsArray(t *testing.
 	if len(window42.Events) != 0 {
 		t.Fatalf("window 42 events len = %d; want 0", len(window42.Events))
 	}
-	if !window42.Live.Found {
-		t.Fatalf("window 42 live.found = false; want true")
+	if window42.Live.Found {
+		t.Fatalf("window 42 live.found = true; want false without a runtime session")
 	}
 }
 
@@ -391,7 +326,6 @@ func TestDaemonExportEventsCommandSchema8ProjectsCausalFields(t *testing.T) {
 		},
 	}
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportEventsSchema = protocol.EventsExportSchemaV8
 	daemonExportEventsPretty = false
 	daemonExportEventsWindow = 42
@@ -448,7 +382,6 @@ func TestDaemonExportEventsCommandSchema9PreservesCausalFieldsWithoutProcessIden
 		},
 	}
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportEventsSchema = protocol.EventsExportSchemaV9
 	daemonExportEventsPretty = false
 	daemonExportEventsWindow = 42

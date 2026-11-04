@@ -84,18 +84,18 @@ func TestSessionShowPrintsOneConversationBySelector(t *testing.T) {
 	}
 
 	if strings.Contains(out, "live:") || envelope.Data.Session.Live != nil {
-		t.Fatalf("show claimed a live tab while the daemon and Kitty could not be asked:\n%s", out)
+		t.Fatalf("show claimed a live tab while the daemon and tmux could not be asked:\n%s", out)
 	}
 
 	// With the lookup answering, show says whether continue would focus a tab
 	// or resume, and --json carries the tab.
 	sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) {
-		return map[string]liveConversation{"codex:7f67dc81-aaaa": {WindowID: 12, TabID: 3}}, true
+		return map[string]liveConversation{"codex:7f67dc81-aaaa": {RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef"}}, true
 	}
-	if out, err = run(false, "7f67"); err != nil || !strings.Contains(out, "live:       open in Kitty window 12 (continue focuses it)\n") {
+	if out, err = run(false, "7f67"); err != nil || !strings.Contains(out, "live:       open in tmux session rs-0123456789abcdef0123456789abcdef (amx attach shows it)\n") {
 		t.Fatalf("show with a live tab = %v:\n%s", err, out)
 	}
-	if out, err = run(true, "7f67"); err != nil || !strings.Contains(out, `"live":{"window_id":12,"tab_id":3}`) {
+	if out, err = run(true, "7f67"); err != nil || !strings.Contains(out, `"live":{"runtime_session_id":"rs-0123456789abcdef0123456789abcdef"}`) {
 		t.Fatalf("show --json with a live tab = %v:\n%s", err, out)
 	}
 	sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return map[string]liveConversation{}, true }

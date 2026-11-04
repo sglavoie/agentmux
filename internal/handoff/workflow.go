@@ -14,7 +14,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -41,21 +40,16 @@ type Request struct {
 	Edit            bool
 	NoLaunch        bool
 	Label           string
-	Kitty           kitty.KittyClient
-	// Runtime selects the backend the target launches on. When it selects
-	// no backend, Kitty is the backend.
+	// Runtime selects the tmux backend the target launches on.
 	Runtime session.Runtime
 }
 
 // launchRuntime is the backend the target launches on, or false when none.
 func (r Request) launchRuntime() (session.Runtime, bool) {
-	if r.Runtime.Tmux != nil || r.Runtime.Kitty != nil {
+	if r.Runtime.Tmux != nil {
 		return r.Runtime, true
 	}
-	if r.Kitty == nil {
-		return session.Runtime{}, false
-	}
-	return session.KittyRuntime(r.Kitty), true
+	return session.Runtime{}, false
 }
 
 // Result describes the finalized handoff and, when requested, the fresh
@@ -100,7 +94,7 @@ func (e *PartialLaunchError) Unwrap() error {
 
 // Workflow turns an indexed source into a finalized handoff artifact, then
 // starts a fresh target harness instructed to read it. The small dependency
-// seams keep the real filesystem/Kitty path testable without global state.
+// seams keep the filesystem and tmux launch path testable without global state.
 type Workflow struct {
 	builder           *Builder
 	artifactDirectory func() (string, error)
@@ -267,9 +261,6 @@ func (w *Workflow) Run(ctx context.Context, request Request) (Result, error) {
 	result.Launched = true
 	if w.threads != nil {
 		key := result.RuntimeSessionID
-		if key == "" && launched.LaunchID != "" {
-			key = "launch:" + launched.LaunchID
-		}
 		if key == "" {
 			return result, &RelationshipError{Err: errors.New("receiving launch has no identity")}
 		}

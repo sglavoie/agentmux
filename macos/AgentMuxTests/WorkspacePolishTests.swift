@@ -13,7 +13,7 @@ final class WorkspacePolishTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work"),
         F.tmux(2, project: "api", profile: "personal"),
-        F.kitty(4, project: "web"),
+        F.tmux(4, project: "web"),
     ]
 
     override func setUp() async throws {
@@ -166,8 +166,7 @@ final class WorkspacePolishTests: XCTestCase {
     }
 
     /// The inspector's Color…, Icon…, and Mute act on the line under the
-    /// pointer, wherever the pane is; a Kitty session has the pickers in
-    /// Kitty but is muted from here.
+    /// pointer, wherever the pane is.
     func testTheRightClickMenuColorsIconsAndMutesTheClickedSession() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(1))))
@@ -183,16 +182,6 @@ final class WorkspacePolishTests: XCTestCase {
         try perform(item("Mute"))
         XCTAssertEqual(app.muteToggles, [personal])
 
-        let kitty = try XCTUnwrap(workspace.state.rows.first { $0.embeddedRuntimeSessionID == nil })
-        let kittyItems = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        for title in ["Color…", "Icon…"] {
-            let picker = try XCTUnwrap(kittyItems.first { $0.title == title })
-            XCTAssertFalse(picker.isEnabled, "\(title) is a Kitty session's in Kitty")
-            XCTAssertEqual(picker.toolTip, WorkspaceInspectorView.kittyOnly)
-        }
-        let mute = try XCTUnwrap(kittyItems.first { $0.title == "Mute" })
-        try perform(mute)
-        XCTAssertEqual(app.muteToggles, [personal, kitty])
     }
 
     /// A right-click on the list's empty space offers where to go and what
@@ -224,11 +213,7 @@ final class WorkspacePolishTests: XCTestCase {
 
     func testHiddenTrailingViewsLeaveTheTitleTheLine() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
-        let kitty = try XCTUnwrap(workspace.state.rows.first { $0.embeddedRuntimeSessionID == nil })
         let cell = WorkspaceRowCellView()
-        cell.show(kitty, muteGlyph: "", sessionKey: nil)
-        XCTAssertFalse(cell.titleClearsClose, "a Kitty session has no ×")
-        XCTAssertFalse(cell.titleClearsKey)
         let tmux = try XCTUnwrap(workspace.state.row(.embedded(F.runtimeID(1))))
         cell.show(tmux, muteGlyph: "", sessionKey: "1")
         XCTAssertTrue(cell.titleClearsClose)

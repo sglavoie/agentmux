@@ -13,11 +13,9 @@ import (
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
 
-// TestOpenActionsNeedNoKitty: with no Kitty to open a tab in, the four open
-// actions hand the shell or editor to the surface's host, and when there is
-// none (or it refuses) leave it to the caller's own terminal. None of them
-// reports a missing Kitty client.
-func TestOpenActionsNeedNoKitty(t *testing.T) {
+// Open actions hand a shell or editor to the surface's host, and when there
+// is none leave it to the caller's terminal.
+func TestOpenActionsUseTheSurfaceHost(t *testing.T) {
 	t.Parallel()
 
 	directory := t.TempDir()
@@ -70,26 +68,17 @@ func TestOpenActionsNeedNoKitty(t *testing.T) {
 	}
 }
 
-// A session on tmux with no tmux server injected is missing a tmux server,
-// not a Kitty client; a Kitty session is still missing Kitty.
-func TestSessionActionsNameTheBackendTheyLack(t *testing.T) {
+// A session on tmux with no server injected reports the missing dependency.
+func TestSessionActionsNameTheTmuxServerTheyLack(t *testing.T) {
 	t.Parallel()
 
 	cfg := continuityConfig(harness.Claude)
-	for kind, want := range map[runtimesession.BackendKind]string{
-		runtimesession.BackendTmux:  "tmux server",
-		runtimesession.BackendKitty: "Kitty client",
-	} {
-		running := session.RunningSession{Project: "api", Profile: "work", Backend: kind, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef"}
-		for _, id := range []ID{Focus, ToggleLock, ToggleMute, TogglePin, Close} {
-			_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg}, id, Request{Session: &running, Confirmed: true})
-			var actionErr *Error
-			if !errors.As(err, &actionErr) || actionErr.Code != "missing_dependency" || !strings.Contains(actionErr.Message, want) {
-				t.Errorf("%s on %s: %v; want a missing %s", id, kind, err, want)
-			}
-			if kind == runtimesession.BackendTmux && err != nil && strings.Contains(err.Error(), "Kitty") {
-				t.Errorf("%s on tmux blamed Kitty: %v", id, err)
-			}
+	running := session.RunningSession{Project: "api", Profile: "work", Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef"}
+	for _, id := range []ID{ToggleLock, ToggleMute, TogglePin, Close} {
+		_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg}, id, Request{Session: &running, Confirmed: true})
+		var actionErr *Error
+		if !errors.As(err, &actionErr) || actionErr.Code != "missing_dependency" || !strings.Contains(actionErr.Message, "tmux server") {
+			t.Errorf("%s: %v; want a missing tmux server", id, err)
 		}
 	}
 }

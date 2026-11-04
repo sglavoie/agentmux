@@ -160,7 +160,7 @@ func TestPickerProfileIndicatorAndEntryReset(t *testing.T) {
 	m.width = 120
 
 	out := stripAnsi(renderPicker(m))
-	if !strings.Contains(out, "Launch Sessions → Kitty: compatibility default  [profile: All]") {
+	if !strings.Contains(out, "Launch Sessions → tmux: default  [profile: All]") {
 		t.Fatalf("initial picker header missing All profile indicator:\n%s", out)
 	}
 	footer := stripAnsi(renderFooter(m))

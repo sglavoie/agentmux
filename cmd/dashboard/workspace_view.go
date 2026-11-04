@@ -18,7 +18,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -39,16 +39,13 @@ import (
 // Two things hold for every kind.
 //
 // The view is not an agent. Before anything runs, the variables that would
-// tie this process to a managed session or to a Kitty window are removed from
+// tie this process to a managed session are removed from
 // its environment, so nothing started from a utility view — a harness the
 // operator runs by hand in the shell, say — reports as the session whose
 // environment the app happened to inherit. A view never registers a runtime
 // session and never appears in the session list.
 //
-// The view never needs Kitty. With the Kitty variables gone the dashboard and
-// the overview select the tmux backend with no Kitty client, exactly as they
-// do in any other terminal, and --backend tmux is explicit so a missing tmux
-// is an error instead of a fall back to a Kitty that is not there.
+// Dashboard and overview select the tmux backend in every terminal.
 
 // The seams the tests replace: a test must not page, exec a shell, send to
 // the operator's daemon, or draw a full-screen surface.
@@ -57,7 +54,7 @@ var (
 		_, err := ipc.NewClient().WorkspaceView(view)
 		return err
 	}
-	workspaceViewDashboard = func() error { return Run(0, string(runtimesession.BackendTmux), View{}) }
+	workspaceViewDashboard = func() error { return Run(string(runtimesession.BackendTmux), View{}) }
 	workspaceViewOverview  = func() error {
 		overviewBackend = string(runtimesession.BackendTmux)
 		return runOverviewCommand(0)
@@ -69,7 +66,7 @@ var (
 	workspaceViewConfig   = cli.LoadRunnableConfig
 	workspaceViewRegistry = runtimesession.DefaultRegistryPath
 	workspaceViewPage     = pageScrollback
-	workspaceViewKeys     = func() error { return customization.RunKeybindingsReference(kittykeys.Workspace) }
+	workspaceViewKeys     = func() error { return customization.RunKeybindingsReference(keybindings.Workspace) }
 	workspaceViewEnviron  = os.Environ
 	workspaceViewUnsetenv = os.Unsetenv
 )
@@ -92,7 +89,7 @@ dashboard, the overview, Past Sessions on one conversation, or a utility view.
 Agent Mux.app starts it; it is not
 meant to be typed.
 
-A view is not a managed session. It runs with the session and Kitty variables
+A view is not a managed session. It runs with the session variables
 removed from its environment, registers nothing, and is never listed or
 counted as waiting.`,
 }
@@ -227,7 +224,7 @@ func utilityIdentityVariable(key string) bool {
 	case runtimesession.EnvVar, "TMUX", "TMUX_PANE", "WINDOWID", "CLAUDECODE":
 		return true
 	}
-	return strings.HasPrefix(key, "KITTY_")
+	return false
 }
 
 // scrubUtilityEnvironment removes every identity variable from this process,
@@ -257,11 +254,10 @@ func runWorkspaceHistory(wanted conversation.Identity) error {
 	if err != nil {
 		return err
 	}
-	client, err := selectTerminals(string(runtimesession.BackendTmux))
-	if err != nil {
+	if err := selectTerminals(string(runtimesession.BackendTmux)); err != nil {
 		return err
 	}
-	return tui.RunHistorySearch(cfg, client, wanted, workspaceHistoryQuery)
+	return tui.RunHistorySearch(cfg, nil, wanted, workspaceHistoryQuery)
 }
 
 // runWorkspaceShell replaces this process with the operator's login shell in

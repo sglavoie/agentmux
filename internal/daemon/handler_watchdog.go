@@ -1,11 +1,6 @@
 package daemon
 
 import (
-	"errors"
-	"io/fs"
-	"log/slog"
-	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -15,30 +10,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/gitstate"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
-
-// SetKittyClient injects the Kitty client used by the stale sweep to clear
-// stranded tab-title icons. Passing nil disables the title-clear step
-// (notifications still fire). Safe to call once before the sweep runs.
-func (h *Handler) SetKittyClient(client kittyTitleClient) {
-	h.useKittyClient(client)
-	// Prime the snapshot cache immediately so the hook path has something to
-	// route against before the first render tick. The render/restore loop keeps
-	// it fresh afterward; a list error here just leaves the cache cold. This
-	// list is synchronous, so production startup uses useKittyClient + the
-	// bounded restore instead, and only tests and simple callers rely on the
-	// prime here.
-	h.primeSnapshot()
-}
-
-// useKittyClient installs the Kitty client without priming the snapshot cache.
-// Production startup uses this so an unbounded ListWindows can never block the
-// daemon before its bounded initial restore runs.
-func (h *Handler) useKittyClient(client kittyTitleClient) {
-	h.kittyClient = client
-}
 
 // SetStaleThresholds configures the per-action sweep thresholds. The global
 // map keys are action names ("active", "subagent", "compact"); the
@@ -167,55 +140,14 @@ func (h *Handler) appendWatchdogEventLocked(windowID, originWindowID int, at tim
 	h.windowMetadata[windowID] = meta
 }
 
-// SweepHookSilence detects accounts whose most recent event predates the
-// configured hook-silence threshold and fires a one-shot notification per
-// silence stretch. Unlike SweepStale, which is per-window, this sweep is
-// account-level: it iterates running Kitty windows (cc_account user var) and
-// the sessions bound on other backends (the profile of their label) so
-// notifications are not produced for accounts the user has not launched.
-//
-// Behavior:
-//   - No-op when h.kittyClient is nil (test environments without Kitty).
-//   - No-op when ListWindows fails — logged at debug and swallowed so other
-//     ticks can retry.
-//   - The "hook_silence" action is daemon-internal: not in
-//     protocol.ActionPriority or protocol.IconState; only the notifier
-//     recognizes it as an action name.
-//   - The notifier's per-(windowID, action) cooldown is keyed by a synthetic
-//     negative ID derived from the account name so it cannot collide with
-//     real positive Kitty window IDs (see activity.HookSilenceWindowID).
-func (h *Handler) SweepHookSilence(now time.Time) {
-	client, _ := h.kittyListTarget()
-	if client == nil {
-		return
-	}
-	windows, err := client.ListWindows()
-	if err != nil {
-		slog.Debug("hook-silence sweep: list windows failed", "err", err)
-		return
-	}
-	h.SweepHookSilenceWithSnapshot(now, windows)
-}
-
-func (h *Handler) SweepHookSilenceWithSnapshot(now time.Time, windows []kitty.OSWindow) {
-	h.sweepHookSilence(now, windows, 0, false)
-}
-
 // sweepHookSilence evaluates account-level hook silence on the same monotonic
 // accumulation the stale sweep uses: an account's silence grows only by
 // in-process observed elapsed time (seeded from wall-clock age on first
 // observation), so a system sleep cannot fire a false "hooks silent"
 // notification the moment the daemon wakes.
-func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, credit time.Duration, gapTick bool) {
-	running := make(map[string]bool)
-	for _, ow := range windows {
-		for _, tab := range ow.Tabs {
-			for _, w := range tab.Windows {
-				if acc := w.UserVars.Account; acc != "" {
-					running[acc] = true
-				}
-			}
-		}
+func (h *Handler) sweepHookSilence(now time.Time, running map[string]bool, credit time.Duration, gapTick bool) {
+	if running == nil {
+		running = make(map[string]bool)
 	}
 
 	type silentEntry struct {
@@ -224,21 +156,9 @@ func (h *Handler) sweepHookSilence(now time.Time, windows []kitty.OSWindow, cred
 	var silent []silentEntry
 
 	h.stateMu.Lock()
-	for _, windows := range h.otherKittyTrees {
-		for _, ow := range windows {
-			for _, tab := range ow.Tabs {
-				for _, win := range tab.Windows {
-					if account := win.UserVars.Account; account != "" {
-						running[account] = true
-					}
-				}
-			}
-		}
-	}
-	// A session on another backend is in no window listing; the profile its
-	// pane named is its account, for as long as it holds a slot.
+	// A tmux session's profile is its account for as long as it holds a slot.
 	for _, b := range h.runtimeRoutes.bySlot {
-		if b.target.backend == string(runtimesession.BackendKitty) {
+		if b.target.backend != string(runtimesession.BackendTmux) {
 			continue
 		}
 		if profile := h.runtimeLabels[b.runtime].profile; profile != "" && !runningAccount(running, profile) {
@@ -302,46 +222,6 @@ func runningAccount(running map[string]bool, account string) bool {
 	return false
 }
 
-// SweepStale detects "active"-class sessions whose last incoming event predates
-// the per-action threshold and resolves them: it fires a single-shot "Session
-// idle" notification, clears the in-memory state so future events restart
-// cleanly, and clears the stale icon in the tab title.
-//
-// Behavior is gated on at least one configured threshold (global or
-// per-account) being > 0. The "stale" action is daemon-internal: it never
-// crosses the IPC wire and is not present in protocol.ActionPriority or
-// protocol.IconState. The notifier is the only subsystem that recognizes it
-// as an action name.
-func (h *Handler) SweepStale(now time.Time) {
-	var windows []kitty.OSWindow
-	var listedSocket string
-	// Prune eventLog entries for windows that Kitty no longer reports as live.
-	// Runs before the staleness scan so an event-log GC happens every sweep
-	// regardless of whether anyStaleThresholdSet() is true below.
-	if client, socket := h.kittyListTarget(); client != nil {
-		if snapshot, err := client.ListWindows(); err == nil {
-			windows = snapshot
-			listedSocket = socket
-			h.pruneClosedWindowsFor(now, liveWindowIDs(windows), socket)
-		} else {
-			slog.Debug("sweep: list windows failed for GC prune", "err", err)
-		}
-	}
-	changed := h.SweepStaleWithSnapshot(now, windows)
-	if changed && len(windows) > 0 {
-		h.renderSnapshotFor(windows, listedSocket)
-	}
-}
-
-// SweepStaleWithSnapshot runs one staleness pass without advancing the
-// monotonic idle accumulation (credit 0): entries not yet tracked are seeded
-// from their wall-clock age, so a one-shot call over pre-aged state expires it
-// immediately. The production watchdog loop calls sweepStale directly with the
-// tick's observed elapsed credit instead.
-func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool {
-	return h.sweepStale(now, 0, false, true)
-}
-
 // sweepStale evaluates reducer retention plus per-fact and per-window
 // staleness. Acknowledged retention is fixed internal policy and runs even when
 // every configurable stale threshold is disabled; otherwise an idle window
@@ -353,10 +233,9 @@ func (h *Handler) SweepStaleWithSnapshot(now time.Time, _ []kitty.OSWindow) bool
 // clears — with its one-shot "Session idle" notification — only when the
 // window as a whole has been idle past its threshold (WatchdogStale).
 //
-// kittySlots is false while no Kitty snapshot is published: the pass then
-// covers only the slots of sessions on other backends, which no snapshot
-// describes, and leaves every Kitty window as it is.
-func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, kittySlots bool) bool {
+// includeDirectSlots permits isolated reducer tests to sweep unregistered
+// slots. Production passes false and sweeps registered runtime sessions only.
+func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, includeDirectSlots bool) bool {
 	staleThresholdsEnabled := h.staleThresholds.AnySet()
 	type staleEntry struct {
 		windowID int
@@ -370,7 +249,7 @@ func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, 
 
 	h.stateMu.Lock()
 	for windowID, st := range h.store {
-		if !kittySlots && !isRuntimeSyntheticSlot(windowID) {
+		if !includeDirectSlots && !isRuntimeSyntheticSlot(windowID) {
 			continue
 		}
 		compacted := 0
@@ -420,7 +299,7 @@ func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, 
 			// Reset so the next idle/clear/active does not try to re-clear an
 			// icon we just cleared, and so the lastKnownAction fallback returns
 			// "". eventLog is intentionally preserved across the sweep so
-			// detail-pane history survives until the Kitty window closes.
+			// detail-pane history survives until the session closes.
 			st.LastAction = ""
 			st.LastActiveEvent = ""
 			st.CopilotToolPermissionState = state.CopilotToolPermissionNone
@@ -455,8 +334,8 @@ func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, 
 		case compacted > 0 || expired > 0:
 			// Retention compaction or per-fact expiry without a whole-window
 			// clear: publish the new reduction; only an actual visible change
-			// forces a Kitty write. An invisible retention-only mutation still
-			// marks persistence dirty so amx_state drops the expired cutoffs.
+			// forces a checkpoint write. An invisible retention-only mutation still
+			// marks persistence dirty so the checkpoint drops the expired cutoffs.
 			before := st.Effective
 			h.publishEffectiveLocked(windowID, st, st.Reducer.Reduce(now.Unix()))
 			h.syncRendererMetadataLocked(windowID)
@@ -550,243 +429,11 @@ func (h *Handler) expireStaleFactsLocked(windowID int, st *state.WindowState, no
 	return expired, aslExecuting
 }
 
-// pruneClosedWindows drops per-window state for windows that Kitty no longer
-// reports as live. Called from the maintenance tick once the live set has
-// been materialised from kitty.ListWindows().
-//
-// The live per-window store must be GC'd here — a session that closes without
-// a terminal hook event (e.g. user closes the tab with Cmd+W, daemon misses
-// the SessionEnd) would otherwise leak an entry per killed window for the
-// daemon's lifetime, which can also let notifiedStale latches survive into a
-// future Kitty-ID reuse and silently suppress a notification. Alongside the
-// store, the close cancels everything keyed by the window: its pending render
-// queue entry, notifier timers/cooldowns, guard entry, remembered Kitty
-// socket, and ASL miss streaks.
-//
-// windowMetadata is preserved behind a bounded tombstone so post-mortem
-// `amx daemon export-events` invocations still have identity/context for
-// sessions whose tabs have already disappeared; the tombstone (and the
-// metadata with it) expires after windowTombstoneRetention or once
-// maxWindowTombstones is exceeded.
-func (h *Handler) pruneClosedWindows(now time.Time, liveIDs map[int]bool) {
-	h.pruneClosedWindowsFor(now, liveIDs, "")
-}
-
-// pruneClosedWindowsFor is pruneClosedWindows for a listing read through
-// listedSocket. Window IDs mean something only inside the Kitty instance that
-// issued them, so a listing of one instance says nothing about a window whose
-// hooks named another: such a window is left for pruneForeignWindows, which
-// asks its own instance. An empty listedSocket judges every window, as a
-// listing of unknown provenance always has.
-func (h *Handler) pruneClosedWindowsFor(now time.Time, liveIDs map[int]bool, listedSocket string) {
-	h.stateMu.Lock()
-	closed := make(map[int]struct{})
-	for id := range h.store {
-		// A non-Kitty runtime slot is never in a Kitty listing; its runtime
-		// session's end retires it (retireEndedRuntimeSessions).
-		if isRuntimeSyntheticSlot(id) {
-			continue
-		}
-		windowID := id
-		if key, ok := h.runtimeRoutes.kittyWindow(id); ok {
-			windowID = key.windowID
-		}
-		if !liveIDs[windowID] && !h.windowOfOtherInstanceLocked(id, listedSocket) {
-			closed[id] = struct{}{}
-		}
-	}
-	h.dropClosedWindowsLocked(now, closed)
-	// A tombstoned ID that Kitty reports live again is a reused window, not a
-	// closed one: resurrect it so its diagnostics resume live and it can count
-	// as renderer drift again.
-	for id := range liveIDs {
-		if slot := h.runtimeRoutes.kittyByKey[kittySlotKey{listedSocket, id}]; slot > 0 {
-			h.reviveTombstoneLocked(slot)
-		} else if key, mapped := h.runtimeRoutes.kittyWindow(id); !mapped || key.socket == listedSocket {
-			h.reviveTombstoneLocked(id)
-		}
-	}
-	h.expireTombstonesLocked(now)
-	h.stateMu.Unlock()
-	h.finishClosedWindows(closed)
-}
-
-// windowOfOtherInstanceLocked reports whether windowID's hooks named a Kitty
-// socket other than listedSocket. Callers hold stateMu.
-func (h *Handler) windowOfOtherInstanceLocked(windowID int, listedSocket string) bool {
-	if listedSocket == "" {
-		return false
-	}
-	socket := h.kittySockets[windowID]
-	if key, ok := h.runtimeRoutes.kittyWindow(windowID); ok {
-		socket = key.socket
-	}
-	return socket != "" && socket != listedSocket
-}
-
-// maxForeignInstanceLists bounds the extra Kitty listings one maintenance pass
-// may spend on windows of instances other than the listed one. With more
-// instances than that, passes take them in turn (Handler.foreignListAfter).
-const maxForeignInstanceLists = 4
-
-// rotateAfter returns sorted's elements starting with the first one greater
-// than after and wrapping around, so an after past every element (or empty)
-// keeps the sorted order.
-func rotateAfter(sorted []string, after string) []string {
-	start := sort.SearchStrings(sorted, after)
-	if start < len(sorted) && sorted[start] == after {
-		start++
-	}
-	if start == len(sorted) {
-		return sorted
-	}
-	rotated := make([]string, 0, len(sorted))
-	rotated = append(rotated, sorted[start:]...)
-	return append(rotated, sorted[:start]...)
-}
-
-// pruneForeignWindows closes windows of Kitty instances other than the one
-// listedSocket names, each judged by a listing of its own instance: a window
-// that instance no longer reports is closed, and so is every window of an
-// instance whose socket file is gone, since Kitty removes it on exit. A
-// listing that fails for any other reason closes nothing, so a slow or busy
-// instance never loses its state. The listings run without stateMu.
-func (h *Handler) pruneForeignWindows(now time.Time, listedSocket string) {
-	if listedSocket == "" {
-		return
-	}
-	h.stateMu.Lock()
-	bySocket := make(map[string][]int)
-	for id := range h.store {
-		if h.windowOfOtherInstanceLocked(id, listedSocket) {
-			socket := h.kittySockets[id]
-			if key, mapped := h.runtimeRoutes.kittyWindow(id); mapped {
-				socket = key.socket
-			}
-			bySocket[socket] = append(bySocket[socket], id)
-		}
-	}
-	client := h.kittyClient
-	after := h.foreignListAfter
-	h.stateMu.Unlock()
-	if len(bySocket) == 0 || client == nil {
-		h.setOtherKittyTrees(nil, nil)
-		return
-	}
-	sockets := make([]string, 0, len(bySocket))
-	for socket := range bySocket {
-		sockets = append(sockets, socket)
-	}
-	sort.Strings(sockets)
-	// Instances this pass does not list keep their previous trees, like a
-	// failed listing; their windows are judged on a later pass.
-	kept := make(map[string]bool)
-	if len(sockets) > maxForeignInstanceLists {
-		sockets = rotateAfter(sockets, after)
-		for _, socket := range sockets[maxForeignInstanceLists:] {
-			kept[socket] = true
-		}
-		sockets = sockets[:maxForeignInstanceLists]
-		h.stateMu.Lock()
-		h.foreignListAfter = sockets[len(sockets)-1]
-		h.stateMu.Unlock()
-	}
-
-	candidates := make(map[int]string)
-	trees := make(map[string][]kitty.OSWindow)
-	for _, socket := range sockets {
-		if kittySocketGone(socket) {
-			for _, id := range bySocket[socket] {
-				candidates[id] = socket
-			}
-			continue
-		}
-		windows, err := scopedKittyClient(client, socket).ListWindows()
-		if err != nil {
-			slog.Debug("maintenance: list windows of another kitty instance failed", "socket", socket, "err", err)
-			kept[socket] = true
-			continue
-		}
-		trees[socket] = windows
-		live := liveWindowIDs(windows)
-		for _, id := range bySocket[socket] {
-			windowID := id
-			h.stateMu.Lock()
-			if key, ok := h.runtimeRoutes.kittyWindow(id); ok {
-				windowID = key.windowID
-			}
-			h.stateMu.Unlock()
-			if !live[windowID] {
-				candidates[id] = socket
-			}
-		}
-	}
-	h.setOtherKittyTrees(trees, kept)
-	if len(candidates) == 0 {
-		return
-	}
-
-	h.stateMu.Lock()
-	closed := make(map[int]struct{})
-	for id, socket := range candidates {
-		// A hook that moved the window to another socket while the listing
-		// ran has made this verdict about a different window.
-		if _, ok := h.store[id]; ok && h.kittySockets[id] == socket {
-			closed[id] = struct{}{}
-		}
-	}
-	h.dropClosedWindowsLocked(now, closed)
-	h.stateMu.Unlock()
-	h.finishClosedWindows(closed)
-}
-
-// setOtherKittyTrees replaces the other instances' trees with listed, keeping
-// the previous tree of an instance in kept, one whose listing failed or was
-// left to a later pass, so a busy or unvisited instance's sessions keep their
-// titles. Every other instance's tree is dropped. Fresh listings clear unseen
-// attention for focused panes; retained trees are not new focus observations.
-// The companion is told whenever there is a set to show or one to withdraw;
-// the hub skips a publish that changed nothing.
-func (h *Handler) setOtherKittyTrees(listed map[string][]kitty.OSWindow, kept map[string]bool) {
-	h.stateMu.Lock()
-	next := make(map[string][]kitty.OSWindow, len(listed))
-	observedAt := time.Now()
-	for socket, windows := range listed {
-		next[socket] = windows
-		h.refreshFocusFromSnapshotForLocked(windows, socket, observedAt)
-	}
-	for socket := range kept {
-		if previous, ok := h.otherKittyTrees[socket]; ok {
-			next[socket] = previous
-		}
-	}
-	changed := len(next) != 0 || len(h.otherKittyTrees) != 0
-	h.otherKittyTrees = next
-	if changed {
-		h.companionDirty()
-	}
-	h.stateMu.Unlock()
-}
-
-// kittySocketGone reports whether a unix-domain Kitty socket's file no longer
-// exists. Abstract sockets and TCP addresses have no file and are never gone.
-func kittySocketGone(socket string) bool {
-	path, ok := strings.CutPrefix(socket, "unix:")
-	if !ok || path == "" || strings.HasPrefix(path, "@") {
-		return false
-	}
-	_, err := os.Stat(path)
-	return errors.Is(err, fs.ErrNotExist)
-}
-
 // dropClosedWindowsLocked removes every closed window's live state. Callers
 // hold stateMu and run finishClosedWindows after releasing it.
 func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}) {
 	for id := range closed {
 		delete(h.store, id)
-		delete(h.kittySockets, id)
-		delete(h.kittyRestored, id)
-		h.runtimeRoutes.releaseKittySlot(id)
 		h.recordWindowClosedLocked(id, now)
 		// A stop still held for the window has nothing left to paint. Left
 		// armed it would commit after the close, bring the window's state
@@ -799,6 +446,7 @@ func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}
 			delete(h.pendingStopHolds, id)
 		}
 	}
+	h.expireTombstonesLocked(now)
 	// ASL miss streaks and supervision records are per-window leases; a closed
 	// window can never corroborate a run again, so both go with it.
 	stillOpen := func(windowID int) bool {
@@ -832,15 +480,6 @@ func (h *Handler) dropClosedWindowsLocked(now time.Time, closed map[int]struct{}
 // outside stateMu. Callers have released stateMu.
 func (h *Handler) finishClosedWindows(closed map[int]struct{}) {
 	for id := range closed {
-		// The pending render entry for a closed window is cancelled outright;
-		// an in-flight render cannot be cancelled, but its completion
-		// bookkeeping already tolerates the deleted state. Persist the pending
-		// queued-stage trace only after both stateMu and the queue mutex are free.
-		if h.renderQueue != nil {
-			if trace, purged := h.renderQueue.Purge(id); purged {
-				h.recordRenderGenerationBounded(trace, id)
-			}
-		}
 		// Notifier cooldown/pending entries are keyed by window ID too. Without
 		// cleanup the notifier's per-(window, action) cooldown map grows
 		// linearly with closed windows, and a stale pending permission timer
@@ -862,7 +501,7 @@ func (h *Handler) finishClosedWindows(closed map[int]struct{}) {
 func (h *Handler) recordWindowClosedLocked(windowID int, now time.Time) {
 	meta := h.windowMetadata[windowID]
 	meta.Watchdog.LastEvent = eventWindowClosed
-	meta.Watchdog.LastReason = "window no longer reported by kitty; live state garbage-collected"
+	meta.Watchdog.LastReason = "runtime session closed; live state garbage-collected"
 	meta.Watchdog.LastAt = now.Unix()
 	meta.Watchdog.ClosedAt = now.Unix()
 	// The live decline maps are purged for this window in the same critical
@@ -880,7 +519,7 @@ func (h *Handler) recordWindowClosedLocked(windowID int, now time.Time) {
 }
 
 // reviveTombstoneLocked clears a window's tombstone when the ID is live again
-// (Kitty ID reuse, or an event racing the close re-created state). Callers
+// (slot ID reuse, or an event racing the close re-created state). Callers
 // hold stateMu.
 func (h *Handler) reviveTombstoneLocked(windowID int) {
 	if _, ok := h.windowTombstones[windowID]; !ok {

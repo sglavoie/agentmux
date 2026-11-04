@@ -11,7 +11,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
@@ -41,129 +40,6 @@ const (
 	// be intermediate and settles immediately (one sample), as before.
 	copilotTurnEndRequiredSamples = 2
 )
-
-// ProbeCopilotTranscriptStop scans managed Copilot windows for a finished
-// interactive turn — a normal completion or a user interruption (abort) — whose
-// native agentStop/sessionEnd hook never arrived, leaving a stuck ⚡. It lists
-// windows, runs the probe against the snapshot, and renders. Production drives
-// the probe from runScreenProbes with the cached snapshot; this wrapper mirrors
-// ProbeClaudeScreenStop for callers (and tests) that want the full list+render
-// round-trip.
-func (h *Handler) ProbeCopilotTranscriptStop(now time.Time) {
-	client, socket := h.kittyListTarget()
-	if client == nil {
-		return
-	}
-	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
-	windows, err := client.ListWindows()
-	if err != nil {
-		slog.Debug("copilot transcript probe: list windows failed", "err", err)
-		return
-	}
-	h.probeCopilotTranscriptStopWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
-		h.screenTextCacheForSocket(socket))
-	h.renderSnapshotFor(windows, socket)
-}
-
-// probeCopilotTranscriptStopWithSnapshot runs the Copilot transcript stop probe
-// against an already-published Kitty snapshot. Direct sessions retain the
-// Copilot title-owner rule; borrowed sessions follow their exact producer route
-// to the managed target. Only a target whose reduced icon is a stuck ⚡ or this
-// probe's recoverable synthetic 🛑 is considered.
-//
-// Unlike the Codex/Claude probes the screen is not what settles here — the
-// authoritative positive evidence is the matching producer session's
-// transcript. The per-tick cache is threaded through for the REFUSAL half of
-// the composition (see copilotScreenRefusesSettle), which is why it is a
-// parameter rather than something this function builds: on the production tick
-// a Copilot pane shares its capture with whatever else read it, exactly as the
-// Claude prompt-kind and idle probes share one.
-func (h *Handler) probeCopilotTranscriptStopWithSnapshot(
-	now time.Time,
-	snapshot probes.Snapshot,
-	screens *activity.ScreenTextCache,
-) {
-	for _, binding := range h.copilotTranscriptProbeBindings(now, snapshot) {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
-		if !ok {
-			continue
-		}
-		h.probeCopilotTranscriptWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, screens)
-	}
-}
-
-// copilotTranscriptProbeBindings combines live interactive producer routes with
-// exact post-settle recovery routes. Recovery is derived from the probe stop's
-// session memo and the retired producer fact, so it retains the original source
-// pane without making that terminal session eligible for ordinary continuation.
-func (h *Handler) copilotTranscriptProbeBindings(now time.Time, snapshot probes.Snapshot) []probes.Binding {
-	bindings := h.screenProbeBindings(snapshot, harness.Copilot)
-	source := protocol.SourceID{Kind: protocol.SourceProbe, Key: copilotTranscriptStopProbeSource}
-
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	var recovery []probes.Binding
-	for i := range snapshot.Windows() {
-		for j := range snapshot.Windows()[i].Tabs {
-			for k := range snapshot.Windows()[i].Tabs[j].Windows {
-				target := &snapshot.Windows()[i].Tabs[j].Windows[k]
-				if target.UserVars.EffectiveProfile() == "" && target.UserVars.EffectiveHarness() == "" {
-					continue
-				}
-				targetSlot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), target.ID)
-				if h.windowOfOtherInstanceLocked(targetSlot, snapshot.Socket()) {
-					continue
-				}
-				st, ok := h.windowStateLocked(targetSlot)
-				if !ok || st == nil || st.Reducer == nil {
-					continue
-				}
-				identity, sourceSlot, ok := st.Reducer.ProbeStopRecoveryRoute(
-					source, harness.Copilot, targetSlot, now.Unix(),
-				)
-				if !ok {
-					continue
-				}
-				sourceWindowID, sameInstance := h.kittyRemoteWindowLocked(sourceSlot, snapshot.Socket())
-				if !sameInstance {
-					continue
-				}
-				binding, found := probes.NewBinding(snapshot, identity, sourceWindowID, target.ID)
-				if !found {
-					continue
-				}
-				binding.RecoverySource = source
-				binding.RecoveryAt = now.Unix()
-				binding.SourceStateSlot = sourceSlot
-				binding.TargetStateSlot = targetSlot
-				binding.KittySocket = snapshot.Socket()
-				if h.screenProbeBindingCurrentLocked(binding) {
-					recovery = append(recovery, binding)
-				}
-			}
-		}
-	}
-
-	// One producer/source pair may recover at most one managed target. Duplicate
-	// restored facts fail closed rather than fanning one transcript observation
-	// across two panes.
-	type routeKey struct {
-		producer string
-		session  string
-		source   int
-	}
-	counts := make(map[routeKey]int, len(recovery))
-	for _, binding := range recovery {
-		counts[routeKey{producer: binding.Producer.Harness, session: binding.Producer.SessionID, source: binding.SourceWindowID}]++
-	}
-	for _, binding := range recovery {
-		key := routeKey{producer: binding.Producer.Harness, session: binding.Producer.SessionID, source: binding.SourceWindowID}
-		if counts[key] == 1 {
-			bindings = append(bindings, binding)
-		}
-	}
-	return bindings
-}
 
 // copilotTranscriptStopProbeCanOverwrite reports whether the current visible
 // icon is one the transcript probe may act on. Two states qualify:
@@ -212,7 +88,7 @@ func copilotTranscriptStopProbeCanOverwrite(iconState string) bool {
 // probeClaudeIdleWindow, but its evidence is the interactive session transcript
 // rather than a screen read:
 //
-//   - the reducer receipt sequence is captured before the Kitty snapshot and
+//   - the reducer receipt sequence is captured before the pane capture and
 //     revalidated while the current interactive conversation is resolved under
 //     stateMu BEFORE the slow off-lock transcript read, so a concurrent prompt
 //     (or any reducer event) landing anywhere after snapshot capture discards
@@ -257,7 +133,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	screens *activity.ScreenTextCache,
 ) {
 	windowID := binding.TargetSlot()
@@ -458,7 +334,7 @@ func (h *Handler) probeCopilotTranscriptWindow(
 const (
 	// copilotScreenReadFailedReason records that the pane could not be read at
 	// all. It is a distinct reason from a veto because it is the one refusal
-	// that says nothing about the pane: Kitty failed, not Copilot.
+	// that says nothing about the pane: the screen read failed, not Copilot.
 	copilotScreenReadFailedReason = "screen_read_failed"
 
 	// copilotScreenRefusedReason records that the pane was read and the Copilot

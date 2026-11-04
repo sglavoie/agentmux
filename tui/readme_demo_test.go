@@ -47,7 +47,7 @@ func TestReadmeDemo(t *testing.T) {
 		commands.PortableIDBase + 2: "GitHub Copilot CLI\n\nUpdate the getting-started guide.\n\n+ Documented tmux setup\n+ Added profile examples\n\nDocumentation checks passed.\nReady for your next prompt.\n",
 	}
 	fx.Text = output[commands.PortableIDBase]
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 	d.model.backgroundCommands.scrollback = func(id int) (string, error) { return output[id], nil }
 	d.Tick(1)

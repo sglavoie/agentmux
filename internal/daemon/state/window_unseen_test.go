@@ -25,47 +25,47 @@ func unseenReducer() *Reducer {
 	return r
 }
 
-func TestUnseenRoundTripsThroughUserVar(t *testing.T) {
-	encoded, err := WindowState{Reducer: unseenReducer(), Unseen: true}.MarshalUserVar()
+func TestUnseenRoundTripsThroughStatePayload(t *testing.T) {
+	encoded, err := WindowState{Reducer: unseenReducer(), Unseen: true}.MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	if !strings.Contains(encoded, `"us":true`) {
-		t.Fatalf("MarshalUserVar() missing the unseen bit: %s", encoded)
+		t.Fatalf("MarshalStatePayload() missing the unseen bit: %s", encoded)
 	}
 
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if !got.Unseen {
 		t.Fatalf("Unseen = false after round trip, want true")
 	}
 }
 
-// TestSeenIsOmittedFromUserVar pins the omitempty half of the inversion: a seen
+// TestSeenIsOmittedFromStatePayload pins the omitempty half of the inversion: a seen
 // window writes no key at all, which is what makes a pre-field payload and an
 // explicitly-seen payload indistinguishable — and therefore both safe.
-func TestSeenIsOmittedFromUserVar(t *testing.T) {
-	encoded, err := WindowState{Reducer: unseenReducer()}.MarshalUserVar()
+func TestSeenIsOmittedFromStatePayload(t *testing.T) {
+	encoded, err := WindowState{Reducer: unseenReducer()}.MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	if strings.Contains(encoded, `"us"`) {
-		t.Fatalf("MarshalUserVar() wrote an unseen key for a seen window: %s", encoded)
+		t.Fatalf("MarshalStatePayload() wrote an unseen key for a seen window: %s", encoded)
 	}
 }
 
-// TestUserVarWithoutUnseenKeyRestoresAsSeen is the restart guarantee. A schema-v4
+// TestStatePayloadWithoutUnseenKeyRestoresAsSeen is the restart guarantee. A schema-v4
 // payload written before the field existed carries no `us` key, and it must
 // restore as seen — a daemon restart that demoted every row would be a nuisance,
 // one that raised every already-read stop into Needs Attention would make the
 // group useless.
-func TestUserVarWithoutUnseenKeyRestoresAsSeen(t *testing.T) {
+func TestStatePayloadWithoutUnseenKeyRestoresAsSeen(t *testing.T) {
 	raw := `{"v":4,"a":"stop","f":[{"k":"harness","y":"claude:s1","a":"stop","i":"stop","q":1,"t":1710000100,"tm":true,"ta":1710000100}],"ei":"stop","sq":1}`
 	var got WindowState
-	if err := got.UnmarshalUserVar(raw); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(raw); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if got.Unseen {
 		t.Fatalf("Unseen = true for a payload with no us key, want false (seen)")
@@ -83,8 +83,8 @@ func TestSchemaV1PayloadRestoresAsSeen(t *testing.T) {
 		`{"a":"stop","t":1710000100,"us":true}`,
 	} {
 		var got WindowState
-		if err := got.UnmarshalUserVar(raw); err != nil {
-			t.Fatalf("UnmarshalUserVar(%s) error: %v", raw, err)
+		if err := got.UnmarshalStatePayload(raw); err != nil {
+			t.Fatalf("UnmarshalStatePayload(%s) error: %v", raw, err)
 		}
 		if got.Unseen {
 			t.Fatalf("Unseen = true for v1 payload %s, want false (seen)", raw)
@@ -92,12 +92,12 @@ func TestSchemaV1PayloadRestoresAsSeen(t *testing.T) {
 	}
 }
 
-// TestEmptyUserVarRestoresAsSeen covers the remaining writer with nothing to say:
+// TestEmptyStatePayloadRestoresAsSeen covers the remaining writer with nothing to say:
 // a blank amx_state resets to the zero WindowState, which must mean seen.
-func TestEmptyUserVarRestoresAsSeen(t *testing.T) {
+func TestEmptyStatePayloadRestoresAsSeen(t *testing.T) {
 	got := WindowState{Unseen: true}
-	if err := got.UnmarshalUserVar("   "); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload("   "); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if got.Unseen {
 		t.Fatalf("Unseen = true after restoring an empty payload, want false (seen)")

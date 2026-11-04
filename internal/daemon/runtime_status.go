@@ -13,9 +13,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
-// A Kitty window's state is rendered into its tab: the title carries the
-// state icon and the tab bar paints the color. A tmux session has no tab, but
-// the terminal attached to it has a title and room for one line, and the
+// A tmux session's terminal has a title and room for one status line, and the
 // private server builds both from two options on the agent's pane
 // (tmux.StatusOption, tmux.StatusColorOption). The daemon writes those
 // options, and is the only thing that does: what a terminal shows of a
@@ -32,7 +30,7 @@ import (
 type RuntimeStatus struct {
 	Instance runtimesession.BackendInstance
 	Pane     string
-	// Text is the state icon and title, as a Kitty tab would title it.
+	// Text is the state icon and session title.
 	Text string
 	// Color is the session's color as #rrggbb, empty for none.
 	Color string
@@ -80,7 +78,7 @@ func NewTmuxRuntimeStatusWriter() RuntimeStatusWriter {
 	}
 }
 
-// runtimeStatusText is the title a Kitty tab would carry for this state: the
+// runtimeStatusText is the title a tmux terminal carries for this state: the
 // session's own title with the state the reducer decided in front of it.
 func runtimeStatusText(label runtimeLabel, st *state.WindowState) string {
 	title := label.title

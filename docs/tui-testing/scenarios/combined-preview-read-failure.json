@@ -13,7 +13,7 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2502error: kitty read failed"
+      "text": "\u2502error: terminal read failed"
     },
     {
       "type": "excludes_text",

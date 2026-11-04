@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
@@ -95,7 +95,7 @@ func TestViewerKeysMatchTheApp(t *testing.T) {
 }
 
 // TestWorkspaceFunctionKeysMatchTheApp holds the reference F1 shows in the
-// app's workspace (kittykeys.Workspace, rendered by amx) to the function keys
+// app's workspace (keybindings.Workspace, rendered by amx) to the function keys
 // the app's main menu really binds (macos/AgentMux/UI/WorkspaceMenu.swift).
 // The two are written in different languages and built apart, so a key added
 // to one side only would be advertised and dead, or live and undocumented.
@@ -120,10 +120,7 @@ func TestWorkspaceFunctionKeysMatchTheApp(t *testing.T) {
 	}
 
 	listed := map[string]bool{}
-	for _, action := range kittykeys.Workspace {
-		if action.ConfigLine() != "" {
-			t.Errorf("%s: a workspace key is the app's to run, yet it has the Kitty line %q", action.Key, action.ConfigLine())
-		}
+	for _, action := range keybindings.Workspace {
 		if regexp.MustCompile(`^f\d+$`).MatchString(action.Key) {
 			listed[action.Key] = true
 			if !bound[action.Key] {
@@ -137,10 +134,4 @@ func TestWorkspaceFunctionKeysMatchTheApp(t *testing.T) {
 		}
 	}
 
-	// Every function key Kitty binds for its tabs works in the app too.
-	for _, action := range kittykeys.Actions {
-		if regexp.MustCompile(`^f\d+$`).MatchString(action.Key) && !bound[action.Key] {
-			t.Errorf("Kitty binds %s (%s) and the app does not", action.Key, action.Description)
-		}
-	}
 }

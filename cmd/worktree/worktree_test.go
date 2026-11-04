@@ -13,11 +13,12 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/agentloop"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/spf13/cobra"
@@ -62,7 +63,7 @@ func (m *commandWorktreeManager) Forget(context.Context, string) (worktree.Mutat
 }
 
 func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
-	manager, client := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	commands := []*struct {
 		command *cobra.Command
 		args    []string
@@ -77,7 +78,6 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 		{worktreeRemoveCmd, []string{"wt-1"}},
 		{worktreeForgetCmd, []string{"wt-1"}},
 	}
-	_ = client
 	for _, tc := range commands {
 		var out bytes.Buffer
 		tc.command.SetOut(&out)
@@ -85,9 +85,6 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 			if err := tc.command.Flags().Set("yes", "true"); err != nil {
 				t.Fatal(err)
 			}
-		}
-		if tc.command == worktreeRemoveCmd || tc.command == worktreeLandCmd {
-			worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
 		}
 		if tc.command == worktreeRemoveCmd {
 			if err := tc.command.Flags().Set("delete-branch", "true"); err != nil {
@@ -114,8 +111,11 @@ func TestWorktreeCLITextAndJSONContracts(t *testing.T) {
 }
 
 func TestWorktreeCLIListAndShowTextContracts(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	manager.entries[0].Warnings = []string{"status snapshot is stale"}
+	worktreeCommandsTmuxSessions = func(backend.TargetLauncher, *config.Config) ([]session.RunningSession, error) {
+		return []session.RunningSession{{RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: "tmux", Project: "api", Profile: "work", Harness: harness.Claude, Directory: manager.entries[0].Path}}, nil
+	}
 
 	var out bytes.Buffer
 	worktreeListCmd.SetOut(&out)
@@ -234,7 +234,7 @@ func TestWorktreeTextHelpers(t *testing.T) {
 }
 
 func TestWorktreeCLIMapsCandidatesConfirmationsAndParameters(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	other := manager.entries[0]
 	other.ID = "wt-2"
 	other.Path = filepath.Join(filepath.Dir(other.Path), "other")
@@ -268,7 +268,6 @@ func TestWorktreeCLIMapsCandidatesConfirmationsAndParameters(t *testing.T) {
 	if err := worktreeReopenCmd.Flags().Set("json", "true"); err != nil {
 		t.Fatal(err)
 	}
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
 	worktreeCommandsTranscriptIndex = func() (*transcript.Index, error) { return nil, errors.New("cache unavailable") }
 	err = worktreeReopenCmd.RunE(worktreeReopenCmd, []string{"wt-1"})
 	payload = decodeWorktreeJSONError(t, out.Bytes(), err)
@@ -289,12 +288,14 @@ func TestWorktreeCLIHelpIsRegistered(t *testing.T) {
 	}
 }
 
-func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *worktreeCommandKitty) {
+func resetWorktreeCommandsTestState(t *testing.T) *commandWorktreeManager {
 	t.Helper()
+	fixture := tmuxtest.New(t)
+	oldTmuxBackend := cli.NewTmuxBackend
+	oldTmuxSessions := worktreeCommandsTmuxSessions
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return fixture.Backend, nil }
 	oldLoadConfig := worktreeCommandsLoadConfig
 	oldNewManager := worktreeCommandsNewManager
-	oldNewKitty := worktreeCommandsNewKitty
-	oldLive := worktreeCommandsLiveSessions
 	oldLoops := worktreeCommandsActiveLoops
 	oldIndex := worktreeCommandsTranscriptIndex
 	oldReaders := worktreeCommandsReaders
@@ -305,10 +306,10 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 		outputs[index] = command.OutOrStdout()
 	}
 	t.Cleanup(func() {
+		cli.NewTmuxBackend = oldTmuxBackend
+		worktreeCommandsTmuxSessions = oldTmuxSessions
 		worktreeCommandsLoadConfig = oldLoadConfig
 		worktreeCommandsNewManager = oldNewManager
-		worktreeCommandsNewKitty = oldNewKitty
-		worktreeCommandsLiveSessions = oldLive
 		worktreeCommandsActiveLoops = oldLoops
 		worktreeCommandsTranscriptIndex = oldIndex
 		worktreeCommandsReaders = oldReaders
@@ -337,20 +338,18 @@ func resetWorktreeCommandsTestState(t *testing.T) (*commandWorktreeManager, *wor
 		Exists: true, GitAvailable: true, StatusAvailable: true, Registered: true, Actionable: true,
 	}
 	manager := &commandWorktreeManager{entries: []worktree.Entry{entry}}
-	client := &worktreeCommandKitty{}
+	worktreeCommandsTmuxSessions = func(backend.TargetLauncher, *config.Config) ([]session.RunningSession, error) {
+		return nil, nil
+	}
 	cfg := &config.Config{
-		Defaults: config.Defaults{Editor: "true", LaunchBackend: "kitty"},
+		Defaults: config.Defaults{Editor: "true", LaunchBackend: "tmux"},
 		Accounts: []config.Account{{Name: "work", Harness: harness.Claude, Color: "blue"}},
 		Projects: []config.Session{{Title: "api", Directory: source, Profile: "work"}},
 	}
 	worktreeCommandsLoadConfig = func() (*config.Config, error) { return cfg, nil }
 	worktreeCommandsNewManager = func() actions.WorktreeLifecycle { return manager }
-	worktreeCommandsNewKitty = func() kitty.KittyClient { return client }
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) {
-		return []session.RunningSession{{TabID: 42, WindowID: 420, Project: "api", Profile: "work", Harness: harness.Claude, Directory: root}}, nil
-	}
 	worktreeCommandsActiveLoops = func() ([]agentloop.Candidate, error) { return nil, nil }
-	return manager, client
+	return manager
 }
 
 func decodeWorktreeJSONError(t *testing.T, body []byte, err error) cli.JSONErrorEnvelope {
@@ -402,7 +401,7 @@ func TestCompleteWorktreeSelectorsOffersIDsWithBranchAndProject(t *testing.T) {
 }
 
 func TestWorktreeDiffTextNamesTheVerdictFilesAndConflicts(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	manager.review = worktree.Review{
 		ID: "wt-1", Branch: "amx/api/source-1", SourceBranch: "main", Ahead: 2, Behind: 1, Dirty: true,
 		Files: []worktree.FileChange{{Path: "a.go", Added: 3, Deleted: 1}, {Path: "img/logo.png", Binary: true}},
@@ -437,7 +436,7 @@ func TestWorktreeDiffTextNamesTheVerdictFilesAndConflicts(t *testing.T) {
 }
 
 func TestWorktreeDiffRefusesAWorktreeWithNoRecordedSource(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	manager.entries[0].SourceBranch = ""
 	var out bytes.Buffer
 	worktreeDiffCmd.SetOut(&out)
@@ -451,8 +450,7 @@ func TestWorktreeDiffRefusesAWorktreeWithNoRecordedSource(t *testing.T) {
 }
 
 func TestWorktreeLandNeedsYesAndSaysWhatMoved(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	manager := resetWorktreeCommandsTestState(t)
 	var out bytes.Buffer
 	worktreeLandCmd.SetOut(&out)
 
@@ -493,12 +491,6 @@ func TestWorktreeReopenLiveSessionFlagAndItsAlias(t *testing.T) {
 			payload := decodeWorktreeJSONError(t, []byte(out), err)
 			if payload.Error.Code != "not_found" || !strings.Contains(payload.Error.Message, `"99"`) {
 				t.Fatalf("--%s 99: payload = %+v", name, payload)
-			}
-			if err := worktreeReopenCmd.Flags().Set(name, "42"); err != nil {
-				t.Fatal(err)
-			}
-			if out, err = runWorktree(t, worktreeReopenCmd, true, "wt-1"); err != nil || !strings.Contains(out, `"continuation":"focused"`) {
-				t.Fatalf("--%s 42: out = %s, err = %v", name, out, err)
 			}
 		})
 	}

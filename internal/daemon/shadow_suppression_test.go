@@ -5,7 +5,7 @@ package daemon
 // the window has to be marked dirty even though nothing visible changed, or a
 // restart restores the older payload and accepts a replay that was already
 // consumed. The mirror-image rule matters just as much: a decision that mutates
-// no facts must leave the durable state and the render queue completely alone.
+// no facts must leave durable state alone.
 
 import (
 	"reflect"
@@ -39,15 +39,14 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 		t.Fatalf("terminal update rejected: %+v", resp)
 	}
 
-	// Model the terminal generation having reached Kitty before the trailing
-	// delivery. The next mutation must independently re-dirty the window.
+	// Model the terminal generation having reached the checkpoint before the
+	// trailing delivery. The next mutation must independently re-dirty the slot.
 	h.stateMu.Lock()
 	st := h.store[42]
 	st.Dirty = false
 	st.DirtySince = time.Time{}
 	seqBeforeSuppression := st.Seq
 	h.stateMu.Unlock()
-	h.renderQueue.Purge(42)
 
 	trailing := protocol.NormalizedEvent{
 		Source: src, Action: "active", Seq: 7, TurnID: "t1", At: now.Add(time.Second).Unix(), Event: "PostToolBatch",
@@ -64,10 +63,10 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 	factsAfterSuppression := st.Reducer.Facts()
 	dirtyAfterSuppression := st.Dirty
 	seqAfterSuppression := st.Seq
-	encoded, err := st.MarshalUserVar()
+	encoded, err := st.MarshalStatePayload()
 	h.stateMu.Unlock()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	if len(factsAfterSuppression) != 1 || factsAfterSuppression[0].Seq != 7 || factsAfterSuppression[0].Icon != "stop" {
 		t.Fatalf("facts after suppression = %+v, want terminal cutoff advanced to seq 7", factsAfterSuppression)
@@ -76,16 +75,13 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 		t.Fatalf("suppressed mutation durability = dirty %v seq %d, want dirty true seq %d",
 			dirtyAfterSuppression, seqAfterSuppression, seqBeforeSuppression+1)
 	}
-	if !h.renderQueue.Empty() {
-		t.Fatal("fact-only suppressed mutation forced an immediate render")
-	}
 
 	// The maintenance-flush payload restores the advanced cutoff. A replay
 	// between the persisted terminal (seq 5) and consumed trailing event (seq 7)
 	// is now rejected even though its new turn would otherwise revive the bolt.
 	var restored state.WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	replay := protocol.ReducerEvent{
 		Source: src, Action: "active", Seq: 6, TurnID: "t2", At: now.Add(2 * time.Second).Unix(),
@@ -97,8 +93,7 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 		t.Fatalf("post-restart replay surfaced %+v, want terminal stop preserved", effective)
 	}
 
-	// Decisions that do not mutate reducer facts remain clean and never enter
-	// the immediate render queue. Keep their explicit sequence at the current
+	// Decisions that do not mutate reducer facts remain clean. Keep their explicit sequence at the current
 	// receipt so the assertion isolates reduction from receipt allocation.
 	tests := []struct {
 		name  string
@@ -126,7 +121,6 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 			shadowSeqBefore := st.ShadowSeq
 			factsBefore := st.Reducer.Facts()
 			h.stateMu.Unlock()
-			h.renderQueue.Purge(42)
 
 			event := tt.event
 			h.reduceStateUpdate(protocol.Request{
@@ -148,9 +142,6 @@ func TestReduceStateUpdate_SuppressedMutationMarksActivityDirty(t *testing.T) {
 			if dirty || seqAfter != seqBefore || shadowSeqAfter != shadowSeqBefore || !reflect.DeepEqual(factsAfter, factsBefore) {
 				t.Fatalf("mutation-free decision changed durable state: dirty=%v seq=%d/%d shadow_seq=%d/%d facts=%+v/%+v",
 					dirty, seqAfter, seqBefore, shadowSeqAfter, shadowSeqBefore, factsAfter, factsBefore)
-			}
-			if !h.renderQueue.Empty() {
-				t.Fatal("mutation-free decision entered the render queue")
 			}
 		})
 	}

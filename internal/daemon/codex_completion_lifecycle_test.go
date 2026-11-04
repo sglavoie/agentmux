@@ -18,7 +18,7 @@ func TestCodexCompletionSurvivesConversationChangesAndObservationGaps(t *testing
 	conversation := "resumed"
 	agent := probedCodex
 	agent.payload = func(string) hookevent.HookPayload { return hookevent.HookPayload{SessionID: conversation} }
-	eachProbedBackendOf(t, agent, func(t *testing.T, s *probedSession) {
+	eachProbedTmuxOf(t, agent, func(t *testing.T, s *probedSession) {
 		for _, name := range []string{"resumed", "after-new", "after-second-new", "resumed"} {
 			conversation = name
 			requireAccepted(t, s.hook("SessionStart"))

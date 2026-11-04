@@ -3,12 +3,8 @@ package daemon
 import (
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // ASL routing by runtime-session identity.
@@ -17,83 +13,28 @@ import (
 // as a harness, so a run inside a managed session delivers managed hooks: each
 // names its AgentMux runtime session, and hook translation has already turned
 // that into the one reducer slot the session holds. That slot is the run's
-// target. Nothing about the terminal is consulted to find it, so the run is
-// placed the same way whether its session lives in Kitty or tmux, and whether
-// or not Kitty — or any viewer at all — is running.
+// target. No terminal listing is consulted, so an unattached session routes
+// the same way as one displayed in a workspace.
 //
-// Workspace matching against the Kitty snapshot remains the route for legacy
-// hooks only. It is a similarity policy (same directory, compatible harness),
-// which is why a run that a runtime session has claimed is excluded from it: a
-// Kitty tab that merely shares the run's directory must never receive the
-// lease, the question icon, or the notification of a run living elsewhere.
-
-// managedHookOrigin returns the runtime-session origin of a managed hook. A
-// legacy hook, even one attributed to a runtime session that claimed its
-// pane, is not managed: it named a Kitty window, not a session.
+// managedHookOrigin returns the runtime-session origin of a managed hook.
 func managedHookOrigin(req protocol.Request) (protocol.HookOrigin, bool) {
-	if req.Origin == nil || req.Origin.Legacy || req.Origin.RuntimeSessionID == "" || req.Origin.Slot <= 0 {
+	if req.Origin == nil || req.Origin.RuntimeSessionID == "" || req.Origin.Slot <= 0 {
 		return protocol.HookOrigin{}, false
 	}
 	return *req.Origin, true
 }
 
-// runtimeLoopTarget is the lifecycle target of a managed hook: the session's
-// own slot. A Kitty session keeps the tab and window the snapshot lists for it
-// so its title context is read as before; any other backend, and a Kitty
-// session the snapshot does not show, has neither.
-func runtimeLoopTarget(origin protocol.HookOrigin, windows []kitty.OSWindow, payload hookevent.HookPayload) loopLifecycleTarget {
-	target := loopLifecycleTarget{
+// runtimeLoopTarget is the lifecycle target of a managed hook: its tmux slot.
+func runtimeLoopTarget(origin protocol.HookOrigin) loopLifecycleTarget {
+	return loopLifecycleTarget{
 		windowID: origin.Slot,
 		runtime:  origin.RuntimeSessionID,
-		workspace: agentloop.WorkspaceTarget{
-			CWD:     strings.TrimSpace(payload.CWD),
-			Harness: normalizeKnownLoopHarness(payload.Harness),
-		},
 	}
-	if origin.Backend != string(runtimesession.BackendKitty) {
-		return target
-	}
-	target.workspace.WindowID = origin.Slot
-	if tab, win, found := kitty.FindTabByWindowID(windows, origin.Slot); found {
-		target.tab = tab
-		target.win = win
-	}
-	return target
 }
 
-// aslHookTargets resolves where one ASL hook lands. A managed hook has exactly
-// one target, its runtime session's slot; a legacy hook keeps the workspace
-// fan-out over managed Kitty title owners.
-func (h *Handler) aslHookTargets(req protocol.Request, windows []kitty.OSWindow, payload hookevent.HookPayload) ([]loopLifecycleTarget, []agentloop.WorkspaceTarget) {
-	if origin, managed := managedHookOrigin(req); managed {
-		_, openTargets := loopLifecycleWindowTargets(windows)
-		return []loopLifecycleTarget{runtimeLoopTarget(origin, windows, payload)}, openTargets
-	}
-	target := loopPayloadWorkspaceTarget(payload)
-	if target.WindowID > 0 && req.KittyListenOn != "" {
-		h.stateMu.Lock()
-		target.WindowID = h.runtimeRoutes.kittySlotOf(req.KittyListenOn, target.WindowID)
-		h.stateMu.Unlock()
-	}
-	return loopLifecycleTargets(windows, target)
-}
-
-// aslHookOriginWindow names the slot of the pane a hook's facts originate
-// from. A managed hook originates from its own slot. A Kitty payload ID is
-// local to its socket and may also belong to another instance with the same
-// window number, so it is read as that socket's slot, as aslHookTargets reads
-// it.
-func (h *Handler) aslHookOriginWindow(req protocol.Request, payload hookevent.HookPayload) int {
+func (h *Handler) aslHookOriginWindow(req protocol.Request, _ hookevent.HookPayload) int {
 	if origin, managed := managedHookOrigin(req); managed {
 		return origin.Slot
-	}
-	if payloadWindowID := payload.EffectiveKittyWindowID(); payloadWindowID > 0 {
-		if req.KittyListenOn == "" {
-			return payloadWindowID
-		}
-		h.stateMu.Lock()
-		defer h.stateMu.Unlock()
-		return h.runtimeRoutes.kittySlotOf(req.KittyListenOn, payloadWindowID)
 	}
 	return req.WindowID
 }
@@ -107,39 +48,16 @@ type loopTargetContext struct {
 	harness      string
 }
 
-// loopTargetContextFor reads a target's context. A target with a Kitty tab
-// reads it from the snapshot and refreshes the mute cache from it, exactly as
-// before runtime sessions existed. A target without one has no title to parse,
-// so its context is what the daemon already holds for the slot, and its mute
-// state is left as recorded.
 func (h *Handler) loopTargetContextFor(target loopLifecycleTarget) loopTargetContext {
-	if target.tab == nil {
-		ctx := loopTargetContext{}
-		_, ctx.currentIcon = h.lastKnownState(target.windowID)
-		h.stateMu.Lock()
-		if st, ok := h.windowStateLocked(target.windowID); ok {
-			ctx.sessionTitle = st.LastSessionTitle
-			ctx.profile = st.LastAccount
-			ctx.harness = st.LastHarness
-		}
-		h.stateMu.Unlock()
-		return ctx
+	ctx := loopTargetContext{}
+	_, ctx.currentIcon = h.lastKnownState(target.windowID)
+	h.stateMu.Lock()
+	if st, ok := h.windowStateLocked(target.windowID); ok {
+		ctx.sessionTitle = st.LastSessionTitle
+		ctx.profile = st.LastAccount
+		ctx.harness = st.LastHarness
 	}
-	parts := palette.ParseTitleParts(target.tab.Title)
-	ctx := loopTargetContext{sessionTitle: parts.Base, currentIcon: parts.State}
-	muted := parts.Muted
-	if target.win != nil {
-		ctx.profile = target.win.UserVars.EffectiveProfile()
-		ctx.harness = target.win.UserVars.EffectiveHarness()
-		muted = muted || target.win.UserVars.Mute != ""
-	}
-	if target.runtime != "" {
-		if owner, ok := kitty.FindTabTitleOwner(target.tab); ok && owner.ID != target.windowID {
-			// The shared title shows another pane's state.
-			_, ctx.currentIcon = h.lastKnownState(target.windowID)
-		}
-	}
-	h.setMutedFromSnapshot(target.windowID, muted)
+	h.stateMu.Unlock()
 	return ctx
 }
 
@@ -171,7 +89,7 @@ func (h *Handler) releaseASLRunLocked(runID string, slot int) {
 //     as the slot stays bound to a runtime session. A mailbox hook does not
 //     claim: it comes from whichever session is supervising, which need not
 //     be the one the run lives in;
-//   - a live ASL lease on a non-Kitty slot. Only a managed hook can write to
+//   - a live ASL lease on a runtime slot. Only a managed hook can write to
 //     such a slot, so the lease is the same evidence, and it is the form that
 //     survives a daemon restart through the runtime checkpoint.
 //
@@ -202,8 +120,8 @@ func (h *Handler) aslRuntimeClaimsLocked() map[string]int {
 	return claims
 }
 
-// hasRuntimeASLStateLocked reports whether any non-Kitty slot exists, which is
-// what makes an ASL sweep worth running with no Kitty snapshot to attribute
+// hasRuntimeASLStateLocked reports whether any runtime slot exists, which is
+// what makes an ASL sweep worth running with no terminal snapshot to attribute
 // candidates against. Callers hold stateMu.
 func (h *Handler) hasRuntimeASLStateLocked() bool {
 	for slot := range h.store {

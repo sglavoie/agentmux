@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -28,9 +27,7 @@ import (
 // (`capture-pane -p -S - -E -`, the backend's Capture(ExtentAll)), taken from
 // codex-cli 0.162.1 after a turn and a /clear.
 //
-// They are the second fixture set. The captures directly under testdata are
-// Kitty `get-text --extent=screen` reads, and the tests here hold the two sets
-// to the same readings.
+// These captures are the authoritative fixtures for tmux screen observations.
 const tmuxFixtureRoot = "testdata/tmux"
 
 // Behaviours the plan requires each backend's fixtures to prove.
@@ -520,112 +517,5 @@ func TestTmuxCodexClearedCapture(t *testing.T) {
 		if got := ClassifyCodexClearScreen(text, text); got != want {
 			t.Errorf("%s: cleared = %v, want %v", fixture.name, got, want)
 		}
-	}
-}
-
-// backendParity pairs a Kitty capture with a tmux capture of the same kind of
-// screen. Kitty captures are from earlier harness builds, so copy has moved;
-// what must not move is the reading.
-var backendParity = []struct {
-	harness   string
-	behaviour string
-	kitty     string
-	tmux      string
-	state     State
-}{
-	{"claude", behaviourPrompt, "claude_permission_prompt.txt", "claude_trust_prompt", Blocked},
-	{"claude", behaviourPermission, "claude_permission_prompt.txt", "claude_permission_prompt", Blocked},
-	{"claude", behaviourBusy, "claude_working_pouncing_t0.txt", "claude_working_t0", Working},
-	{"claude", behaviourCompletion, "claude_idle_completed.txt", "claude_idle_completed_t0", Terminal},
-	{"claude", behaviourFailure, "claude_interrupted.txt", "claude_interrupted", Terminal},
-
-	{"codex", behaviourPrompt, "codex_idle_completed_t0.txt", "codex_idle_completed_t0", Terminal},
-	{"codex", behaviourPermission, "codex_prompt_command_approval.txt", "codex_permission_prompt", Blocked},
-	{"codex", behaviourBusy, "codex_working.txt", "codex_working_t0", Working},
-	{"codex", behaviourCompletion, "codex_idle_completed_t1.txt", "codex_idle_completed_t1", Terminal},
-	{"codex", behaviourFailure, "codex_interrupted_no_background.txt", "codex_rejected_command", Terminal},
-
-	{"copilot", behaviourPrompt, "copilot_trust_prompt.txt", "copilot_trust_prompt", Blocked},
-	{"copilot", behaviourPermission, "copilot_permission_prompt.txt", "copilot_permission_prompt", Blocked},
-	{"copilot", behaviourBusy, "copilot_working_t0.txt", "copilot_working_t0", Working},
-	{"copilot", behaviourCompletion, "copilot_idle_completed_t0.txt", "copilot_idle_completed_t0", Unknown},
-	{"copilot", behaviourFailure, "copilot_interrupted.txt", "copilot_interrupted", Unknown},
-}
-
-// TestBackendFixtureParity holds prompt, permission, busy, completion and
-// failure detection to the same reading on both fixture sets, for all three
-// harnesses.
-//
-// Two rows need saying out loud. Claude and Codex have no Kitty capture of a
-// startup dialog, so their prompt rows pair the tmux capture with the nearest
-// Kitty screen that waits on the user the same way: Claude's permission dialog
-// (both blocked) and Codex's ready composer after a turn (both terminal). And
-// Copilot's completion and failure rows are Unknown on both sides, because its
-// screen is never evidence of a finished turn on any backend.
-func TestBackendFixtureParity(t *testing.T) {
-	covered := map[string]bool{}
-	for _, row := range backendParity {
-		t.Run(row.harness+"/"+row.behaviour, func(t *testing.T) {
-			kitty := classifyFixture(t, row.harness, readScreenFixture(t, row.kitty))
-			tmux := classifyFixture(t, row.harness, readTmuxFixture(t, row.tmux, ".txt"))
-			if kitty.State != row.state || tmux.State != row.state {
-				t.Errorf("kitty %s reads %s/%s, tmux %s reads %s/%s; want %s on both",
-					row.kitty, kitty.State, kitty.Vetoes, row.tmux, tmux.State, tmux.Vetoes, row.state)
-			}
-			if kitty.SettleableTerminal() != tmux.SettleableTerminal() {
-				t.Errorf("settleable: kitty %v, tmux %v", kitty.SettleableTerminal(), tmux.SettleableTerminal())
-			}
-			// The veto that decides the state must be the same one.
-			for _, deciding := range []Veto{VetoBlockingPrompt, VetoLiveStatusLine} {
-				if (kitty.Vetoes&deciding != 0) != (tmux.Vetoes&deciding != 0) {
-					t.Errorf("%s: kitty %s, tmux %s", deciding, kitty.Vetoes, tmux.Vetoes)
-				}
-			}
-		})
-		covered[row.harness+"/"+row.behaviour] = true
-	}
-	// The cleared-screen check reads a screen and the screen with its history.
-	// A Kitty window keeps the session's primary-screen scrollback and a tmux
-	// pane on the alternate screen keeps none, so the second read differs in
-	// kind; the verdict must not.
-	for _, row := range []struct {
-		name        string
-		kitty, tmux string
-		cleared     bool
-	}{
-		{"cleared", "codex_cleared.txt", "codex_cleared", true},
-		{"completed", "codex_idle_completed_t0.txt", "codex_idle_completed_t0", false},
-		{"permission", "codex_prompt_command_approval.txt", "codex_permission_prompt", false},
-		{"busy", "codex_working.txt", "codex_working_t0", false},
-	} {
-		t.Run("codex/clear/"+row.name, func(t *testing.T) {
-			kitty := readScreenFixture(t, row.kitty)
-			tmux := readTmuxFixture(t, row.tmux, ".txt")
-			tmuxAll := tmux
-			if tmuxFixtureExtras[row.tmux] == ".all.txt" {
-				tmuxAll = readTmuxFixture(t, row.tmux, ".all.txt")
-			}
-			if got := ClassifyCodexClearScreen(kitty, kitty); got != row.cleared {
-				t.Errorf("kitty %s: cleared = %v, want %v", row.kitty, got, row.cleared)
-			}
-			if got := ClassifyCodexClearScreen(tmux, tmuxAll); got != row.cleared {
-				t.Errorf("tmux %s: cleared = %v, want %v", row.tmux, got, row.cleared)
-			}
-		})
-	}
-
-	var missing []string
-	for harnessName := range tmuxFixtureVersions {
-		for _, behaviour := range []string{
-			behaviourPrompt, behaviourPermission, behaviourBusy, behaviourCompletion, behaviourFailure,
-		} {
-			if !covered[harnessName+"/"+behaviour] {
-				missing = append(missing, harnessName+"/"+behaviour)
-			}
-		}
-	}
-	sort.Strings(missing)
-	if len(missing) != 0 {
-		t.Errorf("no parity row for %v", missing)
 	}
 }

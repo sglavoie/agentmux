@@ -100,9 +100,8 @@ func (h *Handler) handleWorkspaceView(req protocol.Request) protocol.Response {
 	return protocol.Response{OK: true, WorkspaceView: &protocol.WorkspaceViewResult{Delivered: delivered}}
 }
 
-// workspaceCanEmbed reports whether id is a live session on a backend whose
-// terminal a workspace embeds. A Kitty session is a window of another app; an
-// unreadable registry is no evidence that a session exists.
+// workspaceCanEmbed reports whether id is a live tmux session. An unreadable
+// registry is no evidence that a session exists.
 func (h *Handler) workspaceCanEmbed(id runtimesession.ID) bool {
 	if h.runtimeDirectory == nil {
 		return false
@@ -111,11 +110,11 @@ func (h *Handler) workspaceCanEmbed(id runtimesession.ID) bool {
 	if !found || record.State != runtimesession.StateLive || record.Target == nil {
 		return false
 	}
-	return record.Target.Instance.Kind != runtimesession.BackendKitty
+	return record.Target.Instance.Kind == runtimesession.BackendTmux
 }
 
 // runtimeSessionListed reports whether the daemon holds state for a runtime
-// session, which is exactly when the v2 companion snapshot lists it.
+// session, which is exactly when the companion snapshot lists it.
 func (h *Handler) runtimeSessionListed(id string) bool {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()

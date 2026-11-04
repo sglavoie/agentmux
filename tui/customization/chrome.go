@@ -9,7 +9,7 @@ import (
 )
 
 // The overlays in this package are standalone Bubble Tea programs: each one
-// owns a whole Kitty overlay window rather than a region of the dashboard.
+// owns its own terminal screen rather than a region of the dashboard.
 // They therefore need a handful of the root TUI's presentation decisions —
 // the header, dim, and error styles and the selection wrapper — without
 // needing the root TUI itself. Footer bindings come from tui/chrome, like

@@ -44,7 +44,7 @@
 // engine (cmd/tuitest), and it drives the real Model the way a terminal
 // would: it reads and seeds the mode, every surface's cursor, the palette's
 // results, the injected command seams (session, plan, worktree, and run
-// loads), the background-command queue, the clock, and the Kitty client, and
+// loads), the background-command queue, the clock, and terminal action seams, and
 // it asks each modal renderer for its box to check the overlay geometry.
 // Moving it out would mean exporting roughly forty of those Model internals,
 // which exist to be private, as a permanent API for a test harness. Every
@@ -55,7 +55,7 @@
 // file names a uitest identifier, so the harness is one group to read, and the
 // exported UITest* names are the whole surface cmd/tuitest uses. What the
 // harness and the untagged tests both need lives outside it: Mode.String,
-// config.DefaultPreview, internal/kitty/kittytest's recording client, and
+// config.DefaultPreview and
 // tui/cmdtest's batch and timer detection.
 //
 // The whole TUI tree — this package included — depends on

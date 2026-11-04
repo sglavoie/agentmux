@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -229,23 +228,4 @@ func readHookPayloadJSON(stdin *os.File) (string, error) {
 		return string(data), fmt.Errorf("%w: %d bytes", errHookPayloadOversized, maxHookPayloadBytes)
 	}
 	return string(data), nil
-}
-
-func resolveHookWindowID(windowID int) (int, error) {
-	if windowID < 0 {
-		return 0, fmt.Errorf("invalid window ID %d", windowID)
-	}
-	if windowID > 0 {
-		return windowID, nil
-	}
-
-	rawID := strings.TrimSpace(os.Getenv("KITTY_WINDOW_ID"))
-	if rawID == "" {
-		return 0, fmt.Errorf("KITTY_WINDOW_ID is not set")
-	}
-	windowID, err := strconv.Atoi(rawID)
-	if err != nil || windowID <= 0 {
-		return 0, fmt.Errorf("invalid KITTY_WINDOW_ID %q", rawID)
-	}
-	return windowID, nil
 }

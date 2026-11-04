@@ -56,7 +56,7 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 	t.Parallel()
 
 	t.Run("a still-visible session survives live edits and the commit", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewUrgency)
+		m := listViewModel(dashboard.ViewUrgency)
 		m = selectLine(t, m, "session:cli")
 		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 13 {
@@ -103,7 +103,7 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 	})
 
 	t.Run("cancelling restores the saved filter and the pre-search session", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewUrgency)
+		m := listViewModel(dashboard.ViewUrgency)
 		m = selectLine(t, m, "session:lib")
 		settlePreviewRead(t, &m, m.refreshPreviewForCursor())
 		if m.previewWindowID != 14 {
@@ -145,7 +145,7 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 	})
 
 	t.Run("a selected family summary survives a filter that keeps its family", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewProjects)
+		m := listViewModel(dashboard.ViewProjects)
 
 		// Start on a session so the pane holds a real window; the moves below
 		// then have something to be wrong about.
@@ -200,7 +200,7 @@ func TestDashboardFilterPreservesSelectionAndRetargetsPreview(t *testing.T) {
 		}
 
 		// The cancel lands back on a summary, whose read is the empty-window
-		// placeholder rather than a Kitty call.
+		// placeholder rather than a terminal call.
 		m, fetched = pressKeyForPreview(t, m, "esc")
 		if fetched != 0 {
 			t.Errorf("cancelling onto a summary dispatched a read of window %d, want the empty window", fetched)

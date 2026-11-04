@@ -1,7 +1,6 @@
 package session
 
 import (
-	"os"
 	"sort"
 	"strings"
 
@@ -10,15 +9,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
-// ResolveEnv builds the env map passed as --env flags to kitten @ launch.
-// It includes KITTY_LISTEN_ON, the harness-specific home/config env var, and
-// session-level overrides from sess.Env.
+// ResolveEnv builds the environment passed to a launched agent. It includes
+// the harness-specific home/config variable and session-level overrides.
 func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 	env := make(map[string]string)
-
-	if socket := os.Getenv("KITTY_LISTEN_ON"); socket != "" {
-		env["KITTY_LISTEN_ON"] = socket
-	}
 
 	homeDir := config.ExpandTilde(acc.EffectiveHomeDir())
 	if homeDir != "" {
@@ -35,7 +29,7 @@ func ResolveEnv(sess config.Session, acc config.Account) map[string]string {
 }
 
 // ResolveArgs returns the effective CLI args string for a session, quoted so it
-// can round-trip through Kitty user vars and shell -c launch commands.
+// can round-trip through pane metadata and shell commands.
 // Precedence: project args > profile args > shared defaults args.
 func ResolveArgs(sess config.Session, acc config.Account, defaults config.Defaults) string {
 	return shellquote.Join(resolveArgv(sess, acc, defaults))

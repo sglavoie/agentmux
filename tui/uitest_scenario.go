@@ -18,9 +18,8 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
 )
@@ -31,18 +30,17 @@ import (
 // from a built-in fixture or an isolated config), and get back a stable
 // pass/fail object without scraping stderr. Parsing and validation are
 // path-aware so malformed input fails with a useful message before any model is
-// constructed; execution reuses the same runner and no-op Kitty client the rest
-// of the harness relies on, so a scenario can never touch a live Kitty instance
-// or the operator's real data.
+// constructed; execution reuses the same offline runner, so a scenario never
+// touches a live terminal or the operator's real data.
 
 // UITestScenarioEnv supplies the isolation seam a config-backed scenario needs:
 // a throwaway staging root, a setenv callback that applies the isolation env
-// vars, and the fake Kitty windows the no-op client should report. Fixture-backed
+// vars, and the tmux panes the scenario should report. Fixture-backed
 // scenarios ignore every field.
 type UITestScenarioEnv struct {
-	Root    string
-	Setenv  func(string, string) error
-	Windows []kitty.OSWindow
+	Root   string
+	Setenv func(string, string) error
+	Panes  []backend.Pane
 }
 
 // parseUITestScenario decodes and validates a scenario from JSON bytes. Unknown
@@ -214,13 +212,6 @@ func validateUITestAssertion(a UITestAssertion, modeNames map[string]bool) error
 		if !uitestKnownLayoutIssueType(a.Value) {
 			return fmt.Errorf("excludes_layout_issue assertion has unknown issue type %q", a.Value)
 		}
-	case UITestAssertKittyCalls:
-		if a.Op == "" {
-			return fmt.Errorf("kitty_calls assertion requires an op")
-		}
-		if a.Count != nil && *a.Count < 0 {
-			return fmt.Errorf("kitty_calls assertion count must not be negative")
-		}
 	case UITestAssertCursorEquals:
 		if a.Cursor < 0 {
 			return fmt.Errorf("cursor_equals assertion cursor must not be negative")
@@ -248,7 +239,7 @@ func RunUITestScenario(sc UITestScenario, env UITestScenarioEnv) (UITestScenario
 		return UITestScenarioResult{}, err
 	}
 
-	d, client, err := scenarioDriver(sc, env)
+	d, err := scenarioDriver(sc, env)
 	if err != nil {
 		return UITestScenarioResult{}, err
 	}
@@ -259,7 +250,7 @@ func RunUITestScenario(sc UITestScenario, env UITestScenarioEnv) (UITestScenario
 	}
 
 	final := obs[len(obs)-1]
-	failures := evaluateUITestAssertions(sc, obs, d.Model(), client)
+	failures := evaluateUITestAssertions(sc, obs, d.Model())
 
 	result := UITestScenarioResult{
 		OK:               len(failures) == 0,
@@ -277,41 +268,41 @@ func RunUITestScenario(sc UITestScenario, env UITestScenarioEnv) (UITestScenario
 // recording client it drives. Fixture sources build directly; config sources
 // stage an isolated environment under env.Root using env.Setenv so no real user
 // data is touched.
-func scenarioDriver(sc UITestScenario, env UITestScenarioEnv) (*uitestDriver, *kittytest.Client, error) {
+func scenarioDriver(sc UITestScenario, env UITestScenarioEnv) (*uitestDriver, error) {
 	switch {
 	case sc.Fixture != "":
 		fx, err := uitestFixtureByName(sc.Fixture)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		d, client := newUITestFixtureDriver(fx, sc.Size)
-		return d, client, nil
+		d := newUITestFixtureDriver(fx, sc.Size)
+		return d, nil
 	case sc.Config != "":
 		if env.Root == "" {
-			return nil, nil, fmt.Errorf("uitest: scenario %q: config source requires a staging root", sc.Name)
+			return nil, fmt.Errorf("uitest: scenario %q: config source requires a staging root", sc.Name)
 		}
 		if env.Setenv == nil {
-			return nil, nil, fmt.Errorf("uitest: scenario %q: config source requires a setenv callback", sc.Name)
+			return nil, fmt.Errorf("uitest: scenario %q: config source requires a setenv callback", sc.Name)
 		}
-		d, client, _, err := newUITestConfigDriver(env.Root, sc.Config, env.Windows, sc.Size, env.Setenv)
+		d, _, err := newUITestConfigDriver(env.Root, sc.Config, env.Panes, sc.Size, env.Setenv)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		return d, client, nil
+		return d, nil
 	default:
 		// Unreachable after validation, but kept so this function is safe to
 		// call independently.
-		return nil, nil, fmt.Errorf("uitest: scenario %q: missing fixture or config source", sc.Name)
+		return nil, fmt.Errorf("uitest: scenario %q: missing fixture or config source", sc.Name)
 	}
 }
 
 // evaluateUITestAssertions runs every assertion in order and collects the
 // failures, preserving scenario order for deterministic output.
-func evaluateUITestAssertions(sc UITestScenario, obs []UITestObservation, m Model, client *kittytest.Client) []UITestAssertionFailure {
+func evaluateUITestAssertions(sc UITestScenario, obs []UITestObservation, m Model) []UITestAssertionFailure {
 	final := obs[len(obs)-1]
 	var failures []UITestAssertionFailure
 	for _, a := range sc.Assertions {
-		if f := evaluateUITestAssertion(a, final, m, client); f != nil {
+		if f := evaluateUITestAssertion(a, final, m); f != nil {
 			failures = append(failures, *f)
 		}
 	}
@@ -321,7 +312,7 @@ func evaluateUITestAssertions(sc UITestScenario, obs []UITestObservation, m Mode
 // evaluateUITestAssertion checks one assertion against the final observation,
 // model, and recording client. It returns nil when the assertion holds, or a
 // populated failure describing the mismatch.
-func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model, client *kittytest.Client) *UITestAssertionFailure {
+func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model) *UITestAssertionFailure {
 	switch a.Type {
 	case UITestAssertNoLayoutIssues:
 		if n := len(final.Screen.Issues); n > 0 {
@@ -372,15 +363,6 @@ func evaluateUITestAssertion(a UITestAssertion, final UITestObservation, m Model
 		}
 		if got := sess.EffectiveProfile(); got != a.Value {
 			return uitestAssertionFail(a, fmt.Sprintf("selected profile is %q, want %q", got, a.Value))
-		}
-	case UITestAssertKittyCalls:
-		got := len(client.CallsFor(a.Op))
-		if a.Count != nil {
-			if got != *a.Count {
-				return uitestAssertionFail(a, fmt.Sprintf("recorded %d %s call(s), want %d", got, a.Op, *a.Count))
-			}
-		} else if got == 0 {
-			return uitestAssertionFail(a, fmt.Sprintf("expected at least one %s call, got none", a.Op))
 		}
 	}
 	return nil
@@ -434,7 +416,7 @@ func uitestModeNameSet() map[string]bool {
 // list of actions into a sequence of observations. It is the seam Session 4's
 // scenario parser and Session 6's CLI plug into: prepare config and a client,
 // describe the initial size and the steps, and get back one normalized
-// observation per step. The runner owns no CLI, filesystem, or Kitty concerns —
+// observation per step. The runner owns no CLI, filesystem, or terminal concerns —
 // those are supplied by the caller through cfg and client.
 
 // runUITest builds a driver from cfg and client at opts.Size, then applies each
@@ -443,7 +425,7 @@ func uitestModeNameSet() map[string]bool {
 // returned slice therefore always has len(actions)+1 entries on success. On the
 // first action error the observations captured so far are returned alongside the
 // error so callers can still inspect how far the run got.
-func runUITest(cfg *config.Config, client kitty.KittyClient, opts UITestOptions, actions []UITestAction) ([]UITestObservation, error) {
+func runUITest(cfg *config.Config, client any, opts UITestOptions, actions []UITestAction) ([]UITestObservation, error) {
 	return runUITestActions(newUITestDriver(cfg, client, opts.Size), actions)
 }
 
@@ -457,7 +439,7 @@ func RunUITestFixture(name string, opts UITestOptions, actions []UITestAction) (
 	if err != nil {
 		return nil, err
 	}
-	d, _ := newUITestFixtureDriver(fx, opts.Size)
+	d := newUITestFixtureDriver(fx, opts.Size)
 	return runUITestActions(d, actions)
 }
 
@@ -577,7 +559,7 @@ func singleUITestRune(s string) (rune, error) {
 
 // This file defines the pure, JSON-facing contract shared by the TUI test
 // harness CLI, scenario files, and the in-process model driver. It carries no
-// dependency on Cobra, the filesystem, or a live Kitty instance so later
+// dependency on Cobra, the filesystem, or a live terminal so later
 // sessions can import it without pulling in setup machinery. Field names are
 // deliberately small and explicit so the harness output stays reviewable.
 
@@ -760,9 +742,6 @@ const (
 	// UITestAssertSelectedProfile passes when the selected session's profile
 	// equals Value.
 	UITestAssertSelectedProfile UITestAssertionType = "selected_profile"
-	// UITestAssertKittyCalls passes when the recorded Kitty calls for Op match
-	// Count (exactly, when set) or number at least one (when Count is nil).
-	UITestAssertKittyCalls UITestAssertionType = "kitty_calls"
 	// UITestAssertCursorEquals passes when the final observation's cursor equals
 	// Cursor.
 	UITestAssertCursorEquals UITestAssertionType = "cursor_equals"
@@ -779,7 +758,7 @@ func (t UITestAssertionType) Valid() bool {
 	case UITestAssertNoLayoutIssues, UITestAssertExcludesLayoutIssue,
 		UITestAssertContainsText, UITestAssertExcludesText,
 		UITestAssertModeEquals, UITestAssertSelectedTitle, UITestAssertSelectedProfile,
-		UITestAssertKittyCalls, UITestAssertCursorEquals, UITestAssertSelectedAction:
+		UITestAssertCursorEquals, UITestAssertSelectedAction:
 		return true
 	default:
 		return false
@@ -793,8 +772,6 @@ type UITestAssertion struct {
 	Text   string              `json:"text,omitempty"`   // contains_text / excludes_text
 	Mode   string              `json:"mode,omitempty"`   // mode_equals
 	Value  string              `json:"value,omitempty"`  // selected_title / selected_profile / selected_action (action id) / excludes_layout_issue (issue type)
-	Op     string              `json:"op,omitempty"`     // kitty_calls operation name
-	Count  *int                `json:"count,omitempty"`  // kitty_calls: exact count when set; >=1 when nil
 	Cursor int                 `json:"cursor,omitempty"` // cursor_equals
 }
 

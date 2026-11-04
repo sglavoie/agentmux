@@ -55,7 +55,7 @@ func TestHostedFocusGoesToTheWorkspaceSessionView(t *testing.T) {
 	hostedSurface(t, host, portablePane("$0", "%0", "api", api))
 	sessions := portableRefresh(t, nil).Sessions
 
-	msg := Focus(nil, sessions[0].TabID)()
+	msg := Focus(sessions[0].TabID)()
 	if done, ok := msg.(AttachDoneMsg); !ok || done.Err != nil {
 		t.Fatalf("hosted focus returned %T (%v); want a clean AttachDoneMsg with the terminal kept", msg, msg)
 	}
@@ -73,7 +73,7 @@ func TestHostedFocusFallsBackToAttachingHere(t *testing.T) {
 	hostedSurface(t, host, portablePane("$0", "%0", "api", api))
 	sessions := portableRefresh(t, nil).Sessions
 
-	if msg := Focus(nil, sessions[0].TabID)(); !ranHere(t, msg) {
+	if msg := Focus(sessions[0].TabID)(); !ranHere(t, msg) {
 		t.Fatalf("refused focus returned %T (%v); want this terminal handed to the session", msg, msg)
 	}
 	if len(host.views) != 1 {
@@ -87,7 +87,7 @@ func TestHostedFocusOfAnUnregisteredSessionAttachesHere(t *testing.T) {
 	hostedSurface(t, host, portablePane("$0", "%0", "api", ""))
 	sessions := portableRefresh(t, nil).Sessions
 
-	if msg := Focus(nil, sessions[0].TabID)(); !ranHere(t, msg) {
+	if msg := Focus(sessions[0].TabID)(); !ranHere(t, msg) {
 		t.Fatalf("focus returned %T; want this terminal handed to the session", msg)
 	}
 	if len(host.views) != 0 {
@@ -106,16 +106,16 @@ func TestHostedUtilityViewsGoToTheWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	project := config.Session{Title: "API", Directory: dir}
 
-	if msg := Peek(nil, sessions[0].WindowID)(); msg != (PeekDoneMsg{}) {
+	if msg := Peek(sessions[0].WindowID)(); msg != (PeekDoneMsg{}) {
 		t.Fatalf("hosted peek returned %T (%v)", msg, msg)
 	}
 	if len(server.captured) != 0 {
 		t.Fatalf("hosted peek captured %v here; the workspace's pager view reads the pane", server.captured)
 	}
-	if msg := OpenDirectory(nil, &config.Config{}, project)(); msg != (PickerOpenDoneMsg{Stay: true}) {
+	if msg := OpenDirectory(&config.Config{}, project)(); msg != (PickerOpenDoneMsg{}) {
 		t.Fatalf("hosted shell returned %T (%v)", msg, msg)
 	}
-	if msg := OpenInEditor(nil, &config.Config{}, project)(); msg != (PickerOpenDoneMsg{Stay: true}) {
+	if msg := OpenInEditor(&config.Config{}, project)(); msg != (PickerOpenDoneMsg{}) {
 		t.Fatalf("hosted editor returned %T (%v)", msg, msg)
 	}
 	want := []protocol.WorkspaceViewRequest{
@@ -137,9 +137,9 @@ func TestHostedUtilityViewsFallBackToThisTerminal(t *testing.T) {
 	project := config.Session{Title: "API", Directory: t.TempDir()}
 
 	for name, msg := range map[string]any{
-		"peek":   Peek(nil, sessions[0].WindowID)(),
-		"shell":  OpenDirectory(nil, &config.Config{}, project)(),
-		"editor": OpenInEditor(nil, &config.Config{}, project)(),
+		"peek":   Peek(sessions[0].WindowID)(),
+		"shell":  OpenDirectory(&config.Config{}, project)(),
+		"editor": OpenInEditor(&config.Config{}, project)(),
 	} {
 		if !ranHere(t, msg) {
 			t.Errorf("%s returned %T (%v); want it run in this terminal", name, msg, msg)
@@ -156,7 +156,7 @@ func TestHostedUtilityViewsFallBackToThisTerminal(t *testing.T) {
 func TestHostedLaunchesAreShownByTheWorkspace(t *testing.T) {
 	host := &desktopHost{}
 	hostedSurface(t, host)
-	deps := TerminalDependencies(nil, &config.Config{})
+	deps := TerminalDependencies(&config.Config{})
 	if deps.Launched == nil {
 		t.Fatal("a hosted surface's dependencies do not announce launches")
 	}
@@ -168,7 +168,7 @@ func TestHostedLaunchesAreShownByTheWorkspace(t *testing.T) {
 	}
 
 	usePortable(t, PortableTerminals{Tmux: &portableServer{}, Launch: runtimesession.BackendTmux})
-	if TerminalDependencies(nil, &config.Config{}).Launched != nil {
+	if TerminalDependencies(&config.Config{}).Launched != nil {
 		t.Fatal("a surface with no workspace announces launches")
 	}
 }

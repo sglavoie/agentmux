@@ -1,6 +1,6 @@
 # Daemon
 
-The daemon owns tab-state transitions and notifications:
+The daemon owns runtime-session state transitions and notifications:
 
 ```bash
 amx daemon start
@@ -37,7 +37,7 @@ amx debug bundle --mode share -o agent-mux-debug.tar.gz
 amx debug replay agent-mux-debug.tar.gz
 ```
 
-The commands share selectors for harness, profile, Kitty window, native
+The commands share selectors for harness, profile, daemon slot, runtime
 session, ASL run, event, trace, request, upstream source event, stage, outcome,
 and time range. See [Debugging event delivery](debugging.md) for the
 failure matrix, privacy model, bundle guidance, and operator smoke procedure.
@@ -89,100 +89,32 @@ predating the block reports nothing and `amx doctor` says so rather than
 claiming the embedded default. See
 [Screen classifier patterns](watchdog.md#screen-classifier-patterns).
 
-The daemon is the only writer for state icons and the `🔁` loop marker. Its
-state lives in each Kitty window's `amx_state` user var, so a restart restores
-the intended state and the renderer converges the live title on its next pass.
-`amx_state` schema v4 persists each eligible fact's validated harness-process
-fingerprint (`ph` harness, `pp` PID, and opaque `pt` start token) alongside the
-schema-v3 producer-pane origin (`ow`) and acknowledgement time (`aa`). A compact
-payload marker (`pv:1`) records that process tokens were rendered under the
-pinned UTC timezone. The optional compact `pc` field is the Unix-millisecond
-time of the last effective icon or unseen transition; omitting it is the
-backward-compatible zero value. Readers retain v1-v4 compatibility; v1-v3 facts
-and early v4 payloads without that marker restore without lifecycle ownership
-and continue using watchdog fallback.
-Acknowledged nonterminal replay cutoffs expire after one hour and are capped at
-the newest 64; unacknowledged facts and live ASL leases are never removed by
-that cap.
+The daemon owns reducer state for each registered runtime session. It writes a
+`runtime-state.json` checkpoint beside the runtime-session registry and verifies
+the session and tmux server generation before restoring a saved entry. The tmux
+status writer renders the resulting icon and `🔁` loop marker on the session's
+pane. The checkpoint and status update are part of runtime maintenance.
 
-The state-query response projects each window as `icon_state`, `looping`,
-`last_action`, `last_event_at`, and `guard_action`, plus optional
-`busy_since_at`, `presentation_changed_at_ms`, `unseen`, `reason`, `branch`,
-`dirty`, and `conversation`. `presentation_changed_at_ms` uses Unix
-milliseconds and is omitted when unknown, including for restored pre-field
-payloads and daemons predating the field. Dashboard clients must clear a stale
-local value when the member or whole window entry is absent; the timestamp is
-an ordering signal only and does not replace the busy-stretch or activity
-clocks.
-The base title, `★`, and `🔇` remain owned by their existing writers. Hooks only
-forward raw events, window/socket context, pipe-mode detection, and the safe
-process fingerprint; they auto-start the daemon when needed, log a dropped
-delivery, and exit successfully.
+A managed hook names its runtime session. The daemon resolves that identity to
+the registered slot, then applies the event to that slot's reducer. Hooks carry
+the event, session context, and safe harness-process fingerprint; they do not
+choose a pane by title or by a guessed working directory. An ASL hook from a
+managed session likewise claims the run for that exact runtime session.
 
-Producer identity and title ownership are separate. The producer harness and
-origin pane determine event semantics and source identity; the active managed
-pane supplies the durable profile/harness metadata and is the only pane that
-renders the shared title. Every managed pane still persists its own state, so
-focusing another managed pane reveals that pane's reducer state without
-cross-contamination.
+The state-query response includes each slot's icon, loop marker, last action,
+last event, and guard action, with optional busy, unseen, reason, branch, and
+conversation fields. `presentation_changed_at_ms` is a Unix-millisecond
+ordering signal and is omitted when unknown. Clients clear a stale local value
+when the field or entire slot is absent.
 
-Because hooks can fire from any pane in a split tab, the daemon applies an
-active-pane route policy rather than writing titles from the indicator:
+The dashboard and overview expose **Clear status** and **Mark active** for the
+selected session. Clear acknowledges the visible reducer facts; a live ASL
+lease keeps its independent `🔁` marker. Mark active records a temporary `⚡`
+from `probe:user_active` until a real hook, ASL event, clear, or staleness
+supersedes it. Screen probes read the registered tmux pane and can settle a
+stuck active icon only from fresh evidence for that pane and server generation.
 
-- **F8 (`user_clear`)** clears the tab's state icon and any loop marker without
-  a live ASL lease. On a managed tab it is
-  retargeted to the title owner from whichever pane pressed the binding —
-  owner, managed non-owner, or unmanaged sibling — so the wipe is never dropped
-  as an owner mismatch. On an ownerless tab, it clears a recognized state icon
-  or stale loop marker
-  from the source pane, including terminal icons left by subprocesses such as
-  `claude -p`; an icon-free ownerless tab remains a no-op. A live ASL lease keeps
-  `🔁` while executing, waiting for a mailbox reply, or between turns. Pausing
-  ends the loop process and clears `🔁`; old paused runs are not restored onto
-  new tabs. The base title, harness emoji,
-  `★`, and `🔇` are preserved. On a managed Claude pane,
-  the clear is transient while Claude's current pane title still carries its
-  busy marker: the next 2-second probe tick restores `⚡` from that positive
-  activity evidence. This recovery never creates `🔁`; only a live ASL lease
-  owns the loop marker.
-- **F11 (`user_active`)** is the operator saying "this tab is working". It
-  routes exactly like F8 (owner from any pane; an icon-free ownerless tab is a
-  no-op) and acknowledges every visible fact the same way, then shows `⚡` from
-  its own synthetic `probe:user_active` source. That `⚡` lasts until the next
-  real hook or ASL event for the window — which retires it before applying, so
-  a Stop shows `🛑`, a permission `🔑`, and a prompt the harness's own `⚡` —
-  until F8, or until the ordinary ten-minute active staleness. An ASL
-  supervisor question and a verified harness exit retire it the same way. The
-  screen idle probe keeps reading the pane under it but holds the mark against
-  the idle screen it was pressed on: only once the probe has seen the pane
-  working since the press does a later stabilized terminal screen settle `🛑`
-  over it (recorded as `bolt→stop`), which is what clears the mark on a tab
-  whose harness delivers no hooks. A native Stop withheld under the mark is
-  still confirmed by the probe rather than waiting out the hold. Each F11
-  forgets work observed under the previous one. The mark keeps any promotion
-  hold an earlier F8 placed, so a stale Claude busy title cannot re-promote `⚡`
-  once the mark ages out. The dashboard
-  and overview offer the same action as "Mark active" (`b`).
-- **Unmanaged producer routing** lets the active unmanaged pane borrow exactly
-  one managed target. A direct user prompt is authoritative focus evidence even
-  if the cached Kitty snapshot lags; an exact live ASL candidate also authorizes
-  its source pane. Once accepted, the producer/session/origin/target route stays
-  valid through that session's terminal event after focus moves. A new inactive
-  unmanaged session, an ambiguous target, or CWD/harness similarity alone is
-  rejected as `owner_mismatch`.
-- **Non-interactive runs are excluded.** A background `claude -p` or
-  `codex exec` in an unmanaged pane is not a session the dashboard reports on,
-  so prompt/focus evidence no longer lets it borrow the managed owner, and in an
-  ownerless tab it creates no state on the plain pane. Such hooks are suppressed
-  as `unmanaged_pipe_source`, which is distinct from `owner_mismatch` and never
-  feeds the doctor mismatch findings. An exact live ASL candidate still
-  authorizes its pane, and ASL lifecycle events keep their `🔁` marker. The same
-  exclusion keeps `codex exec` out of the Codex foreground screen probe. Pipe
-  mode inside a *managed* pane is unaffected.
-
-For the acceptance record, required live-client transitions, and dogfood
-checklist, see [Daemon State Acceptance Evidence](acceptance/daemon-state.md).
-The hermetic process-exit fixture and optional installed drill are documented in
+For the process-exit fixture, see
 [Process-Lifecycle Acceptance](process-lifecycle-fixture.md).
 
 ## Companion subscription
@@ -199,7 +131,7 @@ change what a companion shows rings a non-blocking signal; the hub waits 100ms
 for the burst to settle, copies the state in one short critical section, and
 projects outside it, so a subscriber never slows hook acknowledgement. An
 unchanged snapshot is not republished, and a 5s safety tick covers facts that
-change with the clock alone (Kitty snapshot staleness, quiet hours).
+change with the clock alone (such as quiet hours).
 
 ```bash
 amx debug subscribe --frames 3        # one line per frame
@@ -217,15 +149,11 @@ doctor and never trusted for a decision. The response line is the ack,
 daemon speaks the lower of the subscriber's `protocol` and its own
 `CompanionProtocolVersion` (today 1), and `server_protocol_max` tells a client
 that is merely older from one that is incompatible. `features` lists
-`snapshot`, `heartbeat`, and `notifications`, plus each optional feature the
-subscriber named in its own `features` and the daemon granted:
+`snapshot`, `heartbeat`, `notifications`, and `runtime_sessions`, plus optional
+features the subscriber named in its own `features` and the daemon granted:
 
-- `runtime_sessions` selects the mixed-backend snapshot (version 2,
-  `CompanionSnapshotVersionRuntime`): every version-1 field, a runtime block on
-  each session an AgentMux runtime session owns, and the sessions that run on a
-  backend other than Kitty, which carry no window, tab, OS-window, or socket
-  field. A subscriber that does not name it keeps receiving version 1, which
-  lists Kitty sessions only.
+- `runtime_sessions` identifies the snapshot shape (version 2): each session
+  has a runtime block with its tmux identity. Every subscriber receives it.
 - `workspace_views` marks a client that hosts workspace views (the desktop
   workspace). Only such a subscriber is sent `workspace_view` frames, and a
   `workspace_view` request is refused with `workspace_unavailable` while none
@@ -236,7 +164,7 @@ Every later line is a frame `{v, seq, type, data}`. `v` is the protocol version,
 
 | `type` | `data` | When |
 | --- | --- | --- |
-| `snapshot` | the `CompanionSnapshot` (its own `version`: 1, or 2 with `runtime_sessions`) | on subscribe, then whenever the projection changes |
+| `snapshot` | the `CompanionSnapshot` (version 2) | on subscribe, then whenever the projection changes |
 | `notification` | `{notification_id, window_id, navigable, title, subtitle, action, run_id, session_id, actions[]}` | to the notification backend only |
 | `notification_retract` | `{notification_id, reason}` | a notice still showing is withdrawn |
 | `workspace_view` | `{kind, runtime_session_id, await, directory, path, title, raise}`; `kind` is `session`, `dashboard`, `overview`, `shell`, `editor`, or `pager`, and no field is a command line | to `workspace_views` subscribers only, when a `workspace_view` request is accepted or a `focus_session` request finds a workspace (with `raise` set) |
@@ -288,7 +216,6 @@ connection the client is still waiting on:
 | Request | Server deadline | Why |
 | --- | --- | --- |
 | everything else | 1s | hook acknowledgement and state queries stay fast |
-| `focus_window` | 3s | three sequential Kitty remote-control calls |
 | `focus_session` | 3s | with no workspace connected, a tmux survey and a client switch |
 | `notification_test` | 5s | waits up to 3s for the app to confirm delivery |
 | `asl_snapshot`, `asl_question` | 3s | the bridge read timeout (2s) plus 1s |
@@ -297,23 +224,7 @@ connection the client is still waiting on:
 
 ### Focus, snooze, and notification delivery
 
-A companion focuses a session with one `focus_window` request naming a Kitty
-socket and a window ID. The daemon dials the socket only if it already knows it
-— a per-window hook socket, its effective listen address, or the socket its
-published snapshot was read through — and otherwise answers `unknown_socket`
-without dialing anything. It lists that instance, answers `stale_target`
-without writing when the window is gone, and then focuses the tab and the
-window, which is the same sequence a notification click uses
-(`notification.FocusKittyWindow`). All of it runs outside `stateMu`, under a 3s
-connection deadline. A successful answer names the window's tab and OS window:
-
-```bash
-printf '%s\n' '{"type":"focus_window","focus_window":{"kitty_socket":"unix:/tmp/kitty-123","window_id":7}}' \
-  | nc -U ~/.local/share/agent-mux/daemon.sock
-```
-
-A session with no Kitty window is shown with `focus_session`, a request of its
-own that names a runtime session and nothing else:
+A companion focuses a session with `focus_session`, naming its runtime session:
 
 ```bash
 printf '%s\n' '{"type":"focus_session","focus_session":{"runtime_session_id":"rs-0123456789abcdef0123456789abcdef"}}' \
@@ -321,10 +232,9 @@ printf '%s\n' '{"type":"focus_session","focus_session":{"runtime_session_id":"rs
 ```
 
 The daemon looks the session up in the registry and refuses one it cannot
-show: `invalid_session` for no ID, `runtime_session_unknown` for a session
-that is not registered or runs in Kitty (which `focus_window` names), and
-`stale_target` for an agent that stopped. A live one goes to whoever can show
-it:
+show: `invalid_session` for no ID, `runtime_session_unknown` for an unregistered
+session, and `stale_target` for an agent that stopped. A live one goes to
+whoever can show it:
 
 - **A connected workspace.** Every subscriber that named `workspace_views` is
   sent a `workspace_view` frame of kind `session` with `await` and `raise`
@@ -372,17 +282,15 @@ session_id, actions[]}`, where `actions` offers `mute`, `snooze`, and (for an
 ASL question) `answer`, and a permission prompt offers none, or `respond` alone when its
 session runs on tmux — and waits up to
 3s for a `notification_disposition` request reporting `delivered`. A notice
-about a runtime session also carries `runtime_session_id` and `backend`; when
-the backend is not Kitty, `window_id` is 0 and `mute` is not offered, because
-no Kitty window stands behind the session; the notice is still `navigable`,
-by its runtime session, which the app asks for with `focus_session`. Without it
-the notice is retracted, `dispatch:fallback:app_fallback` is recorded, and
+about a runtime session also carries `runtime_session_id` and `backend`;
+`window_id` is 0, and the notice is navigable by its runtime session through
+`focus_session`. Without a delivery confirmation, the notice is retracted,
+`dispatch:fallback:app_fallback` is recorded, and
 Alerter shows the notification instead; with no app connected Alerter is used
 exactly as before. After `delivered` the app reports one terminal disposition:
-`clicked` (the daemon focuses a Kitty pane exactly as an Alerter click does;
-for a session with no Kitty window the app sends `focus_session` itself and
-the daemon records the click as `focus:suppressed:focus_delegated`),
-`dismissed`, `action_mute`, `action_snooze`, `action_answer`, `action_respond`,
+`clicked` (the app sends `focus_session` and the daemon records the click as
+`focus:suppressed:focus_delegated`), `dismissed`, `action_mute`,
+`action_snooze`, `action_answer`, `action_respond`,
 or `failed`. `action_respond` follows the one action a `permission` notice can
 offer, `respond`, and only for a tmux runtime session: the app shows the
 session's screen and the operator answers the prompt there through `amx send`.
@@ -432,39 +340,18 @@ count.
 
 ### Mute lag
 
-The mute lives in the terminal: `amx mute-toggle` writes the window's `cc_mute`
-user var (and mirrors a glyph into the tab title), and the daemon's mute cache
-is recomputed from every Kitty listing. The maintenance loop lists Kitty every
-render cadence (2s), and a hook reads the same cached listing, so a mute made
-from the CLI or the companion app reaches the notifier's mute gate and the
-companion snapshot within about 2s. A notification raised inside that window
-is not yet suppressed.
-
-A tmux session is muted the same way, by `amx mute-toggle --runtime-session`
-(or with no flag from inside the session, which is what F10 in an attached
-terminal runs) or the dashboard: the variable is on its pane, and the daemon reads it in the
-runtime reconciliation pass (`observeRuntimeMutes`), which is that session's
-only source of a mute. Its own hooks carry no Kitty snapshot and leave the
-cache alone. The lag is that pass's interval.
-
-A `mute_set` request that updates the cache under `stateMu` was evaluated and
-not added. The lag is bounded by a cadence the daemon already runs, and is
-short beside the time it takes an operator to mute after deciding to. More
-importantly, the daemon deliberately never trusts a client's claim about mute
-(hook requests carry a legacy `Muted` field it ignores), because the user var
-is the authority and a cache seeded from a client could disagree with it until
-the next listing anyway. If the lag becomes observable, the change to make is
-a request that asks the daemon to refresh its Kitty listing now, which keeps
-Kitty the only source.
+A session is muted with `amx mute-toggle --runtime-session` (or from inside an
+attached session with no selector) or from the dashboard. The mute is stored on
+the tmux pane, and the daemon reads it during runtime reconciliation
+(`observeRuntimeMutes`). The notifier and companion snapshot pick up the change
+on that pass. Hooks do not claim mute state; the pane value is authoritative.
 
 ## Rendered state of a tmux session
 
-A Kitty session's state is rendered into its tab: the daemon writes the title
-and Kitty's tab bar paints the color. A tmux session has no tab, so the daemon
-renders the same thing into two options on the agent's pane, `@amx_status`
-(the state icon and markers ahead of the session's title, exactly as
-`palette.BuildTitleParts` titles a tab) and `@amx_status_color` (the session's
-color as `#rrggbb`). The private server's configuration builds the attached
+A tmux session's state is rendered into two options on the agent's pane:
+`@amx_status` (the state icon and markers ahead of the session's title) and
+`@amx_status_color` (the session's color as `#rrggbb`). The private server's
+configuration builds the attached
 terminal's title (`set-titles-string`) and its one-line status
 (`status-format[0]`) from them and from nothing else, so the daemon is still
 the only writer of rendered state. `amx attach` decides only whether the line
@@ -472,7 +359,7 @@ is shown: on for a plain terminal, off in a terminal Agent Mux.app hosts
 (which sets `AMX_WORKSPACE_HOSTED` for the `amx attach` it runs).
 
 A status is written once the runtime checkpoint holds the state it renders,
-which is what settles a slot of a non-Kitty backend, and again when the
+which settles the slot, and again when the
 session's title or color changes. Everything a maintenance pass has to write
 goes out in one tmux client per server, each status guarded by the server
 generation it was rendered for; a pass with nothing new starts none, so a
@@ -481,9 +368,8 @@ is not repeated by the next pass: everything is written once more thirty
 seconds later.
 
 Sessions are listed in one order everywhere (`session.Order`: pins first, then
-`[defaults] sort`; sessions that tie are Kitty's in tab order, then the rest by
-runtime-session ID). The v2 companion snapshot lists Kitty and tmux sessions
-together in it; v1 keeps Kitty's tab order.
+`[defaults] sort`; sessions that tie use runtime-session ID). The companion
+snapshot uses this same order.
 
 ## Investigating hook event flow
 
@@ -569,14 +455,12 @@ window can be inspected without paired map lookups:
 
 The full export can exceed 1 MiB on a busy daemon; the IPC client accepts
 responses up to 64 MiB, and `--window`/`--current-window` bound the payload to
-one window when investigating a single tab.
+one slot when investigating a single session.
 
-Durable metadata can outlive the live Kitty join after a tab closes;
-`live.found` flips to `false` when Kitty/session lookups are no longer
-available. `stats.suppression_reasons` aggregates suppressed transitions by
-reason, while `renderer` reports desired icon/loop state (`looping_set` shows
-when the daemon has explicitly taken ownership), the known Kitty
-socket, and any consecutive render failure with its last error. `shadow`
+Durable metadata can outlive a live runtime session; `live.found` flips to
+`false` when the session no longer appears in the live survey.
+`stats.suppression_reasons` aggregates suppressed transitions by reason, while
+`renderer` reports desired icon/loop state and render generations. `shadow`
 reports the reducer's effective state and live facts; `busy_since_at` is the
 unix-second start of its current active-class stretch and is absent while the
 window is idle. Event rows keep
@@ -654,7 +538,7 @@ event name and source key:
   line) and **three** for a quiescent screen — an empty composer with no
   terminal marker at all, which is what Claude shows after `/clear`, after
   `/compact`, at session start, and after a completion line has scrolled away.
-  The Kitty pane title never vetoes the screen
+  The pane title never vetoes the screen
   read — Claude leaves a marker and its task description behind after a turn, so
   a title gate would strand idle panes on `⚡` forever. A title still carrying a
   marker adds **one** sample on top of the screen's own tier, so the slowest
@@ -682,12 +566,12 @@ terminal stop. The one exception is background work: a held stop whose pane the
 probe reads as still running it (the `background_task` veto: Claude's
 `· 1 shell`, Codex's `1 background terminal running`) has its deadline moved a
 full timeout past each such reading. The turn ended, but nobody has anything to
-answer while that work runs, so the tab keeps `⚡`, the active watchdog leaves
+answer while that work runs, so the session keeps `⚡`, the active watchdog leaves
 it alone, and the export marks the hold `background_work`. Once the work is off
 the screen, the probe confirms the stop or the turn the finished work starts
 supersedes it. A pane that can no longer be read stops pushing the deadline,
 and the stop paints a timeout later. When there was no hook at all, only the watchdog clears the tab:
-`sweepStale` clears a stale window to the **empty** icon and never to `🛑`,
+`sweepStale` clears a stale session to the **empty** icon and never to `🛑`,
 firing its one-shot "Session idle" notification. The sweep always runs: with
 no `[defaults.watchdog]` threshold configured, `active` defaults to 600 seconds
 (`subagent` to 1800, `compact` to 180), so an unstabilizable pane holds `⚡` for
@@ -695,24 +579,22 @@ no longer than that threshold plus one sweep.
 
 Codex exposes edit approvals and `request_user_input` waits through
 TUI/server-request flows. A native `PreToolUse(request_user_input)`, when
-available, is only early intent: Agent Mux keeps the tab active until its
-best-effort Kitty screen probe confirms that the question UI is visibly
+available, is only early intent: Agent Mux keeps the session active until its
+screen probe confirms that the question UI is visibly
 answerable. The probe owns ❓ and its notification, and withdraws both its fact
 and guard when the prompt disappears even if no `PostToolUse` arrives. It
 recognizes both edit approvals and the bottom-pane question UI while preserving
 terminal, warning, and error states. A separate conservative stop-only fallback
-recognizes Codex's cleared idle UI after `/clear` when full Kitty scrollback no
+recognizes Codex's cleared idle UI after `/clear` when full pane scrollback no
 longer contains a transcript. The per-harness stop fallbacks described above
 (Codex/Claude `ScreenStopProbe`, Copilot `TranscriptStopProbe`) repair a turn
 that finished without a native terminal hook so the icon settles on `🛑`
-instead of staying `⚡`. The stop paths fire only on a stuck `bolt` tab and never
+instead of staying `⚡`. The stop paths fire only on a stuck `bolt` session and never
 downgrade protected attention states (`key`, `question`, `error`, `warning`,
 `subagent`, `compact`), or retire pipe-mode, subagent, or live ASL facts. Claude's
 busy-title active recovery is likewise narrow: it only fills an empty icon. The
-daemon runs these
-probes on the same periodic probe loop as the renderer tick (every 2s).
-A tmux session is probed on the same loop by the same probes, reading its own
-pane on the private server with no terminal attached and no Kitty running:
+daemon runs these probes on a periodic loop (every 2s). It reads each tmux
+session's pane on the private server with no terminal attached:
 the Claude context-limit banner, prompt label, and busy-title recovery, the
 Codex prompt and cleared screen (`ScreenClearProbe`), the Copilot transcript
 probe, and for all three the evidence that settles a stuck `⚡` or confirms a
@@ -726,31 +608,24 @@ read every fifth tick, and so is a stopped Codex session, whose only question
 is whether `/clear` was typed; a working one is read every tick, and a Claude
 or Copilot session at rest on `🛑` not at all.
 
-In split Kitty tabs, screen probes read only the tab-title owner: the active
-managed pane, or the first managed pane if none is active. Sibling panes cannot
-overwrite the shared title with Claude context-limit detection or Codex
-`ScreenPromptProbe`, `ScreenClearProbe`, or `ScreenStopProbe` events.
+Each screen observation is checked against the registered tmux pane and server
+generation before it can change reducer state. A stale or failed read supplies
+no evidence for that probe tick.
 
 The primary debug workflow starts from persisted evidence and remains useful
-when Kitty or the daemon is unavailable:
+when the daemon is unavailable:
 
 ```bash
 amx debug status
-amx debug tail --window "$KITTY_WINDOW_ID" --last 25
-amx debug explain --window "$KITTY_WINDOW_ID"
-amx debug bundle --window "$KITTY_WINDOW_ID" --mode share
+amx debug tail --last 25
+amx debug bundle --mode share
 amx debug replay agent-mux-debug-*-share.tar.gz
 ```
 
-Use `amx debug probe` for a live, read-only transport/routing check of the
-session it is typed in: its runtime session (`AMX_RUNTIME_SESSION_ID`) when it
-has one, else its Kitty window. `--runtime-session ID` and `--window ID` name
-another. A probe of a runtime session reports where that session's hooks
-would be routed or the reason they would be refused; it claims no slot and
-names no window. A Kitty probe needs that window's reusable socket; the
-current Kitty supplies `KITTY_LISTEN_ON`, or use `--window ID --kitty-socket
-unix:/path/to/socket` for another instance. `export-events` remains the
-compatibility and daemon snapshot surface:
+`amx debug probe` makes a live, read-only transport and routing check for a
+runtime session. It uses `AMX_RUNTIME_SESSION_ID` in an attached session or
+accepts `--runtime-session ID`; a daemon slot number is not a valid probe
+target. `export-events` remains the compatibility and daemon snapshot surface.
 
 Trim every exported window to its trailing events without changing cumulative
 `stats`:
@@ -766,18 +641,12 @@ amx daemon export-events --current-window --last 20 \
   | jq '.windows[0].events[] | {at, event, action, source, reason, stop_reason, notification_type, reset_flow}'
 ```
 
-`--current-window` selects the session the command is typed in: the runtime
-session named by `AMX_RUNTIME_SESSION_ID` when there is one (so it works in a
-tmux session, where an inherited `KITTY_WINDOW_ID` is not believed), else the
-Kitty window named by `KITTY_WINDOW_ID`. With neither it is an error, as it is
-combined with `--window`. `--runtime-session ID` selects a session from
-anywhere, and `--window ID` a daemon slot from an unrestricted export. When two
-Kitty instances reuse a window number, a bare number is ambiguous; run
-`--current-window` inside the desired Kitty instance or use its distinct slot
-from the unrestricted export. An entry held by a runtime session
-carries `runtime_session_id` and `backend`; for a tmux session its `window_id`
-is the daemon's own slot for the session, not a Kitty window, and `live.found`
-is false. `--output PATH` writes the JSON to a file instead of
+`--current-window` selects the runtime session named by
+`AMX_RUNTIME_SESSION_ID`; it fails when that variable is absent.
+`--runtime-session ID` selects a registered session from anywhere, and
+`--window ID` selects a daemon slot from an unrestricted export. A runtime
+entry carries `runtime_session_id` and `backend`; its `window_id` is the
+daemon's slot number. `--output PATH` writes the JSON to a file instead of
 stdout. The destination's parent directory must exist. The file is replaced
 atomically with mode `0600`, and a symlink destination is refused. The export
 is read-only and does not auto-start the daemon, so the

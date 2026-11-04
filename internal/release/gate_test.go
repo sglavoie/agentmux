@@ -75,11 +75,6 @@ func TestGateRecordsSignedEvidenceForACleanPair(t *testing.T) {
 	if ev.Environment.OSVersion != fakeOSVersion {
 		t.Errorf("os_version = %q, want %q", ev.Environment.OSVersion, fakeOSVersion)
 	}
-	// The fixture's `kitty` and `kitten` fail, so a gate that asked either
-	// would not have passed; the record names no Kitty it never exercised.
-	if ev.Environment.Kitty != "" {
-		t.Errorf("kitty = %q, want none: the gate releases the pair without one", ev.Environment.Kitty)
-	}
 	wantHarnesses := []HarnessVersion{
 		{Harness: "claude", Version: "2.1.231", Status: "supported"},
 		{Harness: "codex", Version: "0.149.1", Status: "supported"},
@@ -189,24 +184,8 @@ func TestGateRunsPhasesInTheDocumentedOrder(t *testing.T) {
 	}
 }
 
-// TestGateRequiresNoKitty holds the plan to the backend migration's end state:
-// Kitty is an optional backend, so no step of the gate may run it, name it, or
-// run the opt-in recipes that need it.
-func TestGateRequiresNoKitty(t *testing.T) {
-	t.Parallel()
-
-	for _, step := range Plan("/amx", "/asl") {
-		for _, word := range append([]string{step.Name}, step.Argv...) {
-			if strings.Contains(strings.ToLower(word), "kitty") || strings.Contains(word, "kitten") {
-				t.Errorf("step %q names Kitty (%q); the gate must pass on a machine without it", step.Name, word)
-			}
-		}
-	}
-}
-
-// TestLoadEvidenceStillReadsASchemaOneRecord keeps the releases signed before
-// environment.kitty became optional readable, and a record from a later schema
-// refused.
+// TestLoadEvidenceStillReadsASchemaOneRecord keeps earlier schema records
+// readable and rejects records from an unknown later schema.
 func TestLoadEvidenceStillReadsASchemaOneRecord(t *testing.T) {
 	t.Parallel()
 
@@ -222,23 +201,12 @@ func TestLoadEvidenceStillReadsASchemaOneRecord(t *testing.T) {
 	}
 	pair := PairIDPrefix + "0000000000000000"
 
-	old, err := LoadEvidence(write("old.json", Evidence{
+	_, err := LoadEvidence(write("old.json", Evidence{
 		SchemaVersion: 1, PairID: pair, Result: StatusPassed,
-		Environment: Environment{Kitty: "kitty 0.44.1"},
+		Environment: Environment{},
 	}))
 	if err != nil {
 		t.Fatalf("a schema-1 record was refused: %v", err)
-	}
-	if old.Environment.Kitty != "kitty 0.44.1" {
-		t.Errorf("kitty = %q, want the version the schema-1 record named", old.Environment.Kitty)
-	}
-
-	current, err := json.Marshal(Evidence{SchemaVersion: SchemaVersion, PairID: pair})
-	if err != nil {
-		t.Fatalf("encode: %v", err)
-	}
-	if strings.Contains(string(current), `"kitty"`) {
-		t.Errorf("a record that names no Kitty still carries the field: %s", current)
 	}
 
 	for _, version := range []int{0, SchemaVersion + 1} {

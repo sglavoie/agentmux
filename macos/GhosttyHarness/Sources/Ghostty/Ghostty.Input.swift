@@ -143,7 +143,7 @@ extension NSEvent {
 
         // macOS reports no consumed modifiers. Upstream's heuristic: control
         // and command never translate text, and everything else did. This is
-        // what lets the kitty encoder tell ctrl+m from Enter and ctrl+i from Tab.
+        // what lets the extended keyboard encoder tell ctrl+m from Enter and ctrl+i from Tab.
         keyEvent.mods = Ghostty.ghosttyMods(modifierFlags)
         keyEvent.consumed_mods = Ghostty.ghosttyMods(
             (translationMods ?? modifierFlags).subtracting([.control, .command]))

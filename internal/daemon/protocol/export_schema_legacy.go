@@ -126,7 +126,6 @@ type windowDebugRendererV8 struct {
 	LoopingSet          bool   `json:"looping_set"`
 	RenderFailures      int    `json:"render_failures"`
 	LastRenderError     string `json:"last_render_error"`
-	KittyListenOn       string `json:"kitty_listen_on,omitempty"`
 	QueuedGen           uint64 `json:"queued_gen,omitempty"`
 	AttemptedGen        uint64 `json:"attempted_gen,omitempty"`
 	PersistedGen        uint64 `json:"persisted_gen,omitempty"`
@@ -303,7 +302,7 @@ func projectExportEventsPayloadV8(payload ExportEventsPayload) exportEventsPaylo
 			WindowID: window.WindowID, Stats: projectCompatibilityWindowDebugStats(window.Stats), Durable: window.Durable,
 			Renderer: windowDebugRendererV8{
 				DesiredIcon: r.DesiredIcon, StateSet: r.StateSet, Looping: r.Looping, LoopingSet: r.LoopingSet,
-				RenderFailures: r.RenderFailures, LastRenderError: r.LastRenderError, KittyListenOn: r.KittyListenOn,
+				RenderFailures: r.RenderFailures, LastRenderError: r.LastRenderError,
 				QueuedGen: r.QueuedGen, AttemptedGen: r.AttemptedGen, PersistedGen: r.PersistedGen,
 				RenderedGen: r.RenderedGen, FailedGen: r.FailedGen, DirtySince: r.DirtySince,
 				DirtyAgeSeconds: r.DirtyAgeSeconds, LastRenderLatencyMs: r.LastRenderLatencyMs,

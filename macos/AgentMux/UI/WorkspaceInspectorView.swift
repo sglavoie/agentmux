@@ -56,7 +56,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
 
     nonisolated static let nothingWaiting = "Nothing is waiting on you."
     nonisolated static let noSession = "No session is shown."
-    nonisolated static let kittyOnly = "A Kitty session has this in Kitty."
+    nonisolated static let unavailableForSession = "This session cannot use this action."
     nonisolated static let waitForDaemon = "Available once the daemon answers again."
 
     var onTab: ((WorkspaceInspectorTab) -> Void)?
@@ -402,7 +402,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         return holder
     }
 
-    /// The buttons, two to a line. One a Kitty session has in Kitty is
+    /// The buttons, two to a line. One a session cannot use is
     /// disabled and says so.
     private func actions(muted: Bool, embedded: Bool) -> NSView {
         let buttons = WorkspaceInspectorAction.allCases.enumerated().map { index, action in
@@ -427,7 +427,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     private static func configure(_ button: NSButton, _ action: WorkspaceInspectorAction, muted: Bool, embedded: Bool) {
         button.title = action.title(muted: muted)
         button.isEnabled = embedded || !action.needsEmbedded
-        button.toolTip = button.isEnabled ? action.shortcut : kittyOnly
+        button.toolTip = button.isEnabled ? action.shortcut : Self.unavailableForSession
     }
 
     /// The buttons of the session tab, in `WorkspaceInspectorAction` order;

@@ -18,7 +18,7 @@ import (
 // taken too long ago, or shows the screen a dead program left behind can never
 // be read as a finished turn.
 //
-// This is the backend-neutral counterpart of the Kitty epochs in freshness.go.
+// These receipts bind a screen observation to the current runtime pane.
 // Those decide whether a BINDING still holds; this decides whether a SCREEN
 // may be read at all, and applies to every backend alike.
 

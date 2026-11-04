@@ -145,7 +145,7 @@ final class NotificationPresenterTests: XCTestCase {
         }
         XCTAssertEqual(permission(["respond"], backend: "tmux"), "amx.prompt")
         XCTAssertEqual(permission(["respond", "mute", "snooze"], backend: "tmux"), "amx.prompt")
-        XCTAssertEqual(permission(["respond"], backend: "kitty"), "amx.plain")
+        XCTAssertEqual(permission(["respond"], backend: "unsupported"), "amx.plain")
         XCTAssertEqual(permission(["respond"], backend: "tmux", runtimeSessionID: ""), "amx.plain")
         XCTAssertEqual(permission([], backend: "tmux"), "amx.plain", "never an action that was not offered")
         XCTAssertEqual(category("stop", ["respond", "mute", "snooze"]), "amx.session", "respond is for a prompt")
@@ -165,14 +165,14 @@ final class NotificationPresenterTests: XCTestCase {
     func testRequestCarriesIdentityAndThread() {
         let request = NotificationPresenter.request(for: stop)
         XCTAssertEqual(request.identifier, "n-1")
-        XCTAssertEqual(request.content.threadIdentifier, "kitty:#7")
+        XCTAssertEqual(request.content.threadIdentifier, "amx")
         XCTAssertEqual(request.content.title, "API")
         XCTAssertEqual(request.content.subtitle, "Stopped")
         XCTAssertEqual(request.content.categoryIdentifier, "amx.session")
         XCTAssertNil(request.trigger)
     }
 
-    func testThreadsFollowTheRuntimeSessionThenTheKittyWindow() {
+    func testThreadsFollowTheRuntimeSession() {
         var tmux = AppNotice(notificationID: "n-2", windowID: 0, title: "API")
         tmux.runtimeSessionID = "rs-1"
         tmux.backend = "tmux"
@@ -181,10 +181,6 @@ final class NotificationPresenterTests: XCTestCase {
         other.runtimeSessionID = "rs-2"
         XCTAssertNotEqual(NotificationPresenter.threadIdentifier(for: other), NotificationPresenter.threadIdentifier(for: tmux),
                           "two tmux sessions never share a thread")
-        let kittyA = AppNotice(notificationID: "n-3", windowID: 4, kittySocket: "unix:/tmp/a")
-        let kittyB = AppNotice(notificationID: "n-4", windowID: 4, kittySocket: "unix:/tmp/b")
-        XCTAssertEqual(NotificationPresenter.threadIdentifier(for: kittyA), "kitty:unix:/tmp/a#4")
-        XCTAssertNotEqual(NotificationPresenter.threadIdentifier(for: kittyA), NotificationPresenter.threadIdentifier(for: kittyB))
         XCTAssertEqual(NotificationPresenter.threadIdentifier(for: AppNotice(notificationID: "n-5")), "amx")
     }
 
@@ -275,7 +271,7 @@ final class NotificationPresenterTests: XCTestCase {
             Report(id: "n-5", disposition: .actionAnswer, error: nil),
         ])
         XCTAssertEqual(responses.first, NotificationPresenter.Response(
-            notificationID: "n-1", disposition: .clicked, windowID: 7, kittySocket: "", navigable: true, runID: "r1", sessionID: ""))
+            notificationID: "n-1", disposition: .clicked, windowID: 7, navigable: true, runID: "r1", sessionID: ""))
         XCTAssertEqual(responses[1].windowID, 0)
         XCTAssertFalse(responses[1].navigable)
     }
@@ -497,21 +493,18 @@ final class NotificationPresenterTests: XCTestCase {
     /// mute, and a session is found by its runtime session, which is also
     /// how a banner's Mute finds a tmux session.
     func testTerminalNoticesFollowTheirSessionsMute() {
-        var muted = CompanionSession(windowID: 1 << 40)
+        var muted = CompanionSession()
         muted.runtime = CompanionRuntime(sessionID: "rs-1", backend: "tmux")
         muted.muted = true
-        var loud = CompanionSession(windowID: (1 << 40) + 1)
+        var loud = CompanionSession()
         loud.runtime = CompanionRuntime(sessionID: "rs-2", backend: "tmux")
-        var kitty = CompanionSession(windowID: 4)
-        kitty.runtime = CompanionRuntime(sessionID: "rs-3", backend: "kitty")
-        kitty.muted = true
-        let sessions = [muted, loud, kitty]
+        let sessions = [muted, loud]
         XCTAssertTrue(AppDelegate.terminalNoticeMuted(.session(runtimeSessionID: "rs-1"), in: sessions))
         XCTAssertFalse(AppDelegate.terminalNoticeMuted(.session(runtimeSessionID: "rs-2"), in: sessions))
         XCTAssertFalse(AppDelegate.terminalNoticeMuted(.session(runtimeSessionID: "rs-9"), in: sessions), "an unlisted session is not muted")
         XCTAssertFalse(AppDelegate.terminalNoticeMuted(.view(id: "rs-1"), in: sessions), "a view is never a session")
         XCTAssertEqual(AppDelegate.session(runtimeSessionID: "rs-2", in: sessions), loud)
-        XCTAssertNil(AppDelegate.session(runtimeSessionID: "rs-3", in: sessions), "a Kitty session is matched by its window")
+        XCTAssertNil(AppDelegate.session(runtimeSessionID: "rs-3", in: sessions))
         XCTAssertNil(AppDelegate.session(runtimeSessionID: "", in: sessions))
     }
 
@@ -677,73 +670,4 @@ final class NotificationPresenterTests: XCTestCase {
         XCTAssertNotNil(sent)
     }
 
-    func testSessionLookupRefusesAmbiguousWindows() {
-        var a = CompanionSession(windowID: 4)
-        a.kittySocket = "unix:/tmp/kitty-1"
-        var b = CompanionSession(windowID: 4)
-        b.kittySocket = "unix:/tmp/kitty-2"
-        let c = CompanionSession(windowID: 5)
-        XCTAssertNil(AppDelegate.session(windowID: 4, in: [a, b, c]), "window IDs repeat across Kitty instances")
-        XCTAssertEqual(AppDelegate.session(windowID: 5, in: [a, b, c]), c)
-        XCTAssertNil(AppDelegate.session(windowID: 0, in: [c]))
-    }
-
-    func testNotificationSocketSurvivesUserInfoRoundTrip() throws {
-        let json = #"{"notification_id":"n-8","window_id":4,"kitty_socket":"unix:/tmp/kitty-2","navigable":true,"actions":["mute"]}"#
-        let notice = try JSONDecoder().decode(AppNotice.self, from: Data(json.utf8))
-        XCTAssertEqual(notice.kittySocket, "unix:/tmp/kitty-2")
-
-        let presenter = presenter()
-        let userInfo = NotificationPresenter.request(for: notice).content.userInfo
-        presenter.handleResponse(notificationID: "n-8", actionIdentifier: UNNotificationDefaultActionIdentifier, userInfo: userInfo)
-        presenter.handleResponse(notificationID: "n-8", actionIdentifier: "amx.mute", userInfo: userInfo)
-        XCTAssertEqual(responses.map(\.kittySocket), ["unix:/tmp/kitty-2", "unix:/tmp/kitty-2"])
-        XCTAssertEqual(responses.map(\.windowID), [4, 4])
-
-        // A banner posted before the socket existed reads back as none.
-        presenter.handleResponse(notificationID: "n-0", actionIdentifier: "amx.mute",
-                                 userInfo: [NotificationPresenter.UserInfoKey.windowID: 4])
-        XCTAssertEqual(responses.last?.kittySocket, "")
-    }
-
-    func testNotificationResponseUsesCapturedKittySocket() {
-        func response(_ disposition: NotificationDisposition, socket: String, windowID: Int = 4) -> NotificationPresenter.Response {
-            NotificationPresenter.Response(notificationID: "n-1", disposition: disposition, windowID: windowID,
-                                           kittySocket: socket, navigable: true, runID: "", sessionID: "")
-        }
-        var kitty = CompanionKitty()
-        kitty.socket = "unix:/tmp/kitty-1"
-        kitty.sockets = ["unix:/tmp/kitty-1", "unix:/tmp/kitty-2"]
-        // The snapshot instance's row names no socket of its own.
-        let local = CompanionSession(windowID: 4)
-        var foreign = CompanionSession(windowID: 4)
-        foreign.kittySocket = "unix:/tmp/kitty-2"
-
-        // Duplicate IDs: click and mute both follow the captured instance.
-        for disposition in [NotificationDisposition.clicked, .actionMute] {
-            let fromForeign = AppDelegate.origin(of: response(disposition, socket: "unix:/tmp/kitty-2"), in: [local, foreign], snapshotKitty: kitty)
-            XCTAssertEqual(fromForeign, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-2", session: foreign))
-            let fromLocal = AppDelegate.origin(of: response(disposition, socket: "unix:/tmp/kitty-1"), in: [local, foreign], snapshotKitty: kitty)
-            XCTAssertEqual(fromLocal, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-1", session: local))
-        }
-
-        // The origin row is gone and only the other instance's window 4 is
-        // listed: a click still raises the origin, and Mute refuses rather
-        // than muting the unrelated pane.
-        let missing = AppDelegate.origin(of: response(.actionMute, socket: "unix:/tmp/kitty-2"), in: [local], snapshotKitty: kitty)
-        XCTAssertEqual(missing, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-2", session: nil))
-
-        // An old notice with no socket, while two instances are known, names
-        // neither instance nor session.
-        let old = AppDelegate.origin(of: response(.clicked, socket: ""), in: [local, foreign], snapshotKitty: kitty)
-        XCTAssertEqual(old, AppDelegate.NoticeOrigin(socket: nil, session: nil))
-        let oldMissing = AppDelegate.origin(of: response(.actionMute, socket: ""), in: [local], snapshotKitty: kitty)
-        XCTAssertEqual(oldMissing, AppDelegate.NoticeOrigin(socket: nil, session: nil))
-
-        // With a single Kitty there is nothing to confuse it with.
-        var single = CompanionKitty()
-        single.socket = "unix:/tmp/kitty-1"
-        let alone = AppDelegate.origin(of: response(.actionMute, socket: ""), in: [local], snapshotKitty: single)
-        XCTAssertEqual(alone, AppDelegate.NoticeOrigin(socket: "unix:/tmp/kitty-1", session: local))
-    }
 }

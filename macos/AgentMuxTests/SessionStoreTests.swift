@@ -3,12 +3,14 @@ import XCTest
 
 @MainActor
 final class SessionStoreTests: XCTestCase {
+    private func idsRuntime(_ ids: [Int]) -> [String] { ids.map(WorkspaceFixture.runtimeID) }
+
     private func snapshot(_ ids: [Int], key: Int = 0) -> CompanionSnapshot {
         var snapshot = CompanionSnapshot()
         snapshot.daemon.ready = true
         snapshot.daemon.build = DaemonBuild(version: "1.0.0")
         snapshot.attention = CompanionAttention(total: key, key: key)
-        snapshot.sessions = ids.map { CompanionSession(windowID: $0) }
+        snapshot.sessions = ids.map { WorkspaceFixture.tmux($0, project: "p\($0)") }
         return snapshot
     }
 
@@ -24,10 +26,31 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.feed, .live)
         XCTAssertEqual(store.title(glyphs: .fallback), "🔑1")
         XCTAssertEqual(store.daemonStatus, .ready(DaemonBuild(version: "1.0.0")))
-        XCTAssertEqual(store.sessions.map(\.windowID), [1, 2])
+        XCTAssertEqual(store.sessions.compactMap { $0.runtime?.sessionID }, idsRuntime([1, 2]))
         store.apply(.frame(.heartbeat(seq: 2)))
         store.apply(.connecting(attempt: 0))
         XCTAssertEqual(changes, 2, "heartbeats and dial attempts do not redraw")
+    }
+
+    func testManagedPresentationExcludesLegacyRowsAndTheirAttention() {
+        let store = SessionStore()
+        var snapshot = CompanionSnapshot()
+        var legacy = CompanionSession()
+        legacy.iconState = "key"
+        legacy.attention = true
+        var managed = CompanionSession()
+        managed.runtime = CompanionRuntime(sessionID: "rs-managed", backend: "tmux", pane: "%1")
+        managed.iconState = "stop"
+        managed.attention = true
+        snapshot.sessions = [legacy, managed]
+        snapshot.attention = CompanionAttention(total: 2, stop: 1, key: 1)
+        store.apply(snapshot: snapshot)
+
+        XCTAssertEqual(store.managedSessions.count, 1)
+        XCTAssertEqual(store.managedAttention.total, 1)
+        XCTAssertEqual(store.managedAttention.stop, 1)
+        XCTAssertEqual(store.managedAttention.key, 0)
+        XCTAssertEqual(store.managedTitle(glyphs: .fallback), "✓1")
     }
 
     func testDisconnects() {
@@ -95,7 +118,7 @@ final class SessionStoreTests: XCTestCase {
         store.apply(.disconnected(.notRunning, retryIn: 1))
         store.apply(health: .notRunning)
         XCTAssertEqual(store.feed, .reconnecting("the daemon is restarting"))
-        XCTAssertEqual(store.sessions.map(\.windowID), [1, 2], "the menu does not blank during a restart")
+        XCTAssertEqual(store.sessions.compactMap { $0.runtime?.sessionID }, idsRuntime([1, 2]), "the menu does not blank during a restart")
 
         // The daemon comes back: the hold ends with the new snapshot.
         store.apply(.subscribed(SubscriptionAck()))
@@ -149,8 +172,8 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(AppDelegate.launchingNotice(""), "Launching…")
         XCTAssertEqual(AppDelegate.failureLine(title: "Could not launch work/API", message: "no such profile"),
                        "Could not launch work/API: no such profile")
-        XCTAssertEqual(AppDelegate.failureLine(title: "Could not launch", message: "Could not reach Kitty: gone"),
-                       "Could not reach Kitty: gone", "a message that already says it is not prefixed again")
+        XCTAssertEqual(AppDelegate.failureLine(title: "Could not launch", message: "Could not reach terminal: gone"),
+                       "Could not reach terminal: gone", "a message that already says it is not prefixed again")
         XCTAssertEqual(AppDelegate.failureLine(title: "Could not restart the daemon", message: ""), "Could not restart the daemon")
     }
 
@@ -232,142 +255,35 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertTrue(store.sessions.isEmpty)
     }
 
-    func testStaleWindowsHideUntilASnapshotDropsThem() {
-        let store = SessionStore()
-        store.apply(.frame(.snapshot(seq: 1, snapshot([1, 2]))))
-        store.markStale(socket: "", windowID: 2)
-        XCTAssertEqual(store.sessions.map(\.windowID), [1])
-        XCTAssertEqual(store.notice, "That session has closed.")
-
-        store.apply(.frame(.snapshot(seq: 2, snapshot([1, 2]))))
-        XCTAssertEqual(store.sessions.map(\.windowID), [1], "still hidden while the daemon lags")
-        XCTAssertEqual(store.notice, "That session has closed.", "a notice outlasts snapshots until it is seen")
-
-        store.apply(.frame(.snapshot(seq: 3, snapshot([1]))))
-        XCTAssertTrue(store.staleWindows.isEmpty)
-        store.apply(.frame(.snapshot(seq: 4, snapshot([1, 2]))))
-        XCTAssertEqual(store.sessions.map(\.windowID), [1, 2], "a reused window ID shows again")
-    }
-
-    private func sessions(_ pairs: [(String, Int)]) -> CompanionSnapshot {
-        var snapshot = snapshot([])
-        snapshot.sessions = pairs.map { socket, id in
-            var session = CompanionSession(windowID: id)
-            session.kittySocket = socket
-            return session
-        }
-        return snapshot
-    }
-
-    private func listed(_ store: SessionStore) -> [String] {
-        store.sessions.map { "\($0.kittySocket)#\($0.windowID)" }
-    }
-
-    func testStaleTargetIsScopedToKittySocket() {
-        let store = SessionStore()
-        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 7)]))
-        store.markStale(socket: "unix:/tmp/kitty-101", windowID: 7)
-        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#7"], "only the stale Kitty's window hides")
-
-        store.apply(snapshot: sessions([("unix:/tmp/kitty-202", 7)]))
-        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#7"], "the other Kitty's window 7 stays listed")
-        XCTAssertTrue(store.staleWindows.isEmpty, "dropping the stale pair clears its suppression")
-    }
-
-    func testReusedIDInOtherKittyRemainsVisible() {
-        let store = SessionStore()
-        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 3)]))
-        store.markStale(socket: "unix:/tmp/kitty-101", windowID: 7)
-        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#3"])
-
-        // Another Kitty reuses 7 while the daemon still lists the stale one.
-        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 7)]))
-        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#7"], "a reused ID in another Kitty shows")
-
-        store.apply(snapshot: sessions([("unix:/tmp/kitty-202", 7)]))
-        XCTAssertTrue(store.staleWindows.isEmpty)
-        store.apply(snapshot: sessions([("unix:/tmp/kitty-101", 7), ("unix:/tmp/kitty-202", 7)]))
-        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-101#7", "unix:/tmp/kitty-202#7"],
-                       "the stale Kitty's reappearing window 7 shows again")
-    }
-
-    func testEmptyRowSocketNamesTheSnapshotSocket() {
-        let store = SessionStore()
-        var snapshot = sessions([("", 4), ("unix:/tmp/kitty-202", 4)])
-        snapshot.kitty.socket = "unix:/tmp/kitty-101"
-        store.apply(snapshot: snapshot)
-        store.markStale(socket: "", windowID: 4)
-        XCTAssertEqual(listed(store), ["unix:/tmp/kitty-202#4"])
-        store.markStale(socket: "unix:/tmp/kitty-202", windowID: 4)
-        XCTAssertTrue(store.sessions.isEmpty)
-    }
-    private func mutedSnapshot(_ muted: Bool, socket: String = "unix:/tmp/kitty-101") -> CompanionSnapshot {
-        var snapshot = sessions([(socket, 7)])
-        snapshot.sessions[0].muted = muted
-        return snapshot
-    }
-
-    func testExpectedMuteShowsAtOnceAndYieldsToAnAgreeingSnapshot() {
-        var clock = Date(timeIntervalSince1970: 1_000)
-        let store = SessionStore(now: { clock })
-        store.apply(snapshot: mutedSnapshot(false))
-        store.expectMute(socket: "unix:/tmp/kitty-101", windowID: 7, muted: true)
-        XCTAssertEqual(store.sessions.map(\.muted), [true], "the click shows before the daemon publishes it")
-
-        clock += 1
-        store.apply(snapshot: mutedSnapshot(false))
-        XCTAssertEqual(store.sessions.map(\.muted), [true], "a snapshot taken before the toggle landed does not revert it")
-
-        store.apply(snapshot: mutedSnapshot(true))
-        XCTAssertTrue(store.expectedMutes.isEmpty, "an agreeing snapshot settles the expectation")
-        store.apply(snapshot: mutedSnapshot(false))
-        XCTAssertEqual(store.sessions.map(\.muted), [false], "once settled, snapshots are authoritative again")
-    }
-
-    func testExpectedMuteExpiresAndCanBeDropped() {
-        var clock = Date(timeIntervalSince1970: 1_000)
-        let store = SessionStore(now: { clock })
-        store.apply(snapshot: mutedSnapshot(false))
-        store.expectMute(socket: "unix:/tmp/kitty-101", windowID: 7, muted: true)
-        clock += SessionStore.expectedMuteHold + 1
-        XCTAssertEqual(store.sessions.map(\.muted), [false], "an unconfirmed expectation lapses")
-        store.apply(snapshot: mutedSnapshot(false))
-        XCTAssertTrue(store.expectedMutes.isEmpty)
-
-        store.expectMute(socket: "unix:/tmp/kitty-101", windowID: 7, muted: true)
-        store.dropExpectedMute(socket: "unix:/tmp/kitty-101", windowID: 7)
-        XCTAssertEqual(store.sessions.map(\.muted), [false], "a failed toggle withdraws it")
-    }
-
     func testExpectedMuteOfAnEmbeddedSessionIsKeyedByItsRuntimeSession() {
         var clock = Date(timeIntervalSince1970: 1_000)
         let store = SessionStore(now: { clock })
-        var snapshot = sessions([("unix:/tmp/kitty-101", 7)])
-        var tmux = CompanionSession(windowID: 0)
+        var snapshot = snapshot([])
+        var tmux = CompanionSession()
         tmux.runtime = CompanionRuntime(sessionID: "rs-1", backend: "tmux")
         snapshot.sessions.append(tmux)
         store.apply(snapshot: snapshot)
 
         store.expectMute(.embedded("rs-1"), muted: true)
-        XCTAssertEqual(store.sessions.map(\.muted), [false, true], "only the embedded session shows the mute")
+        XCTAssertEqual(store.sessions.map(\.muted), [true], "the session shows the expected mute")
         clock += 1
         store.apply(snapshot: snapshot)
-        XCTAssertEqual(store.sessions.map(\.muted), [false, true], "a stale snapshot does not undo it, so a banner's Mute sees it muted")
+        XCTAssertEqual(store.sessions.map(\.muted), [true], "a stale snapshot does not undo it, so a banner's Mute sees it muted")
 
-        snapshot.sessions[1].muted = true
+        snapshot.sessions[0].muted = true
         store.apply(snapshot: snapshot)
         XCTAssertTrue(store.expectedMutes.isEmpty, "an agreeing snapshot settles it")
 
         store.expectMute(.embedded("rs-1"), muted: false)
         store.dropExpectedMute(.embedded("rs-1"))
-        XCTAssertEqual(store.sessions.map(\.muted), [false, true], "a failed toggle withdraws it")
+        XCTAssertEqual(store.sessions.map(\.muted), [true], "a failed toggle withdraws it")
     }
 
     func testNotificationsSnoozedFollowsTheLiveSnapshot() {
         let clock = Date(timeIntervalSince1970: 1_000)
         let store = SessionStore(now: { clock })
         XCTAssertFalse(store.notificationsSnoozed)
-        var snapshot = sessions([])
+        var snapshot = snapshot([])
         snapshot.notification.snoozedUntil = 2_000
         store.apply(snapshot: snapshot)
         XCTAssertTrue(store.notificationsSnoozed)
@@ -381,12 +297,4 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertFalse(store.notificationsSnoozed)
     }
 
-    func testExpectedMuteIsScopedToKittySocket() {
-        let store = SessionStore()
-        var snapshot = sessions([("", 7), ("unix:/tmp/kitty-202", 7)])
-        snapshot.kitty.socket = "unix:/tmp/kitty-101"
-        store.apply(snapshot: snapshot)
-        store.expectMute(socket: "", windowID: 7, muted: true)
-        XCTAssertEqual(store.sessions.map(\.muted), [true, false], "only the row's own Kitty shows the mute")
-    }
 }

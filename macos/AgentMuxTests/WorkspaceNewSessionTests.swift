@@ -11,7 +11,7 @@ private final class NewSessionRunner: ASLWorkRunner {
 final class WorkspaceNewSessionTests: XCTestCase {
     private typealias F = WorkspaceFixture
     private func source() -> WorkspaceRow {
-        WorkspaceSidebar.row(F.tmux(1, project: "API", profile: "work"), snapshotSocket: "", now: Date(), glyphs: .fallback)
+        WorkspaceSidebar.row(F.tmux(1, project: "API", profile: "work"), now: Date(), glyphs: .fallback)
     }
     private func reply(_ data: String, status: Int32 = 0) -> ProcessRun {
         .finished(ProcessOutput(status: status, stdout: Data(data.utf8), stderr: Data()))
@@ -102,7 +102,7 @@ final class WorkspaceNewSessionTests: XCTestCase {
     func testCanLaunchAgainFromAProfileWithoutItsOwnProjectTemplate() {
         let runner = NewSessionRunner()
         let command = command { args in self.choices(args) }
-        let row = WorkspaceSidebar.row(F.tmux(1, project: "API", profile: "other", harness: "codex"), snapshotSocket: "", now: Date(), glyphs: .fallback)
+        let row = WorkspaceSidebar.row(F.tmux(1, project: "API", profile: "other", harness: "codex"), now: Date(), glyphs: .fallback)
         let model = WorkspaceNewSessionModel(source: row, command: { command }, runner: runner)
         model.load(); runner.release()
         XCTAssertTrue(model.canLaunch)

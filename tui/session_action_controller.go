@@ -72,10 +72,10 @@ func sessionActionEffects() sessionactions.Effects[Model] {
 func sessionActionRunners() map[commands.ID]sessionactions.Effect[Model] {
 	return map[commands.ID]sessionactions.Effect[Model]{
 		commands.FocusSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, commands.Focus(m.client, d.Target.TabID())
+			return m, commands.Focus(d.Target.TabID())
 		},
 		commands.PeekScrollback: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, commands.Peek(m.client, d.Target.WindowID())
+			return m, commands.Peek(d.Target.WindowID())
 		},
 		// The four lifecycle effects below write to the model before they return
 		// — a toast, and for close a recovery reservation — so each binds its
@@ -84,7 +84,7 @@ func sessionActionRunners() map[commands.ID]sessionactions.Effect[Model] {
 		// reservation made here could be dropped by the copy the update loop
 		// keeps.
 		commands.RestartSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			cmd := m.withActionFeedback(d, commands.Restart(m.client, d.Target.Session, m.cfg))
+			cmd := m.withActionFeedback(d, commands.Restart(d.Target.Session, m.cfg))
 			return m, cmd
 		},
 		commands.OverrideProfile: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
@@ -111,26 +111,26 @@ func sessionActionRunners() map[commands.ID]sessionactions.Effect[Model] {
 			if !ok {
 				return m, nil
 			}
-			return m, commands.OpenDirectory(m.client, m.cfg, cs)
+			return m, commands.OpenDirectory(m.cfg, cs)
 		},
 		commands.OpenEditorID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			cs, ok := commands.FindConfigSession(m.cfg, d.Target.Session.EffectiveProfile(), d.Target.Session.EffectiveProject())
 			if !ok {
 				return m, nil
 			}
-			return m, commands.OpenInEditor(m.client, m.cfg, cs)
+			return m, commands.OpenInEditor(m.cfg, cs)
 		},
 		commands.CopyTitleID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			return m, commands.CopyTitle(dashboard.SessionDisplayTitle(d.Target.Session))
 		},
 		commands.ToggleLockID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, commands.ToggleLock(m.client, d.Target.Session)
+			return m, commands.ToggleLock(d.Target.Session)
 		},
 		commands.ToggleMuteID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, commands.ToggleMute(m.client, d.Target.Session)
+			return m, commands.ToggleMute(d.Target.Session)
 		},
 		commands.TogglePinID: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
-			return m, commands.TogglePin(m.client, d.Target.Session)
+			return m, commands.TogglePin(d.Target.Session)
 		},
 		commands.SendToSession: func(m Model, d sessionactions.Dispatch) (Model, tea.Cmd) {
 			return m.openSendForm(d.Target.Session)

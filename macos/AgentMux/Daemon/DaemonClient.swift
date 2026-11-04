@@ -20,19 +20,6 @@ enum DaemonStatus: Equatable {
     }
 }
 
-/// What one focus_window request did.
-enum FocusOutcome: Equatable {
-    case focused(FocusWindowResult)
-    /// The window is gone; the menu was showing a session that has closed.
-    case staleTarget
-    /// The daemon does not know that Kitty socket, so it will not dial it.
-    case unknownSocket
-    /// The daemon predates focus_window.
-    case unsupported
-    case notRunning
-    case failed(String)
-}
-
 /// What one focus_session request did.
 enum FocusSessionOutcome: Equatable {
     /// The daemon asked something to show the session: this workspace, by a
@@ -111,39 +98,10 @@ struct DaemonClient {
             : .degraded(reason: response.degradedReason, build: response.build)
     }
 
-    /// The daemon's own deadline for focus_window is 3s; allow for the trip.
+    /// The daemon's focus deadline plus time for the round trip.
     static let focusTimeout: TimeInterval = 4
 
-    func focusWindow(socket: String, windowID: Int, timeout: TimeInterval = focusTimeout) -> FocusOutcome {
-        let reply: Data
-        do {
-            let request = try JSONEncoder().encode(DaemonRequest.focusing(socket: socket, windowID: windowID))
-            reply = try roundTrip(socketPath, request, timeout)
-        } catch let error as LineSocketError {
-            return error.meansNotRunning ? .notRunning : .failed(Self.phrase(error))
-        } catch {
-            return .failed(error.localizedDescription)
-        }
-        return Self.focusOutcome(fromReply: reply)
-    }
-
-    static func focusOutcome(fromReply reply: Data) -> FocusOutcome {
-        guard let response = decodeReply(DaemonResponse.self, from: reply, request: "focus_window") else {
-            return .failed(DaemonPhrase.unreadable)
-        }
-        if response.ok {
-            return .focused(response.focused ?? FocusWindowResult(windowID: 0))
-        }
-        switch response.error ?? "" {
-        case "stale_target": return .staleTarget
-        case "unknown_socket": return .unknownSocket
-        case "": return .failed("focus_window refused")
-        case let message where message.hasPrefix("unknown request type"): return .unsupported
-        case let message: return .failed(message)
-        }
-    }
-
-    /// Asks the daemon to show a runtime session that has no Kitty window.
+    /// Asks the daemon to show a runtime session.
     func focusSession(runtimeSessionID: String, timeout: TimeInterval = focusTimeout) -> FocusSessionOutcome {
         let reply: Data
         do {

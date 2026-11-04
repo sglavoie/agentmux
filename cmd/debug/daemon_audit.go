@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/cli"
-	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +42,7 @@ type auditReport struct {
 // AuditCommand returns the `audit` leaf so the daemon command family can
 // register it under `amx daemon`. It lives here rather than with the rest of
 // that family because it is a doctor surface wearing a daemon subcommand name:
-// it evaluates the same invariants, reuses the same daemon/Kitty seams, and
+// it evaluates the same invariants, reuses the daemon seam, and
 // prints findings with the same writer.
 func AuditCommand() *cobra.Command { return daemonAuditCmd }
 
@@ -106,11 +105,7 @@ func runDaemonAudit(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				record(newDoctorFinding(severityFailure, "daemon_export", 0, fmt.Sprintf("daemon export is unavailable: %s", err)))
 			} else {
-				var liveByID map[int]protocol.WindowLiveMetadata
-				if windows, kittyErr := newDoctorKitty().ListWindows(); kittyErr == nil {
-					liveByID = ExportLiveMetadata(windows, snapshot, 0, doctorGetenv("KITTY_LISTEN_ON"))
-				}
-				record(evaluateDaemonInvariants(snapshot, health, cliBuild, liveByID, now)...)
+				record(evaluateDaemonInvariants(snapshot, health, cliBuild, nil, now)...)
 			}
 		}
 		report.Samples++

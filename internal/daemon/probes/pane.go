@@ -12,14 +12,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
-// Pane evidence for backends other than Kitty. The Kitty snapshot cache in
-// snapshot.go is keyed by Kitty's window tree; a backend that reports flat
-// panes through backend.Discoverer publishes here instead, and gets the same
-// two guarantees: a probe-relevant change advances a pane's epoch, and churn
-// probes do not consume leaves it alone.
+// Pane evidence from backend discovery. A probe-relevant change advances a
+// pane's epoch; an unchanged discovery leaves it alone.
 
-// Metadata keys a pane's probe signature reads. They are the pane-metadata
-// spellings of the Kitty user vars the tab signature reads.
+// Metadata keys a pane's probe signature reads.
 const (
 	paneVarProfile = "amx_profile"
 	paneVarHarness = "amx_harness"

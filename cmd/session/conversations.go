@@ -13,20 +13,18 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/spf13/cobra"
 )
 
 // Dependency seams keep the filesystem-backed commands testable without a
-// real user config, Kitty instance, or daemon.
+// real user config or daemon.
 var (
 	sessionCommandsLoadConfig       = cli.LoadRunnableConfig
 	sessionCommandsLoadSessionIndex = transcript.LoadIndexAt
 	sessionCommandsSessionIndexPath = transcript.IndexPath
 	sessionCommandsSessionReaders   = cli.TranscriptReaders
-	sessionCommandsNewKitty         = func() kitty.KittyClient { return cli.NewKittyClient() }
 	sessionCommandsDaemon           = func(req protocol.Request) (protocol.Response, error) { return ipc.NewClient().Send(req) }
 	sessionCommandsNewHandoff       = func() handoff.Runner { return handoff.NewWorkflow() }
 	sessionCommandsNewWorktree      = func() worktree.Runner { return worktree.NewWorkflow() }
@@ -88,7 +86,7 @@ has_more, hidden_automated, sessions}.`,
 		views := sessionViews(metas)
 		// Asked even when piped, since piped rows carry a LIVE field too.
 		live, liveKnown := selection.liveConversations(true)
-		markLive(views, live, sessionCommandsCurrentWindow())
+		markLive(views, live)
 		if jsonOutput {
 			var liveSeeds []conversation.Identity
 			for _, meta := range allMetas {
@@ -306,8 +304,8 @@ type sessionView struct {
 	// Ending is the opening of the agent's final prose reply; see
 	// transcript.SessionMeta.Ending.
 	Ending string `json:"ending,omitempty"`
-	// Live is the Kitty tab or tmux session the conversation is open in, when the daemon and
-	// Kitty could both be asked and agreed on exactly one.
+	// Live is the tmux session the conversation is open in when the daemon
+	// reports exactly one owner.
 	Live *liveConversation `json:"live,omitempty"`
 }
 

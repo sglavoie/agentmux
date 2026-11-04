@@ -135,31 +135,30 @@ func TestAttachingATerminalClearsATmuxSessionsUnseenAttention(t *testing.T) {
 }
 
 // The observation only ever clears the bit, and only on a session with no
-// Kitty window: a Kitty session is seen through Kitty's focus, never through
+// terminal window: a tmux session is seen through its attached client, not through
 // this path.
-func TestViewerObservationLeavesKittySlotsAndSeenSessionsAlone(t *testing.T) {
+func TestViewerObservationLeavesOtherTmuxSessionsAlone(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	otherTmux, onTmux := newRuntimeID(t), newRuntimeID(t)
+	directory.put(otherTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxU, "tmux-u-1", "%7")
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
-	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
+	for _, runtime := range []runtimesession.ID{otherTmux, onTmux} {
 		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
 	}
-	kittySlot, tmuxSlot := slotOf(t, h, onKitty), slotOf(t, h, onTmux)
+	otherSlot, tmuxSlot := slotOf(t, h, otherTmux), slotOf(t, h, onTmux)
 	rested := time.Now()
-	restAt(t, h, kittySlot, rested)
+	restAt(t, h, otherSlot, rested)
 	restAt(t, h, tmuxSlot, rested)
 
 	// Older than the rest: nothing. An unknown session: nothing.
 	h.observeRuntimeViewers([]tmux.Viewed{
 		{ID: onTmux, At: rested.Add(-5 * time.Second)},
 		{ID: newRuntimeID(t), At: rested.Add(time.Minute)},
-		{ID: onKitty, At: rested.Add(time.Minute)},
 	}, rested.Add(time.Minute))
-	if !unseen(t, h, tmuxSlot) || !unseen(t, h, kittySlot) {
-		t.Fatalf("unseen after observations that prove nothing: tmux=%v kitty=%v; want both kept", unseen(t, h, tmuxSlot), unseen(t, h, kittySlot))
+	if !unseen(t, h, tmuxSlot) || !unseen(t, h, otherSlot) {
+		t.Fatalf("unseen after observations that prove nothing: tmux=%v other=%v; want both kept", unseen(t, h, tmuxSlot), unseen(t, h, otherSlot))
 	}
 
 	observedAt := rested.Add(2 * time.Minute)
@@ -185,30 +184,28 @@ func TestViewerObservationLeavesKittySlotsAndSeenSessionsAlone(t *testing.T) {
 
 // A tmux session's mute is what the reconciliation pass read from its pane:
 // it reaches notification suppression and the state query, survives the
-// session's own hooks (which carry no Kitty snapshot to read a mute from),
-// and never touches a Kitty slot, whose mute is Kitty's to report.
-func TestMuteObservationIsTheMuteOfASessionWithNoKittyWindow(t *testing.T) {
+// session's own hooks and is independent of an unrelated session.
+func TestMuteObservationFollowsTmuxPane(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	otherTmux, onTmux := newRuntimeID(t), newRuntimeID(t)
+	directory.put(otherTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxU, "tmux-u-1", "%7")
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
-	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
+	for _, runtime := range []runtimesession.ID{otherTmux, onTmux} {
 		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
 	}
-	kittySlot, tmuxSlot := slotOf(t, h, onKitty), slotOf(t, h, onTmux)
+	otherSlot, tmuxSlot := slotOf(t, h, otherTmux), slotOf(t, h, onTmux)
 
 	h.observeRuntimeMutes([]tmux.Muted{
 		{ID: onTmux, Muted: true},
-		{ID: onKitty, Muted: true},
 		{ID: newRuntimeID(t), Muted: true},
 	})
 	if !h.IsMuted(tmuxSlot) {
 		t.Fatal("the tmux session's mute was not recorded")
 	}
-	if h.IsMuted(kittySlot) {
-		t.Fatal("a Kitty slot took its mute from the tmux observation")
+	if h.IsMuted(otherSlot) {
+		t.Fatal("an unrelated tmux session took another pane's mute")
 	}
 	h.stateMu.Lock()
 	states, _ := h.copyStateLocked(time.Now().Unix())
@@ -217,8 +214,7 @@ func TestMuteObservationIsTheMuteOfASessionWithNoKittyWindow(t *testing.T) {
 		t.Fatal("the state query does not carry the mute the companion publishes")
 	}
 
-	// The session's next hook has no Kitty tab, so no snapshot mute: the
-	// observed one stands.
+	// The session's next hook keeps the observed mute.
 	requireAccepted(t, h.Handle(runtimeHook(t, onTmux, "Stop", hookevent.HookPayload{SessionID: "conv-" + string(onTmux)})))
 	if !h.IsMuted(tmuxSlot) {
 		t.Fatal("a hook from the muted session unmuted it")

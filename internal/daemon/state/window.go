@@ -70,7 +70,7 @@ type WindowState struct {
 	// every publish path runs — is what guarantees that: the probe supplies the
 	// kind, the stamp owns the clear.
 	//
-	// IT IS DELIBERATELY ABSENT FROM windowStateUserVar, and that asymmetry with
+	// IT IS DELIBERATELY ABSENT FROM windowStatePayload, and that asymmetry with
 	// Unseen just above is the point. Unseen is news that exists nowhere else —
 	// lose it on restart and the fact that a turn went unwatched is gone for
 	// good — so it is persisted. A prompt kind is not news: the prompt is still
@@ -95,7 +95,7 @@ type WindowState struct {
 	// window ID was reused) while git was running, and drop the answer instead
 	// of stamping it onto the wrong checkout.
 	//
-	// Like PromptKind they are DELIBERATELY ABSENT from windowStateUserVar. A
+	// Like PromptKind they are DELIBERATELY ABSENT from windowStatePayload. A
 	// branch is not news: the checkout is still on disk, so the next sweep
 	// re-reads it within one probe TTL, and a branch restored from before a
 	// daemon restart would be a confident claim about a directory nobody looked
@@ -184,7 +184,7 @@ type WindowState struct {
 // CurrentConversation derives this window's current parent conversation from
 // the reducer facts. It deliberately does not consult LastHarness or any
 // separately persisted identity: both are descriptive metadata and can outlive
-// a reused Kitty pane.
+// a reused pane.
 func (s WindowState) CurrentConversation(now int64) (conversation.Identity, bool) {
 	if s.Reducer == nil {
 		return conversation.Identity{}, false
@@ -207,9 +207,9 @@ func (s WindowState) CurrentInteractiveConversation(now int64) (conversation.Ide
 // origins and acknowledgement timestamps; v4 adds validated harness-process
 // ownership to eligible facts.
 const (
-	stateUserVarSchemaV2 = 2
-	stateUserVarSchemaV3 = 3
-	stateUserVarSchemaV4 = 4
+	statePayloadSchemaV2 = 2
+	statePayloadSchemaV3 = 3
+	statePayloadSchemaV4 = 4
 
 	// harnessProcessTokenVersionUTC distinguishes process fingerprints written
 	// after both ps producers began pinning TZ=UTC. Early schema-v4 payloads
@@ -222,7 +222,7 @@ const (
 // from a schema-v1 payload, whose scalar action carries no source identity.
 const legacyV1MigrationKey = "v1"
 
-type windowStateUserVar struct {
+type windowStatePayload struct {
 	Schema                     int                        `json:"v,omitempty"`
 	Action                     string                     `json:"a,omitempty"`
 	GuardAction                string                     `json:"g,omitempty"`
@@ -267,11 +267,11 @@ type windowStateUserVar struct {
 	// Conversation is a redundant, reader-friendly projection of Facts. It is
 	// written for durable diagnostics but never trusted on restore; Facts remain
 	// the authoritative source and prevent a stale projection from claiming a
-	// reused Kitty window.
+	// reused pane.
 	Conversation *conversation.Identity `json:"c,omitempty"`
 }
 
-// MarshalUserVar returns compact JSON for Kitty's amx_state user var. The
+// MarshalStatePayload returns compact JSON for the runtime checkpoint. The
 // event ring buffer is intentionally not persisted. It always writes schema
 // v4: the reducer's facts and effective generation are the authoritative record
 // of the visible icon and looping, and the legacy scalar fields ride alongside
@@ -279,9 +279,9 @@ type windowStateUserVar struct {
 // restore still parse them; they no longer write the visible state). The facts
 // were already bounded by Compact on the shadow path, so only live/recent facts
 // reach the payload.
-func (s WindowState) MarshalUserVar() (string, error) {
-	uv := windowStateUserVar{
-		Schema:                     stateUserVarSchemaV4,
+func (s WindowState) MarshalStatePayload() (string, error) {
+	uv := windowStatePayload{
+		Schema:                     statePayloadSchemaV4,
 		Action:                     s.LastAction,
 		GuardAction:                s.GuardAction,
 		CopilotToolPermissionState: s.CopilotToolPermissionState,
@@ -335,24 +335,24 @@ func (s WindowState) MarshalUserVar() (string, error) {
 	return string(data), nil
 }
 
-// UnmarshalUserVar restores WindowState from Kitty's amx_state user var.
+// UnmarshalStatePayload restores WindowState from a runtime checkpoint payload.
 // The event ring buffer is intentionally left empty. All wire schemas are
 // readable: v2/v3/v4 payloads restore the reducer's source facts (including
 // acknowledgement cutoffs and ASL leases) and the effective generation, while
 // a v1 payload — which predates the schema discriminator — migrates its
 // scalar action and loop marker into synthetic legacy-source facts. The v2+
 // conversation projection is intentionally re-derived from Facts rather than
-// trusted directly. Writing always produces v4 (see MarshalUserVar), so v1-v3
+// trusted directly. Writing always produces v4 (see MarshalStatePayload), so v1-v3
 // exist only on the read side. Process ownership is admitted only from v4
 // payloads whose token-version marker proves their ps lstart values were
 // rendered under UTC. Older schemas and pre-marker v4 payloads keep their
 // watchdog-only fallback even if process fields are present.
-func (s *WindowState) UnmarshalUserVar(value string) error {
+func (s *WindowState) UnmarshalStatePayload(value string) error {
 	if strings.TrimSpace(value) == "" {
 		*s = WindowState{}
 		return nil
 	}
-	var uv windowStateUserVar
+	var uv windowStatePayload
 	if err := json.Unmarshal([]byte(value), &uv); err != nil {
 		return err
 	}
@@ -376,13 +376,13 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 	if uv.LastEventAt != 0 {
 		s.Activity = time.Unix(uv.LastEventAt, 0)
 	}
-	if uv.Schema >= stateUserVarSchemaV4 && uv.PresentationChangedAt != 0 {
+	if uv.Schema >= statePayloadSchemaV4 && uv.PresentationChangedAt != 0 {
 		s.PresentationChangedAt = time.UnixMilli(uv.PresentationChangedAt)
 	}
 	s.LoopingSet = true
 	s.StateSet = true
 	s.DesiredIcon = protocol.IconState(s.LastAction)
-	if uv.Schema >= stateUserVarSchemaV2 {
+	if uv.Schema >= statePayloadSchemaV2 {
 		s.restoreReducerV2(uv)
 		// The reducer is authoritative for visible state, so a v2/v3/v4 restore with
 		// facts resumes from the persisted effective state rather than the
@@ -400,7 +400,7 @@ func (s *WindowState) UnmarshalUserVar(value string) error {
 
 // restoreReducerV2 rebuilds the shadow reducer from a schema-v2/v3/v4 payload. The
 // reducer is created with zero thresholds; the restore path re-binds the
-// daemon's configured ReducerConfig afterward (restoreFromUserVars), since a
+// daemon's configured ReducerConfig afterward (restoreWindowPayloadLocked), since a
 // deserializer has no access to the owning Handler.
 // RekeyMigratedFacts moves the window's v1-migrated facts onto its live
 // per-window key, including the effective state's own source when that is what
@@ -416,10 +416,10 @@ func (s *WindowState) RekeyMigratedFacts(windowID int) bool {
 	return true
 }
 
-func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
+func (s *WindowState) restoreReducerV2(uv windowStatePayload) {
 	if len(uv.Facts) > 0 {
 		facts := uv.Facts
-		if uv.Schema < stateUserVarSchemaV4 || uv.ProcessTokenVersion != harnessProcessTokenVersionUTC {
+		if uv.Schema < statePayloadSchemaV4 || uv.ProcessTokenVersion != harnessProcessTokenVersionUTC {
 			facts = append([]protocol.SourceFactSnapshot(nil), facts...)
 			for i := range facts {
 				facts[i].ClearHarnessProcessIdentity()
@@ -467,7 +467,7 @@ func (s *WindowState) restoreReducerV2(uv windowStateUserVar) {
 // The scalar action carries no source identity, so it becomes a legacy-kind
 // fact (guard-grace terminal suppression); a persisted loop marker becomes a
 // between-turns ASL lease so the shadow loop marker survives the migration.
-func (s *WindowState) migrateReducerV1(uv windowStateUserVar) {
+func (s *WindowState) migrateReducerV1(uv windowStatePayload) {
 	var facts []protocol.SourceFactSnapshot
 	if uv.Action != "" {
 		fact := protocol.SourceFactSnapshot{

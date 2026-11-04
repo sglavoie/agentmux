@@ -21,17 +21,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hooks"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 func resetDoctorTestState(t *testing.T) {
 	t.Helper()
 	oldClient := newDoctorDaemonClient
-	oldKitty := newDoctorKitty
-	oldKittyAt := newDoctorKittyAt
-	// The daemon's Kitty is whatever fixture the test installs as its own.
-	newDoctorKittyAt = func(string) cli.KittyWindowLister { return newDoctorKitty() }
 	oldConfig := doctorLoadConfig
 	oldExecutable := doctorExecutable
 	oldDoctorLookPath := doctorLookPath
@@ -54,8 +48,6 @@ func resetDoctorTestState(t *testing.T) {
 		aslDoctorStat = oldASLStat
 		doctorLastASLBridgeFailure = oldBridgeFailure
 		newDoctorDaemonClient = oldClient
-		newDoctorKitty = oldKitty
-		newDoctorKittyAt = oldKittyAt
 		doctorLoadConfig = oldConfig
 		doctorExecutable = oldExecutable
 		doctorLookPath = oldDoctorLookPath
@@ -132,22 +124,11 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 						At: now.Unix(), Suppressed: true, SuppressionReason: "guard_blocked",
 					}}},
 					WindowMetadata: map[int]protocol.WindowDebugMetadata{42: {
-						Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, KittyListenOn: "unix:/tmp/kitty-42"},
+						Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true},
 					}},
 				}, nil
 			},
 		}
-	}
-	newDoctorKitty = func() cli.KittyWindowLister {
-		return fakeKittyWindowLister{windows: []kitty.OSWindow{{
-			Tabs: []kitty.Tab{{
-				Title: "⚡api",
-				Windows: []kitty.Window{{
-					ID:       42,
-					UserVars: kitty.UserVars{Profile: "work", Harness: "codex"},
-				}},
-			}},
-		}}}
 	}
 	doctorLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
 	doctorExecutable = func() (string, error) { return binary, nil }
@@ -163,12 +144,9 @@ func TestDoctorReportsDaemonRendererHookAndSuppressionHealth(t *testing.T) {
 	for _, want := range []string{
 		"daemon: running (pid 4242, uptime 2m0s)",
 		"socket: " + socket + " (current)",
-		"kitty: ok (1 OS window)",
-		"kitty sockets: unix:/tmp/kitty-42",
 		"hooks: no configured profiles",
-		"renderer drift: none",
 		"recent suppressions (last 15m0s): 1, all guard_blocked",
-		"overall: ok (1 warning)",
+		"overall: clean",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)
@@ -207,57 +185,6 @@ func TestSuppressionSummaryNamesAMajorityReasonAndPointsAtVerbose(t *testing.T) 
 		if got := suppressionSummary(reasons, tc.counts, total); got != tc.want {
 			t.Errorf("suppressionSummary(%v) = %q, want %q", tc.counts, got, tc.want)
 		}
-	}
-}
-
-func TestDoctorRendererTreatsSharedTabAsConvergedWhenAnyPaneMatches(t *testing.T) {
-	snapshot := protocol.EventsExport{WindowMetadata: map[int]protocol.WindowDebugMetadata{
-		42: {Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: false, LoopingSet: true}},
-		43: {Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true, Looping: true, LoopingSet: true}},
-	}}
-	liveByID := map[int]protocol.WindowLiveMetadata{
-		42: {Found: true, OSWindowID: 1, TabID: 7, IconState: "bolt", Looping: false},
-		43: {Found: true, OSWindowID: 1, TabID: 7, IconState: "bolt", Looping: false},
-	}
-
-	var out bytes.Buffer
-	var failures []string
-	if err := writeDoctorRenderer(&out, snapshot, liveByID, true, true, func(format string, args ...any) {
-		failures = append(failures, fmt.Sprintf(format, args...))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "renderer drift: none") {
-		t.Fatalf("shared-tab renderer output = %q, want no drift", out.String())
-	}
-	if len(failures) != 0 {
-		t.Fatalf("shared-tab renderer failures = %v, want none", failures)
-	}
-}
-
-// A tmux session's slot is in no Kitty tree. With a Kitty answering, its state
-// must not read as a window that closed under the renderer.
-func TestDoctorRendererIgnoresSessionsOnOtherBackends(t *testing.T) {
-	const tmuxSlot, kittySlot, closedWindow = 1 << 40, 42, 43
-	working := protocol.WindowDebugMetadata{Renderer: protocol.WindowDebugRenderer{DesiredIcon: "bolt", StateSet: true}}
-	snapshot := protocol.EventsExport{
-		WindowMetadata: map[int]protocol.WindowDebugMetadata{tmuxSlot: working, kittySlot: working, closedWindow: working},
-		RuntimeSlots: map[int]protocol.RuntimeSlot{
-			tmuxSlot:  {RuntimeSessionID: "rs-tmux", Backend: string(runtimesession.BackendTmux)},
-			kittySlot: {RuntimeSessionID: "rs-kitty", Backend: string(runtimesession.BackendKitty)},
-		},
-	}
-
-	var out bytes.Buffer
-	var failures []string
-	if err := writeDoctorRenderer(&out, snapshot, map[int]protocol.WindowLiveMetadata{}, true, true, func(format string, args ...any) {
-		failures = append(failures, fmt.Sprintf(format, args...))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"renderer drift: window 42 is no longer live", "renderer drift: window 43 is no longer live"}
-	if strings.Join(failures, "\n") != strings.Join(want, "\n") {
-		t.Fatalf("renderer failures = %q; want %q", failures, want)
 	}
 }
 
@@ -374,59 +301,6 @@ func TestDoctorHooksSummarizesDroppedDeliveries(t *testing.T) {
 	}
 }
 
-func TestDoctorReportsNativeCoverageAndDefersActivePruning(t *testing.T) {
-	resetDoctorTestState(t)
-	enabled := true
-	cfg := &config.Config{Defaults: config.Defaults{Diagnostics: config.DiagnosticsConfig{
-		NativeLogging: &enabled, NativeKeepDays: 14, NativeMaxMiB: 1, NativeSessionMaxMiB: 1,
-	}}}
-	doctorLoadConfig = func() (*config.Config, error) { return cfg, nil }
-	paths, err := doctorDiagnosticPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	launchID := "88888888-8888-4888-8888-888888888888"
-	dir, err := diagnostics.EnsureNativeLaunch(paths, launchID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	activeLog := filepath.Join(dir, "debug.log")
-	if err := os.WriteFile(activeLog, make([]byte, 2<<20), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
-		{Windows: []kitty.Window{{UserVars: kitty.UserVars{Profile: "managed", LaunchID: launchID, NativeCoverage: "managed"}}}},
-		{Windows: []kitty.Window{{UserVars: kitty.UserVars{Profile: "external", LaunchID: "99999999-9999-4999-8999-999999999999", NativeCoverage: "external"}}}},
-		{Windows: []kitty.Window{{UserVars: kitty.UserVars{Profile: "degraded", LaunchID: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", NativeCoverage: "degraded"}}}},
-		{Windows: []kitty.Window{{ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"/usr/local/bin/codex"}}}}}},
-	}}}
-	var out bytes.Buffer
-	var warnings []string
-	if err := writeDoctorNativeLogs(&out, windows, true, func(format string, args ...any) {
-		warnings = append(warnings, fmt.Sprintf(format, args...))
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		"native privacy: raw local logs",
-		"native coverage: managed=1 external=1 degraded=1 disabled=0 unmanaged=1",
-	} {
-		if !strings.Contains(out.String(), want) {
-			t.Fatalf("native doctor output missing %q:\n%s", want, out.String())
-		}
-	}
-	if !slices.ContainsFunc(warnings, func(value string) bool { return strings.Contains(value, "pruning is deferred until exit") }) ||
-		!slices.ContainsFunc(warnings, func(value string) bool { return strings.Contains(value, "coverage cannot be guaranteed") }) {
-		t.Fatalf("warnings = %v", warnings)
-	}
-	if info, err := os.Stat(activeLog); err != nil || info.Size() != 2<<20 {
-		t.Fatalf("active log was mutated: info=%v err=%v", info, err)
-	}
-}
-
-// A doctor run from a binary other than the amx on PATH says so, since its
-// socket and hook checks are judged against itself; the installed binary,
-// reached through a symlink or not, and a PATH without amx say nothing.
 func TestDoctorNotesABinaryOtherThanTheInstalledOne(t *testing.T) {
 	resetDoctorTestState(t)
 	dir := t.TempDir()

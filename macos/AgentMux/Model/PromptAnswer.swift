@@ -304,7 +304,7 @@ struct PromptAnswerState: Equatable {
         case "asl_question_open":
             return "This session has an agent-session-loop question open. Answer it from the run's own Answer…."
         case "unsupported_backend":
-            return "Only a session in the workspace can be answered here; this one is a Kitty tab."
+            return "This session cannot be answered from the workspace."
         case "not_found", "runtime_session_exited", "runtime_session_lost", "runtime_session_ended":
             return "This session's agent is no longer running."
         default:

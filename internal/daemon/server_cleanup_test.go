@@ -101,7 +101,6 @@ var daemonOwnedGoroutines = []string{
 	"daemon.(*Handler).runMaintenance",
 	"daemon.(*Handler).runWatchdog",
 	"daemon.(*Handler).runHarnessProcessLifecycle",
-	"daemon.(*Handler).runRenderWorker",
 	"daemon.(*Handler).runScreenProbes",
 	"daemon.(*Server).Serve",
 	"daemon.(*Server).handleConn",

@@ -134,7 +134,7 @@ func (m Model) runPlanRunCmd(seq int, plan plans.PlanMeta, parameters map[string
 	if m.planRunCommand != nil {
 		return m.planRunCommand(seq, plan, parameters)
 	}
-	deps := commands.TerminalDependencies(m.client, m.cfg)
+	deps := commands.TerminalDependencies(m.cfg)
 	return func() tea.Msg {
 		result, err := commands.Registry.Execute(context.Background(), deps, actions.PlanRun, actions.Request{Plan: &plan, Parameters: parameters})
 		return planRunDoneMsg{seq: seq, result: result, err: err}

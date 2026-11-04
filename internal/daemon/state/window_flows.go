@@ -1,7 +1,7 @@
 package state
 
 // This file holds the small per-window flow enums carried by WindowState and
-// persisted inside the amx_state user var. Their transition rules stay with the
+// persisted inside the runtime checkpoint. Their transition rules stay with the
 // handlers that own them (Copilot permission handling, the reset flow); only the
 // durable vocabulary lives here, because the persisted payload is this package's
 // contract.

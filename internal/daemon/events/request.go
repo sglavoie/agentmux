@@ -1,8 +1,6 @@
 package events
 
 import (
-	"strings"
-
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
@@ -27,7 +25,6 @@ func BuildHookStateUpdateRequest(
 	preservesIcon bool,
 	contextLimitDetected bool,
 	resetFlowDetected bool,
-	kittyListenOn string,
 ) protocol.Request {
 	return protocol.Request{
 		Type:             protocol.TypeStateUpdate,
@@ -39,7 +36,6 @@ func BuildHookStateUpdateRequest(
 		IsPrompt:         hookevent.IsPromptEvent(eventOrAction),
 		PreservesIcon:    preservesIcon,
 		PipeMode:         pipeMode,
-		KittyListenOn:    strings.TrimSpace(kittyListenOn),
 		SessionTitle:     sessionTitle,
 		Account:          profile,
 		Harness:          harness.NormalizeKnown(producerHarness),

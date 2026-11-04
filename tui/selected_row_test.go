@@ -11,7 +11,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/launch"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -53,8 +52,7 @@ func TestConfigPickerCursorMoveRestoresNormalRow(t *testing.T) {
 			{Name: "codex-sandbox", Harness: "codex", HomeDir: "/profiles/codex", Color: "green"},
 		},
 	}
-	client := kitty.NewClientWithSocket(kitty.NewMockRunner(nil), "")
-	m := NewModel(cfg, client)
+	m := NewModel(cfg, nil)
 	m.mode = ModeConfigPicker
 	m.targetSession = session.RunningSession{Base: "agentmux", Project: "agentmux", Harness: "claude"}
 	m.configPickerAccounts = cfg.Accounts

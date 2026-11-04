@@ -176,12 +176,6 @@ final class AppPartsTests: XCTestCase {
         XCTAssertEqual(AppDelegate.operatorEventFailedTitle("user_active", name: ""), "The session could not be marked active")
     }
 
-    func testKittyIsInUseOnlyWhenTheDaemonOrASessionSaysSo() {
-        XCTAssertFalse(AppDelegate.kittyInUse(snapshotSocket: "", sessions: [WorkspaceFixture.tmux(1, project: "api")]))
-        XCTAssertTrue(AppDelegate.kittyInUse(snapshotSocket: "unix:/tmp/kitty-1", sessions: []))
-        XCTAssertTrue(AppDelegate.kittyInUse(snapshotSocket: "", sessions: [WorkspaceFixture.kitty(4, project: "web")]))
-    }
-
     // MARK: Config path and watcher
 
     func testTheConfigPathIsExpandedForWatching() {

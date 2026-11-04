@@ -8,26 +8,20 @@ import Foundation
 /// long a session has waited moves nothing. Each press moves past the session
 /// the previous press focused and wraps after the last one.
 ///
-/// A window ID names a window only inside the Kitty instance that issued it,
-/// so a Kitty session is identified by its socket and window together and the
-/// cycle spans every Kitty instance the snapshot lists. A session on another
-/// backend has no window; its runtime session ID alone identifies it.
+/// A runtime session ID identifies each row across snapshots.
 struct AttentionCycler {
     /// What the command that runs the cycle is called everywhere it is
     /// offered: the status menu, the workspace's Session menu and F4, the
     /// command palette, and the global shortcut in Settings.
     static let commandTitle = "Next Waiting Session"
 
-    /// One session across Kitty instances and backends.
+    /// One runtime session.
     struct Key: Hashable {
-        let socket: String
-        let windowID: Int
-        /// Set, with no socket or window, for a session the workspace embeds.
-        var runtimeSessionID = ""
+        let runtimeSessionID: String
 
         /// The key of the embedded session `runtimeSessionID` names.
         static func embedded(_ runtimeSessionID: String) -> Key {
-            Key(socket: "", windowID: 0, runtimeSessionID: runtimeSessionID)
+            Key(runtimeSessionID: runtimeSessionID)
         }
     }
 
@@ -37,20 +31,17 @@ struct AttentionCycler {
 
     init() {}
 
-    /// The session a row is, naming the snapshot's socket when the row has
-    /// none of its own.
-    static func key(_ session: CompanionSession, snapshotSocket: String) -> Key {
-        if let embedded = session.embeddedRuntimeSessionID { return .embedded(embedded) }
-        return Key(socket: session.kittySocket.isEmpty ? snapshotSocket : session.kittySocket, windowID: session.windowID)
+    /// The session a row names.
+    static func key(_ session: CompanionSession) -> Key {
+        .embedded(session.embeddedRuntimeSessionID ?? "")
     }
 
     /// The attention rows in cycle order.
     static func ordered(
         _ sessions: [CompanionSession],
-        snapshotSocket: String = "",
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [CompanionSession] {
-        WorkspaceSidebar.ordered(sessions, snapshotSocket: snapshotSocket, order: order).filter(\.attention)
+        WorkspaceSidebar.ordered(sessions, order: order).filter(\.attention)
     }
 
     /// The first waiting session listed after the one the last press focused,
@@ -65,16 +56,15 @@ struct AttentionCycler {
     /// listed only since come after those, in the order listed now.
     func next(
         in sessions: [CompanionSession],
-        snapshotSocket: String = "",
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> CompanionSession? {
-        let listed = WorkspaceSidebar.ordered(sessions, snapshotSocket: snapshotSocket, order: order)
+        let listed = WorkspaceSidebar.ordered(sessions, order: order)
         let waiting = listed.filter(\.attention)
         guard let last, !waiting.isEmpty else { return waiting.first }
         let known = Set(last.following + [last.key])
-        let added = listed.map { Self.key($0, snapshotSocket: snapshotSocket) }.filter { !known.contains($0) }
+        let added = listed.map { Self.key($0) }.filter { !known.contains($0) }
         for key in last.following + added + [last.key] {
-            if let session = waiting.first(where: { Self.key($0, snapshotSocket: snapshotSocket) == key }) { return session }
+            if let session = waiting.first(where: { Self.key($0) == key }) { return session }
         }
         return waiting[0]
     }
@@ -83,22 +73,20 @@ struct AttentionCycler {
     mutating func focused(
         _ session: CompanionSession,
         in sessions: [CompanionSession],
-        snapshotSocket: String = "",
         order: WorkspaceOrder = WorkspaceOrder()
     ) {
-        let key = Self.key(session, snapshotSocket: snapshotSocket)
-        let listed = WorkspaceSidebar.ordered(sessions, snapshotSocket: snapshotSocket, order: order)
-        last = (key, Self.following(key, in: listed.map { Self.key($0, snapshotSocket: snapshotSocket) }) ?? [])
+        let key = Self.key(session)
+        let listed = WorkspaceSidebar.ordered(sessions, order: order)
+        last = (key, Self.following(key, in: listed.map { Self.key($0) }) ?? [])
     }
 
     /// Picks the next session and records it, in one step.
     mutating func advance(
         in sessions: [CompanionSession],
-        snapshotSocket: String = "",
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> CompanionSession? {
-        guard let session = next(in: sessions, snapshotSocket: snapshotSocket, order: order) else { return nil }
-        focused(session, in: sessions, snapshotSocket: snapshotSocket, order: order)
+        guard let session = next(in: sessions, order: order) else { return nil }
+        focused(session, in: sessions, order: order)
         return session
     }
 

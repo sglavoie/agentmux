@@ -8,7 +8,7 @@ import (
 
 // CursorIdentity is everything the dashboard remembers about the item under the
 // cursor so it can find that item again after the list is rebuilt. The fields
-// are ordered by how exactly they identify a live instance: the Kitty tab and
+// are ordered by how exactly they identify a live instance: the session tab and
 // window IDs are exact, the session key is exact for a keyed session, and the
 // base name is a last resort that is disambiguated by the launch identity
 // fields below it.

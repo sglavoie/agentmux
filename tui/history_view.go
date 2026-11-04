@@ -46,7 +46,7 @@ func historyDetailInput(m Model) history.DetailInput {
 	}
 }
 
-// detailLocation names the session the detail overlay is open on: its Kitty
+// detailLocation names the session the detail overlay is open on: its terminal
 // window, or its backend and runtime session. A portable ID whose session is
 // no longer listed names nothing, since the number is this process's own.
 func detailLocation(m Model) string {

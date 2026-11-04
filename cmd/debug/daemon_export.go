@@ -5,8 +5,6 @@ import (
 	"sort"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -36,71 +34,8 @@ func ExportWindowIDs(snapshot protocol.EventsExport, requestedWindowID int) []in
 	return ids
 }
 
-func ExportLiveMetadata(osWindows []kitty.OSWindow, snapshot protocol.EventsExport, requestedWindowID int, listedSocket ...string) map[int]protocol.WindowLiveMetadata {
-	ids := ExportWindowIDs(snapshot, requestedWindowID)
-	if len(ids) == 0 {
-		return map[int]protocol.WindowLiveMetadata{}
-	}
-
-	sessions := session.ListFromOSWindows(osWindows)
-	out := make(map[int]protocol.WindowLiveMetadata, len(ids))
-	socket := ""
-	if len(listedSocket) > 0 {
-		socket = listedSocket[0]
-	}
-	for _, id := range ids {
-		live := protocol.WindowLiveMetadata{}
-		remoteID := id
-		if key, mapped := snapshot.KittySlots[id]; mapped {
-			if (socket != "" && key.Socket != socket) || (socket == "" && key.WindowID != id) {
-				out[id] = live
-				continue
-			}
-			remoteID = key.WindowID
-		}
-		osw, tab, win, ok := kitty.FindWindowLocationByID(osWindows, remoteID)
-		if !ok {
-			out[id] = live
-			continue
-		}
-
-		live.Found = true
-		live.TabID = tab.ID
-		live.OSWindowID = osw.ID
-		live.TabTitle = tab.Title
-		live.WindowTitle = win.Title
-		if rs, ok := session.FindByWindowID(sessions, remoteID); ok {
-			live.BaseTitle = rs.Base
-			live.IconState = rs.State
-			live.Looping = rs.Looping
-			live.Starred = rs.Starred
-			live.Project = rs.Project
-			live.Profile = rs.Profile
-			live.Harness = rs.Harness
-			live.Directory = rs.Directory
-		} else {
-			parts := palette.ParseTitleParts(tab.Title)
-			live.BaseTitle = parts.Base
-			live.IconState = parts.State
-			live.Looping = parts.Looping
-			live.Starred = parts.Starred
-			live.Profile = win.UserVars.EffectiveProfile()
-			live.Harness = win.UserVars.EffectiveHarness()
-			live.Directory = win.UserVars.EffectiveDirectory()
-			if live.Directory == "" {
-				live.Directory = win.CWD
-			}
-		}
-		out[id] = live
-	}
-	return out
-}
-
-// ExportRuntimeLiveMetadata fills the live half of every exported slot a
-// runtime session on a backend other than Kitty holds, from what that
-// backend's panes say now. Such a slot is a number only the daemon names, so
-// it is joined by its runtime session and never looked up as a Kitty window;
-// it has no tab and no OS window, and its icon is the daemon's, not a title's.
+// ExportRuntimeLiveMetadata fills the live half of each exported tmux slot
+// from its current pane. The daemon slot joins to a runtime session ID.
 // A session whose pane is gone, or whose backend was not read, stays
 // not-found.
 func ExportRuntimeLiveMetadata(into map[int]protocol.WindowLiveMetadata, running []session.RunningSession, snapshot protocol.EventsExport) {
@@ -111,7 +46,7 @@ func ExportRuntimeLiveMetadata(into map[int]protocol.WindowLiveMetadata, running
 		}
 	}
 	for id, slot := range snapshot.RuntimeSlots {
-		if _, exported := into[id]; !exported || !RuntimeSlotOffKitty(slot) {
+		if _, exported := into[id]; !exported || !RuntimeSlotOnTmux(slot) {
 			continue
 		}
 		rs, ok := byRuntime[slot.RuntimeSessionID]
@@ -126,8 +61,7 @@ func ExportRuntimeLiveMetadata(into map[int]protocol.WindowLiveMetadata, running
 	}
 }
 
-// RuntimeSlotOffKitty reports whether a slot's session runs on a backend
-// other than Kitty, where the slot is not a window ID.
-func RuntimeSlotOffKitty(slot protocol.RuntimeSlot) bool {
-	return slot.Backend != "" && slot.Backend != string(runtimesession.BackendKitty)
+// RuntimeSlotOnTmux reports whether the daemon slot belongs to a tmux session.
+func RuntimeSlotOnTmux(slot protocol.RuntimeSlot) bool {
+	return slot.Backend == string(runtimesession.BackendTmux)
 }

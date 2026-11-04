@@ -54,7 +54,6 @@ func setUpDoctorFixture(t *testing.T, health ipc.Health, snapshot protocol.Event
 			export: func(int) (protocol.EventsExport, error) { return snapshot, nil },
 		}
 	}
-	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	doctorLoadConfig = func() (*config.Config, error) { return &config.Config{}, nil }
 	doctorExecutable = func() (string, error) { return binary, nil }
 	doctorSocketPath = func() string { return socket }
@@ -276,9 +275,8 @@ func TestDoctorJSONEmitsStructuredReport(t *testing.T) {
 	// Pinned to a literal, not the constant: the wire version is a consumer
 	// contract, so a bump has to be a deliberate edit here. v5 arrived with the
 	// companion_app and companion_build_mismatch identifiers and the
-	// daemon.companion block; v4 with the kitty_snapshot_stale warning
-	// identifier and the daemon.kitty_snapshot block; v3 with the
-	// screenstate_persistent_decline failure identifier.
+	// daemon.companion block; v3 with the screenstate_persistent_decline
+	// failure identifier.
 	// v7 adds the backend and runtime identifiers with the backend, versions,
 	// and daemon.runtime blocks.
 	if report.SchemaVersion != 7 || report.Healthy {

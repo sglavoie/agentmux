@@ -2,8 +2,8 @@
 
 Manage Claude Code, GitHub Copilot CLI, and OpenAI Codex sessions from one
 terminal dashboard or the macOS workspace. Agents run on a private tmux
-server and keep running when you close the terminal or app. Kitty is an
-optional backend.
+server and keep running when you close the terminal or app. The macOS app
+embeds Ghostty for its terminal views.
 
 Agent Mux groups sessions by project and profile, shows which agents need you,
 searches past conversations and plans, and supports resume, fork, handoff,
@@ -70,8 +70,8 @@ CLI. On macOS, native notifications additionally need
    profile home, an existing project directory, and a default backend, adds
    the first project without touching other settings, and offers to sync the
    profile's hooks (answer explicitly; **no** prints the command to finish
-   later). Choose **Keep** to use the tmux default, **tmux** to pin it explicitly,
-   or **kitty** to launch in Kitty tabs. Authentication is not checked. To write
+   later). Choose **Keep** to use the tmux default or **tmux** to pin it explicitly.
+   Authentication is not checked. To write
    the configuration by hand, see [Manual configuration](#manual-configuration).
 3. **Check.**
 
@@ -82,20 +82,17 @@ CLI. On macOS, native notifications additionally need
    ```
 
    `amx backend status --check` exits 1 when launching on tmux would not work:
-   no usable tmux or a configuration that does not load, whatever
-   `launch_backend` says, and a private server that does not answer when
-   launches go to tmux. The report names each problem and its fix.
+   no usable tmux or a configuration that does not load, and a private server
+   that does not answer. The report names each problem and its fix.
    `amx doctor --strict` checks the whole installation.
 4. **Launch.** Run `amx`, press `l`, highlight your project, and press
    `Enter`. The launcher shows the destination and effective profile. `Enter`
    on the live session attaches and `F12` detaches back to the dashboard;
    attached, `F1` shows the shortcuts and `F2` opens the live overview.
 
-CLI launches and terminal dashboards use `--backend`, then
-`[defaults] launch_backend`, then tmux. The app defaults to Workspace (tmux)
-and also offers Kitty or Follow CLI configuration. Existing sessions stay on
-their recorded backend. See [launch destinations](docs/usage.md#launch-destinations)
-for precedence and explicit Kitty launches.
+CLI launches and terminal dashboards use tmux. The macOS app shows those
+sessions in embedded Ghostty terminals. See
+[launch destinations](docs/usage.md#launch-destinations).
 
 ### Manual configuration
 
@@ -161,12 +158,6 @@ Agent Mux.app shows sessions in a native workspace with embedded terminals,
 conversation history, checkout changes, and run controls. Closing the app
 leaves agents running. See [the companion guide](docs/companion-app.md) for
 setup and [macOS build instructions](macos/README.md) for development.
-
-## Kitty (optional)
-
-Use `just install-kitty` and follow [Kitty setup](docs/operations.md#kitty-optional).
-Its bindings include `F2` for the live session overview and
-`F4` for the next attention tab. Reload Kitty after changing bindings.
 
 ## Maintenance and reference
 

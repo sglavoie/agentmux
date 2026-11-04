@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
@@ -18,7 +17,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
 
@@ -51,14 +49,6 @@ const doctorSuppressionWindow = 15 * time.Minute
 // Neither severity changes what `--strict` exits on; the bump is for the new
 // identifiers, as with v4.
 //
-// v4 adds the `kitty_snapshot_stale` finding, raised when the daemon's cached
-// Kitty topology is older than the shared staleness threshold, and the
-// `daemon.kitty_snapshot` block it is derived from. Its severity is warning,
-// not failure, so unlike every bump before it this one does not change what
-// `--strict` exits on. It is still a bump: the finding identifier is the
-// contract a consumer branches on, and one that has never seen this identifier
-// cannot distinguish "no stale snapshot" from "a daemon too old to say".
-//
 // v3 adds the `screenstate_persistent_decline` finding, raised when the screen
 // classifier has refused the same unchanging frame on a live ⚡ window long
 // enough that a harness UI change is the only ordinary explanation. Its
@@ -75,8 +65,6 @@ const doctorReportSchemaVersion = 7
 
 var (
 	newDoctorDaemonClient = cli.NewDaemonExportClient
-	newDoctorKitty        = func() cli.KittyWindowLister { return cli.NewKittyClient() }
-	newDoctorKittyAt      = func(socket string) cli.KittyWindowLister { return cli.NewKittyClientAt(socket) }
 	doctorLoadConfig      = cli.LoadRunnableConfig
 	doctorExecutable      = os.Executable
 	doctorLookPath        = exec.LookPath
@@ -86,7 +74,6 @@ var (
 	doctorNow             = time.Now
 	doctorCLIBuild        = buildinfo.Current
 	doctorDiagnosticPaths = diagnostics.DefaultPaths
-	doctorGetenv          = os.Getenv
 	doctorConfigModTime   = func() (time.Time, error) {
 		info, err := os.Stat(config.DefaultConfigPath())
 		if err != nil {
@@ -142,13 +129,6 @@ type doctorDaemonStatus struct {
 	// and the warnings the startup load produced. Omitted by a daemon that
 	// predates the block.
 	ScreenPatterns *protocol.ScreenPatternsSnapshot `json:"screen_patterns,omitempty"`
-	// KittySnapshot is the daemon's cached Kitty topology status: readiness,
-	// staleness, generation, capture time, age, and the list-coordinator
-	// counters for the daemon's effective socket. Its Windows field is always
-	// empty because health carries status only. Omitted by a daemon that
-	// predates the block, which is an unknown rather than a cold cache and
-	// raises no finding of its own.
-	KittySnapshot *protocol.KittySnapshot `json:"kitty_snapshot,omitempty"`
 	// Companion lists the connected companion subscribers. Omitted by a daemon
 	// that predates the companion protocol.
 	Companion *protocol.CompanionHealth `json:"companion,omitempty"`
@@ -164,11 +144,10 @@ func DoctorCommand() *cobra.Command { return doctorCmd }
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Diagnose daemon, Kitty, backend, hook, renderer, and invariant health",
+	Short: "Diagnose daemon, backend, hook, renderer, and invariant health",
 	Long: `Check every part of this installation and say what is wrong and what to run.
 
-Doctor reads the daemon (when one runs), the private tmux backend, Kitty (where
-it is in use), the configured harness hooks, project directories, the
+Doctor reads the daemon (when one runs), the private tmux backend, the configured harness hooks, project directories, the
 agent-session-loop pairing, and the daemon's own invariants. Each problem is a
 finding with a stable identifier and a severity: failure, warning, or info.
 The text report prints a remediation line under a finding that has one.
@@ -219,10 +198,8 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	client := newDoctorDaemonClient()
 	health := client.Health()
 	// The backend is read by this process and so is reported with the daemon
-	// down. It is read before anything about Kitty is judged because, with
-	// the daemon's own view of Kitty, it decides whether Kitty is in use.
+	// down.
 	report.Backend = doctorBackendStatus()
-	inUse := kittyInUse(report.Backend, health.KittySnapshot)
 	report.Daemon = doctorDaemonStatus{
 		Alive:          health.Alive,
 		Ready:          health.Ready,
@@ -237,7 +214,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		ASLReconcile:    health.ASLReconcile,
 		ASLHookDelivery: health.ASLHookDelivery,
 		ScreenPatterns:  health.ScreenPatterns,
-		KittySnapshot:   health.KittySnapshot,
 		Companion:       health.Companion,
 		Runtime:         health.Runtime,
 	}
@@ -267,13 +243,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		if err := writeDoctorScreenPatterns(textOut, health.ScreenPatterns, addFinding); err != nil {
 			return err
 		}
-		// The daemon's cached topology is reported before the CLI does its own
-		// `kitten @ ls` below, because a stale daemon snapshot is compatible with
-		// a Kitty that answers this process immediately: the two lines together
-		// are what separate "Kitty is wedged" from "the daemon stopped asking".
-		if err := writeDoctorKittySnapshot(textOut, health.KittySnapshot, doctorVerbose, inUse, addFinding); err != nil {
-			return err
-		}
 		if err := writeDoctorCompanion(textOut, health.Companion, health.Build, addFinding); err != nil {
 			return err
 		}
@@ -293,11 +262,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	var (
-		snapshot protocol.EventsExport
-		windows  []kitty.OSWindow
-		kittyOK  bool
-	)
+	var snapshot protocol.EventsExport
 	if health.Alive {
 		var err error
 		snapshot, err = client.ExportEvents(0)
@@ -311,41 +276,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Outside a Kitty window this process has no socket of its own, so it asks
-	// the Kitty the daemon reads. With neither there is no Kitty to judge, and
-	// a `kitten @ ls` that cannot find one says nothing about its health.
-	var kittyErr error
-	lister := newDoctorKitty()
-	listedSocket := strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON"))
-	kittyNamed := listedSocket != ""
-	if !kittyNamed && health.KittySnapshot != nil && kitty.IsReusableListenAddress(health.KittySnapshot.Socket) {
-		lister, kittyNamed = newDoctorKittyAt(health.KittySnapshot.Socket), true
-		listedSocket = health.KittySnapshot.Socket
-	}
-	windows, kittyErr = lister.ListWindows()
-	if kittyErr != nil && !kittyNamed && report.Backend.LaunchBackend != config.LaunchBackendTmux {
-		if _, err := fmt.Fprintln(textOut, "kitty: not reachable from here (KITTY_LISTEN_ON is not set, and the daemon reads no Kitty)"); err != nil {
-			return err
-		}
-		addFinding(severityWarning, "kitty", "Kitty was not asked for its windows: this is not a Kitty window and the daemon reads no Kitty, while launches go to Kitty; run doctor in a Kitty window to check it, or set [defaults] launch_backend = \"tmux\"")
-	} else if kittyErr != nil && !inUse {
-		// Launches go to tmux and nothing names a live Kitty: there is none
-		// to ask, which is how a tmux-only installation looks. It is said,
-		// and is not a finding.
-		if _, err := fmt.Fprintln(textOut, "kitty: not in use (launches go to tmux, and no Kitty is listening here)"); err != nil {
-			return err
-		}
-	} else if kittyErr != nil {
-		if _, err := fmt.Fprintf(textOut, "kitty: unavailable (%s)\n", kittyErr); err != nil {
-			return err
-		}
-		addFinding(severityFailure, "kitty", "kitten @ ls failed: %s", kittyErr)
-	} else {
-		kittyOK = true
-		if _, err := fmt.Fprintf(textOut, "kitty: ok (%s)\n", cli.CountOf(len(windows), "OS window", "OS windows")); err != nil {
-			return err
-		}
-	}
 	// What the daemon does for the backend's sessions follows when it answered.
 	if err := writeDoctorBackend(textOut, report.Backend, addFinding); err != nil {
 		return err
@@ -359,7 +289,7 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	if _, err := fmt.Fprintf(textOut, "versions: %s\n", report.Versions.summary()); err != nil {
 		return err
 	}
-	if err := writeDoctorNativeLogs(textOut, windows, kittyOK, func(format string, args ...any) {
+	if err := writeDoctorNativeLogs(textOut, func(format string, args ...any) {
 		addFinding(severityWarning, "native_logging", format, args...)
 	}); err != nil {
 		return err
@@ -391,12 +321,6 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 	})
 
 	var liveByID map[int]protocol.WindowLiveMetadata
-	if kittyOK {
-		liveByID = ExportLiveMetadata(windows, snapshot, 0, listedSocket)
-	}
-	if err := writeDoctorRenderer(textOut, snapshot, liveByID, kittyOK, inUse || kittyOK, reportIssue("renderer_drift")); err != nil {
-		return err
-	}
 	if err := writeDoctorSuppressions(textOut, snapshot, now, doctorVerbose); err != nil {
 		return err
 	}
@@ -449,5 +373,5 @@ func runDoctor(cmd *cobra.Command, _ []string) error {
 func init() {
 	cli.AddReportJSONFlag(doctorCmd, &doctorJSON, "the diagnostic report")
 	doctorCmd.Flags().BoolVar(&doctorStrict, "strict", false, "exit nonzero when any health failure is detected")
-	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "list every closed window, suppression reason, healthy hook profile, and Kitty coordinator counter instead of summarizing them")
+	doctorCmd.Flags().BoolVarP(&doctorVerbose, "verbose", "v", false, "list every closed session, suppression reason, and healthy hook profile instead of summarizing them")
 }

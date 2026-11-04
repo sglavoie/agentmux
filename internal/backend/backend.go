@@ -1,7 +1,7 @@
 // Package backend defines the narrow terminal-backend seams AgentMux domain
 // services use: discovery, launch, termination, capture, metadata, and
-// presentation. A backend (the private tmux server, or Kitty) owns its own
-// addressing grammar and topology; domain code only ever holds an opaque
+// presentation. The private tmux server owns its addressing grammar and
+// topology; domain code only ever holds an opaque
 // Ref and asks for an operation by intent.
 //
 // Every operation is synchronous and reports exactly what the backend did.
@@ -28,12 +28,12 @@ import (
 type Scope string
 
 const (
-	// ScopeGroup is the presentation unit that holds one agent: a Kitty tab,
-	// a tmux session. Titles, colors, ordering, focus, and termination act on
+	// ScopeGroup is the tmux session that holds one agent. Titles, colors,
+	// ordering, focus, and termination act on
 	// groups.
 	ScopeGroup Scope = "group"
-	// ScopePane is the terminal surface an agent process runs in: a Kitty
-	// window, a tmux pane. Metadata and capture act on panes.
+	// ScopePane is the tmux pane an agent process runs in. Metadata and
+	// capture act on panes.
 	ScopePane Scope = "pane"
 )
 
@@ -207,7 +207,7 @@ type Launched struct {
 }
 
 // TargetLauncher is a backend that reports the target each launch created.
-// Backends that can only report success (Kitty) implement Launcher alone.
+// Implementations that can only report success implement Launcher alone.
 type TargetLauncher interface {
 	Backend
 	LaunchTarget(spec LaunchSpec) (Launched, error)

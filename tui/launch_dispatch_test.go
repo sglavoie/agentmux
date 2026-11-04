@@ -1,59 +1,14 @@
 package tui
 
 import (
-	"strconv"
-	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/cmdtest"
 )
-
-type fakeLaunchDispatchClient struct {
-	windows  []kitty.OSWindow
-	launched []kitty.LaunchOpts
-	closed   []string
-	focused  []string
-}
-
-func (f *fakeLaunchDispatchClient) ListWindows() ([]kitty.OSWindow, error) { return f.windows, nil }
-func (f *fakeLaunchDispatchClient) LaunchTab(opts kitty.LaunchOpts) error {
-	f.launched = append(f.launched, opts)
-	return nil
-}
-func (f *fakeLaunchDispatchClient) LaunchOverlay(kitty.LaunchOpts) error { return nil }
-func (f *fakeLaunchDispatchClient) CloseTab(match string) error {
-	f.closed = append(f.closed, match)
-	if idText, ok := strings.CutPrefix(match, "id:"); ok {
-		for wi := range f.windows {
-			tabs := f.windows[wi].Tabs
-			for ti := range tabs {
-				if idText == strconv.Itoa(tabs[ti].ID) {
-					f.windows[wi].Tabs = append(tabs[:ti], tabs[ti+1:]...)
-					return nil
-				}
-			}
-		}
-	}
-	return nil
-}
-func (f *fakeLaunchDispatchClient) MoveTab(string, int) error { return nil }
-func (f *fakeLaunchDispatchClient) SetTabColor(string, string, string, string, string) error {
-	return nil
-}
-func (f *fakeLaunchDispatchClient) SetTabTitle(string, string) error            { return nil }
-func (f *fakeLaunchDispatchClient) SetUserVars(string, map[string]string) error { return nil }
-func (f *fakeLaunchDispatchClient) FocusTab(match string) error {
-	f.focused = append(f.focused, match)
-	return nil
-}
-func (f *fakeLaunchDispatchClient) FocusWindow(string) error               { return nil }
-func (f *fakeLaunchDispatchClient) GetText(string, string) (string, error) { return "", nil }
-func (f *fakeLaunchDispatchClient) LaunchOverlayPager(string) error        { return nil }
 
 // collectLeafMsgs invokes cmd and recursively expands any tea.Sequence /
 // tea.Batch slice results into the leaf tea.Msg values they produce. Used
@@ -108,9 +63,7 @@ func launchDispatchModel(t *testing.T, running []session.RunningSession) Model {
 			{Title: "backend", Directory: "/home/user/backend", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
-	m := NewModel(cfg, client)
+	m := NewModel(cfg, nil)
 	m = loadSessions(m, running)
 	m = pressKey(m, "l")
 	if m.mode != ModePicker {
@@ -131,17 +84,6 @@ func selectByTitle(m *Model, titles ...string) {
 	}
 	for i, s := range m.pickerSessions {
 		if wanted[s.Title] {
-			m.pickerSelected[i] = true
-		}
-	}
-}
-
-func selectByTitleAndProfile(m *Model, title, profile string) {
-	if m.pickerSelected == nil {
-		m.pickerSelected = make(map[int]bool)
-	}
-	for i, s := range m.pickerSessions {
-		if s.Title == title && s.EffectiveProfile() == profile {
 			m.pickerSelected[i] = true
 		}
 	}
@@ -248,107 +190,5 @@ func TestDispatchPickerLaunch_RunningAndStoppedRowsQueued(t *testing.T) {
 		if lp.total != 2 {
 			t.Errorf("expected total=2 in launchProgressMsg, got %d", lp.total)
 		}
-	}
-}
-
-func TestDispatchPickerLaunch_RunningRowBypassesLaunchDedup(t *testing.T) {
-	t.Parallel()
-
-	client := &fakeLaunchDispatchClient{
-		windows: []kitty.OSWindow{{
-			ID: 1,
-			Tabs: []kitty.Tab{{
-				ID:       10,
-				Title:    "api",
-				Windows:  []kitty.Window{{ID: 11, IsActive: true, UserVars: kitty.UserVars{Profile: "work", Project: "api"}}},
-				IsActive: true,
-			}},
-		}},
-	}
-	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		Accounts: []config.Account{
-			{Name: "work"},
-		},
-		Sessions: []config.Session{
-			{Title: "api", Directory: "/home/user/api", Account: "work"},
-		},
-	}
-	m := NewModel(cfg, client)
-	m = loadSessions(m, []session.RunningSession{
-		{TabID: 10, WindowID: 11, Base: "api", Account: "work", Profile: "work", Project: "api", Key: session.SessionKey("work", "api")},
-	})
-	m = pressKey(m, "l")
-	selectByTitle(&m, "api")
-
-	cmd := m.dispatchPickerLaunch()
-	if cmd == nil {
-		t.Fatal("expected non-nil cmd for selected running row")
-	}
-	got := countLaunchProgress(collectLeafMsgs(t, cmd))
-	if len(got) != 1 {
-		t.Fatalf("expected 1 launchProgressMsg, got %d (%+v)", len(got), got)
-	}
-	if len(client.launched) != 1 {
-		t.Fatalf("expected LaunchTab to be called once for running row, got %d", len(client.launched))
-	}
-}
-
-func TestDispatchPickerLaunch_SameProjectDifferentProfileLaunches(t *testing.T) {
-	t.Parallel()
-
-	client := &fakeLaunchDispatchClient{
-		windows: []kitty.OSWindow{{
-			ID: 1,
-			Tabs: []kitty.Tab{{
-				ID:       10,
-				Title:    "sis",
-				Windows:  []kitty.Window{{ID: 11, IsActive: true, CWD: "/home/user/sis", UserVars: kitty.UserVars{Profile: "vta", Harness: "claude", Project: "sis", AMXDirectory: "/home/user/sis"}}},
-				IsActive: true,
-			}},
-		}},
-	}
-	projects := []config.Session{
-		{Title: "sis", Directory: "/home/user/sis", Profile: "vta"},
-		{Title: "sis", Directory: "/home/user/sis", Profile: "vta-codex"},
-	}
-	cfg := &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2},
-		Accounts: []config.Account{
-			{Name: "vta", Harness: "claude", Color: "blue"},
-			{Name: "vta-codex", Harness: "codex", Color: "green"},
-		},
-		Projects: projects,
-		Sessions: projects,
-	}
-	m := NewModel(cfg, client)
-	m = loadSessions(m, []session.RunningSession{
-		{TabID: 10, WindowID: 11, Base: "sis", Profile: "vta", Account: "vta", Harness: "claude", Project: "sis", Directory: "/home/user/sis", Key: session.SessionKey("vta", "sis")},
-	})
-	m = pressKey(m, "l")
-	selectByTitleAndProfile(&m, "sis", "vta-codex")
-
-	cmd := m.dispatchPickerLaunch()
-	if cmd == nil {
-		t.Fatal("expected non-nil cmd for selected vta-codex row while vta row is running")
-	}
-	got := countLaunchProgress(collectLeafMsgs(t, cmd))
-	if len(got) != 1 {
-		t.Fatalf("expected 1 launchProgressMsg, got %d (%+v)", len(got), got)
-	}
-	if got[0].err != nil {
-		t.Fatalf("expected launch to succeed, got %v", got[0].err)
-	}
-	if len(client.launched) != 1 {
-		t.Fatalf("expected LaunchTab to be called once for vta-codex/sis, got %d", len(client.launched))
-	}
-	if got := client.launched[0].UserVars["amx_profile"]; got != "vta-codex" {
-		t.Errorf("expected amx_profile=vta-codex, got %q", got)
-	}
-	if got := client.launched[0].UserVars["amx_harness"]; got != "codex" {
-		t.Errorf("expected amx_harness=codex, got %q", got)
-	}
-	if got := client.launched[0].UserVars["amx_project"]; got != "sis" {
-		t.Errorf("expected amx_project=sis, got %q", got)
 	}
 }

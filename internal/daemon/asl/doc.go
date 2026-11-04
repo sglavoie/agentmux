@@ -18,7 +18,7 @@
 // retiring one, raising the question icon, and notifying about it are reducer
 // mutations under the daemon's stateMu, and they stay in the daemon root with
 // the reducer, the renderer, and the notifier. This package must never import
-// the daemon root, and it performs no Kitty, IPC, or journal I/O.
+// the daemon root, and it performs no terminal, IPC, or journal I/O.
 //
 // Generic hook decoding stays in internal/daemon/events: an ASL lifecycle
 // event is normalized there alongside every other hook, and transport dispatch

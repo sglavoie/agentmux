@@ -10,7 +10,7 @@ enum WorkspaceFixture {
         return "rs-" + String(repeating: "0", count: 32 - hex.count) + hex
     }
 
-    /// A session on the private tmux server: no window, a runtime identity.
+    /// A session on the private tmux server with a runtime identity.
     static func tmux(_ n: Int, project: String, profile: String = "work", harness: String = "claude",
                      icon: String = "", attention: Bool = false, changedAtMS: Int64 = 0,
                      conversation: String? = nil) -> CompanionSession {
@@ -26,24 +26,10 @@ enum WorkspaceFixture {
         return session
     }
 
-    static func kitty(_ windowID: Int, project: String, profile: String = "work", harness: String = "claude",
-                      socket: String = "", icon: String = "", attention: Bool = false, changedAtMS: Int64 = 0) -> CompanionSession {
-        var session = CompanionSession(windowID: windowID)
-        session.kittySocket = socket
-        session.project = project
-        session.profile = profile
-        session.harness = harness
-        session.iconState = icon
-        session.attention = attention
-        session.presentationChangedAtMS = changedAtMS
-        return session
-    }
-
-    static func snapshot(_ sessions: [CompanionSession], socket: String = "unix:/tmp/kitty-1") -> CompanionSnapshot {
+    static func snapshot(_ sessions: [CompanionSession]) -> CompanionSnapshot {
         var snapshot = CompanionSnapshot()
         snapshot.v = 2
         snapshot.daemon.ready = true
-        snapshot.kitty.socket = socket
         snapshot.sessions = sessions
         return snapshot
     }
@@ -56,10 +42,6 @@ enum WorkspaceFixture {
             #""presentation_changed_at_ms":\#(session.presentationChangedAtMS)"#,
         ]
         if session.pinned { fields.append(#""pinned":true"#) }
-        if session.windowID > 0 {
-            fields.append(#""window_id":\#(session.windowID)"#)
-            fields.append(#""kitty_socket":"\#(session.kittySocket)""#)
-        }
         if let runtime = session.runtime {
             fields.append(#""runtime":{"session_id":"\#(runtime.sessionID)","backend":"\#(runtime.backend)","instance":"/tmp/amx-tmux.sock","generation":"g1","pane":"\#(runtime.pane)"}"#)
         }
@@ -68,11 +50,19 @@ enum WorkspaceFixture {
 
     /// A v2 snapshot frame listing `sessions`.
     static func frame(seq: Int, _ sessions: [CompanionSession]) -> String {
-        #"{"v":1,"seq":\#(seq),"type":"snapshot","data":{"v":2,"daemon":{"pid":7,"ready":true},"kitty":{"ready":true,"socket":"unix:/tmp/kitty-1"},"notification":{},"dashboard":{"open":false},"attention":{},"asl":{},"sessions":[\#(sessions.map(json).joined(separator: ","))]}}"#
+        #"{"v":1,"seq":\#(seq),"type":"snapshot","data":{"v":2,"daemon":{"pid":7,"ready":true},"notification":{},"dashboard":{"open":false},"attention":{},"asl":{},"sessions":[\#(sessions.map(json).joined(separator: ","))]}}"#
     }
 
     /// The ack of a daemon that granted `runtime_sessions`.
     static let ack = #"{"ok":true,"subscription":{"protocol":1,"server_protocol_max":1,"subscriber_id":"sub-1","heartbeat_ms":15000,"features":["snapshot","heartbeat","notifications","runtime_sessions"]},"ready":true}"#
+}
+
+extension CompanionSession {
+    var testID: Int { Int(runtime?.sessionID.split(separator: "-").last?.suffix(8) ?? "", radix: 16) ?? 0 }
+}
+
+extension MenuSessionRow {
+    var testID: Int { Int(runtimeSessionID.split(separator: "-").last?.suffix(8) ?? "", radix: 16) ?? 0 }
 }
 
 /// A stand-in terminal that can take the keyboard.

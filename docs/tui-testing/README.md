@@ -5,7 +5,7 @@ Tea dashboard model **in-process** to catch layout regressions — the kind of
 overlay sizing bugs fixed in commits like "size profile picker box to fit its
 widest row" and "size actions overlay box to fit its widest row".
 
-It never launches a live Kitty instance, never talks to a real terminal, and
+It never talks to a real terminal, and
 never reads or writes the operator's real config or data. Every run is
 deterministic and isolated, so it is safe to run in CI or from an agent.
 
@@ -47,8 +47,8 @@ overview is a separate Bubble Tea program with its own `Update`/`View` loop, so
 driving it from here would put a second model behind one scenario schema and one
 set of fixtures. Its equivalent evidence is the package-level acceptance suite in
 `tui/overview/acceptance_test.go` — the real loop against a frozen clock,
-scripted snapshots, and a recording Kitty client that counts a write as a
-violation — run with `go test ./tui/overview -run '^TestAcceptance'`. What the
+scripted snapshots, and recorded terminal actions — run with
+`go test ./tui/overview -run '^TestAcceptance'`. What the
 two surfaces share is the declaration of what a session action is
 (`tui/sessionactions`), and the record that both obey it is the parity matrix in
 [`../acceptance.md`](../acceptance.md#session-actions-across-surfaces).
@@ -71,12 +71,8 @@ The harness therefore inspects each open modal's own natural geometry
   an observation is captured. Time-based commands (the refresh ticker) are
   abandoned rather than blocking.
 - **Fixtures** (`tui/uitest_fixtures.go`): deterministic, self-contained data
-  sources — a prepared config plus fake Kitty windows — so a run needs no live
-  Kitty and no user config.
-- **No-op recording Kitty client**: a `kitty.KittyClient` that returns canned
-  window data and records every mutating/focus call instead of executing it, so
-  scenarios can assert on the side effects the model *attempted* without a
-  subprocess ever running.
+  sources with prepared config and tmux panes, so a run needs no live terminal
+  or user config. Terminal actions are recorded in memory.
 - **Safe config mode**: config-backed scenarios stage `HOME`, `AMX_CONFIG`,
   `AMX_OVERRIDES_PATH`, `XDG_DATA_HOME`, and `XDG_STATE_HOME` in a throwaway
   temp directory, so a run can never touch the real config, overrides, plan
@@ -170,7 +166,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `paused_output` | one working session whose scrollback is longer than any pane the fixture's size can draw, numbered `output line 01`…`40` | the inspector's follow/hold split: a numbered buffer where following the tail and holding a scrolled position render visibly different lines |
 | `paused_queue` | five rows spanning all three urgency bands — two working, an unread stop, a seen stop, and a working row with a non-ASCII name and an over-long directory — over a 60-line numbered scrollback, with destructive confirmation turned on | combined runs: a list that can be reordered or refiltered underneath a held inspector, round trips that return to the session inspector, and the only fixture that reaches the confirmation prompt |
 | `pinned_sessions` | two pinned rows (`★`), one waiting on permission and one working, above an unpinned waiting, working, and rested row | the Pinned band: pins lead above Needs you whatever their urgency, while counts, borders, and `n`/`N` still read each row's urgency |
-| `portable_tmux` | three sessions hosted by the private tmux server — one needing permission, one working, one at rest — and no Kitty client at all | the dashboard as it runs in a stock terminal: rows no Kitty window stands behind are listed, selected, and inspected, and a Kitty-only command explains itself instead of reaching for a client that is not there |
+| `portable_tmux` | three tmux sessions — one needing permission, one working, one at rest | the dashboard lists, selects, and inspects pane-backed rows in a stock terminal |
 | `preview_failure` | two working rows sharing a 40-line numbered scrollback whose first read fails and whose every read after it succeeds | the inspector's failed-read state and, more importantly, its recovery — that the pane reports the error without latching on it |
 | `project_families` | two multi-checkout repository families whose members span all three urgency buckets, plus a single-checkout family and a row belonging to no family | the Projects view: summaries, fold/unfold, the singleton that earns no summary, the unfamilied leaf, the project card, and count semantics under a filter |
 | `run_timers` | five busy stretches: sub-minute, multi-minute, hours-long, warning-band, and idle | per-row run timer formatting bands and the `⏳` watchdog warning |
@@ -179,7 +175,7 @@ amx tui-test fixture wide_profiles --width 140 --key C
 | `unseen_stops` | two `🛑` rows the daemon separates by seenness, plus one `⚡` row | the unseen-stop demotion: a read `🛑` falls to Idle while an unread one holds Needs you |
 | `wide_profiles` | long profile names and home dirs | stresses the profile/config picker box width |
 | `worktree_branches` | three rows in one repository — a dirty `main` checkout and two managed worktrees — plus a directory that is not a repository | the branch as inspector detail rather than row column: two worktrees told apart by the branch only the selected one paints, the dirty `*` marker, and a non-repository row whose strip is the bare directory |
-| `worktree_lifecycle` | deterministic reopen and cleanup outcomes | exercises focus/resume/fresh reopen, ambiguity, replacement profiles, cleanup refusals, safe deletion, forgetting, and partial recovery without real Git or Kitty mutations |
+| `worktree_lifecycle` | deterministic reopen and cleanup outcomes | exercises focus/resume/fresh reopen, ambiguity, replacement profiles, cleanup refusals, safe deletion, forgetting, and partial recovery without real Git or terminal mutations |
 | `worktrees` | clean, dirty, live, looping, missing, and invalid managed worktrees | hermetic Worktrees browsing, filtering, badges, and layout |
 
 The `basic` fixture's list is state/profile-grouped, not globally
@@ -190,7 +186,7 @@ alpha-sorted: the cursor starts on `dotfiles` (personal).
 A fixture may also carry the per-window state the daemon owns — icon state,
 looping, the busy-stretch anchor, the durable presentation-transition time, the
 unseen bit, the blocked reason, the Git branch and dirty bit, and watchdog thresholds —
-which no Kitty tab title can express. The `unseen_stops` fixture is the clearest
+which no terminal title can express. The `unseen_stops` fixture is the clearest
 case: both of its `🛑` rows carry the same icon in the same title, and only the
 daemon state tells them apart. `blocked_reasons` is the same argument one field
 over: four rows wearing two icons between them, where what each is actually
@@ -236,13 +232,12 @@ implementation identity.
 ### Reads that fail
 
 A fixture may also declare that its first `N` pane reads fail rather than
-answering with its scrollback, which is what a `kitten @ get-text` against a
-window that has gone away or a socket that is not answering yet looks like from
-the inspector's side. It is a count rather than a flag because the property
+answering with its scrollback, which is what reading a pane that has gone away
+or whose server is not answering yet looks like from the inspector's side. It is a count rather than a flag because the property
 worth committing a scenario to is recovery: a fixture that failed forever could
 only ever show that the pane *reports* an error, never that it can stop
 reporting one. Failures are counted per read in the order the reads reach the
-client, not per target, so a fixture that sets `1` fails the opening paint and
+fixture, not per target, so a fixture that sets `1` fails the opening paint and
 answers every later read — a reopened inspector, a moved cursor — normally.
 
 The error sentence is fixed rather than generated, because scenarios assert on
@@ -354,8 +349,8 @@ any scenario whose subject IS a binding.
 
 Mouse coordinates address the last rendered frame, so clicks and wheel events
 exercise the same immutable hit map a live Bubble Tea view captured. Shift-drag
-is intentionally not a scenario event: Kitty consumes that modified gesture for
-terminal-native text selection before the application receives a mouse event,
+is intentionally not a scenario event: the terminal consumes that modified
+gesture for text selection before the application receives a mouse event,
 so it remains part of the attended live checklist in `docs/acceptance.md`.
 
 **Key names** accepted by `key` actions:
@@ -378,7 +373,6 @@ so it remains part of the attended live checklist in `docs/acceptance.md`.
 | `selected_profile` | `value` | the selected session's profile equals `value` |
 | `selected_action` | `value` | the actions menu is open and the highlighted entry's action ID equals `value`. Only meaningful in `actions` mode; asserting it in any other mode fails. `value` must name an action the menu actually offers, so a renamed or retired ID fails validation rather than passing vacuously |
 | `cursor_equals` | `cursor` | the relevant cursor equals `cursor` |
-| `kitty_calls` | `op`, `count` | recorded Kitty calls for `op` match `count` (exactly, when set) or number at least one (when `count` is omitted) |
 
 **Mode names**: `list`, `search`, `confirm`, `picker`, `config_picker`,
 `help`, `health`, `detail`, `actions`, `session_search`, `session_view`,
@@ -387,11 +381,6 @@ so it remains part of the attended live checklist in `docs/acceptance.md`.
 `project_switcher`, `command_palette`, `send`, and `plan_run`. An unmapped mode reports `unknown`
 rather than a bare integer, so a `mode_equals` assertion against a mode nobody
 named fails visibly.
-
-**Kitty `op` names** recorded by the no-op client: `LaunchTab`,
-`LaunchOverlay`, `CloseTab`, `MoveTab`, `SetTabColor`, `SetTabTitle`,
-`SetUserVars`, `FocusTab`, `FocusWindow`, `LaunchOverlayPager`. Reads
-(`ListWindows`/`GetText`) are not recorded.
 
 ## Layout issue types
 
@@ -482,7 +471,7 @@ inventory is:
 | [`asl-runs-narrow-fit.json`](scenarios/asl-runs-narrow-fit.json) | `asl_runs` | narrow Runs rows keep state, label, reason, and age, and move the rest into the selected-row panel |
 | [`asl-runs-reason-narrow-fit.json`](scenarios/asl-runs-reason-narrow-fit.json) | `asl_runs` | the selected-row panel says why the run is listed (`reason:`) above its binding at 60 columns |
 | [`asl-runs-reason-wide.json`](scenarios/asl-runs-reason-wide.json) | `asl_runs` | at a width whose rows spend their last column on the workspace, the selected-row panel still says why the run is listed |
-| [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | opening Runs by name gives needs-action rows first, the full wide columns, and no Kitty focus |
+| [`asl-runs-wide.json`](scenarios/asl-runs-wide.json) | `asl_runs` | opening Runs by name gives needs-action rows first, the full wide columns, and no terminal focus |
 | [`attention-overlap-reasons.json`](scenarios/attention-overlap-reasons.json) | `attention_overlap` | rows wanted for several reasons at once all land in Needs you, their Status column naming one reason each, but only the unread stop earns the `•`, and the recoverable tool warning stays in Running |
 | [`band-boundary-79-compact-fit.json`](scenarios/band-boundary-79-compact-fit.json) | `project_families` | one cell below the standard band the queue rows are exactly the rows every other width draws — the width bands no longer reach a session row — and the quiet header and essentials footer read the same as at every other width, 79 having bought only that the inspector key is not among the hints that fit |
 | [`band-boundary-80-standard.json`](scenarios/band-boundary-80-standard.json) | `project_families` | exactly at 80 nothing in the chrome moves: the same header line and the same essentials footer, with the retired `/ to filter` hint and the spacious legend both gone for good |
@@ -493,14 +482,14 @@ inventory is:
 | [`branch-column-narrow-fit.json`](scenarios/branch-column-narrow-fit.json) | `worktree_branches` | at 66 cells no branch is on screen at all: the branch and directory belong to no row at any width, and this width is below the split floor, so the inspector that would carry them is gone and the two checkouts are told apart by name alone |
 | [`branch-column-unreserved.json`](scenarios/branch-column-unreserved.json) | `worktree_branches` | filtering down to the non-repository row leaves no branch anywhere, so the strip's second line is the bare directory rather than a dangling separator |
 | [`branch-column-wide.json`](scenarios/branch-column-wide.json) | `worktree_branches` | the branch is the inspector's, not the row's: only the selected worktree's `amx/feat-x` is on screen, and its siblings' branches are nowhere |
-| [`combined-actions-during-refresh.json`](scenarios/combined-actions-during-refresh.json) | `paused_queue` | three refresh ticks under an open actions menu leave the menu open on the row it was opened for: the refresh reaches only the chrome behind it — the health reading goes cold — and neither the refresh nor the captured overlay touches a Kitty tab |
+| [`combined-actions-during-refresh.json`](scenarios/combined-actions-during-refresh.json) | `paused_queue` | three refresh ticks under an open actions menu leave the menu open on the row it was opened for: the refresh reaches only the chrome behind it — the health reading goes cold — and neither the refresh nor the captured overlay focuses a session |
 | [`combined-filter-then-resize.json`](scenarios/combined-filter-then-resize.json) | `paused_queue` | an applied `@work` chip survives narrowing to 80 cells and widening back: the same three rows, the same selection, the chip still in the header, and the inspector's metadata redrawn whole once the split floor is cleared again |
 | [`combined-folded-attention-reveal.json`](scenarios/combined-folded-attention-reveal.json) | `family_unread` | `n` reaches an attention row folded inside a collapsed family, unfolding it on the way, and the inspector swaps from the family card back to the session inspector for the checkout it landed on |
-| [`combined-preview-read-failure.json`](scenarios/combined-preview-read-failure.json) | `preview_failure` | a failed read paints `error: kitty read failed` where the buffer would be, with none of the scrollback on screen, while the metadata block above the divider still names the session the read was for |
+| [`combined-preview-read-failure.json`](scenarios/combined-preview-read-failure.json) | `preview_failure` | a failed read paints `error: terminal read failed` where the buffer would be, with none of the scrollback on screen, while the metadata block above the divider still names the session the read was for |
 | [`combined-preview-read-recovery.json`](scenarios/combined-preview-read-recovery.json) | `preview_failure` | hiding and reopening the inspector re-reads the same pane, the second read succeeds, and the tail of the numbered buffer replaces the error — the pane recovers rather than latching on the failure |
 | [`combined-reorder-while-paused.json`](scenarios/combined-reorder-while-paused.json) | `paused_queue` | a held inspector keeps its scrolled position while the view toggle rebuilds the queue underneath it into family order: the `── Paused ──` marker and the same buffer line survive a reorder that moves every row on screen |
-| [`command-action-by-name.json`](scenarios/command-action-by-name.json) | `basic` | three `command` actions reach Plans, the worktree inventory, and a live Kitty focus by capability name, each leaving the palette closed behind it |
-| [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without Kitty mutations |
+| [`command-action-by-name.json`](scenarios/command-action-by-name.json) | `basic` | three `command` actions reach Plans, the worktree inventory, and a live session focus by capability name, each leaving the palette closed behind it |
+| [`command-palette-execute-help.json`](scenarios/command-palette-execute-help.json) | `basic` | palette search executes the safe keyboard-help transition without terminal mutations |
 | [`command-palette-filter.json`](scenarios/command-palette-filter.json) | `basic` | printable text filters the palette to the matching plans command |
 | [`command-palette-narrow-scroll.json`](scenarios/command-palette-narrow-scroll.json) | `basic` | narrow palette scrolls the active command into view without layout issues |
 | [`command-palette-wide.json`](scenarios/command-palette-wide.json) | `basic` | wide empty-query palette shows grouped commands and inline disabled reasons |
@@ -550,7 +539,7 @@ inventory is:
 | [`mouse-list-wheel.json`](scenarios/mouse-list-wheel.json) | `project_families` | a wheel event over the session pane moves the selection by three selectable rows |
 | [`mouse-switcher-ignores-wheel.json`](scenarios/mouse-switcher-ignores-wheel.json) | `project_families` | the open switcher publishes click targets only: a wheel over it and a click on the dashboard behind it both do nothing, leaving mode, cursor, and filter untouched |
 | [`mouse-switcher-scope.json`](scenarios/mouse-switcher-scope.json) | `project_families` | clicking a rendered scope row inside the switcher applies that project and closes the overlay |
-| [`mouse-session-select-focus.json`](scenarios/mouse-session-select-focus.json) | `project_families` | one click selects a live session and a second click on the same identity focuses its Kitty tab |
+| [`mouse-session-select-focus.json`](scenarios/mouse-session-select-focus.json) | `project_families` | one click selects a live session and a second click on the same identity focuses its terminal pane |
 | [`needs-you-reveals-folded-target.json`](scenarios/needs-you-reveals-folded-target.json) | `project_families` | `N` reaches an attention row folded inside a collapsed project: the family unfolds, the cursor lands on the row itself, and no tab is focused and no pager opens — finding a waiting session is not answering it |
 | [`paused-output-follows-tail.json`](scenarios/paused-output-follows-tail.json) | `paused_output` | the inspector opens over a scrollback longer than the pane: the six-line metadata block is drawn above the divider and the output below it follows the tail, so the last lines are on screen, the first are gone, and nothing says Paused because no key yet holds a position — the quiet chrome having handed the viewport two more rows of it |
 | [`picker-dsl-narrow-fit.json`](scenarios/picker-dsl-narrow-fit.json) | `basic` | launcher DSL/help text clamps at narrow width |
@@ -562,21 +551,19 @@ inventory is:
 | [`pinned-band-narrow-fit.json`](scenarios/pinned-band-narrow-fit.json) | `pinned_sessions` | pinned rows lead under `Pinned (2)` above `Needs you (1)` at 34 columns, and the pinned row waiting on permission stays under Pinned rather than joining Needs you, while the cursor still opens on it |
 | [`pinned-band-wide.json`](scenarios/pinned-band-wide.json) | `pinned_sessions` | the four headings render in order at 120 columns, and `n` from the waiting pin goes on to the unpinned waiting row: a pin moves a row, not its place in the Needs you queue |
 | [`portable-dashboard-narrow-fit.json`](scenarios/portable-dashboard-narrow-fit.json) | `portable_tmux` | at 80 columns the selection moves onto a tmux-hosted row and its actions menu opens over it with the full session vocabulary, the focus entry saying it attaches here rather than jumping to a tab |
-| [`portable-dashboard-wide.json`](scenarios/portable-dashboard-wide.json) | `portable_tmux` | with no Kitty client the queue still buckets tmux-hosted rows by the daemon state keyed to them, selects the one that needs the operator, and fills the inspector from that pane's own scrollback |
-| [`portable-launch-picker-narrow-fit.json`](scenarios/portable-launch-picker-narrow-fit.json) | `portable_tmux` | at 80 columns **Launch another session** on a tmux-hosted row opens the profile picker with no Kitty client: both profiles are offered, the row's own marked current, and nothing asks for Kitty |
+| [`portable-dashboard-wide.json`](scenarios/portable-dashboard-wide.json) | `portable_tmux` | the queue buckets tmux-hosted rows by the daemon state keyed to them, selects the one that needs the operator, and fills the inspector from that pane's own scrollback |
+| [`portable-launch-picker-narrow-fit.json`](scenarios/portable-launch-picker-narrow-fit.json) | `portable_tmux` | at 80 columns **Launch another session** on a tmux-hosted row opens the profile picker with both profiles offered, the row's own marked current |
 | [`portable-launch-picker-wide.json`](scenarios/portable-launch-picker-wide.json) | `portable_tmux` | the same picker at 140 columns, over the split queue and inspector |
-| [`portable-open-here-narrow-fit.json`](scenarios/portable-open-here-narrow-fit.json) | `portable_tmux` | at 80 columns **Open shell** and **Open editor** on a tmux-hosted row are not refused for want of a Kitty tab: with no workspace hosting the surface each is handed to this terminal, so the dashboard is back on the same row with no error and no mention of Kitty |
+| [`portable-open-here-narrow-fit.json`](scenarios/portable-open-here-narrow-fit.json) | `portable_tmux` | at 80 columns **Open shell** and **Open editor** on a tmux-hosted row use the available terminal: with no workspace hosting the surface each is handed to this terminal, so the dashboard is back on the same row with no error |
 | [`portable-open-here-wide.json`](scenarios/portable-open-here-wide.json) | `portable_tmux` | the same two actions at 140 columns leave the split dashboard as it was |
-| [`portable-resort-always-sorted-wide.json`](scenarios/portable-resort-always-sorted-wide.json) | `portable_tmux` | the same answer at 140 columns, with the queue's buckets still drawn in sort order beside it |
-| [`portable-resort-always-sorted.json`](scenarios/portable-resort-always-sorted.json) | `portable_tmux` | `Resort Tabs` runs outside Kitty instead of being refused: with no tab to move it answers that sessions are always in sort order and returns to the dashboard |
-| [`portable-session-action-names-tmux-narrow-fit.json`](scenarios/portable-session-action-names-tmux-narrow-fit.json) | `portable_tmux` | at 80 columns an action on a tmux-hosted row whose server cannot be reached says it needs the tmux server, the backend that session runs on, and never names Kitty |
+| [`portable-session-action-names-tmux-narrow-fit.json`](scenarios/portable-session-action-names-tmux-narrow-fit.json) | `portable_tmux` | at 80 columns an action on a tmux-hosted row whose server cannot be reached says it needs the tmux server, the backend that session runs on |
 | [`portable-session-action-names-tmux-wide.json`](scenarios/portable-session-action-names-tmux-wide.json) | `portable_tmux` | the same refusal at 140 columns |
 | [`projects-cross-view-selection.json`](scenarios/projects-cross-view-selection.json) | `project_families` | the view toggle carries the selected session across to Projects, where the cursor lands on the same session at its new tree index |
 | [`projects-cross-view-summary-return.json`](scenarios/projects-cross-view-summary-return.json) | `project_families` | toggling back out of Projects from a family summary selects that family's primary session in Urgency rather than losing the cursor |
 | [`projects-family-collapse.json`](scenarios/projects-family-collapse.json) | `project_families` | `Enter` on a summary folds its family away while the sibling family stays expanded and each summary keeps its own tally, there being no status tally left to disagree with |
 | [`projects-family-expand.json`](scenarios/projects-family-expand.json) | `project_families` | a second `Enter` unfolds the collapsed family and restores every checkout underneath it as an indented Session/Status/Time row, still visibly distinct from the summary above them |
 | [`projects-filtered-attention-counts.json`](scenarios/projects-filtered-attention-counts.json) | `project_families` | the `!attention` chip keeps only the two attention rows and drops the now-empty family summaries, the chip itself being what says the list is filtered now that the `V/N visible` status line is gone |
-| [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | a family summary refuses session actions by both routes: `a` does not open the actions menu on it, and the retired `X`/`r`/`e`/`o` spellings pressed afterwards land at the list and do nothing, so no Kitty focus, launch, close, or pager call is made and the model ends where it started |
+| [`projects-summary-action-refusal.json`](scenarios/projects-summary-action-refusal.json) | `project_families` | a family summary refuses session actions by both routes: `a` does not open the actions menu on it, and the retired `X`/`r`/`e`/`o` spellings pressed afterwards land at the list and do nothing, so no terminal focus, launch, close, or pager call is made and the model ends where it started |
 | [`projects-summary-preview.json`](scenarios/projects-summary-preview.json) | `project_families` | the inspector's family card for a selected family summary lists the family's bucket tally and every checkout with its branch and directory |
 | [`projects-tree-expanded.json`](scenarios/projects-tree-expanded.json) | `project_families` | the view toggle replaces the urgency headings with family summary lines and indented checkout rows, leaving unfamilied and single-checkout rows flat |
 | [`project-scope-survives-resize.json`](scenarios/project-scope-survives-resize.json) | `project_families` | an applied scope survives a narrowing resize and the switcher reopens on it, so the chip, the header selector, and the highlighted row all still name the same project |
@@ -672,7 +659,7 @@ inventory is:
 | [`worktrees-remove-retain-branch.json`](scenarios/worktrees-remove-retain-branch.json) | `worktree_lifecycle` | default `d` removal retains the branch and refreshes away the checkout row |
 | [`worktrees-reopen-ambiguous.json`](scenarios/worktrees-reopen-ambiguous.json) | `worktree_lifecycle` | ambiguous live sessions open a detailed picker without focusing either candidate |
 | [`worktrees-reopen-fresh.json`](scenarios/worktrees-reopen-fresh.json) | `worktree_lifecycle` | smart reopen launches fresh when no live session or transcript exists |
-| [`worktrees-reopen-live.json`](scenarios/worktrees-reopen-live.json) | `worktree_lifecycle` | smart reopen focuses the sole live Kitty session |
+| [`worktrees-reopen-live.json`](scenarios/worktrees-reopen-live.json) | `worktree_lifecycle` | smart reopen focuses the sole live session |
 | [`worktrees-reopen-replacement-profile.json`](scenarios/worktrees-reopen-replacement-profile.json) | `worktree_lifecycle` | a stale recorded profile detours through the shared profile picker and launches with the replacement |
 | [`worktrees-reopen-resume.json`](scenarios/worktrees-reopen-resume.json) | `worktree_lifecycle` | smart reopen resumes the newest indexed conversation |
 | [`worktrees-short-layout.json`](scenarios/worktrees-short-layout.json) | `worktree_lifecycle` | the inventory remains bounded in a short terminal |

@@ -1,7 +1,7 @@
 package state
 
 // This file is the reducer's persistence seam. The fact map itself stays
-// unexported; schema-v4 user-var serialization and startup restoration go
+// unexported; schema-v4 checkpoint serialization and startup restoration go
 // through the Facts/Restore snapshot pair, and the Compact retention policy
 // keeps both the live map and the persisted payload bounded to live/recent
 // facts.

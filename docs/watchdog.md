@@ -1,4 +1,4 @@
-# Watchdog and tab state
+# Watchdog and session state
 
 ## Watchdog
 
@@ -23,8 +23,7 @@ The daemon includes a watchdog that turns three independent signals into a
    a misconfigured `settings.json` or a daemon-down window where every
    session simply looks idle.
 
-All three apply to a tmux session as they do to a Kitty window, and need no
-Kitty: a daemon with none running sweeps its tmux sessions every second.
+All three apply to tmux sessions. The daemon sweeps them every second.
 
 Configure the four thresholds under `[defaults.watchdog]`:
 
@@ -52,10 +51,8 @@ watchdog = { active = 300, subagent = 2400, hook_silence = 0 }
 ```
 
 `color` is required on every profile and sets the project-title color in
-the dashboard, picker, detail header, and account chips, as well as the
-inactive Kitty tab-bar accent on every session launched under that profile.
-Active tab colors come from `kitty.conf` so the focused tab remains prominent.
-Harness identity uses `[harness_emojis]` for the tab-title prefix and
+the dashboard, picker, detail header, and account chips.
+Harness identity uses `[harness_emojis]` for the session-title prefix and
 `[harness_colors]` for harness-name cells in the dashboard and launch picker
 (see the starter `config.toml`).
 
@@ -83,15 +80,14 @@ selecting another installation. Run `amx daemon status` or `amx doctor` to see
 the selected executable and capability, and restart the daemon after installing
 Alerter or changing this setting.
 
-Clicking a session notification activates Kitty and focuses the exact originating
-OS window, tab, and pane through that session's Kitty socket. If the daemon did
-not receive a reusable socket or the target no longer exists, it records a
-diagnostic suppression and does not guess another target. Profile-wide hook
-silence notifications remain informational and do not navigate on click.
+Clicking a session notification focuses its runtime session in the connected
+Ghostty workspace or attached tmux client. If the session has ended or no
+viewer is available, the daemon records a diagnostic suppression. Profile-wide
+hook silence notifications remain informational and do not navigate on click.
 
-## Tab icons
+## Session icons
 
-The tab title is prefixed with an icon based on the latest hook event:
+The session title is prefixed with an icon based on the latest hook event:
 
 | Icon | Meaning |
 | --- | --- |
@@ -136,7 +132,7 @@ once at daemon startup, so run `amx daemon restart` after changing them.
 the hook lands.
 
 The hold is bypassed at arm time for pipe-mode panes, harnesses without an idle
-probe, windows holding a live ASL lease, a daemon with no Kitty client, and
+probe, sessions holding a live ASL lease, a daemon without a pane reader, and
 `enabled = false`. A bypass sends the native terminal to the reducer without the
 confirmed-idle wait, which paints 🛑 immediately in every case but one: under a
 live ASL lease the reducer goes on masking the stop icon for as long as the

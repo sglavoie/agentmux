@@ -16,7 +16,7 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cachefile"
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -433,7 +433,7 @@ type AttachView struct {
 	StatusLine bool
 	// Amx is the amx executable of the terminal that attaches, recorded in
 	// the server's environment for the keys bound in the configuration
-	// (kittykeys.TmuxAmxEnv). Empty leaves what is there.
+	// (keybindings.TmuxAmxEnv). Empty leaves what is there.
 	Amx string
 }
 
@@ -467,7 +467,7 @@ func (b *Backend) AttachCommand(pane backend.Ref, view AttachView) (*exec.Cmd, e
 		if !filepath.IsAbs(view.Amx) || strings.ContainsRune(view.Amx, 0) {
 			return nil, fmt.Errorf("tmux: amx executable %q must be an absolute path", view.Amx)
 		}
-		args = append(args, "set-environment", "-g", kittykeys.TmuxAmxEnv, escapeArg(view.Amx), ";")
+		args = append(args, "set-environment", "-g", keybindings.TmuxAmxEnv, escapeArg(view.Amx), ";")
 	}
 	args = append(args, "set-option", "-t", pane.ID, "status", status, ";", "attach-session", "-d", "-t", pane.ID)
 	// #nosec G204 -- the binary was resolved at NewServer and the target is a canonical pane ID.

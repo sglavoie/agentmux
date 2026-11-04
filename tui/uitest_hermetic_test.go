@@ -17,7 +17,7 @@ func TestUITestDriverSeedsHermeticFilesystemIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, _ := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	cleanupUITestDriver(t, d)
 
 	for label, path := range map[string]string{
@@ -85,20 +85,6 @@ func TestUITestDriverTickUsesDeterministicDaemonAndDiscoveryDependencies(t *test
 	}
 	if d.model.detailErr == nil || !strings.Contains(d.model.detailErr.Error(), "live daemon access is disabled") {
 		t.Fatalf("detail daemon guard = %v", d.model.detailErr)
-	}
-}
-
-func TestUITestDriverActionDaemonFailsFast(t *testing.T) {
-	d := newUITestDriverModel(testModelWithSessions(), UITestSize{Width: 80, Height: 24})
-	cleanupUITestDriver(t, d)
-	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-test")
-	row := makeSessions()[0]
-	row.WindowID = 42
-	if err := d.drain(d.model.clearStatusCmd(row)); err != nil {
-		t.Fatalf("clear status command: %v", err)
-	}
-	if err := d.Err(); err == nil || !strings.Contains(err.Error(), "live daemon access is disabled") {
-		t.Fatalf("clear-status daemon guard = %v", err)
 	}
 }
 

@@ -64,10 +64,10 @@ extension AppDelegate: DaemonConnectionDelegate {
     }
 
     func storeChanged() {
-        if store.feed == .live { handoffOrigins.observe(store.sessions) }
+        if store.feed == .live { handoffOrigins.observe(store.managedSessions) }
         refreshDockBadge()
-        historyWindow?.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
-        historyWindow?.model.workingConversations = Set(store.sessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
+        historyWindow?.model.liveConversations = Set(store.feed == .live ? store.managedSessions.compactMap { $0.conversation?.encoded } : [])
+        historyWindow?.model.workingConversations = Set(store.managedSessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
         refreshHistoryRecap()
         refreshBriefing()
         snoozes.reconcile()
@@ -78,8 +78,6 @@ extension AppDelegate: DaemonConnectionDelegate {
         if store.feed == .live, let snapshot = store.snapshot {
             aslPanel?.flow.observe(waiting: snapshot.asl.waiting)
         }
-        let kitty = Self.kittyInUse(snapshotSocket: store.snapshot?.kitty.socket ?? "", sessions: store.sessions)
-        if preferencesModel.kittyInUse != kitty { preferencesModel.kittyInUse = kitty }
         preferences.daemonStatus = store.daemonStatus
         publishPreferences()
     }
@@ -87,7 +85,7 @@ extension AppDelegate: DaemonConnectionDelegate {
     func refreshHistoryRecap() {
         guard let historyWindow, historyWindow.window?.isVisible == true,
               let selected = historyWindow.model.selected else { return }
-        let session = store.sessions.first { $0.conversation == selected.conversation.identity }
+        let session = store.managedSessions.first { $0.conversation == selected.conversation.identity }
         historyWindow.model.recap.select(selected.conversation.identity,
             revision: String(session?.presentationChangedAtMS ?? 0) + (session?.iconState ?? ""),
             canGenerate: session?.isWorking != true)
@@ -96,7 +94,7 @@ extension AppDelegate: DaemonConnectionDelegate {
     func refreshDockBadge(force: Bool = false) {
         if force { NSApp.dockTile.badgeLabel = nil }
         // The compact title is the attention total, empty at zero or offline.
-        NSApp.dockTile.badgeLabel = store.title(style: .compact)
+        NSApp.dockTile.badgeLabel = store.managedTitle(style: .compact)
     }
 
     /// Pins the sessions this app pinned by itself before pins were the
@@ -108,17 +106,11 @@ extension AppDelegate: DaemonConnectionDelegate {
         guard !Self.isRunningTests, !defaults.bool(forKey: WorkspaceOrder.pinsSharedDefaultsKey),
               store.feed == .live, let snapshot = store.snapshot, command != nil else { return }
         defaults.set(true, forKey: WorkspaceOrder.pinsSharedDefaultsKey)
-        let rows = WorkspaceSidebar.rows(store.sessions, snapshotSocket: snapshot.kitty.socket)
+        let rows = WorkspaceSidebar.rows(store.managedSessions)
         for row in attentionOrder.unsharedPins(rows) {
             Self.logger.notice("workspace: sharing the pin of \(WorkspaceOrder.token(row.key), privacy: .public)")
             workspaceSetPinned(row, true)
         }
-    }
-
-    /// Whether any Kitty is in use, for Settings' Kitty-only fields: the
-    /// daemon knows a Kitty socket, or a listed session lives in Kitty.
-    nonisolated static func kittyInUse(snapshotSocket: String, sessions: [CompanionSession]) -> Bool {
-        !snapshotSocket.isEmpty || sessions.contains { $0.embeddedRuntimeSessionID == nil && $0.windowID > 0 }
     }
 
     /// Hands Preferences what it reports, without republishing an unchanged

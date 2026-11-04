@@ -15,25 +15,12 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/gitstate"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
-
-// kittyTitleClient is the narrow subset of kitty.KittyClient that the daemon
-// sweeps need. Declaring it locally lets tests provide a focused fake instead
-// of all methods on kitty.KittyClient. kitty.SubprocessClient satisfies this
-// interface implicitly.
-type kittyTitleClient interface {
-	ListWindows() ([]kitty.OSWindow, error)
-	GetText(matchExpr, extent string) (string, error)
-	SetTabTitle(matchExpr, title string) error
-	SetUserVars(matchExpr string, vars map[string]string) error
-}
 
 // Handler processes daemon requests.
 type Handler struct {
@@ -92,27 +79,15 @@ type Handler struct {
 	// daemon (receipt order is a process-lifetime notion).
 	eventSeq eventlog.Sequence
 
-	// kittyClient is used by the stale sweep to clear stranded tab-title icons.
-	// Injected by daemon.Run; nil in unit tests that don't exercise the
-	// title-clear path.
-	kittyClient kittyTitleClient
-
-	// screenObserver, when set, is what the screen probes read pane screens
-	// through instead of the Kitty client. The probes consume backend.Screen
-	// observations either way; this is the seam for another backend's reader.
+	// screenObserver is an optional observation seam for tests.
 	screenObserver backend.Observer
 
-	// runtimeScreens opens the screen reader of a backend instance other than
-	// Kitty, for the probes of the sessions registered on it. Nil means those
-	// sessions are not probed (runtime_screen_probes.go).
+	// runtimeScreens opens the screen reader of a registered backend instance.
+	// Nil means those sessions are not probed (runtime_screen_probes.go).
 	runtimeScreens RuntimeScreenReader
 	// runtimeProbeTicks counts the probe ticks that reached those sessions.
 	// Only the screen-probe loop touches it.
 	runtimeProbeTicks uint64
-
-	// renderQueue is the latest-generation per-window render queue consumed by
-	// the render worker (renderqueue.go), the daemon's single Kitty writer.
-	renderQueue *rendering.Queue
 
 	// processInspector observes the validated PID/start-token fingerprints
 	// retained by reducer facts. The lifecycle loop always calls it off stateMu;
@@ -153,23 +128,15 @@ type Handler struct {
 	nextStopHoldSeq               uint64
 	afterDeferredStopClaimForTest func(windowID int, seq uint64)
 
-	kittySockets      map[int]string
-	kittyRestored     map[int]bool
-	lastKittyListenOn string
-	// kittyRestorePending is set by a daemon that started with no Kitty to
-	// read and cleared by the maintenance tick that restores from the first
-	// snapshot.
-	kittyRestorePending atomic.Bool
-
 	// runtimeDirectory resolves the runtime session a managed hook names. It
 	// is installed once at startup by SetRuntimeSessionDirectory, before the
 	// server dispatches a request, and is internally synchronized. Nil refuses
-	// managed hooks as retryable; legacy hooks never consult it.
+	// managed hooks as retryable.
 	runtimeDirectory RuntimeSessionDirectory
 	// runtimeRoutes binds reducer slots to the runtime sessions that own them
 	// (runtime_routes.go). Guarded by stateMu.
 	runtimeRoutes runtimeRoutes
-	// runtimeLabeler reads a non-Kitty runtime session's label from its
+	// runtimeLabeler reads a runtime session's label from its
 	// backend (runtime_labels.go). Installed once at startup; nil labels a
 	// session with its registry project alone.
 	runtimeLabeler RuntimeSessionLabeler
@@ -189,7 +156,7 @@ type Handler struct {
 	// writer is installed once at startup; nil writes nothing.
 	runtimeHealth  runtimeHealthTally
 	runtimeJournal runtimeJournal
-	// runtimeLabels is the project and profile of each non-Kitty runtime
+	// runtimeLabels is the project and profile of each runtime
 	// session bound to a slot, by runtime-session ID. Guarded by stateMu.
 	runtimeLabels map[string]runtimeLabel
 	// profileColors is each configured profile's palette color, by folded
@@ -222,33 +189,11 @@ type Handler struct {
 	runtimeCheckpointMu      sync.Mutex
 	runtimeCheckpointDigest  [32]byte
 	runtimeCheckpointWritten bool
-	// otherKittyTrees holds the latest window tree of each Kitty instance
-	// other than the listed one that still has windows in the store, keyed by
-	// socket. The companion, Git probe, and focus observations use each tree
-	// only for slots from that socket. Guarded by stateMu; a stored tree is
-	// never mutated, only replaced.
-	otherKittyTrees map[string][]kitty.OSWindow
-	// foreignListAfter is the last other-instance socket a maintenance pass
-	// listed; the next pass starts after it, so every instance is listed in
-	// turn when there are more of them than one pass may list. Guarded by
-	// stateMu.
-	foreignListAfter string
-
-	// focusClient performs focus_window's list-verify-focus sequence. It is
-	// installed once on the startup goroutine by SetFocusClient, before the
-	// server can dispatch a request; nil answers focus_window with an error.
-	focusClient notification.FocusClient
 	// runtimeSwitcher is the terminal half of focus_session: it switches the
 	// terminal the operator used last to a runtime session. Installed once at
 	// startup by SetRuntimeSessionSwitcher; nil leaves a session shown only
 	// by a connected workspace.
 	runtimeSwitcher RuntimeSessionSwitcher
-
-	// snapshots holds the immutable Kitty snapshot cache. The render/restore
-	// loop is the single lister and publishes into it; hook routing reads it
-	// without any Kitty I/O so a slow or wedged ListWindows can never delay a
-	// hook acknowledgement. Its own RWMutex keeps snapshot reads off stateMu.
-	snapshots probes.SnapshotStore
 
 	// readiness tracks whether the daemon completed its bounded initial
 	// snapshot+restore before binding the public socket, and, if not, why it
@@ -259,24 +204,6 @@ type Handler struct {
 	// goroutine. Nil means spawn a goroutine (production); tests inject a
 	// synchronous runner for deterministic assertions.
 	probeRunner func(func())
-
-	// activeLoopCache memoizes agent-session-loop discovery for the ASL
-	// sibling-pane routing exception (handler_asl_routing.go). Discovery scans
-	// on-disk loop state, so a hook burst from the same pane must not rescan on
-	// every event. Entries are valid for at most rendering.Interval and are
-	// invalidated whenever a loop lifecycle event (started, turn started,
-	// finished) changes the active set. The cache is rebuilt lazily, including
-	// after a daemon restart, and is never persisted in amx_state. Guarded by
-	// stateMu.
-	activeLoopCache      []agentloop.Candidate
-	activeLoopCacheAt    time.Time
-	activeLoopCacheValid bool
-	// activeLoopCacheGen counts lifecycle invalidations. A scan captures the
-	// generation before releasing stateMu to discover, and only publishes its
-	// result if the generation still matches on re-lock. This prevents a slow
-	// scan that started before invalidateActiveLoopCache from overwriting the
-	// newer (empty) state with a stale candidate set.
-	activeLoopCacheGen uint64
 
 	// aslMissStreak counts, per window lease, how many consecutive discoveries
 	// positively confirmed the lease's run absent. Reconciliation releases the
@@ -318,7 +245,7 @@ type Handler struct {
 	aslSupervisors asl.SupervisorRegistry
 	// aslRuntimeRuns maps each ASL run a managed hook delivered to the slot of
 	// the runtime session that delivered it. It is what keeps a run routed by
-	// its session's identity out of Kitty workspace matching. Guarded by
+	// its session's identity rather than workspace matching. Guarded by
 	// stateMu.
 	aslRuntimeRuns map[string]int
 
@@ -429,7 +356,7 @@ type Handler struct {
 
 	// windowMetadata stores the durable per-window export snapshot. Terminal
 	// cleanup intentionally does not clear this so post-mortem exports still
-	// have identity/context even after the original Kitty tab is gone;
+	// have identity/context after a runtime session closes;
 	// closed-window GC bounds it via windowTombstones below.
 	windowMetadata map[int]protocol.WindowDebugMetadata
 
@@ -472,10 +399,7 @@ func NewHandler(guard *activity.StateGuard, notifier *notification.Notifier) *Ha
 		startedAt:                      time.Now(),
 		store:                          make(map[int]*state.WindowState),
 		pendingStopHolds:               make(map[int]pendingStopHold),
-		renderQueue:                    rendering.NewQueue(),
 		processInspector:               probes.NewPSHarnessProcessInspector(),
-		kittySockets:                   make(map[int]string),
-		kittyRestored:                  make(map[int]bool),
 		claudeContextLimitProbeEnabled: true,
 		stopConfirmDelay:               defaultStopConfirmDelay,
 		stopConfirmTimeout:             defaultStopConfirmTimeout,

@@ -29,17 +29,6 @@ func accountByName(cfg *config.Config, profile string) (config.Account, bool) {
 	return config.Account{}, false
 }
 
-func requireProjectAccount(id ID, deps Dependencies, project config.Session) (config.Account, error) {
-	if deps.Config == nil {
-		return config.Account{}, dependencyError(id, "configuration")
-	}
-	account, ok := accountByName(deps.Config, project.EffectiveProfile())
-	if !ok {
-		return config.Account{}, &Error{Code: "not_found", Action: id, Message: fmt.Sprintf("no matching profile %q", project.EffectiveProfile())}
-	}
-	return account, nil
-}
-
 func parameterBool(parameters map[string]string, name string) bool {
 	value := strings.TrimSpace(parameters[name])
 	return strings.EqualFold(value, "true") || value == "1" || strings.EqualFold(value, "yes")

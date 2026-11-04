@@ -111,13 +111,9 @@ nothing else in that state is interpreted — the loop's turn, verification,
 pause, and lock bookkeeping are private to ASL. This is a hard paired cutover:
 Agent Mux keeps no parser for state that predates the projection.
 
-Agent Mux implements `asl-amx-1.85ec3041b9f03f47`, which added the
-`run.redirect`, `run.redirect_status`, and `run.recover_conversation` bridge
-methods. Loop observation also accepts the previous set,
-`asl-amx-1.6f30193cd1744a98`: its projection and lifecycle schemas and fixtures
-match the vendored components exactly, so state written by an ASL that has not
-moved yet stays observable. The bridge accepts only the exact current set, and
-`amx doctor` judges the state root by the same rule the reconciler uses.
+Agent Mux implements `asl-amx-1.d0c0c70abf623b3e`. The bridge, projection,
+and lifecycle hook all require that exact contract set; `amx doctor` judges the
+state root by the same rule as the reconciler.
 Unknown contract identities remain
 indeterminate, and ongoing loop discovery still authenticates the PID and birth
 token. Paused runs have no loop process and do not restore `🔁` onto new tabs.

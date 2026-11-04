@@ -150,7 +150,7 @@ func TestCompactHeaderGeometryIsFixed(t *testing.T) {
 	}{
 		{"ready", CompactInput{Content: InspectorReady, Session: full, Output: SplitOutput("a\nb\n")}},
 		{"loading", CompactInput{Content: InspectorLoading, Session: full}},
-		{"failed", CompactInput{Content: InspectorFailed, Session: full, Error: "kitty: no such window"}},
+		{"failed", CompactInput{Content: InspectorFailed, Session: full, Error: "tmux: no such pane"}},
 		{"vanished", CompactInput{Content: InspectorVanished, Session: full}},
 		{"no selection", CompactInput{Content: InspectorNoSelection}},
 		{"session with nothing to say", CompactInput{Content: InspectorReady, Session: bare}},
@@ -270,7 +270,7 @@ func TestCompactAndInspectorSayTheSameSentences(t *testing.T) {
 	}{
 		{content: InspectorLoading},
 		{content: InspectorReady},
-		{content: InspectorFailed, err: "kitty: no such window"},
+		{content: InspectorFailed, err: "tmux: no such pane"},
 		{content: InspectorVanished},
 		{content: InspectorNoSelection},
 		{content: InspectorReady, output: SplitOutput("only line\n")},
@@ -395,7 +395,7 @@ func TestCompactDoesNotLeakStylesPastItsWidth(t *testing.T) {
 }
 
 // TestCompactIsPure renders the same input twice and compares bytes. Nothing in
-// the tile may read a clock, a config file, Kitty, or the daemon.
+// the tile may read a clock, a config file, the terminal, or the daemon.
 func TestCompactIsPure(t *testing.T) {
 	in := compactInput(CompactInput{
 		Content: InspectorReady,

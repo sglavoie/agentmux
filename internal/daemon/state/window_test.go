@@ -9,7 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-func TestWindowStateUserVarRoundTrip(t *testing.T) {
+func TestWindowStateStatePayloadRoundTrip(t *testing.T) {
 	activity := time.Unix(1710000001, 0)
 	guardExpiry := time.Unix(1710000301, 0)
 	state := WindowState{
@@ -32,22 +32,22 @@ func TestWindowStateUserVarRoundTrip(t *testing.T) {
 		Dirty:           true,
 		Seq:             7,
 		RenderFailures:  3,
-		LastRenderError: "kitty unavailable",
+		LastRenderError: "tmux unavailable",
 		GuardAction:     "active",
 		GuardExpiresAt:  guardExpiry,
 	}
 
-	encoded, err := state.MarshalUserVar()
+	encoded, err := state.MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	if strings.Contains(encoded, "PreToolUse") && strings.Contains(encoded, "result_icon_state") {
-		t.Fatalf("MarshalUserVar() persisted event log: %s", encoded)
+		t.Fatalf("MarshalStatePayload() persisted event log: %s", encoded)
 	}
 
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 
 	if got.LastAction != state.LastAction {
@@ -94,12 +94,12 @@ func TestWindowStateUserVarRoundTrip(t *testing.T) {
 	}
 }
 
-func TestWindowStateUserVarEmptyClearsState(t *testing.T) {
+func TestWindowStateStatePayloadEmptyClearsState(t *testing.T) {
 	state := WindowState{LastAction: "active", LastAccount: "work"}
-	if err := state.UnmarshalUserVar(" \n\t "); err != nil {
-		t.Fatalf("UnmarshalUserVar(empty) error: %v", err)
+	if err := state.UnmarshalStatePayload(" \n\t "); err != nil {
+		t.Fatalf("UnmarshalStatePayload(empty) error: %v", err)
 	}
 	if !reflect.DeepEqual(state, WindowState{}) {
-		t.Fatalf("UnmarshalUserVar(empty) = %+v, want zero state", state)
+		t.Fatalf("UnmarshalStatePayload(empty) = %+v, want zero state", state)
 	}
 }

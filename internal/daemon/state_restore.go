@@ -1,15 +1,11 @@
 package daemon
 
 import (
-	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 func (h *Handler) ensureWindowStateLocked(windowID int) *state.WindowState {
@@ -19,8 +15,8 @@ func (h *Handler) ensureWindowStateLocked(windowID int) *state.WindowState {
 	st := h.store[windowID]
 	if st == nil {
 		if h.runtimeSlotClosedLocked(windowID) {
-			// A non-Kitty slot no runtime session holds is closed for good:
-			// Kitty pruning skips it and retirement walks bindings, so state
+			// A slot no runtime session holds is closed for good:
+			// retirement walks bindings, so state
 			// stored there would never be dropped. Work that reaches it late (a
 			// hook translated before its session ended, a probe or timer that
 			// outlived it) mutates a detached state instead. A slot a session
@@ -30,7 +26,7 @@ func (h *Handler) ensureWindowStateLocked(windowID int) *state.WindowState {
 		}
 		st = &state.WindowState{}
 		h.store[windowID] = st
-		// A window ID coming back to life (Kitty ID reuse, or an event racing
+		// A slot ID coming back to life (ID reuse, or an event racing
 		// the close) is no longer a tombstone; its diagnostics resume live.
 		h.reviveTombstoneLocked(windowID)
 	}
@@ -44,10 +40,8 @@ func (h *Handler) windowStateLocked(windowID int) (*state.WindowState, bool) {
 
 // markWindowDirtyLocked records a visible-state change (effective icon, loop
 // marker, or the unseen bit that decides which dashboard group the row sits in)
-// and queues the window for an immediate render. Visible does not mean "in the
-// tab title": the unseen bit is carried only by amx_state, and it is here rather
-// than on the batched path because a row the user has just read must survive a
-// restart that lands before the next maintenance flush.
+// and queues its generation for checkpointing. The unseen bit is persisted with
+// the reducer state so a row the user has just read survives a daemon restart.
 func (h *Handler) markWindowDirtyLocked(windowID int) {
 	st := h.markWindowStateDirtyLocked(windowID)
 	h.enqueueRenderLocked(windowID, st)
@@ -56,7 +50,7 @@ func (h *Handler) markWindowDirtyLocked(windowID int) {
 // markWindowActivityDirtyLocked records a durable change that does not alter
 // the visible state (activity timestamps, bookkeeping). The window is NOT
 // queued: batched persistence lands on the next maintenance flush, so a busy
-// session cannot force a Kitty write per event.
+// session does not force a checkpoint write per event.
 func (h *Handler) markWindowActivityDirtyLocked(windowID int) {
 	h.markWindowStateDirtyLocked(windowID)
 }
@@ -80,103 +74,14 @@ func (h *Handler) markWindowStateDirtyLocked(windowID int) *state.WindowState {
 	return st
 }
 
-func (h *Handler) rememberKittySocketLocked(windowID int, socket string) {
-	socket = strings.TrimSpace(socket)
-	// Never let an unusable value (empty or a process-local "fd:" descriptor)
-	// replace an existing stable socket in per-window or fallback storage.
-	if !isReusableKittySocket(socket) {
-		return
-	}
-	if h.kittySockets == nil {
-		h.kittySockets = make(map[int]string)
-	}
-	h.kittySockets[windowID] = socket
-	h.lastKittyListenOn = socket
-	h.syncRendererMetadataLocked(windowID)
-}
-
-// isReusableKittySocket reports whether socket is a transferable Kitty
-// remote-control endpoint that a different process (the detached daemon) can
-// dial. It defers to kitty.IsReusableListenAddress so per-window/fallback
-// storage and the listener normalization path share one validation rule:
-// empty values, process-local "fd:" descriptors, prefix-only "unix:"/"tcp:"
-// endpoints, and unknown forms are all rejected rather than guessed at.
-func isReusableKittySocket(socket string) bool {
-	return kitty.IsReusableListenAddress(socket)
-}
-
-func (h *Handler) restoreFromUserVars(windows []kitty.OSWindow, now time.Time) {
-	h.restoreFromUserVarsFor(windows, now, "")
-}
-
-func (h *Handler) restoreFromUserVarsFor(windows []kitty.OSWindow, now time.Time, socket string) {
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-
-	for i := range windows {
-		for j := range windows[i].Tabs {
-			tab := windows[i].Tabs[j]
-			for k := range windows[i].Tabs[j].Windows {
-				win := windows[i].Tabs[j].Windows[k]
-				slot := h.kittySlotLocked(socket, win.ID)
-				if h.kittyRestored == nil {
-					h.kittyRestored = make(map[int]bool)
-				}
-				h.kittyRestored[slot] = true
-				if isReusableKittySocket(socket) {
-					if h.kittySockets == nil {
-						h.kittySockets = make(map[int]string)
-					}
-					h.kittySockets[slot] = socket
-				}
-				if existing, live := h.store[slot]; live {
-					// Restore is a one-shot startup seeding of durable state.
-					// A window that already holds in-process state was populated
-					// either by an earlier restore or, during a degraded startup,
-					// by a hook event that landed after the bounded snapshot timed
-					// out. A late-completing startup restore (or the maintenance
-					// recovery restore) must never overwrite those newer reducer
-					// facts, ASL leases, or activity, so the accepted in-process
-					// state stays authoritative. But a hook creates state for its
-					// own source only, so blindly skipping the window permanently
-					// loses every disjoint durable fact the persisted amx_state
-					// still carries (a live ASL lease, pipe child, subagent, or
-					// attention/error contribution). Merge those disjoint facts
-					// in without touching any same-source in-process fact; the
-					// merge is idempotent, so repeated maintenance ticks and a
-					// late startup completion cannot duplicate or regress it.
-					h.mergePersistedFactsLocked(slot, existing, win, now)
-					continue
-				}
-				if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
-					continue
-				}
-				if strings.TrimSpace(win.UserVars.AMXState) == "" {
-					continue
-				}
-				st, err := h.restoreWindowPayloadLocked(slot, win.UserVars.AMXState, now)
-				if err != nil {
-					slog.Warn("renderer: discarded invalid restored state", "window_id", win.ID, "err", err)
-					continue
-				}
-				if desired := rendering.DesiredIcon(st); desired != palette.ParseTitleParts(tab.Title).State {
-					slog.Warn("renderer: restored state differs from live title", "window_id", win.ID, "desired_icon", desired, "title_icon", palette.ParseTitleParts(tab.Title).State)
-				}
-			}
-		}
-	}
-}
-
-// restoreWindowPayloadLocked rebuilds slot's state from a persisted amx_state
-// payload and installs it. It is the one restore path for every backend: a
-// Kitty window's payload comes from its user var, a non-Kitty runtime slot's
-// from the runtime checkpoint (runtime_checkpoint.go). The caller has checked
+// restoreWindowPayloadLocked rebuilds a slot's state from its runtime checkpoint
+// payload and installs it. The caller has checked
 // that the slot holds no in-process state, which would otherwise win. A slot
 // the runtime routes already bind to a runtime session restores bound to it,
 // so the session's next event keeps the restored facts. Callers hold stateMu.
 func (h *Handler) restoreWindowPayloadLocked(slot int, payload string, now time.Time) (*state.WindowState, error) {
 	var st state.WindowState
-	if err := st.UnmarshalUserVar(payload); err != nil {
+	if err := st.UnmarshalStatePayload(payload); err != nil {
 		return nil, err
 	}
 	if st.GuardExpiresAt.IsZero() || !st.GuardExpiresAt.After(now) {
@@ -227,34 +132,12 @@ func (h *Handler) restoreWindowPayloadLocked(slot int, payload string, now time.
 	return &st, nil
 }
 
-// mergePersistedFactsLocked folds the disjoint still-live reducer facts carried
-// by a window's persisted amx_state into the accepted in-process state that a
-// degraded-window hook already created. It is the merge half of the restore
-// skip guard: the in-process state stays authoritative (Reducer.MergeDisjoint
-// only adds sources the window does not already hold), so no accepted hook
-// fact, sequence, reset flow, conversation identity, render generation, or
-// timestamp is ever rolled backward. Merging nothing (no persisted facts, all
-// same-source, or a malformed payload) leaves the window exactly as the hook
-// left it, which keeps the operation idempotent across repeated maintenance
-// ticks and a late-completing startup restore. Callers hold stateMu.
-func (h *Handler) mergePersistedFactsLocked(windowID int, st *state.WindowState, win kitty.Window, now time.Time) {
-	if win.UserVars.EffectiveProfile() == "" && win.UserVars.EffectiveHarness() == "" {
-		return
-	}
-	if strings.TrimSpace(win.UserVars.AMXState) == "" {
-		return
-	}
-	if err := h.mergePersistedPayloadLocked(windowID, st, win.UserVars.AMXState, now); err != nil {
-		slog.Warn("renderer: discarded invalid restored state on merge", "window_id", windowID, "err", err)
-	}
-}
-
 // mergePersistedPayloadLocked is mergePersistedFactsLocked for a payload
 // already read from wherever its backend persists it. It reports only a
 // malformed payload; merging nothing is not an error. Callers hold stateMu.
 func (h *Handler) mergePersistedPayloadLocked(windowID int, st *state.WindowState, payload string, now time.Time) error {
 	var persisted state.WindowState
-	if err := persisted.UnmarshalUserVar(payload); err != nil {
+	if err := persisted.UnmarshalStatePayload(payload); err != nil {
 		return err
 	}
 	if persisted.Reducer == nil {

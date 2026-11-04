@@ -2,67 +2,12 @@ package session
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 )
-
-// OpenDirectory opens a session's directory in a new Kitty tab as a plain
-// shell (no harness). The tab gets the project title and account color
-// but no user vars, so it won't appear in the dashboard's session list.
-func OpenDirectory(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config) error {
-	formattedTitle := sess.Title
-
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return fmt.Errorf("listing running sessions: %w", err)
-	}
-	// Include every tab (managed and unmanaged) so the color retry below
-	// cannot repaint a pre-existing tab whose title coincides with
-	// formattedTitle.
-	beforeGroups := allGroupRefs(osWindows)
-	term := kitty.NewBackend(client)
-
-	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
-	if err != nil {
-		loc = ""
-		prevTabID = 0
-	}
-
-	focusInsertReference(term, loc, prevTabID)
-
-	spec := backend.LaunchSpec{
-		Title:     formattedTitle,
-		Directory: config.ExpandTilde(sess.Directory),
-		Placement: placementArg(loc),
-	}
-
-	if err := term.Launch(spec); err != nil {
-		return fmt.Errorf("opening directory for %q: %w", formattedTitle, err)
-	}
-
-	colorName := acc.Color
-	if color, err := palette.Lookup(colorName); err == nil {
-		if colorErr := applyColorWithRetry(term, beforeGroups, formattedTitle, color); colorErr != nil {
-			slog.Warn("applying tab color after open",
-				"title", formattedTitle,
-				"account", acc.Name,
-				"harness", acc.EffectiveHarness(),
-				"profile_color", acc.Color,
-				"error", colorErr,
-			)
-		}
-	}
-
-	return nil
-}
 
 // resolveEditor picks an editor command. Order:
 //
@@ -95,8 +40,7 @@ func resolveEditor(cfgEditor string) (string, []string, error) {
 }
 
 // EditorCommand is the configured editor as an argument list, resolved the
-// way OpenInEditor resolves it, for a caller that runs the editor in its own
-// terminal because there is no Kitty tab to open.
+// way EditPath resolves it, for a caller that runs the editor in its own terminal.
 func EditorCommand(cfg *config.Config) ([]string, error) {
 	configured := ""
 	if cfg != nil {
@@ -109,93 +53,9 @@ func EditorCommand(cfg *config.Config) ([]string, error) {
 	return append([]string{name}, args...), nil
 }
 
-// OpenInEditor opens a session's directory in a new Kitty tab running the
-// user's configured editor. The tab gets the correct title and account color
-// but no user vars, so it won't appear in the dashboard's session list
-// (same contract as OpenDirectory).
-func OpenInEditor(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config) error {
-	formattedTitle := FormatTitle(sess, acc, cfg)
-
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return fmt.Errorf("listing running sessions: %w", err)
-	}
-	beforeGroups := allGroupRefs(osWindows)
-	term := kitty.NewBackend(client)
-
-	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
-	if err != nil {
-		loc = ""
-		prevTabID = 0
-	}
-
-	focusInsertReference(term, loc, prevTabID)
-
-	name, editorArgs, err := resolveEditor(cfg.Defaults.Editor)
-	if err != nil {
-		return fmt.Errorf("resolving editor for %q: %w", formattedTitle, err)
-	}
-
-	expandedDir := config.ExpandTilde(sess.Directory)
-	spec := backend.LaunchSpec{
-		Title:     formattedTitle,
-		Directory: expandedDir,
-		Placement: placementArg(loc),
-		Argv:      append([]string{name}, append(editorArgs, expandedDir)...),
-	}
-
-	if err := term.Launch(spec); err != nil {
-		return fmt.Errorf("opening editor for %q: %w", formattedTitle, err)
-	}
-
-	colorName := acc.Color
-	if color, err := palette.Lookup(colorName); err == nil {
-		if colorErr := applyColorWithRetry(term, beforeGroups, formattedTitle, color); colorErr != nil {
-			slog.Warn("applying tab color after open-in-editor",
-				"title", formattedTitle,
-				"account", acc.Name,
-				"harness", acc.EffectiveHarness(),
-				"profile_color", acc.Color,
-				"error", colorErr,
-			)
-		}
-	}
-
-	return nil
-}
-
-// OpenPathInEditor launches a Kitty tab running the user's editor against an
-// arbitrary directory. Unlike OpenInEditor it has no profile/harness context,
-// so it skips color application and account-derived tab styling. title becomes
-// the new tab's title.
-func OpenPathInEditor(client kitty.KittyClient, path, title string, cfg *config.Config) error {
-	name, editorArgs, err := resolveEditor(cfg.Defaults.Editor)
-	if err != nil {
-		return fmt.Errorf("resolving editor for %q: %w", title, err)
-	}
-
-	expandedPath := config.ExpandTilde(path)
-	directory := expandedPath
-	if info, statErr := os.Stat(expandedPath); statErr == nil && !info.IsDir() {
-		directory = filepath.Dir(expandedPath)
-	}
-	term := kitty.NewBackend(client)
-	spec := backend.LaunchSpec{
-		Title:     title,
-		Directory: directory,
-		Argv:      append([]string{name}, append(editorArgs, expandedPath)...),
-	}
-
-	if err := term.Launch(spec); err != nil {
-		return fmt.Errorf("opening editor for %q: %w", title, err)
-	}
-	return nil
-}
-
 // EditPath runs the configured editor against one file or directory in the
-// current terminal. Unlike OpenPathInEditor it waits for the editor to exit,
-// which makes it suitable for workflows that must read a user's edits before
-// continuing (for example, finalizing a handoff pack).
+// current terminal. It waits for the editor to exit, which makes it suitable for workflows
+// that must read a user's edits before continuing.
 func EditPath(path string, cfg *config.Config) error {
 	if cfg == nil {
 		return fmt.Errorf("editing %q: configuration is required", path)

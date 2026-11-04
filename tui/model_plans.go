@@ -12,9 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
-	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
@@ -240,7 +238,7 @@ func (m Model) handlePlanSearchNavKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
 			return m, nil
 		}
-		return m, openPlanInEditorCmd(m.client, m.planResults[m.planCursor].Meta, m.cfg)
+		return m, openPlanInEditorCmd(m.planResults[m.planCursor].Meta, m.cfg)
 	case keyEnter:
 		if m.planCursor < 0 || m.planCursor >= len(m.planResults) {
 			return m, nil
@@ -318,25 +316,14 @@ func (m Model) runPlansRefreshCmd(idx *plans.Index, cfg *config.Config, seq int)
 	return plansRefreshCmd(idx, cfg, seq)
 }
 
-// openPlanInEditorCmd invokes session.OpenPathInEditor against the plan's
-// directory and surfaces an error back to the model on failure.
-//
-// Outside Kitty the editor runs in this terminal instead of a new tab.
-func openPlanInEditorCmd(client kitty.KittyClient, meta plans.PlanMeta, cfg *config.Config) tea.Cmd {
-	if client == nil {
-		return commands.EditHere(cfg, meta.DirPath, func(err error) tea.Msg {
-			if err != nil {
-				return planEditorErrMsg{err: err}
-			}
-			return nil
-		})
-	}
-	return func() tea.Msg {
-		if err := session.OpenPathInEditor(client, meta.DirPath, "plan: "+meta.Name, cfg); err != nil {
+// openPlanInEditorCmd opens the plan directory in this terminal.
+func openPlanInEditorCmd(meta plans.PlanMeta, cfg *config.Config) tea.Cmd {
+	return commands.EditHere(cfg, meta.DirPath, func(err error) tea.Msg {
+		if err != nil {
 			return planEditorErrMsg{err: err}
 		}
 		return nil
-	}
+	})
 }
 
 // currentPlanQuery snapshots the text query into a plans.Query value.
@@ -510,7 +497,7 @@ func (m Model) handlePlanViewKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.viewerPlan == nil {
 			return m, nil
 		}
-		return m, openPlanInEditorCmd(m.client, *m.viewerPlan, m.cfg)
+		return m, openPlanInEditorCmd(*m.viewerPlan, m.cfg)
 	}
 	return m, nil
 }

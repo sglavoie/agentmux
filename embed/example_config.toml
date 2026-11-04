@@ -20,7 +20,7 @@
 # Paths in this file (home_dir, directory) support `~` for $HOME.
 #
 # Minimum manual setup: uncomment and customize this profile/project pair.
-# Launches default to the private tmux server; Kitty remains an explicit choice.
+# Launches use the private tmux server.
 # README.md#first-session has the complete minimal file; do not add a second
 # [defaults] section to this template.
 #
@@ -108,12 +108,9 @@ confirm_destructive = false
 # Each top-level directory under this root is treated as one plan.
 # plans_directory = "~/.local/share/agent-plans"
 
-# Where a launch goes when the command gives no --backend: "tmux" (the private
-# tmux server, whose agents outlive every terminal and are shown by `amx
-# attach`, the dashboard in any terminal, or Agent Mux.app's workspace) or
-# "kitty" (a new Kitty tab; needs Kitty and `just install-kitty`). Unset or
-# empty means "tmux" in every terminal, including Kitty. Agent Mux.app launches
-# into its workspace unless its own Preferences choose Kitty or Follow CLI.
+# New agents run on the private tmux server, whose sessions outlive every
+# terminal and appear through `amx attach`, the dashboard, and the macOS app.
+# Unset or empty means "tmux".
 # launch_backend = "tmux"
 # Plans in that directory and harness transcript files remain authoritative.
 # Agent Mux keeps only disposable filesystem caches at:
@@ -397,9 +394,8 @@ permission_debounce_ms = 500
 
 
 # ── Harness emojis ────────────────────────────────────────────────────────────
-# One-character marker per harness, prepended to the Kitty tab title just
-# before the project name so you can tell at a glance which harness is
-# running in each tab. Every harness referenced by a profile below must
+# One-character marker per harness, shown beside the project name in the
+# dashboard and native workspace. Every harness referenced by a profile below must
 # have an entry here. Values must be a single emoji glyph that does not
 # collide with the palette state icons (⚡ 🛑 🔑 ⚠️ ❗ 🤖 🌀 ❓).
 [harness_emojis]
@@ -425,9 +421,8 @@ codex   = "purple"
 # You can define as many profiles as you like and mix harnesses freely.
 # If the same account or project family spans harnesses, give each variant a
 # distinct name, for example "vta" and "vta-codex".
-# Tab bar color comes from each profile's `color` (below). The harness
-# shows as a one-character emoji prefix in the Kitty tab title, and harness
-# labels use [harness_colors] above.
+# Session color comes from each profile's `color` (below). Harness labels use
+# [harness_colors] above.
 #
 # Required fields:
 #   name      Unique identifier used to reference this profile from projects.
@@ -438,8 +433,7 @@ codex   = "purple"
 #             Codex exports CODEX_HOME=<home_dir>.
 #   color     Per-profile palette color used to render the project title in
 #             the dashboard list, picker, detail header, account chips, and
-#             inactive Kitty tab-bar accent. Active tab colors come from
-#             kitty.conf. Valid colors: green, blue, red, orange, purple,
+#             native workspace. Valid colors: green, blue, red, orange, purple,
 #             teal, pink, yellow, gray, cyan.
 #
 # Optional fields:

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -131,9 +130,7 @@ func TestPickerRowEmojiTitleColumnAlignment(t *testing.T) {
 			{Title: "•dotfiles", Directory: "/work/dotfiles", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
-	m := NewModel(cfg, client)
+	m := NewModel(cfg, nil)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
 	m.width, m.height = 120, 40

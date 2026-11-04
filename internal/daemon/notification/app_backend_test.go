@@ -8,7 +8,6 @@ package notification
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"sync"
@@ -140,6 +139,10 @@ func (l *backendLog) backend(entry string) string {
 	return l.backends[entry]
 }
 
+func runtimeNoticeTarget(windowID int, account string) NotificationTarget {
+	return NotificationTarget{WindowID: windowID, Account: account, Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux}
+}
+
 func newAppTestNotifier(t *testing.T, cfg *config.NotificationConfig, app *fakeApp) (*Notifier, *callRecorder, *backendLog) {
 	t.Helper()
 	n, rec := newTestNotifier(cfg)
@@ -149,15 +152,13 @@ func newAppTestNotifier(t *testing.T, cfg *config.NotificationConfig, app *fakeA
 	return n, rec, log
 }
 
-func TestAppBackendClickFocusesWithoutAlerter(t *testing.T) {
+func TestAppBackendClickDelegatesRuntimeFocus(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		app := newFakeApp()
 		app.respond = deliverThen(protocol.DispositionClicked)
 		n, rec, log := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
-		focus := &fakeFocusClient{live: focusTestWindows(42)}
-		n.SetFocus(focus)
 
-		n.MaybeNotifyTracedTarget(focusTarget(42, "work", "unix:/tmp/kitty-a"), "W:api", "stop", false, NotificationTrace{SessionID: "s-1"})
+		n.MaybeNotifyTracedTarget(runtimeNoticeTarget(42, "work"), "W:api", "stop", false, NotificationTrace{SessionID: "s-1"})
 		synctest.Wait()
 
 		if rec.len() != 0 {
@@ -168,7 +169,7 @@ func TestAppBackendClickFocusesWithoutAlerter(t *testing.T) {
 			t.Fatalf("app notices = %d, want 1", len(notices))
 		}
 		got := notices[0]
-		if got.NotificationID == "" || got.WindowID != 42 || !got.Navigable || got.Title != "W:api" || got.Subtitle != "Session stopped" || got.Action != "stop" || got.SessionID != "s-1" {
+		if got.NotificationID == "" || got.WindowID != 0 || !got.Navigable || got.Title != "W:api" || got.Subtitle != "Session stopped" || got.Action != "stop" || got.SessionID != "s-1" {
 			t.Fatalf("notice = %+v", got)
 		}
 		if !slices.Equal(got.Actions, []string{protocol.NotificationActionMute, protocol.NotificationActionSnooze}) {
@@ -177,12 +178,8 @@ func TestAppBackendClickFocusesWithoutAlerter(t *testing.T) {
 		if !log.has("dispatch:sent:send_success") || log.backend("dispatch:sent:send_success") != BackendApp {
 			t.Fatalf("no app send_success disposition: %v", log.entries)
 		}
-		if !log.has("focus:focused:focus_success") || log.backend("focus:focused:focus_success") != BackendApp {
-			t.Fatalf("click did not focus through the app path: %v", log.entries)
-		}
-		tabs, windows := focus.snapshot()
-		if len(tabs) != 1 || len(windows) != 1 {
-			t.Fatalf("focus calls = %v / %v", tabs, windows)
+		if !log.has("focus:suppressed:focus_delegated") {
+			t.Fatalf("click was not delegated to the app: %v", log.entries)
 		}
 		if log.has("dispatch:fallback:app_fallback") {
 			t.Fatal("a delivered notice recorded app_fallback")
@@ -310,7 +307,6 @@ func TestAppBackendEveryGateStillSuppresses(t *testing.T) {
 			}
 		}, want: "snoozed"},
 		{name: "cooldown", cfg: config.NotificationConfig{Stop: true}, action: "stop", setup: func(n *Notifier) { n.MarkNotified(1, "stop", n.now()) }, want: "cooldown"},
-		{name: "focus_unavailable", cfg: config.NotificationConfig{Stop: true}, action: "stop", setup: func(n *Notifier) { n.SetFocus(&fakeFocusClient{}) }, want: "focus_unavailable"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -322,10 +318,7 @@ func TestAppBackendEveryGateStillSuppresses(t *testing.T) {
 				if tc.setup != nil {
 					tc.setup(n)
 				}
-				target := NotificationTarget{WindowID: 1, Account: "work", Navigable: true, KittyListenOn: "unix:/tmp/kitty-a"}
-				if tc.want == "focus_unavailable" {
-					target.KittyListenOn = ""
-				}
+				target := runtimeNoticeTarget(1, "work")
 				n.MaybeNotifyTracedTarget(target, "W:api", tc.action, tc.pipe, NotificationTrace{})
 				synctest.Wait()
 
@@ -376,17 +369,12 @@ func TestAppBackendRecordsSafeActionsLikeReplied(t *testing.T) {
 				app := newFakeApp()
 				app.respond = deliverThen(disposition)
 				n, _, log := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
-				focus := &fakeFocusClient{live: focusTestWindows(1)}
-				n.SetFocus(focus)
 
-				n.MaybeNotifyTracedTarget(focusTarget(1, "work", "unix:/tmp/kitty-a"), "W:api", "stop", false, NotificationTrace{})
+				n.MaybeNotifyTracedTarget(runtimeNoticeTarget(1, "work"), "W:api", "stop", false, NotificationTrace{})
 				synctest.Wait()
 
 				if !log.has("focus:suppressed:" + disposition) {
 					t.Fatalf("dispositions = %v; want focus:suppressed:%s", log.entries, disposition)
-				}
-				if tabs, _ := focus.snapshot(); len(tabs) != 0 {
-					t.Fatalf("%s focused a window", disposition)
 				}
 			})
 		})
@@ -402,9 +390,7 @@ func TestAppBackendOffersRespondOnlyWhereAPromptCanBeAnsweredInPlace(t *testing.
 		t.Fatalf("tmux permission actions = %v; want respond alone", got)
 	}
 	for name, target := range map[string]NotificationTarget{
-		"a Kitty window":          {WindowID: 3, Navigable: true},
-		"a Kitty runtime session": {WindowID: 3, Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindKitty},
-		"tmux with no session":    {WindowID: 3, Backend: BackendKindTmux},
+		"tmux with no session": {WindowID: 3, Backend: BackendKindTmux},
 	} {
 		if got := appActions(target, "permission", NotificationTrace{}); len(got) != 0 {
 			t.Errorf("%s: permission actions = %v; want none", name, got)
@@ -415,14 +401,12 @@ func TestAppBackendOffersRespondOnlyWhereAPromptCanBeAnsweredInPlace(t *testing.
 	}
 }
 
-// A tmux session has no Kitty window, but the app mutes it by its runtime
-// session, so its banners offer Mute like a Kitty window's.
+// The app mutes a tmux session by its runtime identity.
 func TestAppBackendOffersMuteForRuntimeSessions(t *testing.T) {
 	want := []string{protocol.NotificationActionMute, protocol.NotificationActionSnooze}
 	for name, target := range map[string]NotificationTarget{
 		"a tmux session":                {WindowID: 1 << 40, Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux},
 		"a tmux session with no window": {Navigable: true, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: BackendKindTmux},
-		"a Kitty window":                {WindowID: 3, Navigable: true},
 	} {
 		if got := appActions(target, "stop", NotificationTrace{}); !slices.Equal(got, want) {
 			t.Errorf("%s: stop actions = %v; want %v", name, got, want)
@@ -680,52 +664,14 @@ func TestTestAppDeliveryReportsTheApp(t *testing.T) {
 	})
 }
 
-// TestAppNoticePreservesKittySocket: window IDs repeat across Kitty instances,
-// so the notice carries the socket the daemon captured for its target, and the
-// app can raise and mute the pane that actually raised it.
-func TestAppNoticePreservesKittySocket(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		app := newFakeApp()
-		app.respond = deliverThen(protocol.DispositionDismissed)
-		n, _, _ := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
-		n.SetFocus(&fakeFocusClient{live: focusTestWindows(4)})
-
-		n.MaybeNotifyTracedTarget(focusTarget(4, "work", "unix:/tmp/kitty-b"), "W:api", "stop", false, NotificationTrace{})
-		synctest.Wait()
-
-		notices := app.deliveries()
-		if len(notices) != 1 {
-			t.Fatalf("notices = %+v; want one", notices)
-		}
-		if got := notices[0].KittySocket; got != "unix:/tmp/kitty-b" {
-			t.Fatalf("notice socket = %q; want the target's unix:/tmp/kitty-b", got)
-		}
-		data, err := json.Marshal(notices[0])
-		if err != nil {
-			t.Fatal(err)
-		}
-		var wire map[string]any
-		if err := json.Unmarshal(data, &wire); err != nil {
-			t.Fatal(err)
-		}
-		if wire["kitty_socket"] != "unix:/tmp/kitty-b" || wire["window_id"] != float64(4) {
-			t.Fatalf("frame = %s; want kitty_socket and window_id together", data)
-		}
-	})
-}
-
-// A notice for a runtime session on a backend other than Kitty names the
-// session and nothing Kitty could act on: no window ID, no socket. It offers
+// A notice for a runtime session names the session. It offers
 // mute, which the app carries out by runtime session. It is navigable by its runtime session, which the app asks the daemon to show
-// (focus_session), so the click is recorded as delegated: the notifier shows
-// nothing a second time and never reaches the Kitty focus client.
-func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
+// (focus_session), so the click is recorded as delegated.
+func TestAppNoticeForRuntimeSessionCarriesRuntimeTarget(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		app := newFakeApp()
 		app.respond = deliverThen(protocol.DispositionClicked)
 		n, rec, log := newAppTestNotifier(t, &config.NotificationConfig{Permission: true}, app)
-		focus := &fakeFocusClient{live: focusTestWindows(42)}
-		n.SetFocus(focus)
 		var shown []string
 		n.SetSessionFocus(func(id string) error { shown = append(shown, id); return nil })
 
@@ -740,7 +686,7 @@ func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
 			t.Fatalf("app notices = %d, alerter dispatches = %d; want 1 and 0", len(notices), rec.len())
 		}
 		got := notices[0]
-		if got.WindowID != 0 || got.KittySocket != "" || !got.Navigable ||
+		if got.WindowID != 0 || !got.Navigable ||
 			got.RuntimeSessionID != "rs-0123456789abcdef0123456789abcdef" || got.Backend != "tmux" || got.RunID != "run-1" {
 			t.Fatalf("notice = %+v", got)
 		}
@@ -748,34 +694,7 @@ func TestAppNoticeForANonKittyRuntimeSessionCarriesNoKittyTarget(t *testing.T) {
 			t.Fatalf("actions = %v; want mute by runtime session, snooze, and answer", got.Actions)
 		}
 		if !log.has("focus:suppressed:focus_delegated") || len(shown) != 0 {
-			t.Fatalf("click on the app's non-Kitty notice: log %v, shown %v; want it left to the app", log.entries, shown)
-		}
-		if tabs, windows := focus.snapshot(); len(tabs) != 0 || len(windows) != 0 {
-			t.Fatalf("a non-Kitty notice reached the Kitty focus client: %v / %v", tabs, windows)
-		}
-	})
-}
-
-// A Kitty runtime session's notice keeps its window and socket and adds the
-// session's identity.
-func TestAppNoticeForAKittyRuntimeSessionKeepsItsWindow(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		app := newFakeApp()
-		app.respond = deliverThen(protocol.DispositionDismissed)
-		n, _, _ := newAppTestNotifier(t, &config.NotificationConfig{Stop: true}, app)
-		target := focusTarget(42, "work", "unix:/tmp/kitty-a")
-		target.RuntimeSessionID = "rs-0123456789abcdef0123456789abcdef"
-		target.Backend = BackendKindKitty
-		n.MaybeNotifyTracedTarget(target, "W:api", "stop", false, NotificationTrace{})
-		synctest.Wait()
-
-		notices := app.deliveries()
-		if len(notices) != 1 {
-			t.Fatalf("app notices = %d, want 1", len(notices))
-		}
-		if got := notices[0]; got.WindowID != 42 || got.KittySocket != "unix:/tmp/kitty-a" || !got.Navigable ||
-			got.RuntimeSessionID != target.RuntimeSessionID || got.Backend != BackendKindKitty {
-			t.Fatalf("notice = %+v", got)
+			t.Fatalf("click on the app notice: log %v, shown %v; want it left to the app", log.entries, shown)
 		}
 	})
 }

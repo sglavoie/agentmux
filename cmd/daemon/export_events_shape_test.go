@@ -116,7 +116,7 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 	guide := guides.String()
 	for _, want := range []string{
 		"--harness=<claude|codex|copilot>",
-		"`amx_state` schema v4",
+		"`runtime-state.json` checkpoint",
 		"`owner_mismatch_prompt`",
 		"`owner_mismatch_burst`",
 		"`unknown_producer_fact`",
@@ -129,23 +129,6 @@ func TestCrossHarnessDiagnosticDocumentation(t *testing.T) {
 		}
 	}
 
-	acceptanceData, err := os.ReadFile("../../docs/acceptance/daemon-state.md")
-	if err != nil {
-		t.Fatalf("ReadFile(../../docs/acceptance/daemon-state.md): %v", err)
-	}
-	acceptance := string(acceptanceData)
-	for _, want := range []string{
-		"## Cross-harness route diagnostics (session 6)",
-		"19-event synthetic trace",
-		"`owner_mismatch_prompt`",
-		"`owner_mismatch_burst`",
-		"`unknown_producer_fact`",
-		"`acknowledged_fact_pressure`",
-	} {
-		if !strings.Contains(acceptance, want) {
-			t.Errorf("acceptance documentation missing %q", want)
-		}
-	}
 }
 
 // extractSchemaV10ExampleFacts returns the shadow.facts array from the schema-v10

@@ -357,7 +357,10 @@ func TestIdleSampleExportedTrackingAndWindowClose(t *testing.T) {
 	}
 
 	// Window closure drops the streak with the rest of the window's state.
-	h.pruneClosedWindows(time.Now(), map[int]bool{})
+	h.stateMu.Lock()
+	h.dropClosedWindowsLocked(time.Now(), map[int]struct{}{7: {}})
+	h.stateMu.Unlock()
+	h.finishClosedWindows(map[int]struct{}{7: {}})
 	h.stateMu.Lock()
 	present := h.idleSamples.Streak(activity.Ref{WindowID: 7, Key: src.Key}) > 0
 	h.stateMu.Unlock()

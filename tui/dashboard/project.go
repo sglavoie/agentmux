@@ -4,7 +4,7 @@
 //
 // It reads the filtered rows and nothing else. Every fact it groups by was
 // stamped onto the session at discovery time, so building the projection costs
-// no Git probe, no Kitty call, and no config lookup, and running it twice on the
+// no Git probe, no terminal call, and no config lookup, and running it twice on the
 // same input produces the same lines.
 
 package dashboard

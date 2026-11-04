@@ -30,7 +30,7 @@
 // disambiguator is measured across the whole live set, including the sessions on
 // other pages, so it cannot be derived from the tile — the caller supplies it.
 //
-// Nothing here reads a clock, a config file, Kitty, or the daemon.
+// Nothing here reads a clock, a config file, the terminal, or the daemon.
 
 package dashboard
 

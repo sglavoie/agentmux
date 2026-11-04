@@ -497,7 +497,7 @@ func (m Model) restartWithProfileCmd(rs session.RunningSession, profile string) 
 				msg = commands.ActionDoneMsg{Err: fmt.Errorf("panic in restartWithProfile: %v", r)}
 			}
 		}()
-		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.Restart, actions.Request{
+		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.cfg), actions.Restart, actions.Request{
 			Session: &rs, Project: &sess, Parameters: map[string]string{"profile": profile}, Confirmed: true,
 		})
 		return commands.ActionDoneMsg{Err: err}
@@ -536,7 +536,7 @@ func (m *Model) launchBatchCmd(todo []launch.Queued, quitOnSuccess bool) tea.Cmd
 		sess := q.Session
 		title := q.Title
 		launchCmds = append(launchCmds, func() tea.Msg {
-			_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.Launch, actions.Request{Project: &sess})
+			_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.cfg), actions.Launch, actions.Request{Project: &sess})
 			return launchProgressMsg{batchID: batchID, total: total, title: title, err: err}
 		})
 	}
@@ -618,25 +618,20 @@ func (m Model) handleLaunchProgress(msg launchProgressMsg) (tea.Model, tea.Cmd) 
 	}); c != nil {
 		cmds = append(cmds, c)
 	}
-	// Quitting hands the operator to the tab Kitty just opened. A portable
-	// launch opens none, so the dashboard stays and lists the new session.
-	if batchDone && m.launchBatchErrors == 0 && m.launchBatchQuitOnSuccess && commands.LaunchesInKitty() {
-		cmds = append(cmds, tea.Quit)
-	} else if c := m.requestTopologyRefresh(); c != nil {
+	// The dashboard stays open and lists newly launched sessions.
+	if c := m.requestTopologyRefresh(); c != nil {
 		cmds = append(cmds, c)
 	}
 	return m, tea.Batch(cmds...)
 }
 
 // pickerOpensEveryTarget reports whether `o` can open each target in a view
-// of its own: a Kitty tab, or a utility view of the desktop workspace hosting
-// this surface. In a plain terminal outside Kitty only one shell runs here.
+// of its own in the desktop workspace. In a plain terminal one shell runs here.
 func pickerOpensEveryTarget(m Model) bool {
-	return m.client != nil || commands.Portable.Desktop != nil
+	return commands.Portable.Desktop != nil
 }
 
-// pickerOpenCmd opens every target directory in a plain shell tab, or outside
-// Kitty in a shell view of the workspace. All targets are attempted even when
+// pickerOpenCmd opens every target directory in a workspace shell. All targets are attempted even when
 // one fails; project-labelled errors are joined into the single completion
 // message consumed by the existing open handler.
 func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
@@ -650,7 +645,7 @@ func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
 		errs := make([]error, 0)
 		for i := range targets {
 			sess := targets[i]
-			result, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.OpenDirectory, actions.Request{Project: &sess})
+			result, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.cfg), actions.OpenDirectory, actions.Request{Project: &sess})
 			if err == nil {
 				if _, here := actions.UtilityHere(result); here {
 					// The workspace refused the view, and the shells of several
@@ -662,30 +657,21 @@ func pickerOpenCmd(m Model, targets []config.Session) tea.Cmd {
 				errs = append(errs, fmt.Errorf("%s: %w", configSessionDisplayTitle(sess), err))
 			}
 		}
-		// A workspace view, like a shell here, leaves the operator on this
-		// surface; only a Kitty tab takes them away from it.
-		return commands.PickerOpenDoneMsg{Err: errors.Join(errs...), Stay: m.client == nil}
+		return commands.PickerOpenDoneMsg{Err: errors.Join(errs...)}
 	}
 }
 
-// pickerOpenHereCmd is pickerOpenCmd in a plain terminal outside Kitty: with no
-// tab to open, the first target's directory is opened in a shell in this
+// pickerOpenHereCmd runs in a plain terminal: the first target's directory is opened in a shell in this
 // terminal, and the key handler names the rest in a warning.
 func pickerOpenHereCmd(m Model, targets []config.Session) tea.Cmd {
 	if len(targets) == 0 {
 		return nil
 	}
-	return commands.OpenDirectory(nil, m.cfg, targets[0])
+	return commands.OpenDirectory(m.cfg, targets[0])
 }
 
 func pickerOpenEditorCmd(m Model, sess config.Session) tea.Cmd {
-	if m.client == nil {
-		return commands.OpenInEditor(nil, m.cfg, sess)
-	}
-	return func() tea.Msg {
-		_, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.OpenEditor, actions.Request{Project: &sess})
-		return commands.PickerOpenDoneMsg{Err: err}
-	}
+	return commands.OpenInEditor(m.cfg, sess)
 }
 
 // savePickerOverridesCmd persists an updated one-time profile choice while

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 func TestHookProcessDetectionJournalsCompleteDegradedAndAbsentIdentity(t *testing.T) {
@@ -56,12 +57,12 @@ func TestDeliverStandardDetailSamplesSuccessStagesAndStampsDelivery(t *testing.T
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", t.TempDir()+"/missing-config.toml")
 
-	_, records, payload := deliverOutsideKitty(t)
+	_, records, payload := deliverOnRuntimeSession(t)
 	stages := map[string]diagnostics.TraceEnvelope{}
 	for _, record := range records {
 		stages[record.Stage] = record
 	}
-	for _, stage := range []string{"hook.kitty_detection", "hook.delivery"} {
+	for _, stage := range []string{"hook.runtime_session", "hook.delivery"} {
 		if _, ok := stages[stage]; !ok {
 			t.Errorf("missing always-written stage %q in %+v", stage, records)
 		}
@@ -77,7 +78,7 @@ func TestDeliverStandardDetailSamplesSuccessStagesAndStampsDelivery(t *testing.T
 	}
 }
 
-func TestDeliverFullDetailPersistsEveryOutsideKittyExitStage(t *testing.T) {
+func TestDeliverFullDetailPersistsEveryRuntimeExitStage(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	if err := os.WriteFile(configPath, []byte("[defaults.diagnostics]\njournal_detail = \"full\"\n"), 0o600); err != nil {
@@ -85,11 +86,11 @@ func TestDeliverFullDetailPersistsEveryOutsideKittyExitStage(t *testing.T) {
 	}
 	t.Setenv("AMX_CONFIG", configPath)
 
-	_, records, _ := deliverOutsideKitty(t)
+	_, records, _ := deliverOnRuntimeSession(t)
 	wantStages := map[string]bool{
 		"hook.payload_read":    false,
 		"hook.validation":      false,
-		"hook.kitty_detection": false,
+		"hook.runtime_session": false,
 		"hook.delivery":        false,
 	}
 	for _, record := range records {
@@ -121,7 +122,7 @@ func TestHookRecorderStandardDetailKeepsEveryNonSuccessOutcome(t *testing.T) {
 		Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026", Trackable: true,
 	})
 	recorder.recordProcessDetection(HarnessProcessDiscovery{})
-	recorder.record("hook.kitty_detection", "success", "kitty_detected", nil, 0)
+	recorder.record("hook.runtime_session", "success", "runtime_session_identified", nil, 0)
 	recorder.record("hook.validation", "success", "payload_valid", nil, 0)
 	recorder.record("hook.acknowledgement", "success", "accepted", nil, 0)
 	// Non-success-class outcomes are never sampled.
@@ -177,7 +178,7 @@ func TestDeliverHonorsExplicitJournalDisable(t *testing.T) {
 	}
 	t.Setenv("XDG_STATE_HOME", stateRoot)
 	t.Setenv("AMX_CONFIG", configPath)
-	t.Setenv("KITTY_LISTEN_ON", "")
+	t.Setenv(runtimesession.EnvVar, "")
 
 	stdin, err := os.CreateTemp(t.TempDir(), "hook-payload-*.json")
 	if err != nil {
@@ -191,7 +192,7 @@ func TestDeliverHonorsExplicitJournalDisable(t *testing.T) {
 	})
 
 	result := Deliver("Stop", 42, "claude", "/tmp/amx", DeliveryOptions{})
-	if result.Status != DeliveryPermanentFailure || result.Reason != "outside_kitty" {
+	if result.Status != DeliveryPermanentFailure || result.Reason != "missing_runtime_session" {
 		t.Fatalf("result = %+v", result)
 	}
 	paths, err := diagnostics.DefaultPaths()

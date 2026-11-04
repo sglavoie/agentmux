@@ -6,20 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // SessionLocation names where a running session lives, for the surfaces that
-// name one session back to the operator. A Kitty session is its window. A
-// session on another backend is its backend and runtime session: the window
-// ID this process lists it under is a process-local stand-in and means
-// nothing to the operator.
+// name one session back to the operator. The local row ID is process-local
+// and means nothing to the operator.
 func SessionLocation(sess session.RunningSession) string {
 	kind := sess.BackendKind()
-	if kind == runtimesession.BackendKitty {
-		return fmt.Sprintf("window %d", sess.WindowID)
-	}
 	if sess.RuntimeSessionID != "" {
 		return fmt.Sprintf("%s session %s", kind, sess.RuntimeSessionID)
 	}
@@ -40,7 +34,7 @@ func SessionStateLabel(sess session.RunningSession, lastActivity map[int]time.Ti
 // dashboard-derived surface: the row title column, the filter's substring
 // match, the detail and preview headers, and the action confirmations that
 // name a session back to the user. It prefers the current config title,
-// then the launch project title, and finally its Kitty base name.
+// then the launch project title, and finally its base name.
 func SessionDisplayTitle(sess session.RunningSession) string {
 	if sess.DisplayProject != "" {
 		return sess.DisplayProject

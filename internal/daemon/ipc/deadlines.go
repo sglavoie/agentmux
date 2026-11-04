@@ -7,11 +7,8 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-// FocusWindowDeadline bounds a focus_window handshake. The daemon answers it
-// with three sequential Kitty remote-control calls (list, focus tab, focus
-// window), each a subprocess, which a 1s connection deadline would cut short
-// on a busy machine.
-const FocusWindowDeadline = 3 * time.Second
+// FocusSessionDeadline allows a tmux survey and client switch to complete.
+const FocusSessionDeadline = 3 * time.Second
 
 // NotificationTestDeadline bounds a notification_test handshake. The daemon
 // waits up to three seconds for the companion app to confirm delivery before
@@ -33,10 +30,10 @@ func deadlineFor(t protocol.MessageType) time.Duration {
 		return asl.ActionDeadline
 	case protocol.TypeASLQuestion, protocol.TypeASLSnapshot:
 		return asl.ReadDeadline
-	case protocol.TypeFocusWindow, protocol.TypeFocusSession:
+	case protocol.TypeFocusSession:
 		// A focus_session with no workspace connected is a tmux survey and a
 		// client switch, subprocesses too.
-		return FocusWindowDeadline
+		return FocusSessionDeadline
 	case protocol.TypeNotificationTest:
 		return NotificationTestDeadline
 	default:

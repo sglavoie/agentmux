@@ -7,7 +7,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -16,15 +15,10 @@ import (
 
 // ColorContext holds the inputs needed by the color picker overlay.
 type ColorContext struct {
-	Client       kitty.KittyClient
-	TabID        int
-	WindowID     int
 	DefaultColor string
-	// Apply, when set, records the pick somewhere other than a Kitty tab: the
-	// picker then never touches Client. colorName is empty for "reset to
-	// default", which is the absence of a pick.
+	// Apply records the pick. colorName is empty for "reset to default".
 	Apply func(colorName string) error
-	// Subject names what is being colored in the header; empty means a tab.
+	// Subject names what is being colored in the header.
 	Subject string
 }
 
@@ -143,47 +137,23 @@ func (m *colorPickerModel) apply() {
 		colorName = m.items[m.cursor].name
 	}
 
-	c, err := palette.Lookup(colorName)
+	_, err := palette.Lookup(colorName)
 	if err != nil {
 		m.err = fmt.Errorf("couldn't find the color %q in the palette: %w", colorName, err)
 		return
 	}
-	if m.ctx.Apply != nil {
-		picked := colorName
-		if m.items[m.cursor].isReset {
-			picked = ""
-		}
-		if err := m.ctx.Apply(picked); err != nil {
-			m.err = fmt.Errorf("couldn't apply the color to this session: %w", err)
-			return
-		}
-		m.applied = true
+	if m.ctx.Apply == nil {
+		m.err = fmt.Errorf("couldn't apply the color: no session color writer is available")
 		return
 	}
-
-	err = m.ctx.Client.SetTabColor(
-		kitty.MatchTabByID(m.ctx.TabID),
-		kitty.TabColorDefault, c.InactiveBg,
-		kitty.TabColorDefault, palette.InactiveFg,
-	)
-	if err != nil {
-		m.err = fmt.Errorf("couldn't apply the color to this tab: %w", err)
+	picked := colorName
+	if m.items[m.cursor].isReset {
+		picked = ""
+	}
+	if err := m.ctx.Apply(picked); err != nil {
+		m.err = fmt.Errorf("couldn't apply the color to this session: %w", err)
 		return
 	}
-
-	if m.ctx.WindowID != 0 {
-		err = m.ctx.Client.SetUserVars(
-			kitty.MatchWindowByID(m.ctx.WindowID),
-			map[string]string{"cc_color": colorName},
-		)
-		if err != nil {
-			// The tab is already recolored; only the record Kitty keeps of
-			// the choice for later redraws failed, so say exactly that.
-			m.err = fmt.Errorf("the tab is recolored, but Kitty couldn't remember the color for this window: %w", err)
-			return
-		}
-	}
-
 	m.applied = true
 }
 
@@ -192,7 +162,7 @@ func (m colorPickerModel) View() tea.View {
 
 	divider := strings.Repeat("─", 30)
 
-	header := "Set Tab Color"
+	header := "Set Session Color"
 	if m.ctx.Subject != "" {
 		header = "Set Color: " + m.ctx.Subject
 	}
@@ -265,7 +235,7 @@ func (m colorPickerModel) View() tea.View {
 }
 
 // RunColorOverlay renders the color picker and blocks until the user
-// dismisses it. Designed to run inside a Kitty overlay window.
+// dismisses it.
 func RunColorOverlay(ctx ColorContext) error {
 	p := tea.NewProgram(newColorPickerModel(ctx), tea.WithoutSignalHandler())
 	_, err := p.Run()

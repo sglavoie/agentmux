@@ -35,10 +35,10 @@ PROBE = HARNESS_DIR / "scripts/probe.py"
 TMUX_CONF = HARNESS_DIR / "tmux.conf"
 
 # Variables that would tie a test agent to the session running this driver:
-# the outer agent's identity, and Kitty's, which Agent Mux hooks report against.
+# the outer agent's identity and terminal attachment.
 DROPPED_ENV = re.compile(
     r"^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_PID|CLAUDE_EFFORT|CODEX_CI|CODEX_SESSION_ID|CODEX_THREAD_ID"
-    r"|ASL_.*|KITTY_.*|TMUX|TMUX_PANE|TERM|TERMINFO|TERM_PROGRAM.*|COLORTERM|AMX_.*)$"
+    r"|ASL_.*|TMUX|TMUX_PANE|TERM|TERMINFO|TERM_PROGRAM.*|COLORTERM|AMX_.*)$"
 )
 
 AGENTS = {

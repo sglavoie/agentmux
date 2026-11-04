@@ -97,8 +97,7 @@ extension WorkspaceWindowController {
     }
 
     /// ⌘W closes a utility view or detaches an embedded session terminal.
-    /// Reports whether there was anything to close: a Kitty session is not
-    /// the workspace's.
+    /// Reports whether there was anything to close.
     @discardableResult
     func closeShown() -> Bool {
         if reviewSelected {
@@ -324,8 +323,7 @@ extension WorkspaceWindowController {
 
     /// Opens a shell where the session the pane is on is working, listed
     /// right below that session, and gives it the keyboard. From one of a
-    /// session's terminals it opens another beside the same session. A Kitty
-    /// session has its terminals in Kitty, so there is nothing to do for one.
+    /// session's terminals it opens another beside the same session.
     /// Reports whether it opened one.
     @discardableResult
     func openTerminalBesideSession() -> Bool {
@@ -346,7 +344,7 @@ extension WorkspaceWindowController {
         return id
     }
 
-    static let terminalNeedsEmbedded = "A terminal opens below a session the workspace embeds; a Kitty session has its terminals in Kitty."
+    static let terminalNeedsEmbedded = "A terminal opens below a running tmux session."
 
     /// The session the pane is on, or the one the terminal, pager, or picker
     /// it shows is about: what the session function keys act on.

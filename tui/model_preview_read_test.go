@@ -10,7 +10,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/cmdtest"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
@@ -78,7 +77,7 @@ func feedPreviewReplies(m *Model, cmd tea.Cmd, depth int) bool {
 // own story from.
 func previewReadModel(t *testing.T) Model {
 	t.Helper()
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	requireInspector(t, m)
 	m = selectLine(t, m, "session:api")
 	settlePreviewRead(t, &m, m.refreshPreviewForCursor())
@@ -87,8 +86,7 @@ func previewReadModel(t *testing.T) Model {
 
 // TestOnlyOnePreviewReadIsEverInFlight is the concurrency bound that makes the
 // pane safe to leave on. A selection moves far faster than a terminal read
-// returns, and the dashboard used to answer every move with its own Kitty
-// subprocess; here a burst of moves costs one read and the memory that it owes
+// returns; a burst of moves costs one read and the memory that it owes
 // exactly one more.
 func TestOnlyOnePreviewReadIsEverInFlight(t *testing.T) {
 	t.Parallel()
@@ -189,7 +187,7 @@ func TestAStaleReplySettlesWithoutPainting(t *testing.T) {
 	}
 }
 
-// TestAFailedReadSettlesLikeAnyOther keeps a broken Kitty from wedging the pane.
+// TestAFailedReadSettlesLikeAnyOther keeps a failed pane read from wedging the pane.
 // The failure is content — the inspector says so — but it is first of all a
 // reply, and a controller that released its slot only on success would stop
 // reading the moment one read failed.
@@ -203,7 +201,7 @@ func TestAFailedReadSettlesLikeAnyOther(t *testing.T) {
 		t.Fatal("setup: the move dispatched no read")
 	}
 	failed := read().(previewContentMsg)
-	failed.err = errors.New("kitty is not listening")
+	failed.err = errors.New("tmux server is not responding")
 	failed.text = ""
 
 	updated, _ := m.Update(failed)
@@ -364,7 +362,7 @@ func TestARetiredTickChainNeverSchedulesAgain(t *testing.T) {
 
 	// An unstamped tick belongs to no chain and is refused even against the zero
 	// counter a model that has never shown a pane holds.
-	fresh, _ := listViewModel(dashboard.ViewUrgency)
+	fresh := listViewModel(dashboard.ViewUrgency)
 	updated, follow = fresh.Update(previewTickMsg{})
 	if follow != nil {
 		t.Error("an unstamped tick opened a polling chain")
@@ -456,33 +454,30 @@ func firstPreviewLine(s string) string {
 }
 
 // TestConcurrentPreviewReadsAreRaceFree drives the read seam the way the program
-// loop does — commands on their own goroutines against a client that is slow and
-// that fails, replies applied one at a time — so the race detector sees the
-// arrangement the invariants above only state functionally.
+// loop does — commands on their own goroutines against a pane reader that is slow
+// and sometimes fails, with replies applied one at a time.
 //
-// The bound is measured from inside the client rather than counted from outside
+// The bound is measured from inside the reader rather than counted from outside
 // it, because "one read at a time" is about overlap and not about totals: a
 // steady stream of moves is allowed to cost many reads over a run and is never
 // allowed to have two of them in the terminal at once.
 func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
 	t.Parallel()
 
-	client := kittytest.NewClient(nil)
 	var reads, concurrent, overlaps atomic.Int64
-	client.SetReadBehavior(func(string) (string, error) {
+	m := previewReadModel(t)
+	m.backgroundCommands.scrollback = func(int) (string, error) {
 		if concurrent.Add(1) > 1 {
 			overlaps.Add(1)
 		}
 		defer concurrent.Add(-1)
 		time.Sleep(time.Millisecond)
 		if reads.Add(1)%3 == 0 {
-			return "", errors.New("kitty is not listening")
+			return "", errors.New("tmux server is not responding")
 		}
 		return strings.Repeat("scrollback\n", 20), nil
-	})
+	}
 
-	m := previewReadModel(t)
-	m.client = client
 	m.previewPollSeq = 1
 
 	replies := make(chan tea.Msg, 128)
@@ -527,8 +522,8 @@ func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
 	if m.previewReadPending && !m.previewReadInFlight {
 		t.Error("the run ended owing a catch-up nothing will start")
 	}
-	if n := client.ReadCount(); n == 0 {
-		t.Fatal("the run never reached the fake client")
+	if n := reads.Load(); n == 0 {
+		t.Fatal("the pane reader was never called")
 	}
 	if n := overlaps.Load(); n != 0 {
 		t.Errorf("%d read(s) found another already in the terminal; the pane is meant to hold one at a time", n)
@@ -542,15 +537,18 @@ func TestConcurrentPreviewReadsAreRaceFree(t *testing.T) {
 func TestASlowReadNeverBlocksTheUpdateLoop(t *testing.T) {
 	t.Parallel()
 
-	client := kittytest.NewClient(nil)
 	release := make(chan struct{})
-	client.SetReadBehavior(func(string) (string, error) {
+	started := make(chan struct{}, 1)
+	m := previewReadModel(t)
+	m.backgroundCommands.scrollback = func(int) (string, error) {
+		select {
+		case started <- struct{}{}:
+		default:
+		}
 		<-release
 		return "released", nil
-	})
+	}
 
-	m := previewReadModel(t)
-	m.client = client
 	m.previewPollSeq = 1
 	m = selectLine(t, m, "session:web")
 	read := m.refreshPreviewForCursor()
@@ -560,8 +558,14 @@ func TestASlowReadNeverBlocksTheUpdateLoop(t *testing.T) {
 	parked := m.previewReadActiveSeq
 	done := make(chan tea.Msg, 1)
 	go func() { done <- read() }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		close(release)
+		t.Fatal("pane read did not start")
+	}
 
-	// The read is parked inside the fake client. Every one of these is handled
+	// The read is parked inside the pane reader. Every one of these is handled
 	// on the update loop and must return without waiting for it.
 	settled := make(chan Model, 1)
 	go func() {

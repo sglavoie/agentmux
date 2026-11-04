@@ -4,46 +4,31 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"maps"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/shellquote"
 )
 
 var launchDebug = newFileLogger("/tmp/amx-debug.log", "[launch] ")
 
-// Color-retry tuning is exposed as package-level vars (not consts) so tests
-// can shrink the delays without sleeping for ~1.3s of real time.
-var (
-	colorMaxRetries   = 5
-	colorInitialDelay = 100 * time.Millisecond
-	colorBackoffMul   = 1.5
-)
-
-// LaunchPolicy controls whether Launch should honor the duplicate-session
-// guard or deliberately create another tab for the same session key.
+// LaunchPolicy controls whether launch honors the duplicate-session guard.
 type LaunchPolicy int
 
 const (
 	// LaunchPolicyDedupExisting is the default idempotent behavior: if the
-	// same profile/project key is already running, Launch returns without
-	// creating another tab.
+	// same profile/project key is already running, launch returns without
+	// creating another session.
 	LaunchPolicyDedupExisting LaunchPolicy = iota
 	// LaunchPolicyAlwaysNewInstance bypasses the duplicate-session guard and
-	// always asks Kitty to create a new tab.
+	// always creates a new runtime session.
 	LaunchPolicyAlwaysNewInstance
 )
 
@@ -58,10 +43,7 @@ func (p LaunchPolicy) String() string {
 	}
 }
 
-// BuildUserVars constructs the user-var map written onto a launched (or
-// re-anchored) tab's window. The same map shape must be produced by both
-// Launch and any future re-anchoring helper so hook-side consumers
-// (EffectiveProfile, EffectiveHarness, ...) see a consistent contract.
+// BuildUserVars constructs the metadata written onto a launched pane.
 func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defaults) map[string]string {
 	args := ResolveArgs(sess, acc, defaults)
 	explicitArgs := shellquote.Join(sess.EffectiveArgs())
@@ -85,7 +67,7 @@ func BuildUserVars(sess config.Session, acc config.Account, defaults config.Defa
 		"cc_config_dir": homeDir,
 		"cc_cwd":        projectDir,
 		"cc_flags":      args,
-		// Presence matters: an empty value means this modern tab had no
+		// Presence matters: an empty value means this session had no
 		// project-explicit args, so restart/profile-switch paths may recompute
 		// profile/default args instead of pinning inherited ones.
 		"cc_explicit_flags": explicitArgs,
@@ -107,29 +89,17 @@ func buildLaunchUserVars(sess config.Session, acc config.Account, defaults confi
 	return vars
 }
 
-// Launch launches a single session from config. The default policy is
+// LaunchOn launches a single session from config. The default policy is
 // LaunchPolicyDedupExisting, which returns nil silently if the session is
 // already running.
-func Launch(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, policies ...LaunchPolicy) error {
-	_, err := LaunchOn(KittyRuntime(client), sess, acc, cfg, policies...)
-	return err
-}
-
-// LaunchOn is Launch on the backend rt selects.
 func LaunchOn(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, policies ...LaunchPolicy) (LaunchResult, error) {
 	return launchFresh(rt, sess, acc, cfg, "", lineage{}, policies...)
 }
 
-// LaunchFresh starts a new harness conversation with an optional initial
+// LaunchFreshOn starts a new harness conversation with an optional initial
 // instruction. It deliberately bypasses the project-key deduplication guard:
 // callers use it for a new handoff or another explicitly requested fresh
-// session, where an existing tab for the same project is not a substitute.
-func LaunchFresh(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string) error {
-	_, err := LaunchFreshOn(KittyRuntime(client), sess, acc, cfg, initialPrompt)
-	return err
-}
-
-// LaunchFreshOn is LaunchFresh on the backend rt selects.
+// session, where an existing session for the same project is not a substitute.
 func LaunchFreshOn(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, initialPrompt string) (LaunchResult, error) {
 	return launchFresh(rt, sess, acc, cfg, initialPrompt, lineage{}, LaunchPolicyAlwaysNewInstance)
 }
@@ -151,63 +121,10 @@ func launchFresh(rt Runtime, sess config.Session, acc config.Account, cfg *confi
 		}
 		return invocation, nil
 	}
-	if rt.Kind() == runtimesession.BackendTmux {
-		return launchTmux(rt, sess, acc, cfg, formattedTitle, build, policy, lin)
-	}
-	result := LaunchResult{Backend: runtimesession.BackendKitty}
-	client := rt.Kitty
-	if client == nil {
-		return result, errNoKittyClient
-	}
-
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return result, fmt.Errorf("listing running sessions: %w", err)
-	}
-	running, _ := runningSessionsFromOSWindows(osWindows, cfg)
-	launchDebug.Printf("Launch: %d running sessions", len(running))
-	for _, r := range running {
-		launchDebug.Printf("  running: base=%q account=%q tabID=%d", r.Base, r.Account, r.TabID)
-	}
-
-	if policy != LaunchPolicyAlwaysNewInstance {
-		profileName := effectiveSessionProfile(sess, acc)
-		if existing, exists := FindByKey(running, SessionKey(profileName, sess.Title)); exists {
-			launchDebug.Printf("Launch: dedup hit, returning nil")
-			return result.deduplicated(existing), nil
-		}
-	} else {
-		launchDebug.Printf("Launch: dedup skipped")
-	}
-
-	invocation, err := build()
-	if err != nil {
-		return result, err
-	}
-	result.LaunchID = invocation.LaunchID
-	return result, launchInvocation(client, sess, acc, cfg, formattedTitle, invocation, policy, launchFlightIdentity{operation: lin.operation})
+	return launchTmux(rt, sess, acc, cfg, formattedTitle, build, policy, lin)
 }
 
-// LaunchContinuity launches a native resume or fork in a new Kitty tab. The
-// harness adapter owns the exact argument order; this helper owns the same
-// Kitty environment, title, user-vars, placement, and cosmetic color behavior
-// as a normal launch. Continuity deliberately bypasses project-key dedup: a
-// previously indexed conversation may not be live even when another instance
-// of that project is open.
-func LaunchContinuity(
-	client kitty.KittyClient,
-	sess config.Session,
-	acc config.Account,
-	cfg *config.Config,
-	kind harness.InvocationKind,
-	sessionID string,
-	initialPrompt string,
-) error {
-	_, err := LaunchContinuityOn(KittyRuntime(client), sess, acc, cfg, kind, sessionID, initialPrompt)
-	return err
-}
-
-// LaunchContinuityOn is LaunchContinuity on the backend rt selects. On tmux a
+// LaunchContinuityOn launches a native resume or fork. A
 // resume registers the resumed conversation with its runtime session, so a
 // conversation already live in another runtime session is refused instead of
 // running twice.
@@ -235,99 +152,13 @@ func LaunchContinuityOn(
 		}
 		return invocation, nil
 	}
-	if rt.Kind() == runtimesession.BackendTmux {
-		var lin lineage
-		if kind == harness.InvocationResume {
-			if identity, ok := conversation.New(acc.EffectiveHarness(), sessionID); ok {
-				lin.conversation = &identity
-			}
-		}
-		return launchTmux(rt, sess, acc, cfg, formattedTitle, build, LaunchPolicyAlwaysNewInstance, lin)
-	}
-	if rt.Kitty == nil {
-		return result, errNoKittyClient
-	}
-	invocation, err := build()
-	if err != nil {
-		return result, err
-	}
-	return result, launchInvocation(rt.Kitty, sess, acc, cfg, formattedTitle, invocation, LaunchPolicyAlwaysNewInstance)
-}
-
-// launchInvocation carries the Kitty-facing half shared by normal and
-// continuity launches. The caller must have already built the harness-owned
-// invocation, so this function never reconstructs CLI arguments.
-func launchInvocation(client kitty.KittyClient, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, invocation harness.Invocation, policy LaunchPolicy, flightIdentity ...launchFlightIdentity) error {
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return fmt.Errorf("listing running sessions: %w", err)
-	}
-
-	// Record pre-launch tab IDs for color retry later. We include *every* tab
-	// (managed and unmanaged) so a pre-existing tab whose title coincides with
-	// formattedTitle cannot be misidentified as the newly launched tab and
-	// repainted by applyColorWithRetry.
-	beforeGroups := allGroupRefs(osWindows)
-	term := kitty.NewBackend(client)
-
-	// Compute insert location for sorted insertion.
-	loc, prevTabID, err := ComputeInsertLocation(client, cfg.Defaults.Sort, effectiveSessionProfile(sess, acc), formattedTitle)
-	if err != nil {
-		// Non-fatal: fall back to default insertion.
-		loc = ""
-		prevTabID = 0
-	}
-
-	// Focus the reference tab so Kitty inserts relative to it.
-	focusInsertReference(term, loc, prevTabID)
-
-	harnessName := acc.EffectiveHarness()
-	userVars := buildLaunchUserVars(sess, acc, cfg.Defaults, invocation)
-	nativeReport := maintainNativeBeforeLaunch(cfg, osWindows, invocation.LaunchID)
-	shellCmd := RenderInvocation(invocation)
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/zsh"
-	}
-	spec := backend.LaunchSpec{
-		Title:     formattedTitle,
-		Directory: invocation.CWD,
-		Placement: placementArg(loc),
-		Env:       invocation.Environment,
-		Vars:      userVars,
-		Argv:      []string{shell, "-lic", shellCmd},
-	}
-
-	// Environment values and the command line can carry secrets and the
-	// initial prompt, so only the variable names are logged.
-	launchDebug.Printf("Launch: calling LaunchTab: title=%q dir=%q harness=%q loc=%q env=%v", spec.Title, spec.Directory, harnessName, spec.Placement, slices.Sorted(maps.Keys(spec.Env)))
-	if err := term.Launch(spec); err != nil {
-		launchDebug.Printf("Launch: LaunchTab error: %v", err)
-		recordHarnessLaunch(cfg, sess, acc, invocation, "error", launchReasonLaunchFailed, nativeReport)
-		return fmt.Errorf("launching session %q: %w", formattedTitle, err)
-	}
-	launchDebug.Printf("Launch: LaunchTab succeeded")
-	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport, flightIdentity...)
-
-	// Apply tab color with exponential backoff retry. Agent Mux owns the
-	// inactive profile accent; active colors reset to kitty.conf so the focused
-	// tab remains prominent even when the tab has a profile color.
-	if color, err := palette.Lookup(acc.Color); err == nil {
-		if colorErr := applyColorWithRetry(term, beforeGroups, formattedTitle, color); colorErr != nil {
-			slog.Warn("applying tab color after launch",
-				"title", formattedTitle,
-				"account", acc.Name,
-				"harness", acc.EffectiveHarness(),
-				"profile_color", acc.Color,
-				"error", colorErr,
-			)
+	var lin lineage
+	if kind == harness.InvocationResume {
+		if identity, ok := conversation.New(acc.EffectiveHarness(), sessionID); ok {
+			lin.conversation = &identity
 		}
 	}
-	return nil
-}
-
-func maintainNativeBeforeLaunch(cfg *config.Config, windows []kitty.OSWindow, launchID string) diagnostics.NativeReport {
-	return maintainNativeForActive(cfg, activeLaunchIDs(windows), launchID)
+	return launchTmux(rt, sess, acc, cfg, formattedTitle, build, LaunchPolicyAlwaysNewInstance, lin)
 }
 
 // maintainNativeForActive prunes native logs while keeping every launch in
@@ -356,20 +187,6 @@ func nativeOptions(policy config.DiagnosticsConfig) diagnostics.NativeOptions {
 		MaxBytes:       int64(policy.NativeMaxMiB) << 20,
 		LaunchMaxBytes: int64(policy.NativeSessionMaxMiB) << 20,
 	}
-}
-
-func activeLaunchIDs(windows []kitty.OSWindow) map[string]struct{} {
-	active := make(map[string]struct{})
-	for _, osWindow := range windows {
-		for _, tab := range osWindow.Tabs {
-			for _, window := range tab.Windows {
-				if window.UserVars.LaunchID != "" {
-					active[window.UserVars.LaunchID] = struct{}{}
-				}
-			}
-		}
-	}
-	return active
 }
 
 type launchFlightIdentity struct {
@@ -465,93 +282,4 @@ func effectiveSessionProfile(sess config.Session, acc config.Account) string {
 		return profileName
 	}
 	return acc.Name
-}
-
-// placementArg converts a logical insert location to a backend placement.
-// Returns the default placement for anything unrecognized.
-func placementArg(loc string) backend.Placement {
-	switch loc {
-	case "first":
-		return backend.PlacementFirst
-	case "after":
-		return backend.PlacementAfter
-	case "before":
-		return backend.PlacementBefore
-	default:
-		return backend.PlacementDefault
-	}
-}
-
-// focusInsertReference focuses the tab a relative placement is computed
-// against, then gives the terminal a moment to apply it before the launch.
-func focusInsertReference(term backend.Presenter, loc string, prevTabID int) {
-	if (loc == "after" || loc == "before") && prevTabID != 0 {
-		_ = term.Focus(kitty.GroupRef(prevTabID))
-		time.Sleep(100 * time.Millisecond)
-	}
-}
-
-// allGroupRefs returns every tab present in osWindows as a backend group,
-// including unmanaged tabs. The color-retry path uses this set to detect
-// "tabs that existed before Launch" so it never repaints a pre-existing tab
-// whose title happens to match the new session's formattedTitle.
-func allGroupRefs(osWindows []kitty.OSWindow) map[backend.Ref]bool {
-	refs := make(map[backend.Ref]bool)
-	for _, osw := range osWindows {
-		for _, tab := range osw.Tabs {
-			refs[kitty.GroupRef(tab.ID)] = true
-		}
-	}
-	return refs
-}
-
-// colorTarget is what the post-launch color pass needs from a backend.
-type colorTarget interface {
-	backend.Discoverer
-	backend.Presenter
-}
-
-// applyColorWithRetry polls for the newly created tab and sets its color.
-// It retries with exponential backoff to handle Kitty's registration delay.
-// Returns nil once the color is applied or the last error encountered if
-// every retry attempt fails; callers should treat the error as cosmetic.
-func applyColorWithRetry(term colorTarget, beforeGroups map[backend.Ref]bool, formattedTitle string, color palette.Color) error {
-	delay := colorInitialDelay
-	var lastErr error
-	colors := backend.Colors{
-		ActiveBg:   backend.ColorReset,
-		InactiveBg: color.InactiveBg,
-		ActiveFg:   backend.ColorReset,
-		InactiveFg: palette.InactiveFg,
-	}
-	for i := range colorMaxRetries {
-		panes, err := term.Discover()
-		if err != nil {
-			lastErr = fmt.Errorf("listing windows for color apply: %w", err)
-		} else {
-			lastErr = fmt.Errorf("new tab %q not visible in any kitty window", formattedTitle)
-			tried := make(map[backend.Ref]bool)
-			for _, pane := range panes {
-				if beforeGroups[pane.Group] || tried[pane.Group] || palette.StripIcons(pane.GroupTitle) != formattedTitle {
-					continue
-				}
-				tried[pane.Group] = true
-				if setErr := term.SetColors(pane.Group, colors); setErr != nil {
-					lastErr = fmt.Errorf("setting tab color: %w", setErr)
-				} else {
-					return nil
-				}
-			}
-		}
-		// Skip the sleep on the final iteration — we're about to return.
-		// Previously the function slept the full backoff after the last attempt
-		// (~500 ms at default tuning) before returning, padding every failed
-		// launch with wasted wall time the caller cannot reclaim.
-		if i == colorMaxRetries-1 {
-			break
-		}
-		time.Sleep(delay)
-		delay = time.Duration(float64(delay) * colorBackoffMul)
-	}
-	return lastErr
 }

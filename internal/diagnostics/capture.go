@@ -27,7 +27,7 @@ var ErrNoCapture = errors.New("diagnostics: no capture has been started")
 // required so an operator cannot accidentally enable a machine-wide capture.
 //
 // RuntimeSessionID scopes a capture to one runtime session, which is how a
-// session with no Kitty window is named: its hooks carry no window ID.
+// runtime session is named: its hooks carry no window ID.
 type CaptureScope struct {
 	WindowID         int    `json:"window_id,omitempty"`
 	RuntimeSessionID string `json:"runtime_session_id,omitempty"`

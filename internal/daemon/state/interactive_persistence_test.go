@@ -51,24 +51,24 @@ func TestCurrentConversationInteractiveOnlyRejectsPipeOnlyChild(t *testing.T) {
 }
 
 // TestPipeModeSurvivesDurableRoundTrip pins the persistence contract: the pm
-// flag round-trips through MarshalUserVar/UnmarshalUserVar and the restored
+// flag round-trips through MarshalStatePayload/UnmarshalStatePayload and the restored
 // reducer still prefers the interactive owner.
 func TestPipeModeSurvivesDurableRoundTrip(t *testing.T) {
 	r := NewReducer(zeroCfg)
 	r.Apply(harnessEvent("parent", "active", 1, 100, false))
 	r.Apply(harnessEvent("child", "active", 2, 200, true))
 
-	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar: %v", err)
+		t.Fatalf("MarshalStatePayload: %v", err)
 	}
 	if !strings.Contains(encoded, `"pm":true`) {
 		t.Fatalf("durable payload omitted pipe-mode flag: %s", encoded)
 	}
 
 	var restored WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload: %v", err)
 	}
 	child := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:child"}]
 	if child == nil || !child.pipeMode {
@@ -92,17 +92,17 @@ func TestWindowStateCrossSourceCausalOrderSurvivesDurableRoundTrip(t *testing.T)
 	r.Apply(harnessEvent("old", "active", 900, 100, false))
 	r.Apply(harnessEvent("current", "active", 1, 100, false))
 
-	encoded, err := (WindowState{Reducer: r, Effective: r.Reduce(100)}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r, Effective: r.Reduce(100)}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar: %v", err)
+		t.Fatalf("MarshalStatePayload: %v", err)
 	}
 	if !strings.Contains(encoded, `"o":1`) || !strings.Contains(encoded, `"o":2`) {
 		t.Fatalf("durable payload omitted causal orders: %s", encoded)
 	}
 
 	var restored WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload: %v", err)
 	}
 	old := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
 	current := restored.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:current"}]
@@ -143,13 +143,13 @@ func TestReducerCrossSourceCausalOrderSurvivesDegradedMerge(t *testing.T) {
 		t.Fatalf("merged Reduce = %+v, want current live bolt", got)
 	}
 
-	encoded, err := (WindowState{Reducer: live, Effective: live.Reduce(100)}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: live, Effective: live.Reduce(100)}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar after merge: %v", err)
+		t.Fatalf("MarshalStatePayload after merge: %v", err)
 	}
 	var restored WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar after merge: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload after merge: %v", err)
 	}
 	if got, ok := restored.CurrentConversation(100); !ok || got.SessionID != "current" {
 		t.Fatalf("restored merged CurrentConversation = %+v, %v; want current", got, ok)
@@ -166,8 +166,8 @@ func TestOldPayloadRestoresAsInteractive(t *testing.T) {
 	// A schema-v2 payload with a harness bolt fact and no pm key.
 	payload := `{"v":2,"f":[{"k":"harness","y":"claude:old","a":"active","i":"bolt","q":1,"t":100,"sid":"old"}]}`
 	var st WindowState
-	if err := st.UnmarshalUserVar(payload); err != nil {
-		t.Fatalf("UnmarshalUserVar: %v", err)
+	if err := st.UnmarshalStatePayload(payload); err != nil {
+		t.Fatalf("UnmarshalStatePayload: %v", err)
 	}
 	old := st.Reducer.facts[protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:old"}]
 	if old == nil || old.pipeMode {
@@ -190,13 +190,13 @@ func TestInteractiveOwnershipSurvivesRestart(t *testing.T) {
 	r.Apply(harnessEvent("old", "active", 1, 100, false))
 	r.Apply(harnessEvent("pipe", "active", 2, 110, true))
 
-	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar: %v", err)
+		t.Fatalf("MarshalStatePayload: %v", err)
 	}
 	var restored WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload: %v", err)
 	}
 	restored.Reducer.SetConfig(zeroCfg)
 	restored.Reducer.Apply(harnessEvent("cur", "stop", 1, 200, false))

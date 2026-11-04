@@ -293,7 +293,7 @@ func TestRun_DuplicateStartExitsWithoutTouchingLiveSocket(t *testing.T) {
 
 // seedHugeMalformedTranscriptIndex points HOME at a fresh directory holding a
 // megabyte-scale malformed transcripts.json, and empties PATH so the unrelated
-// bounded Kitty snapshot fails immediately instead of spending its 400 ms
+// bounded terminal snapshot fails immediately instead of spending its 400 ms
 // production budget. Startup behaviour then depends on transcript I/O alone.
 func seedHugeMalformedTranscriptIndex(t *testing.T) (home string, indexPath string) {
 	t.Helper()

@@ -9,7 +9,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 const ProbeSchemaVersion = 1
@@ -21,11 +20,7 @@ type ProbeClient interface {
 }
 
 type ProbeOptions struct {
-	WindowID int
-	// KittyListenOn identifies the Kitty instance that owns WindowID.
-	KittyListenOn string
-	// RuntimeSessionID names the session to probe when it has no Kitty
-	// window; it takes the place of WindowID.
+	// RuntimeSessionID names the session to probe.
 	RuntimeSessionID string
 	Harness          string
 	TraceID          string
@@ -44,8 +39,6 @@ type ProbeStage struct {
 type ProbeReport struct {
 	SchemaVersion  int                               `json:"schema_version"`
 	GeneratedAt    time.Time                         `json:"generated_at"`
-	WindowID       int                               `json:"window_id"`
-	KittySocket    string                            `json:"kitty_socket,omitempty"`
 	RuntimeSession string                            `json:"runtime_session_id,omitempty"`
 	Harness        string                            `json:"harness,omitempty"`
 	TraceID        string                            `json:"trace_id"`
@@ -61,7 +54,7 @@ type ProbeReport struct {
 // dedicated side-effect-free diagnostic request.
 func Probe(client ProbeClient, options ProbeOptions) ProbeReport {
 	report := ProbeReport{
-		SchemaVersion: ProbeSchemaVersion, GeneratedAt: time.Now().UTC(), WindowID: options.WindowID,
+		SchemaVersion: ProbeSchemaVersion, GeneratedAt: time.Now().UTC(),
 		Harness: strings.TrimSpace(options.Harness), TraceID: strings.TrimSpace(options.TraceID),
 		RequestID: strings.TrimSpace(options.RequestID), Stages: make([]ProbeStage, 0), Scope: ProbeScope,
 	}
@@ -79,19 +72,12 @@ func Probe(client ProbeClient, options ProbeOptions) ProbeReport {
 		return report
 	}
 	report.RuntimeSession = strings.TrimSpace(options.RuntimeSessionID)
-	if report.RuntimeSession != "" {
-		report.WindowID = 0
-	} else if report.WindowID <= 0 {
-		report.Error = "a runtime session ID or a positive Kitty window ID is required"
+	if report.RuntimeSession == "" {
+		report.Error = "a runtime session ID is required"
 		return report
-	} else if !kitty.IsReusableListenAddress(options.KittyListenOn) {
-		report.Error = "a reusable Kitty socket is required to probe a Kitty window"
-		return report
-	} else {
-		report.KittySocket = strings.TrimSpace(options.KittyListenOn)
 	}
 	request := protocol.Request{
-		Type: protocol.TypeDiagnosticProbe, WindowID: report.WindowID, KittyListenOn: report.KittySocket, RuntimeSessionID: report.RuntimeSession,
+		Type: protocol.TypeDiagnosticProbe, RuntimeSessionID: report.RuntimeSession,
 		ProducerHarness: report.Harness, Harness: report.Harness,
 		TraceID: report.TraceID, RequestID: report.RequestID,
 	}

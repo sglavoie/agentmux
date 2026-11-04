@@ -76,7 +76,7 @@ fields are present only when messages were read.`,
 		}
 		views := sessionViews([]transcript.SessionMeta{*meta})
 		live, liveKnown := sessionCommandsLiveConversations()
-		markLive(views, live, sessionCommandsCurrentWindow())
+		markLive(views, live)
 		view := views[0]
 		var tail *sessionMessageTail
 		if last > 0 || windowed {
@@ -291,7 +291,7 @@ func writeSessionMessages(out io.Writer, tail sessionMessageTail, now time.Time)
 // last lines are the commands that pick the conversation back up or branch
 // from it, spelled with its exact harness-qualified identity so they cannot
 // become ambiguous later. The live line, which says whether continue would
-// focus a tab or resume, is left out when the daemon or Kitty could not say.
+// focus a running session or resume, is left out when the daemon could not say.
 func writeSessionShow(out io.Writer, view sessionView, now time.Time, liveKnown bool) error {
 	dash := func(value string) string {
 		if value == "" {
@@ -342,22 +342,15 @@ func plural(label string, count int) string {
 	return label
 }
 
-// liveLine is session show's live value: the Kitty window a conversation is
-// open in, which continue focuses, or "no" when continue would resume it.
+// liveLine is session show's live value, or "no" when continue would resume it.
 func liveLine(live *liveConversation) string {
 	if live == nil {
 		return "no"
 	}
-	if live.RuntimeSessionID != "" {
-		if live.Here {
-			return fmt.Sprintf("open in this session (%s)", live.RuntimeSessionID)
-		}
-		return fmt.Sprintf("open in tmux session %s (amx attach shows it)", live.RuntimeSessionID)
-	}
 	if live.Here {
-		return fmt.Sprintf("open in this Kitty window (%d)", live.WindowID)
+		return fmt.Sprintf("open in this session (%s)", live.RuntimeSessionID)
 	}
-	return fmt.Sprintf("open in Kitty window %d (continue focuses it)", live.WindowID)
+	return fmt.Sprintf("open in tmux session %s (amx attach shows it)", live.RuntimeSessionID)
 }
 
 // sessionShowFrom is --from. It is unset (-1) by default, which --help does

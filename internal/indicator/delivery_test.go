@@ -18,7 +18,6 @@ import (
 func TestDeliverResolvesProducerConfigDirFromEnvAndStampsEvidence(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	configDir := filepath.Join(t.TempDir(), "claude-personal")
 	t.Setenv("CLAUDE_CONFIG_DIR", configDir+string(os.PathSeparator))
 
@@ -93,7 +92,6 @@ func TestResolveProducerConfigDirFallbacksAndUnknownHarness(t *testing.T) {
 }
 
 func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 
 	for _, tc := range []struct {
 		name   string
@@ -160,7 +158,6 @@ func TestDeliverPayloadWithDepsStructuredOutcomes(t *testing.T) {
 }
 
 func TestDeliverPayloadWithDepsForwardsHarnessProcessIdentity(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{resp: protocol.Response{OK: true}}
 	identity := &protocol.HarnessProcessIdentity{
 		Harness: "claude", PID: 4242, StartToken: "Thu Jul 16 10:20:30 2026",

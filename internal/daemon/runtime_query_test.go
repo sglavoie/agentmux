@@ -8,7 +8,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
-// A dashboard outside Kitty knows a tmux session only by its runtime session.
+// A dashboard outside the desktop workspace knows a tmux session only by its runtime session.
 // The state query has to tell it which slot that is, and the two operator
 // requests it sends back have to be addressable the same way.
 func TestStateQueryNamesTheRuntimeSessionOfEachBoundSlot(t *testing.T) {

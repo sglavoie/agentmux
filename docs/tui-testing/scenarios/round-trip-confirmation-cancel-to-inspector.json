@@ -42,16 +42,11 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2502alpha"
+      "text": "│alpha"
     },
     {
       "type": "contains_text",
-      "text": "\u2502Dir     ~/projects/alpha"
-    },
-    {
-      "type": "kitty_calls",
-      "op": "CloseTab",
-      "count": 0
+      "text": "│Dir     ~/projects/alpha"
     },
     {
       "type": "no_layout_issues"

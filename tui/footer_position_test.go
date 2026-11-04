@@ -170,7 +170,7 @@ func TestListFooterPositionFragmentAccountsForGroupChrome(t *testing.T) {
 	})
 
 	t.Run("projects view keeps its whole-list suppression", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewProjects)
+		m := listViewModel(dashboard.ViewProjects)
 		m.width, m.height = 120, 15
 
 		start, end, _, _ := renderedItemWindow(t, m)
@@ -183,7 +183,7 @@ func TestListFooterPositionFragmentAccountsForGroupChrome(t *testing.T) {
 	})
 
 	t.Run("projects view reports the window it overflows into", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewProjects)
+		m := listViewModel(dashboard.ViewProjects)
 		m.width, m.height = 120, 11
 		total := m.listItemCount()
 

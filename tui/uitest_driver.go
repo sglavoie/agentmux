@@ -19,12 +19,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/planrun"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
@@ -58,12 +58,11 @@ const (
 // errUITestPreviewRead is what a fixture's TextFailures answers a read with. The
 // wording is fixed because a scenario asserts on the sentence the inspector
 // paints, and a message that varied by run would make that assertion untestable.
-var errUITestPreviewRead = errors.New("kitty read failed")
+var errUITestPreviewRead = errors.New("terminal read failed")
 
 // uitestDriver holds a live Model plus the terminal size it is rendered at, and
-// applies scenario actions to it. It never talks to a live Kitty instance; all
-// side effects flow through the injected kitty.KittyClient (a no-op recorder in
-// scenario runs), so it stays independent of CLI flags and fixture setup.
+// applies scenario actions to it. Fixture commands use in-memory data and
+// record terminal actions, so scenarios stay independent of CLI flags.
 type uitestDriver struct {
 	model    Model
 	size     UITestSize
@@ -85,8 +84,34 @@ type uitestDriver struct {
 	workbenchMu    sync.Mutex
 	workbenchOpens []uitestWorkbenchOpen
 
-	aslActionMu sync.Mutex
-	aslActions  []uitestASLAction
+	aslActionMu      sync.Mutex
+	aslActions       []uitestASLAction
+	terminalActionMu sync.Mutex
+	terminalActions  []uitestTerminalAction
+}
+
+type uitestTerminalAction struct {
+	Kind   string
+	Target string
+	Title  string
+}
+
+func (d *uitestDriver) recordTerminalAction(action uitestTerminalAction) {
+	d.terminalActionMu.Lock()
+	d.terminalActions = append(d.terminalActions, action)
+	d.terminalActionMu.Unlock()
+}
+
+func (d *uitestDriver) TerminalActions(kind string) []uitestTerminalAction {
+	d.terminalActionMu.Lock()
+	defer d.terminalActionMu.Unlock()
+	var matches []uitestTerminalAction
+	for _, action := range d.terminalActions {
+		if action.Kind == kind {
+			matches = append(matches, action)
+		}
+	}
+	return matches
 }
 
 // uitestASLAction records one submitted agent-session-loop mutation. It carries
@@ -498,48 +523,34 @@ func (d *uitestDriver) recordErr(err error) {
 // uitest_driver_hermetic.go and the fixtures in uitest_fixtures.go.
 
 // newUITestFixtureDriver builds a driver from a built-in fixture: it constructs
-// the model with the fixture's config and a no-op recording Kitty client (which
-// reports the fixture's windows), applies size, and loads the fixture's running
+// the model with the fixture's config, applies size, and loads the fixture's running
 // sessions synchronously so the list is populated without the refresh ticker
 // (whose tea.Tick commands the harness skips before launch). Each zero dimension falls back
 // independently to the fixture's own default for that dimension, so a caller can
-// override width alone (or height alone) without zeroing the other. The recording
-// client is returned so callers can assert on the Kitty calls the model attempted.
-func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *kittytest.Client) {
+// override width alone (or height alone) without zeroing the other.
+func newUITestFixtureDriver(fx uitestFixture, size UITestSize) *uitestDriver {
 	if size.Width == 0 {
 		size.Width = fx.Size.Width
 	}
 	if size.Height == 0 {
 		size.Height = fx.Size.Height
 	}
-	client := kittytest.NewClient(fx.Windows)
-	client.SetText(fx.Text)
-	if fx.TextFailures > 0 {
-		// Installed rather than counted inside GetText so the plain path stays
-		// exactly what it was: a fixture with no failures never reaches this.
-		remaining, text := fx.TextFailures, fx.Text
-		var mu sync.Mutex
-		client.SetReadBehavior(func(string) (string, error) {
-			mu.Lock()
-			defer mu.Unlock()
-			if remaining > 0 {
-				remaining--
-				return "", errUITestPreviewRead
-			}
-			return text, nil
-		})
-	}
-	d := newUITestDriver(fx.Config, client, size)
+	d := newUITestDriver(fx.Config, nil, size)
 	d.model.flightRead = fixtureFlightReader(fx.FlightEvents)
-	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(fx.overlay())
-	if len(fx.Portable) > 0 || fx.NoKitty {
-		portable, text := fx.Portable, fx.Text
-		d.model.backgroundCommands.topologyRefresh = hermeticPortableRefresh(fx.overlay(), portable)
-		d.model.backgroundCommands.scrollback = func(int) (string, error) { return text, nil }
+	remainingReads := fx.TextFailures
+	var readMu sync.Mutex
+	d.model.backgroundCommands.scrollback = func(int) (string, error) {
+		readMu.Lock()
+		defer readMu.Unlock()
+		if remainingReads > 0 {
+			remainingReads--
+			return "", errUITestPreviewRead
+		}
+		return fx.Text, nil
 	}
-	if fx.NoKitty {
-		d.model.client = nil
-	}
+	rows := fx.runningSessions()
+	rows = append(rows, fx.Portable...)
+	d.model.backgroundCommands.topologyRefresh = hermeticPortableRefresh(fx.overlay(), rows)
 	if fx.Health != nil {
 		// Honor the two flags the way commands.Health does, so a fixture cannot
 		// make a daemon-only refresh silently deliver a hook summary. The model
@@ -574,7 +585,7 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 		}
 	}
 	d.model.backgroundCommands.worktreeAction = func(_ Model, id actions.ID, request actions.Request) tea.Cmd {
-		return fixtureWorktreeActionCmd(client, &fixtureWorktrees, id, request)
+		return fixtureWorktreeActionCmd(d.recordTerminalAction, &fixtureWorktrees, id, request)
 	}
 	fixtureRows := append([]aslbridge.Row(nil), fx.ASLRows...)
 	fixtureStatus := fx.ASLStatus
@@ -649,14 +660,14 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) (*uitestDriver, *
 			return msg
 		}
 	}
-	d.loadSessionsWith(client, fx.Config, fx.overlay(), fx.Portable)
+	d.loadSessionsWith(fx.overlay(), rows)
 	for _, notice := range fx.Notices {
 		d.model.pushToast(notice)
 	}
-	return d, client
+	return d
 }
 
-func fixtureWorktreeActionCmd(client *kittytest.Client, entries *[]actions.WorktreeView, id actions.ID, request actions.Request) tea.Cmd {
+func fixtureWorktreeActionCmd(record func(uitestTerminalAction), entries *[]actions.WorktreeView, id actions.ID, request actions.Request) tea.Cmd {
 	return func() tea.Msg {
 		entry := request.Worktree
 		if entry == nil {
@@ -670,25 +681,25 @@ func fixtureWorktreeActionCmd(client *kittytest.Client, entries *[]actions.Workt
 		case actions.WorktreeReopen:
 			switch entry.ID {
 			case "wt-live":
-				_ = client.FocusTab(kitty.MatchTabByID(71))
+				record(uitestTerminalAction{Kind: "focus", Target: "71"})
 				return done(actions.Result{Changed: true, Message: "focused live worktree session"}, nil)
 			case "wt-multi":
 				if candidate := request.Parameters["session"]; candidate != "" {
-					_ = client.FocusTab("id:" + candidate)
+					record(uitestTerminalAction{Kind: "focus", Target: candidate})
 					return done(actions.Result{Changed: true, Message: "focused selected live worktree session"}, nil)
 				}
 				return done(actions.Result{}, &actions.Error{Code: "ambiguous_live_sessions", Action: id, Message: "multiple live sessions are inside this worktree", Candidates: []actions.Candidate{{ID: "81", DisplayName: "multi-project (work)"}, {ID: "82", DisplayName: "multi-project (personal)"}}})
 			case "wt-resume":
-				_ = client.LaunchTab(kitty.LaunchOpts{Title: "resume-project"})
+				record(uitestTerminalAction{Kind: "launch", Title: "resume-project"})
 				return done(actions.Result{Changed: true, Message: "resumed newest worktree conversation", Data: map[string]any{"continuation": "resumed"}}, nil)
 			case "wt-fresh":
-				_ = client.LaunchTab(kitty.LaunchOpts{Title: "fresh-project"})
+				record(uitestTerminalAction{Kind: "launch", Title: "fresh-project"})
 				return done(actions.Result{Changed: true, Message: "launched fresh worktree session", Data: map[string]any{"continuation": "fresh"}}, nil)
 			case "wt-profile":
 				if request.Parameters["profile"] == "" {
 					return done(actions.Result{}, &actions.Error{Code: "profile_required", Action: id, Message: "the recorded worktree profile is no longer configured", MissingParameters: []actions.ParameterSchema{{Name: "profile", Type: "string", Required: true}}})
 				}
-				_ = client.LaunchTab(kitty.LaunchOpts{Title: "profile-project"})
+				record(uitestTerminalAction{Kind: "launch", Title: "profile-project"})
 				return done(actions.Result{Changed: true, Message: "launched fresh worktree session with replacement profile"}, nil)
 			}
 			return done(actions.Result{Changed: true, Message: "launched fresh worktree session"}, nil)
@@ -789,7 +800,7 @@ var uitestFrozenNow = time.Date(2026, 1, 2, 15, 4, 5, 0, time.UTC)
 // a running program, and a running program's config came through config.Load;
 // a fixture's did not, so without this every scenario would be judged against a
 // split geometry no installation produces.
-func newUITestDriver(cfg *config.Config, client kitty.KittyClient, size UITestSize) *uitestDriver {
+func newUITestDriver(cfg *config.Config, client any, size UITestSize) *uitestDriver {
 	if cfg != nil {
 		config.ApplyPreviewDefaults(&cfg.Defaults.Preview)
 	}
@@ -874,58 +885,13 @@ func newUITestDriverUnder(m Model, size UITestSize, tempParent string) (*uitestD
 	return d, nil
 }
 
-// hermeticTopologyRefresh enumerates sessions from the no-op Kitty client and
-// overlays the fixture's injected facts: the daemon-owned state no Kitty title
-// can carry (the busy anchor above all), and the repository-family identity a
-// real Git probe would have stamped. The overlay is zero for a driver built
-// without a fixture, which reproduces an unreachable daemon and discovery's own
-// family answer exactly as before. The daemon is never contacted either way, so
-// the no-live-daemon guarantee holds.
-//
-// It carries the refresh sequence and the freshness metadata the real command
-// does, so the model's one-refresh-in-flight controller settles here exactly as
-// it does in production; a fixture fetch that dropped the sequence would leave
-// every scenario stuck after its first refresh. The fixture's own listing stands
-// in for a direct fallback, which is what it is: no daemon is reachable.
-func hermeticTopologyRefresh(overlay uitestSessionOverlay) func(Model, int, int) tea.Cmd {
-	return func(m Model, seq, _ int) tea.Cmd {
-		return func() tea.Msg {
-			windows, err := m.client.ListWindows()
-			if err != nil {
-				return commands.ErrMsg{Seq: seq, Err: err}
-			}
-			sessions, _ := session.ListFromOSWindowsWithConfig(windows, m.cfg)
-			overlay.apply(sessions)
-			return commands.SessionsMsg{
-				Seq:      seq,
-				Sessions: session.SortRunning(sessions, m.sortMode),
-				Watchdog: overlay.Watchdog,
-				States:   overlay.States,
-				Topology: commands.TopologyFreshness{
-					Source:     commands.TopologyFromDirect,
-					CapturedAt: m.now(),
-				},
-			}
-		}
-	}
-}
-
-// hermeticPortableRefresh is hermeticTopologyRefresh for a fixture with
-// sessions on a portable backend: the fixture's rows are listed beside
-// whatever the fake Kitty client reports, and a model with no Kitty client
-// lists them alone, exactly as commands.Refresh does outside Kitty.
+// hermeticPortableRefresh serves a fixed tmux session listing with the
+// fixture's daemon state and project-family facts. It preserves the refresh
+// sequence so the model's one-refresh-in-flight controller settles normally.
 func hermeticPortableRefresh(overlay uitestSessionOverlay, portable []session.RunningSession) func(Model, int, int) tea.Cmd {
 	return func(m Model, seq, _ int) tea.Cmd {
 		return func() tea.Msg {
-			var sessions []session.RunningSession
-			if m.client != nil {
-				windows, err := m.client.ListWindows()
-				if err != nil {
-					return commands.ErrMsg{Seq: seq, Err: err}
-				}
-				sessions, _ = session.ListFromOSWindowsWithConfig(windows, m.cfg)
-			}
-			sessions = append(sessions, portable...)
+			sessions := append([]session.RunningSession(nil), portable...)
 			overlay.apply(sessions)
 			return commands.SessionsMsg{
 				Seq:      seq,
@@ -943,10 +909,7 @@ func hermeticPortableRefresh(overlay uitestSessionOverlay, portable []session.Ru
 
 func hermeticModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
-		topologyRefresh: hermeticTopologyRefresh(uitestSessionOverlay{}),
-		activeLoops: func(seq int) tea.Cmd {
-			return func() tea.Msg { return commands.ActiveLoopsMsg{Seq: seq} }
-		},
+		topologyRefresh: hermeticPortableRefresh(uitestSessionOverlay{}, nil),
 		health: func(_ Model, checkDaemon, checkHooks bool) tea.Cmd {
 			return func() tea.Msg { return commands.HealthMsg{DaemonChecked: checkDaemon, HookChecked: checkHooks} }
 		},
@@ -991,27 +954,28 @@ func hermeticModelBackgroundCommands() modelBackgroundCommands {
 }
 
 // newUITestConfigDriver stages an isolated environment under root, loads the
-// config at srcConfigPath from inside it, and builds a driver backed by a no-op
-// recording Kitty client reporting windows. setenv applies the isolation env
+// config at srcConfigPath from inside it, and builds a driver with tmux panes.
+// setenv applies the isolation env
 // vars (pass t.Setenv in tests, os.Setenv in the CLI). It returns the driver,
 // the recording client, and the staged environment description so callers can
 // assert that no real user paths are used.
-func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow, size UITestSize, setenv func(string, string) error) (*uitestDriver, *kittytest.Client, uitestConfigEnv, error) {
+func newUITestConfigDriver(root, srcConfigPath string, panes []backend.Pane, size UITestSize, setenv func(string, string) error) (*uitestDriver, uitestConfigEnv, error) {
 	env, err := stageUITestConfigEnv(root, srcConfigPath, setenv)
 	if err != nil {
-		return nil, nil, uitestConfigEnv{}, err
+		return nil, uitestConfigEnv{}, err
 	}
 	cfg, err := config.Load(env.ConfigPath)
 	if err != nil {
-		return nil, nil, env, fmt.Errorf("uitest: loading staged config: %w", err)
+		return nil, env, fmt.Errorf("uitest: loading staged config: %w", err)
 	}
-	client := kittytest.NewClient(windows)
-	d, err := newUITestDriverUnder(NewModel(cfg, client), size, root)
+	d, err := newUITestDriverUnder(NewModel(cfg, nil), size, root)
 	if err != nil {
-		return nil, nil, env, err
+		return nil, env, err
 	}
-	d.loadSessionsFrom(client, cfg, uitestSessionOverlay{})
-	return d, client, env, nil
+	rows := session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg)
+	d.model.backgroundCommands.topologyRefresh = hermeticPortableRefresh(uitestSessionOverlay{}, rows)
+	d.loadSessionsWith(uitestSessionOverlay{}, rows)
+	return d, env, nil
 }
 
 // loadSessionsFrom populates the model's session list the way the production
@@ -1022,17 +986,8 @@ func newUITestConfigDriver(root, srcConfigPath string, windows []kitty.OSWindow,
 // keeps that first list identical to what a later tick's hermetic initial fetch
 // would produce — which is why both go through the same overlay. A query error
 // leaves the model with an empty list rather than failing driver construction.
-func (d *uitestDriver) loadSessionsFrom(client kitty.KittyClient, cfg *config.Config, overlay uitestSessionOverlay) {
-	d.loadSessionsWith(client, cfg, overlay, nil)
-}
-
-// loadSessionsWith is loadSessionsFrom plus the rows a portable backend hosts.
-func (d *uitestDriver) loadSessionsWith(client kitty.KittyClient, cfg *config.Config, overlay uitestSessionOverlay, portable []session.RunningSession) {
-	sessions, _, err := session.ListWithConfig(client, cfg)
-	if err != nil {
-		return
-	}
-	sessions = append(sessions, portable...)
+func (d *uitestDriver) loadSessionsWith(overlay uitestSessionOverlay, rows []session.RunningSession) {
+	sessions := append([]session.RunningSession(nil), rows...)
 	overlay.apply(sessions)
 	// This load stands in for the startup refresh the constructor armed, so it
 	// carries that refresh's sequence: settling it is what lets the first tick

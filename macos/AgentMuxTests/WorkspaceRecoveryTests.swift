@@ -10,8 +10,6 @@ final class WorkspaceRestorationTests: XCTestCase {
     func testPlacesRoundTripThroughTheirPreferenceString() {
         let places: [Place] = [
             .session(runtimeSessionID: F.runtimeID(7)),
-            .kitty(socket: "unix:/tmp/kitty-1", windowID: 42),
-            .kitty(socket: "", windowID: 3),
             .view(id: WorkspaceUtilityView.dashboard.id),
             .view(id: WorkspaceUtilityView.overview.id),
         ]
@@ -23,7 +21,7 @@ final class WorkspaceRestorationTests: XCTestCase {
     }
 
     func testAStringThatIsNotAPlaceRestoresNothing() {
-        for junk in ["", "session", "session:", "session:rs-1", "session:not-an-id", "kitty:0:sock", "kitty:x:sock", "kitty:7",
+        for junk in ["", "session", "session:", "session:rs-1", "session:not-an-id", "unsupported:7:sock",
                      "view:shell:/tmp", "view:pager:" + F.runtimeID(1), "launch:api", "session:\(F.runtimeID(1)); rm"] {
             XCTAssertNil(Place(encoded: junk), junk)
         }
@@ -161,7 +159,7 @@ final class WorkspaceRecoveryTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work"),
         F.tmux(2, project: "api", profile: "personal"),
-        F.kitty(4, project: "web"),
+        F.tmux(4, project: "web"),
     ]
 
     override func setUp() async throws {
@@ -191,7 +189,7 @@ final class WorkspaceRecoveryTests: XCTestCase {
         workspace.showView(WorkspaceUtilityView.overview.id)
         XCTAssertEqual(app.places, [
             .session(runtimeSessionID: F.runtimeID(1)),
-            .kitty(socket: "unix:/tmp/kitty-1", windowID: 4),
+            .session(runtimeSessionID: F.runtimeID(4)),
             .view(id: "overview"),
         ])
 
@@ -397,21 +395,11 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertEqual(app.conversations.last, .some(nil), "another session's conversation is never kept for this one")
     }
 
-    func testRestoringAViewShowsItAndAKittySessionIsSelectedNotRaised() throws {
+    func testRestoringAViewShowsIt() throws {
         workspace.restore(.view(id: "overview"))
         XCTAssertEqual(workspace.content, .view(id: "overview"))
         XCTAssertEqual(app.madeViews, ["overview"])
 
-        app.store.apply(snapshot: F.snapshot(sessions))
-        workspace.restore(.kitty(socket: "unix:/tmp/kitty-1", windowID: 4))
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
-        XCTAssertEqual(app.external, [], "coming back must not pull Kitty forward")
-        XCTAssertEqual(app.asked, [])
-
-        // A Kitty window that is gone restores nothing and reports nothing.
-        workspace.restore(.kitty(socket: "unix:/tmp/kitty-1", windowID: 99))
-        XCTAssertEqual(workspace.content, .empty)
-        XCTAssertNil(workspace.gone)
     }
 
     // MARK: An agent that stops while the window is on it
@@ -460,12 +448,12 @@ final class WorkspaceRecoveryTests: XCTestCase {
         XCTAssertEqual(app.made, [F.runtimeID(1)])
     }
 
-    func testAKittySessionThatClosesLeavesThePaneEmpty() throws {
+    func testASessionThatClosesShowsRecovery() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.select(try row("web", "work").key)
         app.store.apply(snapshot: F.snapshot([sessions[0], sessions[1]]))
-        XCTAssertEqual(workspace.content, .empty)
-        XCTAssertEqual(app.asked, [], "amx is asked only about sessions the workspace embeds")
+        XCTAssertEqual(workspace.content, .gone(runtimeSessionID: F.runtimeID(4), .live(clients: 0)))
+        XCTAssertEqual(app.asked, [F.runtimeID(4)])
     }
 
     func testClosingTheWindowForgetsWhatThePaneWasSaying() throws {

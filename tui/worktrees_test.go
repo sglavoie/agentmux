@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
@@ -230,8 +230,14 @@ func TestWorktreeNavigationFilterAndReturn(t *testing.T) {
 
 func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 	fx := worktreesFixture()
-	client := kittytest.NewClient(fx.Windows)
-	m := NewModel(fx.Config, client)
+	previous := commands.Portable.Desktop
+	var opened []string
+	commands.Portable.Desktop = func(req protocol.WorkspaceViewRequest) error {
+		opened = append(opened, req.Kind)
+		return nil
+	}
+	t.Cleanup(func() { commands.Portable.Desktop = previous })
+	m := NewModel(fx.Config, nil)
 	m.width, m.height = 120, 30
 	m.mode = ModeWorktrees
 	m.worktreeEntries = tuiworktrees.SortViews(fx.Worktrees)
@@ -254,8 +260,8 @@ func TestWorktreeShellEditorAndCopyActions(t *testing.T) {
 			t.Fatalf("%s action error: %v", key, m.actionErr)
 		}
 	}
-	if got := len(client.CallsFor("LaunchTab")); got != 2 {
-		t.Fatalf("LaunchTab calls = %d, want shell + editor", got)
+	if len(opened) != 2 || opened[0] != protocol.WorkspaceViewShell || opened[1] != protocol.WorkspaceViewEditor {
+		t.Fatalf("workspace views = %v, want shell then editor", opened)
 	}
 
 	oldCopy := commands.CopyToClipboard

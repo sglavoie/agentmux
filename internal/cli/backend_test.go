@@ -40,8 +40,7 @@ func TestLaunchBackendComesFromTheFlagThenTheConfiguration(t *testing.T) {
 		{name: "nothing set uses tmux", want: runtimesession.BackendTmux},
 		{name: "an empty configuration uses tmux", configured: configWithBackend(""), want: runtimesession.BackendTmux},
 		{name: "configured tmux", configured: configWithBackend("tmux"), want: runtimesession.BackendTmux},
-		{name: "the flag overrides configured tmux", flag: "kitty", configured: configWithBackend("tmux"), want: runtimesession.BackendKitty},
-		{name: "the flag overrides configured Kitty", flag: "TMUX", configured: configWithBackend("kitty"), want: runtimesession.BackendTmux},
+		{name: "the flag selects tmux", flag: "TMUX", configured: configWithBackend("tmux"), want: runtimesession.BackendTmux},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := SelectedBackend(launchCommand(t, tc.flag), tc.configured)
@@ -77,17 +76,14 @@ func replaceTmuxBackend(t *testing.T, open func() (backend.TargetLauncher, error
 	t.Cleanup(func() { NewTmuxBackend = previous })
 }
 
-func TestSelectingKittyNeverOpensTmux(t *testing.T) {
+func TestSelectingUnsupportedBackendIsRefusedBeforeOpeningTmux(t *testing.T) {
 	replaceTmuxBackend(t, func() (backend.TargetLauncher, error) {
-		t.Fatal("a Kitty launch opened the tmux backend")
+		t.Fatal("an unsupported launch opened the tmux backend")
 		return nil, nil
 	})
-	deps := actions.Dependencies{Config: configWithBackend("kitty")}
-	if err := SelectBackend(launchCommand(t, ""), &deps); err != nil {
-		t.Fatalf("SelectBackend: %v", err)
-	}
-	if deps.Backend != runtimesession.BackendKitty || deps.Tmux != nil {
-		t.Fatalf("deps = %+v", deps)
+	deps := actions.Dependencies{Config: configWithBackend("tmux")}
+	if err := SelectBackend(launchCommand(t, "unsupported"), &deps); err == nil || !strings.Contains(err.Error(), "use tmux") {
+		t.Fatalf("SelectBackend = %v, want a tmux-only error", err)
 	}
 }
 
@@ -177,18 +173,18 @@ func TestBackendStatusWithoutTmuxSaysWhatToInstall(t *testing.T) {
 		t.Fatalf("candidates = %+v", status.Tmux.Candidates)
 	}
 
-	// An operator who launches into Kitty is only warned.
-	kitty := CollectBackendStatus(configWithBackend("kitty"), nil, missing)
-	if got := problemCodes(kitty); len(got) != 1 || got[0] != "warning:tmux_unavailable" {
-		t.Fatalf("problems for a Kitty setup = %v", got)
+	// An unsupported backend preference does not make a missing tmux optional.
+	unsupported := CollectBackendStatus(configWithBackend("unsupported"), nil, missing)
+	if got := problemCodes(unsupported); len(got) != 1 || got[0] != "error:tmux_unavailable" {
+		t.Fatalf("problems for an unsupported setup = %v", got)
 	}
-	if kitty.Usable() {
+	if unsupported.Usable() {
 		t.Fatal("a setup without tmux reports the tmux backend as usable")
 	}
 }
 
 func TestBackendStatusReportsAnUnreadableConfiguration(t *testing.T) {
-	status := CollectBackendStatus(nil, errors.New("defaults.launch_backend \"ghostty\": must be \"kitty\" or \"tmux\""), probe())
+	status := CollectBackendStatus(nil, errors.New("defaults.launch_backend \"ghostty\": must be \"tmux\""), probe())
 	if got := problemCodes(status); len(got) != 1 || got[0] != "error:config_invalid" {
 		t.Fatalf("problems = %v", got)
 	}

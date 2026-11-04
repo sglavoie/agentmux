@@ -46,10 +46,6 @@ func (h *Handler) syncRendererMetadataLocked(windowID int) {
 	}
 	meta.Renderer.LastRenderLatencyMs = st.LastRenderLatency.Milliseconds()
 	meta.Renderer.Generations = rendering.CloneTraces(st.RenderGenerations)
-	meta.Renderer.KittyListenOn = h.kittySockets[windowID]
-	if meta.Renderer.KittyListenOn == "" {
-		meta.Renderer.KittyListenOn = h.lastKittyListenOn
-	}
 	h.windowMetadata[windowID] = meta
 }
 

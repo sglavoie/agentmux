@@ -50,8 +50,6 @@ type HookPayload struct {
 	Trigger               string `json:"trigger"`
 	CWD                   string `json:"cwd"`
 	Harness               string `json:"harness"`
-	KittyWindowID         int    `json:"kitty_window_id"`
-	WindowID              int    `json:"window_id"`
 	PlanDir               string `json:"plan_dir"`
 	RunID                 string `json:"run_id"`
 	RunIDCamel            string `json:"runId"`
@@ -293,16 +291,6 @@ func (p HookPayload) EffectiveSourceEventID() string {
 
 func (p HookPayload) EffectiveEmittedTime() string {
 	return firstNonBlank(p.EmittedTime, p.EmittedTimeCamel)
-}
-
-func (p HookPayload) EffectiveKittyWindowID() int {
-	if p.KittyWindowID > 0 {
-		return p.KittyWindowID
-	}
-	if p.WindowID > 0 {
-		return p.WindowID
-	}
-	return 0
 }
 
 func firstNonBlank(values ...string) string {

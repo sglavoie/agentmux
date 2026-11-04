@@ -19,16 +19,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 )
 
 // stuckScreenDeclineSnapshot is a live ⚡ window whose probe has refused the
 // same frame past the threshold: the synthetic stuck-bolt case. Its renderer
-// state agrees with the live tab title that stuckScreenDeclineWindows paints,
-// so the fixture is a window that is genuinely still stuck rather than one that
-// merely retains the evidence — and it trips no renderer-drift finding on the
-// way, which is what keeps these tests asserting exactly the finding they set up.
+// state agrees with the reducer, so the fixture describes a live session.
 func stuckScreenDeclineSnapshot(streak int) protocol.EventsExport {
 	return protocol.EventsExport{
 		WindowMetadata: map[int]protocol.WindowDebugMetadata{
@@ -48,43 +43,15 @@ func stuckScreenDeclineSnapshot(streak int) protocol.EventsExport {
 	}
 }
 
-// stuckScreenDeclineWindows is the live Kitty view that goes with the snapshot
-// above: window 7 exists and its tab is still painted ⚡. The finding is a claim
-// about a pane an operator is looking at right now, so the live join has to find
-// one — a decline streak retained for a window Kitty no longer reports is
-// history, not health.
-func stuckScreenDeclineWindows() []kitty.OSWindow {
-	return screenDeclineWindowsShowing("bolt")
-}
-
-// screenDeclineWindowsShowing is the same live view painted with an arbitrary
-// icon, so a test can express "the window recovered" the way an operator would
-// see it: the tab is no longer ⚡.
-func screenDeclineWindowsShowing(icon string) []kitty.OSWindow {
-	return []kitty.OSWindow{{
-		ID: 900,
-		Tabs: []kitty.Tab{{
-			ID:      91,
-			Title:   palette.BuildTitle("W:api", icon, false),
-			Windows: []kitty.Window{{ID: 7, Title: "api window"}},
-		}},
-	}}
-}
-
-// setUpStuckScreenDeclineFixture is setUpDoctorFixture with the live Kitty view
-// the decline finding needs. It exists because every test here has to agree
-// about what "still live" looks like: a disagreement would silently turn a
-// finding assertion into a retraction assertion.
-func setUpStuckScreenDeclineFixture(t *testing.T, snapshot protocol.EventsExport, windows []kitty.OSWindow) {
+func setUpStuckScreenDeclineFixture(t *testing.T, snapshot protocol.EventsExport) {
 	t.Helper()
 	build := doctorTestBuild
 	health := ipc.Health{Alive: true, Ready: true, PID: 1, Uptime: time.Minute, Build: &build}
 	setUpDoctorFixture(t, health, snapshot)
-	newDoctorKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{windows: windows} }
 }
 
 func TestDoctorStrictFailsOnPersistentScreenDecline(t *testing.T) {
-	setUpStuckScreenDeclineFixture(t, stuckScreenDeclineSnapshot(screenDeclinePersistentStreak), stuckScreenDeclineWindows())
+	setUpStuckScreenDeclineFixture(t, stuckScreenDeclineSnapshot(screenDeclinePersistentStreak))
 	doctorStrict = true
 
 	var out bytes.Buffer
@@ -119,10 +86,6 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 	cases := []struct {
 		name     string
 		snapshot protocol.EventsExport
-		// windows overrides the live Kitty view. Nil means the ordinary
-		// still-live ⚡ pane; a case whose window is gone says so explicitly
-		// rather than leaving the live join to contradict its own snapshot.
-		windows []kitty.OSWindow
 	}{
 		{
 			// A pane that is genuinely working repaints its elapsed-time
@@ -154,23 +117,17 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 				snapshot.WindowMetadata[7] = meta
 				return snapshot
 			}(),
-			windows: []kitty.OSWindow{},
 		},
 		{
 			// The clean deployment: no windows, no declines, nothing to say.
 			name:     "clean deployment",
 			snapshot: protocol.EventsExport{},
-			windows:  []kitty.OSWindow{},
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			windows := tc.windows
-			if windows == nil {
-				windows = stuckScreenDeclineWindows()
-			}
-			setUpStuckScreenDeclineFixture(t, tc.snapshot, windows)
+			setUpStuckScreenDeclineFixture(t, tc.snapshot)
 			doctorJSON = true
 			doctorStrict = true
 
@@ -197,7 +154,7 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 // the recovery case, and the one the daemon's own retraction cannot cover: the
 // operator cleared the pane, but the export doctor read still carries the
 // threshold decline AND says ⚡ in both the renderer's desired icon and the
-// reducer's effective icon. Only the live Kitty title has caught up.
+// reducer's effective icon. Only the live pane metadata has caught up.
 //
 // A found live window with no state icon is exactly that clear, so it is the
 // freshest reading of the three and the finding must retract on it alone.
@@ -206,23 +163,13 @@ func TestDoctorStaysCleanOnBenignScreenDeclines(t *testing.T) {
 //
 // Renderer drift is the correct reading of that disagreement and is expected
 // here, so this asserts only that the decline finding is gone.
-func TestDoctorIgnoresLiveClearWithStaleDeclineExport(t *testing.T) {
-	setUpStuckScreenDeclineFixture(t,
-		stuckScreenDeclineSnapshot(screenDeclinePersistentStreak+5),
-		screenDeclineWindowsShowing(""))
-	doctorJSON = true
-	doctorStrict = true
 
-	var out bytes.Buffer
-	doctorCmd.SetOut(&out)
-	err := runDoctor(doctorCmd, nil)
-	_ = err // the stale bolt against a cleared tab is renderer drift, not this finding
-
-	var report doctorReport
-	if jsonErr := json.Unmarshal(out.Bytes(), &report); jsonErr != nil {
-		t.Fatalf("output is not a single JSON report: %v\n%s", jsonErr, out.String())
-	}
-	if found := findingsByCheck(report.Findings, checkScreenPersistentDecline); len(found) != 0 {
+func TestScreenDeclineInvariantIgnoresLiveClearWithStaleExport(t *testing.T) {
+	findings := evaluateDaemonInvariants(
+		stuckScreenDeclineSnapshot(screenDeclinePersistentStreak+5), ipc.Health{}, doctorTestBuild,
+		map[int]protocol.WindowLiveMetadata{7: {Found: true, IconState: ""}}, time.Now(),
+	)
+	if found := findingsByCheck(findings, checkScreenPersistentDecline); len(found) != 0 {
 		t.Fatalf("cleared window still reported as persistently declining: %+v", found)
 	}
 }
@@ -231,7 +178,7 @@ func TestDoctorIgnoresLiveClearWithStaleDeclineExport(t *testing.T) {
 // contract: the stable identifier, the failure severity that drives strict
 // exit, and the window attribution a consumer routes on.
 func TestDoctorJSONReportsPersistentScreenDecline(t *testing.T) {
-	setUpStuckScreenDeclineFixture(t, stuckScreenDeclineSnapshot(screenDeclinePersistentStreak+5), stuckScreenDeclineWindows())
+	setUpStuckScreenDeclineFixture(t, stuckScreenDeclineSnapshot(screenDeclinePersistentStreak+5))
 	doctorJSON = true
 	doctorStrict = true
 
@@ -283,51 +230,33 @@ func TestDoctorIgnoresRecoveredPersistentScreenDecline(t *testing.T) {
 	cases := []struct {
 		name     string
 		snapshot protocol.EventsExport
-		windows  []kitty.OSWindow
-		// otherFailures allows a case whose whole point is that the window is
-		// gone: that shape is legitimately renderer drift, and asserting an
-		// overall-clean report would be asserting the wrong thing.
-		otherFailures bool
 	}{
 		{
 			// The native Stop hook finally arrived: the turn really did end.
 			name:     "native stop",
 			snapshot: recovered("stop"),
-			windows:  screenDeclineWindowsShowing("stop"),
 		},
 		{
 			// The turn ended in a terminal error instead.
 			name:     "terminal error",
 			snapshot: recovered("error"),
-			windows:  screenDeclineWindowsShowing("error"),
 		},
 		{
 			// A blocking prompt took the window: attention is owed, but not by
 			// the screen classifier.
 			name:     "blocking prompt",
 			snapshot: recovered("question"),
-			windows:  screenDeclineWindowsShowing("question"),
 		},
 		{
 			// The operator cleared the window, which resets it to no icon.
 			name:     "user clear",
 			snapshot: recovered(""),
-			windows:  screenDeclineWindowsShowing(""),
-		},
-		{
-			// Kitty no longer reports the pane, and the daemon has not
-			// tombstoned it yet. Whatever that is, it is not a screen the
-			// classifier is refusing right now.
-			name:          "window no longer live",
-			snapshot:      stuckScreenDeclineSnapshot(screenDeclinePersistentStreak + 5),
-			windows:       []kitty.OSWindow{},
-			otherFailures: true,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			setUpStuckScreenDeclineFixture(t, tc.snapshot, tc.windows)
+			setUpStuckScreenDeclineFixture(t, tc.snapshot)
 			doctorJSON = true
 			doctorStrict = true
 
@@ -342,9 +271,6 @@ func TestDoctorIgnoresRecoveredPersistentScreenDecline(t *testing.T) {
 			if found := findingsByCheck(report.Findings, checkScreenPersistentDecline); len(found) != 0 {
 				t.Fatalf("recovered window still reported as persistently declining: %+v", found)
 			}
-			if tc.otherFailures {
-				return
-			}
 			if err != nil {
 				t.Fatalf("strict doctor: %v\n%s", err, out.String())
 			}
@@ -352,5 +278,15 @@ func TestDoctorIgnoresRecoveredPersistentScreenDecline(t *testing.T) {
 				t.Fatalf("report is unhealthy: %+v", report.Findings)
 			}
 		})
+	}
+}
+
+func TestScreenDeclineInvariantIgnoresMissingLivePane(t *testing.T) {
+	findings := evaluateDaemonInvariants(
+		stuckScreenDeclineSnapshot(screenDeclinePersistentStreak+5), ipc.Health{}, doctorTestBuild,
+		map[int]protocol.WindowLiveMetadata{7: {Found: false}}, time.Now(),
+	)
+	if found := findingsByCheck(findings, checkScreenPersistentDecline); len(found) != 0 {
+		t.Fatalf("closed pane still reported as persistently declining: %+v", found)
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // Registry is intentionally package-level and stateless. It gives direct
@@ -25,44 +24,13 @@ var DaemonRequest = func(req protocol.Request) (protocol.Response, error) {
 
 // StateQuery is the dashboard refresh's own seam. It is separate from
 // DaemonRequest because a state query has its own one-second budget: it carries
-// the cached Kitty window tree as well as per-window state, which is more than
+// cached session state, which is more than
 // the acknowledgement budget was ever sized for. The client turns a refusal
 // into an error, so a rejected query can never be read as a daemon with no
-// windows.
+// sessions.
 var StateQuery = func() (protocol.Response, error) {
 	return ipc.NewClient().StateQuery()
 }
-
-// LocalKittySocket reports the reusable remote-control endpoint of the Kitty
-// instance this dashboard is running inside. It is the identity a daemon
-// snapshot's own socket is checked against, so the dashboard never renders — or
-// writes back into — a window tree belonging to a different Kitty.
-//
-// It is the NORMALIZED address rather than the raw KITTY_LISTEN_ON: a pane
-// launched with --allow-remote-control inherits a process-local "fd:N"
-// descriptor, which names the same instance the daemon dials as
-// "unix:/tmp/kitty-<pid>" but shares no characters with it. Comparing the raw
-// values would report a mismatch for the ordinary single-Kitty case.
-//
-// It is empty outside Kitty and for any address that cannot be normalized,
-// which is "unknown", not "matches everything"; the comparison below is what
-// decides what to do with that.
-var LocalKittySocket = kitty.NormalizedListenAddressFromEnv
-
-// LocalWindowID reports the Kitty window this dashboard process is running in.
-//
-// It is the HOSTING window, and it is deliberately not the sourceWindowID a
-// refresh is given. That one names the window an operator launched the
-// dashboard FROM, is consumed by the first refresh that can resolve it, and is
-// re-aimed by a cross-window selection handoff; this one never changes for the
-// life of the process, because a Bubble Tea program does not move between
-// windows. A surface that needs to know whether an action would close the
-// surface itself has to ask this question, not that one.
-//
-// It is a seam for the same reason LocalKittySocket is: a test names a host
-// window by replacing the function rather than by setting process environment
-// every other test in the package would then see.
-var LocalWindowID = kitty.WindowIDFromEnv
 
 // SpawnDaemonDetached is the seam the health probe uses to start a daemon it
 // found unreachable.

@@ -35,26 +35,6 @@ func (h *Handler) persistConversationBindings() {
 			bindings[route.runtime] = identity
 			continue
 		}
-		// Kitty launches have a stable launch ID even though they predate
-		// runtime registration. Match both socket and window, never a bare ID.
-		windowID, socket := slot, h.kittySockets[slot]
-		if key, ok := h.runtimeRoutes.kittyBySlot[slot]; ok {
-			windowID, socket = key.windowID, key.socket
-		}
-		view := h.snapshots.View()
-		windows := view.Windows()
-		if socket != "" && socket != view.Socket() {
-			windows = h.otherKittyTrees[socket]
-		}
-		for _, osw := range windows {
-			for _, tab := range osw.Tabs {
-				for _, window := range tab.Windows {
-					if window.ID == windowID && window.UserVars.LaunchID != "" {
-						bindings["launch:"+window.UserVars.LaunchID] = identity
-					}
-				}
-			}
-		}
 	}
 	h.stateMu.Unlock()
 	h.conversationThreadsMu.Lock()

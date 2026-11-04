@@ -21,16 +21,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 type debugTestDaemon struct{ health ipc.Health }
 
 func (d debugTestDaemon) Health() ipc.Health { return d.health }
-
-type debugTestKitty struct{ err error }
-
-func (k debugTestKitty) ListWindows() ([]kitty.OSWindow, error) { return nil, k.err }
 
 type debugTestProbe struct{}
 
@@ -65,17 +60,14 @@ func resetDebugTestState(t *testing.T) {
 	oldLookPath := debugLookPath
 	oldNow := debugNow
 	oldDaemon := debugDaemon
-	oldKitty := debugKitty
 	oldProbe := debugProbeClient
 	oldNewJournal := debugNewJournal
 	oldSelector := debugSelectorFlags
-	oldRuntimeSession, oldGetenv, oldProbeKittySocket := debugRuntimeSession, debugGetenv, debugProbeKittySocket
+	oldRuntimeSession, oldGetenv := debugRuntimeSession, debugGetenv
 	// A test run typed inside a managed session must not select it.
 	debugRuntimeSession, debugGetenv = "", func(string) string { return "" }
-	t.Setenv("KITTY_WINDOW_ID", "")
-	debugProbeKittySocket = ""
 	t.Cleanup(func() {
-		debugRuntimeSession, debugGetenv, debugProbeKittySocket = oldRuntimeSession, oldGetenv, oldProbeKittySocket
+		debugRuntimeSession, debugGetenv = oldRuntimeSession, oldGetenv
 	})
 	oldStatusJSON := debugStatusJSON
 	oldTailJSON := debugTailJSON
@@ -100,7 +92,6 @@ func resetDebugTestState(t *testing.T) {
 		debugLookPath = oldLookPath
 		debugNow = oldNow
 		debugDaemon = oldDaemon
-		debugKitty = oldKitty
 		debugProbeClient = oldProbe
 		debugNewJournal = oldNewJournal
 		debugSelectorFlags = oldSelector
@@ -151,7 +142,6 @@ func TestDebugStatusJSONIsVersionedAndUsefulOffline(t *testing.T) {
 	debugExecutable = func() (string, error) { return "/tmp/amx", nil }
 	debugNow = func() time.Time { return time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC) }
 	debugDaemon = func() debugger.DaemonHealthClient { return debugTestDaemon{} }
-	debugKitty = func() debugger.KittyWindowLister { return debugTestKitty{err: errors.New("offline")} }
 	debugStatusJSON = true
 
 	var out bytes.Buffer
@@ -226,8 +216,7 @@ func TestDebugTailJSONAndFollowWrapperAreV2Snapshots(t *testing.T) {
 
 func TestDebugProbeJSONStatesScopeAndStages(t *testing.T) {
 	resetDebugTestState(t)
-	debugProbeKittySocket = "unix:/kitty-test"
-	debugSelectorFlags.windowID = 77
+	debugRuntimeSession = "rs-0123456789abcdef0123456789abcdef"
 	debugSelectorFlags.harness = "codex"
 	debugSelectorFlags.traceID = "trace-probe"
 	debugProbeClient = func() debugger.ProbeClient { return debugTestProbe{} }
@@ -258,8 +247,7 @@ func (debugFailingProbe) SendWithAutoStartObserved(protocol.Request, string, ipc
 // health status quietly, so the root does not print the same message again.
 func TestDebugProbeTextFailurePrintsItsErrorOnce(t *testing.T) {
 	resetDebugTestState(t)
-	debugProbeKittySocket = "unix:/kitty-test"
-	debugSelectorFlags.windowID = 77
+	debugRuntimeSession = "rs-0123456789abcdef0123456789abcdef"
 	debugSelectorFlags.harness = "codex"
 	debugProbeClient = func() debugger.ProbeClient { return debugFailingProbe{} }
 	debugExecutable = func() (string, error) { return "/tmp/amx", nil }
@@ -398,7 +386,7 @@ func TestDebugReplayJSONRunsOfflineAndHasNoLiveApplyFlags(t *testing.T) {
 		!report.Success || report.Complete || len(report.Comparisons) != 1 {
 		t.Fatalf("replay report = %+v", report)
 	}
-	for _, name := range []string{"apply", "live", "socket", "kitty"} {
+	for _, name := range []string{"apply", "live", "socket"} {
 		if debugReplayCmd.Flags().Lookup(name) != nil {
 			t.Fatalf("replay unexpectedly exposes --%s", name)
 		}

@@ -8,24 +8,23 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-func mouseFixture(t *testing.T) (*uitestDriver, *kittytest.Client) {
+func mouseFixture(t *testing.T) *uitestDriver {
 	t.Helper()
 	fx, err := uitestFixtureByName("project_families")
 	if err != nil {
 		t.Fatal(err)
 	}
-	d, client := newUITestFixtureDriver(fx, fx.Size)
+	d := newUITestFixtureDriver(fx, fx.Size)
 	t.Cleanup(func() {
 		if err := d.Close(); err != nil {
 			t.Errorf("close driver: %v", err)
 		}
 	})
-	return d, client
+	return d
 }
 
 func findMouseHit(t *testing.T, m Model, kind mouseHitKind, match func(mouseHitRegion) bool) mouseHitRegion {
@@ -81,26 +80,26 @@ func TestViewEnablesMouseOnlyForLiveDashboard(t *testing.T) {
 func TestMouseSessionSelectionDoubleClickAndInterveningTarget(t *testing.T) {
 	t.Parallel()
 
-	d, client := mouseFixture(t)
+	d := mouseFixture(t)
 	notes := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 	clickHit(t, d, notes)
 	if selected, ok := d.model.selectedSession(); !ok || selected.WindowID != 61 {
 		t.Fatalf("single click selection = %+v ok=%v", selected, ok)
 	}
-	if got := len(client.CallsFor("FocusTab")); got != 0 {
-		t.Fatalf("single click issued %d FocusTab calls", got)
+	if d.model.lastMouseClickAt.IsZero() {
+		t.Fatal("single click did not start a click chain")
 	}
 	clickHit(t, d, findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 }))
-	if got := len(client.CallsFor("FocusTab")); got != 1 {
-		t.Fatalf("double click issued %d FocusTab calls, want 1", got)
+	if !d.model.lastMouseClickAt.IsZero() {
+		t.Fatal("double click did not consume its click chain")
 	}
 
-	d2, client2 := mouseFixture(t)
+	d2 := mouseFixture(t)
 	clickHit(t, d2, findMouseHit(t, d2.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 }))
 	clickHit(t, d2, findMouseHit(t, d2.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 71 }))
 	clickHit(t, d2, findMouseHit(t, d2.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 }))
-	if got := len(client2.CallsFor("FocusTab")); got != 0 {
-		t.Fatalf("intervening target left %d FocusTab calls", got)
+	if d2.model.lastMouseClickAt.IsZero() {
+		t.Fatal("intervening target should start a new click chain")
 	}
 }
 
@@ -113,15 +112,19 @@ func TestMouseDoubleClickBoundary(t *testing.T) {
 		want int
 	}{{"at boundary", 400 * time.Millisecond, 1}, {"past boundary", 401 * time.Millisecond, 0}} {
 		t.Run(tc.name, func(t *testing.T) {
-			d, client := mouseFixture(t)
+			d := mouseFixture(t)
 			now := time.Unix(100, 0)
 			d.model.now = func() time.Time { return now }
 			hit := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 			clickHit(t, d, hit)
 			now = now.Add(tc.gap)
 			clickHit(t, d, findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 }))
-			if got := len(client.CallsFor("FocusTab")); got != tc.want {
-				t.Fatalf("FocusTab calls = %d, want %d", got, tc.want)
+			got := 0
+			if d.model.lastMouseClickAt.IsZero() {
+				got = 1
+			}
+			if got != tc.want {
+				t.Fatalf("double click recognized = %d, want %d", got, tc.want)
 			}
 		})
 	}
@@ -130,7 +133,7 @@ func TestMouseDoubleClickBoundary(t *testing.T) {
 func TestMouseStaleAndReorderedSessionTargets(t *testing.T) {
 	t.Parallel()
 
-	d, _ := mouseFixture(t)
+	d := mouseFixture(t)
 	hit := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 	view := d.model.View()
 	cmd := view.OnMouse(tea.MouseClickMsg{X: hit.rect.X, Y: hit.rect.Y, Button: tea.MouseLeft})
@@ -174,7 +177,7 @@ func TestMouseStaleAndReorderedSessionTargets(t *testing.T) {
 func TestMouseSummaryBodyAndChevronHaveDistinctActions(t *testing.T) {
 	t.Parallel()
 
-	d, _ := mouseFixture(t)
+	d := mouseFixture(t)
 	d.model.setListView(dashboard.ViewProjects)
 	body := findMouseHit(t, d.model, mouseHitFamily, func(hit mouseHitRegion) bool { return hit.identity.FamilyKey == "git:api" })
 	clickHit(t, d, body)
@@ -209,7 +212,7 @@ func findRootMouseHit(t *testing.T, m Model, kind mouseHitKind, match func(mouse
 func TestMouseProjectSwitcherHeaderChipAndScopeRow(t *testing.T) {
 	t.Parallel()
 
-	d, _ := mouseFixture(t)
+	d := mouseFixture(t)
 	d.Resize(240, 32)
 
 	clickHit(t, d, findMouseHit(t, d.model, mouseHitProjectSwitcher, nil))
@@ -254,7 +257,7 @@ func TestMouseProjectSwitcherHeaderChipAndScopeRow(t *testing.T) {
 func TestMouseProjectSwitcherIgnoresEverythingButItsOwnRows(t *testing.T) {
 	t.Parallel()
 
-	d, _ := mouseFixture(t)
+	d := mouseFixture(t)
 	d.Resize(240, 32)
 	sessionHit := findMouseHit(t, d.model, mouseHitSession, nil)
 	before := d.model.cursor
@@ -277,7 +280,7 @@ func TestMouseProjectSwitcherIgnoresEverythingButItsOwnRows(t *testing.T) {
 func TestMouseGeometryWrappedChipsAndPreview(t *testing.T) {
 	t.Parallel()
 
-	d, _ := mouseFixture(t)
+	d := mouseFixture(t)
 	d.model.activeFilter = dashboard.Parse(`界界 alpha beta gamma #"wide project" @personal`)
 	d.model.width = 36
 	d.model.height = 30
@@ -330,7 +333,7 @@ func TestMouseGeometryWrappedChipsAndPreview(t *testing.T) {
 func TestMouseIgnoresUnsupportedEventsAndOutsideCoordinates(t *testing.T) {
 	t.Parallel()
 
-	d, _ := mouseFixture(t)
+	d := mouseFixture(t)
 	hit := findMouseHit(t, d.model, mouseHitSession, nil)
 	view := d.model.View()
 	for _, msg := range []tea.MouseMsg{
@@ -357,7 +360,7 @@ func TestMouseIgnoresUnsupportedEventsAndOutsideCoordinates(t *testing.T) {
 func TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick(t *testing.T) {
 	t.Parallel()
 
-	d, client := mouseFixture(t)
+	d := mouseFixture(t)
 	requireInspector(t, d.model)
 
 	row := func() mouseHitRegion {
@@ -381,8 +384,8 @@ func TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick(t *testing.
 	}
 
 	clickHit(t, d, row())
-	if got := len(client.CallsFor("FocusTab")); got != 0 {
-		t.Fatalf("the click across the divider left the chain intact: %d FocusTab calls", got)
+	if got := len(d.TerminalActions("focus")); got != 0 {
+		t.Fatalf("the click across the divider focused a terminal session: %d actions", got)
 	}
 	if d.model.inspectorFocused() {
 		t.Fatal("clicking a queue row left the keyboard in the inspector")
@@ -397,7 +400,7 @@ func TestMouseInspectorClickTakesTheKeysAndBreaksAPendingDoubleClick(t *testing.
 func TestMouseOverAFullScreenInspectorReachesNoQueueRow(t *testing.T) {
 	t.Parallel()
 
-	d, client := mouseFixture(t)
+	d := mouseFixture(t)
 	requireInspector(t, d.model)
 	row := findMouseHit(t, d.model, mouseHitSession, func(hit mouseHitRegion) bool { return hit.identity.WindowID == 61 })
 
@@ -423,8 +426,8 @@ func TestMouseOverAFullScreenInspectorReachesNoQueueRow(t *testing.T) {
 	if d.model.cursor != cursor {
 		t.Fatalf("a click over the full-screen pane moved the cursor to %d", d.model.cursor)
 	}
-	if got := len(client.CallsFor("FocusTab")); got != 0 {
-		t.Fatalf("a click over the full-screen pane issued %d FocusTab calls", got)
+	if got := len(d.TerminalActions("focus")); got != 0 {
+		t.Fatalf("a click over the full-screen pane focused a terminal session: %d actions", got)
 	}
 }
 

@@ -16,6 +16,15 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 )
 
+func hasDisposition(dispositions []NotificationDisposition, stage, outcome, reason string) bool {
+	for _, disposition := range dispositions {
+		if disposition.Stage == stage && disposition.Outcome == outcome && disposition.Reason == reason {
+			return true
+		}
+	}
+	return false
+}
+
 func TestNotifier_SuppressedByPipeMode(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		cfg := &config.NotificationConfig{Stop: true, Permission: true, Error: true}

@@ -8,7 +8,7 @@ protocol StatusItemDelegate: AnyObject {
     /// Asks for a fresh health request when the feed is not live; the answer
     /// arrives through the store.
     func refreshDaemonStatus()
-    /// Focuses the session a menu row names and brings its Kitty forward.
+    /// Focuses the session a menu row names in the workspace.
     func focus(_ row: MenuSessionRow)
     func perform(_ action: MenuAction)
     /// Toggles the mute on the session a row names (its ⌥ alternate).
@@ -34,9 +34,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// How the title summarizes the counts; Preferences sets these.
     var titleStyle: StatusTitleStyle = .glyphs { didSet { refresh() } }
     var showWorking = true { didSet { refresh() } }
-    /// A Kitty socket Preferences names, tried before any other.
-    var kittySocketOverride = ""
-
     /// The action submenus, kept across rebuilds so a list that arrives while
     /// the menu is open fills in where it is.
     private(set) var submenus: [MenuSubmenu: NSMenu] = [:]
@@ -139,7 +136,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     /// Brings the title and tooltip in line with the store.
     func refresh() {
         guard let store = delegate?.store, let button = statusItem.button else { return }
-        let title = store.title(style: titleStyle, showWorking: showWorking)
+        let title = store.managedTitle(style: titleStyle, showWorking: showWorking)
         button.title = title
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         let snoozed = store.notificationsSnoozed
@@ -154,7 +151,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         button.toolTip = toolTip
         button.setAccessibilityLabel(Self.accessibilityLabel(
             feedLive: store.feed == .live,
-            attention: store.snapshot?.attention ?? CompanionAttention(),
+            attention: store.managedAttention,
             snoozed: snoozed
         ))
         button.appearsDisabled = Self.appearsDisabled(store.feed)
@@ -199,22 +196,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         rebuildMenu()
     }
 
-    /// Whether focusing these sessions needs a Kitty socket nothing has named
-    /// yet. Only a Kitty session needs one; an embedded one is shown here.
-    nonisolated static func needsKittySocket(_ sessions: [CompanionSession], snapshotSocket: String) -> Bool {
-        let inKitty = sessions.filter { $0.embeddedRuntimeSessionID == nil }
-        return !inKitty.isEmpty && snapshotSocket.isEmpty && inKitty.allSatisfy { $0.kittySocket.isEmpty }
-    }
-
     func menuInput(_ store: SessionStore) -> MenuBuilder.Input {
-        let sessions = store.sessions
-        let snapshotSocket = store.snapshot?.kitty.socket ?? ""
-        var reachable = true
-        if Self.needsKittySocket(sessions, snapshotSocket: snapshotSocket) {
-            reachable = !KittyEndpoint.candidates(
-                override: kittySocketOverride, rowSocket: "", snapshotSocket: "", kittyPIDs: KittyEndpoint.runningKittyPIDs()
-            ).isEmpty
-        }
+        let sessions = store.managedSessions
         let actions = delegate?.actionsInput
         return MenuBuilder.Input(
             feed: store.feed,
@@ -222,7 +205,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             sessions: sessions,
             snapshot: store.snapshot,
             notice: store.notice,
-            kittyReachable: reachable,
             gate: actions?.gate ?? ActionGate(),
             order: delegate?.attentionOrder ?? WorkspaceOrder(),
             daemonBusy: actions?.daemonBusy

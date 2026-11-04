@@ -23,7 +23,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // pausedQueueFixture is a queue deep enough to reorder under a held inspector.
@@ -82,7 +81,7 @@ func pausedQueueFixture() uitestFixture {
 			{Title: "ρυθμός-δοκιμή", Directory: "~/projects/very-long-directory-name/nested/deeper/ρυθμός-δοκιμή", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊alpha", true, managedVars("work", "claude", "alpha", "~/projects/alpha")),
 		uitestTab(2, 21, "⚡🦊bravo", false, managedVars("work", "claude", "bravo", "~/projects/bravo")),
 		uitestTab(3, 31, "🛑🤖charlie", false, managedVars("personal", "codex", "charlie", "~/projects/charlie")),
@@ -96,7 +95,7 @@ func pausedQueueFixture() uitestFixture {
 		Description: "a five-row queue spanning all three urgency bands over a scrollback long enough to hold, so the list can be reordered underneath a paused inspector",
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		Text:        numberedScrollback(60),
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: busySince(42 * time.Second)},
@@ -141,7 +140,7 @@ func noSessionsFixture() uitestFixture {
 		Description: "a configured operator with no live sessions at all, which is the only world that reaches the empty hero rather than the filtered one",
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
-		Windows:     []kitty.OSWindow{uitestOSWindow()},
+		PaneGroups:  []fixturePaneGroup{uitestPaneGroup()},
 	}
 }
 
@@ -174,7 +173,7 @@ func previewFailureFixture() uitestFixture {
 			{Title: "neighbour", Directory: "~/projects/neighbour", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊unreadable", true, managedVars("work", "claude", "unreadable", "~/projects/unreadable")),
 		uitestTab(2, 21, "⚡🦊neighbour", false, managedVars("work", "claude", "neighbour", "~/projects/neighbour")),
 	)}
@@ -183,7 +182,7 @@ func previewFailureFixture() uitestFixture {
 		Description:  "a pane whose first read fails and whose reads after it succeed, so a scenario can watch the inspector report the error and then recover",
 		Size:         UITestSize{Width: 120, Height: 32},
 		Config:       cfg,
-		Windows:      windows,
+		PaneGroups:   windows,
 		Text:         numberedScrollback(40),
 		TextFailures: 1,
 		States: map[int]protocol.WindowStateSnapshot{

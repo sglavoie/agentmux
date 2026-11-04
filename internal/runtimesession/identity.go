@@ -31,7 +31,7 @@ import (
 )
 
 // idPrefix makes runtime IDs recognizable in logs and CLI arguments and keeps
-// them visibly distinct from harness session IDs and Kitty window numbers.
+// them visibly distinct from harness session IDs and tmux pane numbers.
 const idPrefix = "rs-"
 
 const idHexLength = 32
@@ -79,16 +79,15 @@ func (id ID) Validate() error {
 type BackendKind string
 
 const (
-	BackendKitty BackendKind = "kitty"
-	BackendTmux  BackendKind = "tmux"
+	BackendTmux BackendKind = "tmux"
 )
 
 func (k BackendKind) valid() bool {
-	return k == BackendKitty || k == BackendTmux
+	return k == BackendTmux
 }
 
 // BackendInstance identifies one running backend server. Address is where it
-// is reached (a Kitty listen_on socket, a private tmux socket path); it is
+// is reached (a private tmux socket path); it is
 // reused when the server restarts. Generation is an opaque token the backend
 // derives from the running server itself (for example its PID and start
 // time), so a restarted server at the same address is a different instance.
@@ -118,8 +117,8 @@ func (b BackendInstance) SameServer(other BackendInstance) bool {
 	return b.Kind == other.Kind && b.Address == other.Address
 }
 
-// Target is a terminal location inside one backend instance: a tmux pane ID
-// or a Kitty window ID, kept as the backend's own string.
+// Target is a tmux pane inside one backend instance, kept as the backend's
+// own string.
 type Target struct {
 	Instance BackendInstance `json:"instance"`
 	Ref      string          `json:"ref"`

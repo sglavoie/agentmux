@@ -6,13 +6,12 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui"
 )
 
 // The seam the tests replace: a test must not draw a full-screen surface.
-var runPastSessions = func(cfg *config.Config, client kitty.KittyClient) error {
-	return tui.RunHistory(cfg, client, conversation.Identity{})
+var runPastSessions = func(cfg *config.Config) error {
+	return tui.RunHistory(cfg, nil, conversation.Identity{})
 }
 
 var (
@@ -31,8 +30,8 @@ var pastSessionsCmd = &cobra.Command{
 does, but with no dashboard behind it: leaving Past Sessions quits. Continue,
 resume, and fork work as they do there.
 
-It is bound to ctrl+shift+y in Kitty and in a terminal attached to a tmux
-session (a popup there). In the desktop workspace, ⌘Y opens native
+It is bound to ctrl+shift+y in a terminal attached to a tmux session
+(a popup there). In the desktop workspace, ⌘Y opens native
 Conversation History; Handoff / More opens these terminal actions.`,
 	Example: `  amx past-sessions
   amx past-sessions --backend tmux`,
@@ -42,18 +41,13 @@ Conversation History; Handoff / More opens these terminal actions.`,
 		if err != nil {
 			return err
 		}
-		client, err := selectTerminalsForConfig(pastSessionsBackend, cfg, newKittyClient)
-		if err != nil {
+		if err := selectTerminalsForConfig(pastSessionsBackend, cfg); err != nil {
 			return err
 		}
-		if client == nil {
-			// Outside Kitty a popup over an attached terminal shows what it
-			// continues by switching that terminal (popup.go).
-			if _, err := terminalView(pastSessionsView); err != nil {
-				return err
-			}
+		if _, err := terminalView(pastSessionsView); err != nil {
+			return err
 		}
-		return runPastSessions(cfg, client)
+		return runPastSessions(cfg)
 	},
 }
 

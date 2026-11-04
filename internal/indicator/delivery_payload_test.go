@@ -59,7 +59,6 @@ func TestDeliverCapturesExplicitlyAuthorizedMalformedPayloadBeforeDecode(t *test
 func TestDeliverPayloadBoundariesAndEncoding(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 
 	oldDiscovery := discoverHarnessProcessForDelivery
 	discoveryCalls := 0
@@ -141,7 +140,6 @@ func TestDeliverPayloadBoundariesAndEncoding(t *testing.T) {
 func TestDeliverCompactPayloadStillOversizedFailsPermanently(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 
 	oldDiscovery := discoverHarnessProcessForDelivery
 	discoveryCalls := 0
@@ -171,7 +169,6 @@ func TestDeliverCompactPayloadCaptureAndHMACUseOriginalBytes(t *testing.T) {
 	stateBase := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateBase)
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	paths := diagnostics.PathsForRoot(filepath.Join(stateBase, "agent-mux"))
 	store, err := diagnostics.NewCaptureStore(paths, diagnostics.CaptureOptions{})
 	if err != nil {
@@ -252,7 +249,6 @@ func TestDeliverOverLimitCaptureIsBoundedAndTruncated(t *testing.T) {
 	stateBase := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", stateBase)
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	paths := diagnostics.PathsForRoot(filepath.Join(stateBase, "agent-mux"))
 	store, err := diagnostics.NewCaptureStore(paths, diagnostics.CaptureOptions{})
 	if err != nil {
@@ -298,7 +294,6 @@ func TestDeliverOverLimitCaptureIsBoundedAndTruncated(t *testing.T) {
 func TestDeliverLargeHarnessPayloadsRetainSourceIdentity(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 
 	oldDiscovery := discoverHarnessProcessForDelivery
 	discoverHarnessProcessForDelivery = func(string) HarnessProcessDiscovery { return HarnessProcessDiscovery{} }
@@ -353,7 +348,6 @@ func TestDeliverLargeHarnessPayloadsRetainSourceIdentity(t *testing.T) {
 func TestDeliverCompactResetAndContextLimitMatchRawPayload(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	oldDiscovery := discoverHarnessProcessForDelivery
 	discoverHarnessProcessForDelivery = func(string) HarnessProcessDiscovery { return HarnessProcessDiscovery{} }
 	t.Cleanup(func() { discoverHarnessProcessForDelivery = oldDiscovery })
@@ -414,7 +408,6 @@ func TestDeliverCompactResetAndContextLimitMatchRawPayload(t *testing.T) {
 func TestDeliverMalformedAndOverLimitCannotReachDaemonOrDiscovery(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", filepath.Join(t.TempDir(), "missing-config.toml"))
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	oldDiscovery := discoverHarnessProcessForDelivery
 	discoveryCalls := 0
 	discoverHarnessProcessForDelivery = func(string) HarnessProcessDiscovery {

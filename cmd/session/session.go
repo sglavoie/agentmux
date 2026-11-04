@@ -1,5 +1,5 @@
-// Package session holds the command surfaces that act on a conversation or on
-// the Kitty tab carrying one.
+// Package session holds the command surfaces that act on a conversation or
+// its running tmux session.
 //
 // Two kinds of leaf live here and they are the same domain seen from two
 // distances. The `amx session` family works on conversation identity (list,

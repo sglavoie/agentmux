@@ -30,28 +30,23 @@ func (p *recordingProbe) SendWithAutoStartObserved(request protocol.Request, _ s
 }
 
 // In a tmux session `debug probe` probes the session it is typed in, by its
-// runtime session: the Kitty window the pane inherited is not believed, and
-// no window ID is sent. --runtime-session names another, --window still names
-// a Kitty window, and the two cannot be combined.
+// runtime session ID. --runtime-session names another session; --window is
+// unsupported and cannot be combined with it.
 func TestDebugProbeTargetsARuntimeSession(t *testing.T) {
 	for _, tc := range []struct {
-		name           string
-		env, flag      string
-		kittyWindow    string
-		kittySocket    string
-		explicitSocket string
-		window         int
-		wantRuntime    string
-		wantWindow     int
-		wantErr        string
-		wantNoRequest  bool
+		name          string
+		env, flag     string
+		window        int
+		wantRuntime   string
+		wantWindow    int
+		wantErr       string
+		wantNoRequest bool
 	}{
-		{name: "the current tmux session", env: debugRuntimeID, kittyWindow: "77", wantRuntime: debugRuntimeID},
+		{name: "the current tmux session", env: debugRuntimeID, wantRuntime: debugRuntimeID},
 		{name: "a named session", env: debugRuntimeID, flag: "rs-ffffffffffffffffffffffffffffffff", wantRuntime: "rs-ffffffffffffffffffffffffffffffff"},
-		{name: "a named Kitty window wins over the environment", env: debugRuntimeID, window: 9, explicitSocket: "unix:/kitty-other", wantWindow: 9},
-		{name: "the current Kitty window", kittyWindow: "77", kittySocket: "unix:/kitty-local", wantWindow: 77},
-		{name: "Kitty window without a socket", window: 9, wantErr: "Kitty socket", wantNoRequest: true},
-		{name: "both named", flag: debugRuntimeID, window: 9, wantErr: "cannot be used with --window", wantNoRequest: true},
+		{name: "window selector is refused", env: debugRuntimeID, window: 9, wantErr: "--window is not supported", wantNoRequest: true},
+		{name: "inherited window does not select a session", wantErr: "a runtime session ID is required", wantNoRequest: true},
+		{name: "both named", flag: debugRuntimeID, window: 9, wantErr: "--window is not supported", wantNoRequest: true},
 		{name: "malformed flag", flag: "7", wantErr: "--runtime-session requires a valid runtime session ID", wantNoRequest: true},
 		{name: "malformed environment", env: "rs-nope", wantErr: runtimesession.EnvVar + " requires a valid runtime session ID", wantNoRequest: true},
 	} {
@@ -61,17 +56,13 @@ func TestDebugProbeTargetsARuntimeSession(t *testing.T) {
 			debugProbeClient = func() debugger.ProbeClient { return probe }
 			debugExecutable = func() (string, error) { return "/tmp/amx", nil }
 			debugProbeJSON = true
-			debugRuntimeSession, debugSelectorFlags.windowID, debugProbeKittySocket = tc.flag, tc.window, tc.explicitSocket
+			debugRuntimeSession, debugSelectorFlags.windowID = tc.flag, tc.window
 			debugGetenv = func(key string) string {
 				if key == runtimesession.EnvVar {
 					return tc.env
 				}
-				if key == "KITTY_LISTEN_ON" {
-					return tc.kittySocket
-				}
 				return ""
 			}
-			t.Setenv("KITTY_WINDOW_ID", tc.kittyWindow)
 
 			var out bytes.Buffer
 			debugProbeCmd.SetOut(&out)
@@ -85,21 +76,14 @@ func TestDebugProbeTargetsARuntimeSession(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantSocket := tc.explicitSocket
-			if wantSocket == "" {
-				wantSocket = tc.kittySocket
-			}
-			if tc.wantRuntime != "" {
-				wantSocket = ""
-			}
-			if len(probe.requests) != 1 || probe.requests[0].RuntimeSessionID != tc.wantRuntime || probe.requests[0].WindowID != tc.wantWindow || probe.requests[0].KittyListenOn != wantSocket {
+			if len(probe.requests) != 1 || probe.requests[0].RuntimeSessionID != tc.wantRuntime || probe.requests[0].WindowID != tc.wantWindow {
 				t.Fatalf("requests = %+v; want runtime %q window %d", probe.requests, tc.wantRuntime, tc.wantWindow)
 			}
 			var report debugger.ProbeReport
 			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
 				t.Fatal(err)
 			}
-			if !report.Success || report.RuntimeSession != tc.wantRuntime || report.WindowID != tc.wantWindow {
+			if !report.Success || report.RuntimeSession != tc.wantRuntime {
 				t.Fatalf("report = %+v", report)
 			}
 		})
@@ -126,7 +110,6 @@ func TestDebugCaptureScopesToTheCurrentRuntimeSession(t *testing.T) {
 		}
 		return ""
 	}
-	t.Setenv("KITTY_WINDOW_ID", "77")
 	debugCaptureDuration, debugCaptureInclude, debugCaptureYes, debugCaptureJSON = time.Minute, true, true, true
 	debugInputInteractive = func(io.Reader) bool { return false }
 

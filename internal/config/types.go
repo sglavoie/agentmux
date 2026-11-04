@@ -20,7 +20,7 @@ type Config struct {
 	Hooks    HooksConfig `toml:"hooks"`
 
 	// HarnessEmojis maps a harness name (normalized) to a single emoji
-	// glyph used as the harness badge in the Kitty tab title. Looked up
+	// glyph used as the harness badge in session titles. Looked up
 	// by Config.HarnessEmoji.
 	HarnessEmojis map[string]string `toml:"harness_emojis"`
 
@@ -78,7 +78,7 @@ type Defaults struct {
 	PlansDirectory       string               `toml:"plans_directory"` // root for the Plans browser's index; defaults to ~/.local/share/agent-plans
 	ASL                  ASLConfig            `toml:"asl"`             // optional agent-session-loop bridge integration
 	Release              ReleaseConfig        `toml:"release"`         // paired ASL/Agent Mux release gate
-	LaunchBackend        string               `toml:"launch_backend"`  // "tmux" (default) or "kitty": where launches go when --backend is not given
+	LaunchBackend        string               `toml:"launch_backend"`  // "tmux"; unsupported values receive a validation error
 	Tmux                 TmuxConfig           `toml:"tmux"`            // the private tmux backend's executable
 
 	// GitProbe enables the cheap per-directory Git probe behind the dashboard's
@@ -112,19 +112,13 @@ type TmuxConfig struct {
 	Path string `toml:"path"`
 }
 
-// The launch backends `launch_backend` and --backend accept.
-const (
-	LaunchBackendKitty = "kitty"
-	LaunchBackendTmux  = "tmux"
-)
+// The terminal backend used for new launches.
+const LaunchBackendTmux = "tmux"
 
 // LaunchBackendOrDefault is where a launch goes when nothing on the command
 // line says otherwise: `[defaults] launch_backend`, else the private tmux
-// server. Existing sessions still use their recorded backend.
+// server.
 func (c *Config) LaunchBackendOrDefault() string {
-	if c != nil && strings.EqualFold(strings.TrimSpace(c.Defaults.LaunchBackend), LaunchBackendKitty) {
-		return LaunchBackendKitty
-	}
 	return LaunchBackendTmux
 }
 
@@ -436,9 +430,7 @@ type Account struct {
 	ConfigDir string `toml:"config_dir"`
 	// Color is the required per-profile palette color used to render the
 	// project title (picker, main list, detail header, preview headers,
-	// account chips/badges) and inactive Kitty tab-bar accent. Active tab
-	// colors come from kitty.conf. Validation rejects an empty or invalid
-	// value.
+	// account chips/badges). Validation rejects an empty or invalid value.
 	Color    string         `toml:"color"`
 	Args     []string       `toml:"args"`
 	Watchdog WatchdogConfig `toml:"watchdog"` // per-profile override; zero fields fall back to defaults at read time

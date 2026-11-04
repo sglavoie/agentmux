@@ -15,6 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
@@ -125,43 +126,12 @@ func TestWorktreeLifecycleErrorsHaveStableCodes(t *testing.T) {
 	}
 }
 
-func TestWorktreeReopenDisambiguatesFreshLiveMatches(t *testing.T) {
-	t.Parallel()
-
-	root := t.TempDir()
-	source := t.TempDir()
-	entry := worktree.Entry{ID: "wt-1", Path: root, SourceRoot: source, ProjectLabel: "api", Exists: true}
-	manager := &actionWorktreeManager{entries: []worktree.Entry{entry}}
-	client := &continuityKitty{}
-	running := []session.RunningSession{
-		{TabID: 22, WindowID: 220, Project: "api", Profile: "work", Directory: filepath.Join(root, "nested")},
-		{TabID: 11, WindowID: 110, Project: "api", Profile: "work", Directory: root},
-		{TabID: 33, Directory: source},
-	}
-	deps := Dependencies{
-		Kitty: client, Config: worktreeActionConfig(source), WorktreeManager: manager,
-		LiveSessions: func(*config.Config) ([]session.RunningSession, error) { return running, nil },
-	}
-	_, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID})
-	var actionErr *Error
-	if !errors.As(err, &actionErr) || actionErr.Code != "ambiguous_live_sessions" || len(actionErr.Candidates) != 2 || actionErr.Candidates[0].ID != "11" {
-		t.Fatalf("ambiguous error = %#v", err)
-	}
-	result, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID, Parameters: map[string]string{"session": "22"}})
-	if err != nil {
-		t.Fatalf("selected reopen: %v", err)
-	}
-	if result.Data["continuation"] != "focused" || len(client.focuses) != 1 || client.focuses[0] != "id:22" {
-		t.Fatalf("selected result = %+v focuses=%v", result, client.focuses)
-	}
-}
-
 // TestWorktreeReopenNamesTmuxCandidatesByRuntimeSession pins that two tmux
 // sessions in one worktree, which the CLI lists at tab 0, are told apart by
 // their runtime sessions, in a stable order, and that --live-session picks the
 // one named.
 func TestWorktreeReopenNamesTmuxCandidatesByRuntimeSession(t *testing.T) {
-	t.Parallel()
+	f := tmuxtest.New(t)
 
 	root := t.TempDir()
 	source := t.TempDir()
@@ -171,10 +141,9 @@ func TestWorktreeReopenNamesTmuxCandidatesByRuntimeSession(t *testing.T) {
 		{Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-b", Directory: root},
 		{Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-a", Project: "api", Directory: root},
 	}
-	deps := Dependencies{
-		Kitty: &continuityKitty{}, Config: worktreeActionConfig(source), WorktreeManager: manager,
-		LiveSessions: func(*config.Config) ([]session.RunningSession, error) { return running, nil },
-	}
+	deps := tmuxDeps(f, worktreeActionConfig(source))
+	deps.WorktreeManager = manager
+	deps.LiveSessions = func(*config.Config) ([]session.RunningSession, error) { return running, nil }
 	_, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID})
 	var actionErr *Error
 	if !errors.As(err, &actionErr) || actionErr.Code != "ambiguous_live_sessions" || len(actionErr.Candidates) != 2 {
@@ -202,7 +171,7 @@ func TestWorktreeRemoveFailsClosedOnProbeErrorsAndActivity(t *testing.T) {
 	loopCalled := false
 	deps := Dependencies{
 		WorktreeManager: manager,
-		LiveSessions:    func(*config.Config) ([]session.RunningSession, error) { return nil, errors.New("Kitty down") },
+		LiveSessions:    func(*config.Config) ([]session.RunningSession, error) { return nil, errors.New("session probe down") },
 		ActiveLoops:     func() ([]agentloop.Candidate, error) { loopCalled = true; return nil, nil },
 	}
 	_, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeRemove, Request{Selector: entry.ID, Confirmed: true})
@@ -212,7 +181,7 @@ func TestWorktreeRemoveFailsClosedOnProbeErrorsAndActivity(t *testing.T) {
 	}
 
 	deps.LiveSessions = func(*config.Config) ([]session.RunningSession, error) {
-		return []session.RunningSession{{TabID: 9, Directory: filepath.Join(root, "child")}}, nil
+		return []session.RunningSession{{Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-active", Directory: filepath.Join(root, "child")}}, nil
 	}
 	_, err = DefaultRegistry().Execute(context.Background(), deps, WorktreeRemove, Request{Selector: entry.ID, Confirmed: true})
 	if !errors.As(err, &actionErr) || actionErr.Code != "worktree_active" || len(actionErr.Candidates) != 1 || manager.removeCalls != 0 {
@@ -227,7 +196,6 @@ func TestWorktreeRemoveFailsClosedOnProbeErrorsAndActivity(t *testing.T) {
 }
 
 func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *testing.T) {
-	t.Parallel()
 
 	root := t.TempDir()
 	source := t.TempDir()
@@ -240,15 +208,15 @@ func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *test
 	hidden := writeActionTranscript(t, root, "hidden", now.Add(time.Hour), true)
 	indexPath := filepath.Join(t.TempDir(), "transcripts.json")
 	writeActionTranscriptIndex(t, indexPath, older, newer, hidden)
-	client := &continuityKitty{}
-	deps := Dependencies{
-		Kitty: client, Config: worktreeActionConfig(source), WorktreeManager: manager,
-		Readers:      map[string]transcript.Reader{harness.Claude: reader},
-		LiveSessions: func(*config.Config) ([]session.RunningSession, error) { return nil, nil },
-		TranscriptIndex: func() (*transcript.Index, error) {
-			idx, err := transcript.LoadIndexAt(indexPath)
-			return idx, errors.Join(err, errors.New("cache warning"))
-		},
+	f := tmuxtest.New(t)
+	cfg := worktreeActionConfig(source)
+	deps := tmuxDeps(f, cfg)
+	deps.WorktreeManager = manager
+	deps.Readers = map[string]transcript.Reader{harness.Claude: reader}
+	deps.LiveSessions = func(*config.Config) ([]session.RunningSession, error) { return nil, nil }
+	deps.TranscriptIndex = func() (*transcript.Index, error) {
+		idx, err := transcript.LoadIndexAt(indexPath)
+		return idx, errors.Join(err, errors.New("cache warning"))
 	}
 	result, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID})
 	if err == nil || !strings.Contains(err.Error(), "validating indexed transcript source") {
@@ -256,8 +224,8 @@ func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *test
 		// of silently turning into a fresh launch.
 		t.Fatalf("resume validation error = %v result=%+v", err, result)
 	}
-	if len(client.launched) != 0 {
-		t.Fatalf("resume failure launched fresh: %+v", client.launched)
+	if len(tmuxSessions(t, f, cfg)) != 0 {
+		t.Fatal("resume failure launched fresh")
 	}
 
 	reader.err = nil
@@ -265,8 +233,8 @@ func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *test
 	if err != nil {
 		t.Fatalf("resume newest: %v", err)
 	}
-	if result.Data["session_id"] != "newer" || result.Data["continuation"] != "resumed" || len(client.launched) != 1 {
-		t.Fatalf("resume result = %+v launches=%+v", result, client.launched)
+	if result.Data["session_id"] != "newer" || result.Data["continuation"] != "resumed" || len(tmuxSessions(t, f, cfg)) != 1 {
+		t.Fatalf("resume result = %+v", result)
 	}
 	warnings, _ := result.Data["warnings"].([]string)
 	if len(warnings) != 1 || warnings[0] != "cache warning" {
@@ -275,36 +243,34 @@ func TestWorktreeReopenUsesNewestVisibleTranscriptAndKeepsRefreshWarning(t *test
 }
 
 func TestWorktreeReopenFreshFallbackHandlesLegacyDefaultsAndProfileDrift(t *testing.T) {
-	t.Parallel()
 
 	root := t.TempDir()
 	source := t.TempDir()
 	entry := worktree.Entry{ID: "wt-1", Path: root, SourceRoot: source, ProjectLabel: "api", Profile: "removed", Harness: harness.Claude, Exists: true}
 	manager := &actionWorktreeManager{entries: []worktree.Entry{entry}}
-	client := &continuityKitty{}
+	f := tmuxtest.New(t)
 	cfg := worktreeActionConfig(source)
 	reader := &continuityReader{harness: harness.Claude}
 	indexPath := filepath.Join(t.TempDir(), "missing-index.json")
-	deps := Dependencies{
-		Kitty: client, Config: cfg, WorktreeManager: manager,
-		Readers:         map[string]transcript.Reader{harness.Claude: reader},
-		LiveSessions:    func(*config.Config) ([]session.RunningSession, error) { return nil, nil },
-		TranscriptIndex: func() (*transcript.Index, error) { return transcript.LoadIndexAt(indexPath) },
-	}
+	deps := tmuxDeps(f, cfg)
+	deps.WorktreeManager = manager
+	deps.Readers = map[string]transcript.Reader{harness.Claude: reader}
+	deps.LiveSessions = func(*config.Config) ([]session.RunningSession, error) { return nil, nil }
+	deps.TranscriptIndex = func() (*transcript.Index, error) { return transcript.LoadIndexAt(indexPath) }
 	_, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID})
 	var actionErr *Error
 	if !errors.As(err, &actionErr) || actionErr.Code != "profile_required" || len(actionErr.MissingParameters) != 1 {
 		t.Fatalf("removed profile error = %#v", err)
 	}
 	result, err := DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID, Parameters: map[string]string{"profile": "work"}})
-	if err != nil || result.Data["continuation"] != "fresh" || len(client.launched) != 1 {
-		t.Fatalf("replacement profile result = %+v err=%v launches=%d", result, err, len(client.launched))
+	if err != nil || result.Data["continuation"] != "fresh" || len(tmuxSessions(t, f, cfg)) != 1 {
+		t.Fatalf("replacement profile result = %+v err=%v", result, err)
 	}
 
 	manager.entries[0].Profile = ""
 	result, err = DefaultRegistry().Execute(context.Background(), deps, WorktreeReopen, Request{Selector: entry.ID})
-	if err != nil || result.Data["profile"] != "work" || len(client.launched) != 2 {
-		t.Fatalf("legacy default result = %+v err=%v launches=%d", result, err, len(client.launched))
+	if err != nil || result.Data["profile"] != "work" || len(tmuxSessions(t, f, cfg)) != 2 {
+		t.Fatalf("default profile result = %+v err=%v", result, err)
 	}
 }
 

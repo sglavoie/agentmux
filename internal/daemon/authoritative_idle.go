@@ -126,20 +126,6 @@ type authoritativeIdle struct {
 	DiagnosticEvent string
 }
 
-// captureWindowReceipt samples the window-wide reducer receipt generation
-// (WindowState.ShadowSeq) under stateMu so a slow off-lock external read (a
-// screen text capture, a transcript stat) can later prove no receipt-relevant
-// state transition landed while it was looking. A window with no in-process
-// state yet reports generation zero; every path that creates receipt-visible
-// state (including deferred-stop acceptance) advances the generation past
-// zero, so the matching recheck treats a window created in the meantime as a
-// receipt change. Safe to call off the state lock.
-func (h *Handler) captureWindowReceipt(windowID int) uint64 {
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	return h.windowReceiptLocked(windowID)
-}
-
 // windowReceiptLocked returns the window-wide reducer receipt generation, or
 // zero for a window with no in-process state. Callers hold stateMu.
 func (h *Handler) windowReceiptLocked(windowID int) uint64 {
@@ -227,7 +213,7 @@ func (h *Handler) applyAuthoritativeIdle(obs authoritativeIdle) bool {
 		h.stateMu.Unlock()
 		return false
 	}
-	// Discard the probe if either reducer state or the cached Kitty snapshot
+	// Discard the probe if either reducer state or the cached pane capture
 	// moved since the evidence was captured. Snapshot publication refreshes mute
 	// state while holding stateMu, so this generation check is atomic with the
 	// mute assignment and reducer mutation below: a mute-only snapshot change

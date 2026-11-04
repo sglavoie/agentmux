@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
@@ -16,9 +15,8 @@ import (
 
 // WorktreeLiveSession is the stable, presentation-neutral subset of a live
 // session exposed by worktree list/show and ambiguity errors. ID is what
-// --live-session takes: a Kitty session's tab ID, or the runtime session of a
-// session on another backend, whose tab and window IDs mean nothing outside
-// the process that listed it. Backend is empty for Kitty.
+// --live-session takes the runtime session ID, or the pane target when a
+// runtime record is unavailable.
 type WorktreeLiveSession struct {
 	ID               string `json:"id"`
 	TabID            int    `json:"tab_id"`
@@ -56,16 +54,18 @@ func probeWorktreeUsage(deps Dependencies, entries []worktree.Entry) usageSnapsh
 	liveProbe := deps.LiveSessions
 	if liveProbe == nil {
 		liveProbe = func(cfg *config.Config) ([]session.RunningSession, error) {
-			if deps.Kitty == nil {
-				return nil, fmt.Errorf("kitty client is unavailable")
+			if deps.Tmux == nil {
+				return nil, fmt.Errorf("tmux server is unavailable")
 			}
-			running, _, err := session.ListWithConfig(deps.Kitty, cfg)
-			return running, err
+			panes, err := deps.Tmux.Discover()
+			if err != nil {
+				return nil, err
+			}
+			return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), nil
 		}
 	}
-	// A probe that failed may still return what it could read (the tmux
-	// sessions when Kitty did not answer). Those are counted; the warning
-	// says the count is incomplete, and land and remove refuse on it.
+	// A failed probe may still return partial data. The warning says the count
+	// is incomplete, and land and remove refuse on it.
 	running, liveErr := liveProbe(deps.Config)
 	if liveErr != nil {
 		snapshot.warnings = append(snapshot.warnings, "live-session probe: "+liveErr.Error())
@@ -120,20 +120,12 @@ func liveSessionView(value session.RunningSession) WorktreeLiveSession {
 		Project:          value.EffectiveProject(), Profile: value.EffectiveProfile(),
 		Harness: value.Harness, HarnessSessionID: value.HarnessSessionID, Directory: value.Directory,
 	}
-	if value.BackendKind() != runtimesession.BackendKitty {
-		view.Backend = string(value.BackendKind())
-	}
+	view.Backend = string(value.BackendKind())
 	return view
 }
 
-// liveSessionID is the candidate ID a live session is chosen by. A Kitty
-// session is named by its tab. A session on another backend has no tab the
-// CLI can name (it lists every tmux session at tab 0), so it is named by its
-// runtime session, or by its pane when it registered none.
+// liveSessionID is the candidate ID a live session is chosen by.
 func liveSessionID(value session.RunningSession) string {
-	if value.BackendKind() == runtimesession.BackendKitty {
-		return strconv.Itoa(value.TabID)
-	}
 	if value.RuntimeSessionID != "" {
 		return string(value.RuntimeSessionID)
 	}
@@ -158,10 +150,7 @@ func liveSessionCandidates(values []session.RunningSession) []Candidate {
 		view := liveSessionView(value)
 		label := strings.TrimSpace(view.Project)
 		if label == "" {
-			label = "Kitty tab " + view.ID
-			if view.Backend != "" {
-				label = view.Backend + " session " + view.ID
-			}
+			label = "tmux session " + view.ID
 		}
 		if view.Profile != "" {
 			label += " (" + view.Profile + ")"

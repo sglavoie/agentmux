@@ -131,12 +131,7 @@ func CollectBackendStatus(cfg *config.Config, cfgErr error, probe BackendProbe) 
 		})
 	}
 
-	// Without tmux only a tmux launch fails, so it is an error for an
-	// operator who launches there and a warning for one who launches in Kitty.
-	unusable := "warning"
-	if status.LaunchBackend == config.LaunchBackendTmux {
-		unusable = "error"
-	}
+	unusable := "error"
 
 	dir := probe.ServerDir()
 	status.Server.Directory = dir

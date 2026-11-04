@@ -1,7 +1,6 @@
 package plans
 
 import (
-	"errors"
 	"os"
 	"testing"
 
@@ -13,9 +12,7 @@ import (
 func TestMain(m *testing.M) {
 	testenv.ClearSessionEnv()
 	// Launch tests must opt into a private test backend.
-	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) {
-		return nil, errors.New("test must install a tmux backend seam")
-	}
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return noLaunchTmux{}, nil }
 	stateRoot, err := os.MkdirTemp("", "agentmux-plan-test-state-")
 	if err != nil {
 		panic(err)
@@ -33,3 +30,5 @@ func TestMain(m *testing.M) {
 	_ = os.RemoveAll(stateRoot)
 	os.Exit(code)
 }
+
+type noLaunchTmux struct{ backend.TargetLauncher }

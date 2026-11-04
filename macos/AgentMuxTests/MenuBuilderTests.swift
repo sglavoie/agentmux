@@ -6,7 +6,7 @@ final class MenuBuilderTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_000_000)
 
     private func session(_ id: Int, _ icon: String, attention: Bool = false, project: String = "", changedSecondsAgo: Int? = nil) -> CompanionSession {
-        var s = CompanionSession(windowID: id)
+        var s = WorkspaceFixture.tmux(id, project: project.isEmpty ? "p\(id)" : project)
         s.iconState = icon
         s.attention = attention
         s.project = project.isEmpty ? "p\(id)" : project
@@ -30,7 +30,7 @@ final class MenuBuilderTests: XCTestCase {
         s.reason = "permission"
         let row = MenuBuilder.row(s, showReason: true, input: input([s]))
         XCTAssertEqual(row.title, "🔑 api · claude · 4m · Needs permission")
-        XCTAssertEqual(row.windowID, 1)
+        XCTAssertEqual(row.testID, 1)
         XCTAssertTrue(row.accessibilityLabel.contains("needs attention"), row.accessibilityLabel)
         XCTAssertFalse(row.accessibilityLabel.contains("🔑"), "VoiceOver says the state, not the glyph")
         let item = MenuBuilder.items(for: [.session(row)], target: NSObject(), sessionAction: #selector(NSObject.description),
@@ -41,10 +41,8 @@ final class MenuBuilderTests: XCTestCase {
         s.iconState = ""
         XCTAssertEqual(MenuBuilder.row(s, showReason: false, input: input([s])).title, "api · claude · 4m 🔇")
 
-        var unnamed = CompanionSession(windowID: 9)
-        unnamed.baseTitle = "W:x"
-        XCTAssertEqual(MenuBuilder.name(of: unnamed), "W:x")
-        XCTAssertEqual(MenuBuilder.name(of: CompanionSession(windowID: 9)), "window 9")
+        let unnamed = WorkspaceFixture.tmux(9, project: "")
+        XCTAssertEqual(MenuBuilder.name(of: unnamed), "tmux %9")
     }
 
     func testRowAgesAreTheSharedCompactAges() {
@@ -71,7 +69,7 @@ final class MenuBuilderTests: XCTestCase {
         func ids(after header: String) -> [Int] {
             guard let start = entries.firstIndex(of: .header(header)) else { return [] }
             return entries[(start + 1)...].prefix { if case .session = $0 { return true } else { return false } }
-                .compactMap { if case let .session(row) = $0 { return row.windowID } else { return nil } }
+                .compactMap { if case let .session(row) = $0 { return row.testID } else { return nil } }
         }
         // The sidebar promotes the permission request above a seen completion.
         XCTAssertEqual(ids(after: "Needs attention"), [4, 2])
@@ -91,20 +89,20 @@ final class MenuBuilderTests: XCTestCase {
             embedded,
         ]
         var order = WorkspaceOrder()
-        order.set([.embedded("rs-6"), AttentionCycler.Key(socket: "", windowID: 4),
-                   AttentionCycler.Key(socket: "", windowID: 3), AttentionCycler.Key(socket: "", windowID: 2)], for: "api")
+        order.set([.embedded("rs-6"), .embedded(WorkspaceFixture.runtimeID(4)),
+                   .embedded(WorkspaceFixture.runtimeID(3)), .embedded(WorkspaceFixture.runtimeID(2))], for: "api")
         var menuInput = input(sessions)
         menuInput.order = order
         let entries = MenuBuilder.entries(menuInput)
         guard let start = entries.firstIndex(of: .header("Needs attention")) else { return XCTFail("no Needs attention") }
         let listed = entries[(start + 1)...].prefix { if case .session = $0 { return true } else { return false } }
-            .compactMap { if case let .session(row) = $0 { return row.windowID } else { return nil } }
-        let cycle = AttentionCycler.ordered(sessions, order: order).map(\.windowID)
+            .compactMap { if case let .session(row) = $0 { return row.testID } else { return nil } }
+        let cycle = AttentionCycler.ordered(sessions, order: order).map(\.testID)
         XCTAssertEqual(listed, cycle)
         XCTAssertEqual(listed, [6, 4, 2, 5, 1], "the dragged api order, then Docs and web by name")
 
         var cycler = AttentionCycler()
-        let presses = (0..<5).compactMap { _ in cycler.advance(in: sessions, order: order)?.windowID }
+        let presses = (0..<5).compactMap { _ in cycler.advance(in: sessions, order: order)?.testID }
         XCTAssertEqual(presses, listed, "⌃⌥⌘N visits them in the order the menu lists them")
     }
 
@@ -168,13 +166,11 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(MenuBuilder.entries(input([], feed: .connecting)), [.info("Daemon: connecting…")])
     }
 
-    func testNoticeAndMissingListenOn() {
+    func testNotice() {
         var value = input([session(1, "")])
         value.notice = "That session has closed."
-        value.kittyReachable = false
         let entries = MenuBuilder.entries(value)
         XCTAssertEqual(entries[1], .info("That session has closed."))
-        XCTAssertEqual(entries[2], .info(KittyEndpoint.listenOnMissing))
     }
 
     func testANoticeNamingRestartDaemonOffersIt() {
@@ -194,7 +190,7 @@ final class MenuBuilderTests: XCTestCase {
     }
 
     func testMenuItemsCarryTheirRows() {
-        let rows = (1...11).map { MenuSessionRow(title: "r\($0)", windowID: $0, kittySocket: "", toolTip: "") }
+        let rows = (1...11).map { MenuSessionRow(title: "r\($0)", toolTip: "", runtimeSessionID: WorkspaceFixture.runtimeID($0)) }
         let entries: [MenuEntry] = [.info("x"), .header("H"), .session(rows[0]), .submenu("Idle (11)", rows),
                                     .action(.startDaemon, "Start Daemon"), .separator, .action(.restartDaemon, "Restart Daemon")]
         let target = NSObject()
@@ -229,41 +225,8 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(Glyphs.fallback.glyph(for: "nope"), "")
     }
 
-    // MARK: Kitty
-
-    func testEndpointCandidates() {
-        let exists: (String) -> Bool = { $0 == "/tmp/kitty-20" || $0 == "/tmp/kitty-10" }
-        XCTAssertEqual(KittyEndpoint.candidates(rowSocket: "unix:/tmp/kitty-20", snapshotSocket: "unix:/tmp/kitty-10",
-                                                kittyPIDs: [30, 20, 10], fileExists: exists),
-                       ["unix:/tmp/kitty-20", "unix:/tmp/kitty-10"])
-        XCTAssertEqual(KittyEndpoint.candidates(rowSocket: "", snapshotSocket: "", kittyPIDs: [30, 20, 10], fileExists: exists),
-                       ["unix:/tmp/kitty-10", "unix:/tmp/kitty-20"])
-        XCTAssertEqual(KittyEndpoint.candidates(rowSocket: " ", snapshotSocket: "", kittyPIDs: [30], fileExists: exists), [])
-    }
-
-    func testSocketPIDs() {
-        XCTAssertEqual(KittyEndpoint.pid(fromSocket: "unix:/tmp/kitty-1234"), 1234)
-        XCTAssertEqual(KittyEndpoint.pid(fromSocket: "/tmp/kitty-5"), 5)
-        XCTAssertNil(KittyEndpoint.pid(fromSocket: "unix:/tmp/kitty"))
-        XCTAssertNil(KittyEndpoint.pid(fromSocket: "unix:/tmp/kitty-abc"))
-        XCTAssertNil(KittyEndpoint.pid(fromSocket: "unix:/tmp/kitty-"))
-    }
-
-    func testActivatorPicksTheInstanceTheSocketNames() {
-        let kitty = KittyEndpoint.bundleIdentifier
-        let running = [
-            KittyActivator.RunningKitty(pid: 10, bundleIdentifier: kitty),
-            KittyActivator.RunningKitty(pid: 20, bundleIdentifier: kitty),
-            KittyActivator.RunningKitty(pid: 30, bundleIdentifier: "other"),
-        ]
-        XCTAssertEqual(KittyActivator.target(socket: "unix:/tmp/kitty-20", running: running), 20)
-        XCTAssertEqual(KittyActivator.target(socket: "unix:/tmp/kitty-30", running: running), 10, "pid 30 is not Kitty")
-        XCTAssertEqual(KittyActivator.target(socket: "unix:/tmp/mykitty", running: running), 10)
-        XCTAssertNil(KittyActivator.target(socket: "unix:/tmp/kitty-20", running: []))
-    }
-
     func testALongOrManyLinedMessageIsCutWithTheWholeAsTooltip() {
-        XCTAssertTrue(MenuBuilder.menuLine("Kitty is not running.") == ("Kitty is not running.", nil))
+        XCTAssertTrue(MenuBuilder.menuLine("Terminal is not running.") == ("Terminal is not running.", nil))
         let multi = MenuBuilder.menuLine("amx exited with status 2\nerror: config.toml line 4\nmore")
         XCTAssertEqual(multi.title, "amx exited with status 2 …")
         XCTAssertEqual(multi.toolTip, "amx exited with status 2\nerror: config.toml line 4\nmore")

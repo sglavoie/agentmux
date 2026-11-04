@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
@@ -176,7 +175,7 @@ func TestPickerPinIdentityIncludesDefaultProfile(t *testing.T) {
 			{Title: "api", Directory: "/work/api", Account: "work"},
 		},
 	}
-	m := NewModel(cfg, kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""))
+	m := NewModel(cfg, nil)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
 

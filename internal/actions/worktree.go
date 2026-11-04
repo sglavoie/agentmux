@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -274,13 +273,14 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	liveProbe := deps.LiveSessions
 	if liveProbe == nil {
 		liveProbe = func(cfg *config.Config) ([]session.RunningSession, error) {
-			// A tmux launch without Kitty has no Kitty tab to find; the
-			// launch itself refuses a project that is already running.
-			if deps.Kitty == nil {
-				return nil, nil
+			if deps.Tmux == nil {
+				return nil, fmt.Errorf("tmux server is unavailable")
 			}
-			running, _, err := session.ListWithConfig(deps.Kitty, cfg)
-			return running, err
+			panes, err := deps.Tmux.Discover()
+			if err != nil {
+				return nil, err
+			}
+			return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), nil
 		}
 	}
 	running, err := liveProbe(deps.Config)
@@ -298,13 +298,13 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 	if requestedSession != "" {
 		for _, candidate := range matches {
 			if liveSessionView(candidate).ID == requestedSession {
-				return focusWorktreeSession(deps.sessionTerminal(candidate), candidate)
+				return focusWorktreeSession(candidate)
 			}
 		}
 		return Result{}, &Error{Code: "not_found", Action: WorktreeReopen, Message: fmt.Sprintf("live-session candidate %q was not found", requestedSession), Candidates: liveSessionCandidates(matches)}
 	}
 	if len(matches) == 1 {
-		return focusWorktreeSession(deps.sessionTerminal(matches[0]), matches[0])
+		return focusWorktreeSession(matches[0])
 	}
 	if len(matches) > 1 {
 		return Result{}, &Error{Code: "ambiguous_live_sessions", Action: WorktreeReopen, Message: "multiple live sessions are inside this worktree", Candidates: liveSessionCandidates(matches)}
@@ -341,23 +341,12 @@ func reopenWorktree(ctx context.Context, deps Dependencies, request Request) (Re
 // the caller shows the session by attaching a terminal to it.
 const DataContinuationAttach = "attach"
 
-func focusWorktreeSession(term backend.Presenter, running session.RunningSession) (Result, error) {
-	if running.BackendKind() != runtimesession.BackendKitty {
-		data := map[string]any{"continuation": DataContinuationAttach, "session": liveSessionView(running), "backend": string(running.BackendKind())}
-		if running.RuntimeSessionID != "" {
-			data["runtime_session_id"] = string(running.RuntimeSessionID)
-		}
-		return Result{Message: "live worktree session is running; attach to view it", Data: data}, nil
+func focusWorktreeSession(running session.RunningSession) (Result, error) {
+	data := map[string]any{"continuation": DataContinuationAttach, "session": liveSessionView(running), "backend": string(running.BackendKind())}
+	if running.RuntimeSessionID != "" {
+		data["runtime_session_id"] = string(running.RuntimeSessionID)
 	}
-	if term == nil {
-		return Result{}, dependencyError(WorktreeReopen, "Kitty client")
-	}
-	if err := term.Focus(running.GroupRef()); err != nil {
-		return Result{}, err
-	}
-	return Result{Changed: true, Message: "focused live worktree session", Data: map[string]any{
-		"continuation": "focused", "session": liveSessionView(running),
-	}}, nil
+	return Result{Message: "live worktree session is running; attach to view it", Data: data}, nil
 }
 
 func resumeWorktreeConversation(deps Dependencies, entry worktree.Entry, project config.Session, meta transcript.SessionMeta, warnings []string) (Result, error) {
@@ -436,46 +425,7 @@ func openWorktree(ctx context.Context, deps Dependencies, request Request, edito
 	if !entry.Exists {
 		return Result{}, &Error{Code: "metadata_invalid", Action: action, Message: "worktree checkout is missing"}
 	}
-	if deps.Kitty == nil {
-		return deps.openUtility(action, editor, entry.Path)
-	}
-	project, matched := configuredWorktreeProject(deps.Config, entry)
-	opened := false
-	if matched {
-		profile := strings.TrimSpace(entry.Profile)
-		if profile == "" {
-			profile = project.EffectiveProfile()
-		}
-		if account, ok := accountByName(deps.Config, profile); ok {
-			project.Directory = entry.Path
-			project.Profile, project.Account = account.Name, account.Name
-			if editor {
-				err = session.OpenInEditor(deps.Kitty, project, account, deps.Config)
-			} else {
-				err = session.OpenDirectory(deps.Kitty, project, account, deps.Config)
-			}
-			opened = true
-		}
-	}
-	if !opened {
-		title := worktreeTitle(entry)
-		if editor {
-			if deps.Config == nil {
-				return Result{}, dependencyError(action, "configuration")
-			}
-			err = session.OpenPathInEditor(deps.Kitty, entry.Path, title, deps.Config)
-		} else {
-			err = deps.terminal().Launch(backend.LaunchSpec{Title: title, Directory: entry.Path})
-		}
-	}
-	if err != nil {
-		return Result{}, &Error{Code: "launch_failed", Action: action, Message: err.Error()}
-	}
-	message := "opened worktree shell"
-	if editor {
-		message = "opened worktree editor"
-	}
-	return Result{Changed: true, Message: message, Data: map[string]any{"path": entry.Path}}, nil
+	return deps.openUtility(action, editor, entry.Path)
 }
 
 func removeWorktree(ctx context.Context, deps Dependencies, request Request) (Result, error) {

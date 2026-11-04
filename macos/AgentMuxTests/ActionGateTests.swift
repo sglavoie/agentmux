@@ -50,12 +50,11 @@ final class ActionGateTests: XCTestCase {
         var input = MenuBuilder.ActionsInput()
         input.gate = ActionGate(capabilities: capabilities, binaryPath: "amx")
         input.feedLive = true
-        input.dashboardPlace = .kitty
         let entries = MenuBuilder.actionEntries(input)
         XCTAssertEqual(entries, [
             .separator,
             .action(.openWorkspace, "Open Workspace"),
-            .unavailable("Open Dashboard", reason: "amx has no open-dashboard command; run just install"),
+            .action(.openDashboard, "Open Dashboard"),
             .unavailableAction(.nextAttention, "Next Waiting Session", reason: "No session is waiting"),
             .submenuRef(.projects, "Launch Project", reason: "amx has no project command; run just install"),
             .submenuRef(.recent, "Recent", reason: nil),
@@ -67,10 +66,7 @@ final class ActionGateTests: XCTestCase {
         let old = AMXCapabilities(root: AMXHelp(subcommands: ["session"], flags: []), notifications: nil, muteToggle: nil)
         var input = MenuBuilder.ActionsInput()
         input.gate = ActionGate(capabilities: old, binaryPath: "amx")
-        input.dashboardPlace = .workspace
         XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .action(.openDashboard, "Open Dashboard"))
-        input.dashboardPlace = .kitty
-        XCTAssertEqual(MenuBuilder.actionEntries(input)[2], .unavailable("Open Dashboard", reason: "amx has no open-dashboard command; run just install"))
     }
 
     func testActionEntriesOnACurrentAmx() {
@@ -164,10 +160,9 @@ final class ActionGateTests: XCTestCase {
     // MARK: Mute
 
     func testRowsCarryTheirMuteState() {
-        var session = CompanionSession(windowID: 4)
+        var session = WorkspaceFixture.tmux(4, project: "api")
         session.project = "api"
         session.muted = true
-        session.kittySocket = "unix:/tmp/kitty-9"
         var input = MenuBuilder.Input(feed: .live, daemonStatus: nil, sessions: [session], snapshot: CompanionSnapshot())
         input.gate = ActionGate(capabilities: full)
         let row = MenuBuilder.row(session, showReason: false, input: input)
@@ -178,8 +173,8 @@ final class ActionGateTests: XCTestCase {
     }
 
     func testEachSessionItemHasAnOptionAlternate() {
-        let muted = MenuSessionRow(title: "api", windowID: 4, kittySocket: "s", toolTip: "t", muted: true)
-        let blocked = MenuSessionRow(title: "web", windowID: 5, kittySocket: "s", toolTip: "t", muteUnavailable: "too old")
+        let muted = MenuSessionRow(title: "api", toolTip: "t", muted: true, runtimeSessionID: WorkspaceFixture.runtimeID(4))
+        let blocked = MenuSessionRow(title: "web", toolTip: "t", muteUnavailable: "too old", runtimeSessionID: WorkspaceFixture.runtimeID(5))
         let target = NSObject()
         let items = MenuBuilder.items(
             for: [.session(muted), .submenu("Idle (1)", [blocked])], target: target,
@@ -224,19 +219,18 @@ final class ActionGateTests: XCTestCase {
         XCTAssertEqual((items[4].representedObject as? MenuBuilder.ActionBox)?.action, .launchProjectInFolder(ProjectEntry(profile: "w", title: "A")))
     }
 
-    func testMuteToggleRunsAgainstTheRowSocket() {
+    func testMuteToggleUsesRuntimeSessionID() {
         var calls: [([String], [String: String])] = []
         var amx = AMXCommand(binary: URL(fileURLWithPath: "/opt/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
-        amx.inheritedEnvironment = ["KITTY_LISTEN_ON": "unix:/tmp/kitty-1"]
+        amx.inheritedEnvironment = ["AMX_RUNTIME_SESSION_ID": "rs-current"]
         amx.runner = { _, args, env, _ in
             calls.append((args, env))
-            return .finished(ProcessOutput(status: 1, stdout: Data(#"{"schema_version":1,"data":{"window_id":4,"muted":true,"changed":true}}"#.utf8), stderr: Data()))
+            return .finished(ProcessOutput(status: 1, stdout: Data(#"{"schema_version":1,"data":{"muted":true,"changed":true}}"#.utf8), stderr: Data()))
         }
-        let result = amx.json(MuteToggleResult.self, MuteToggleResult.arguments(windowID: 4), kittyListenOn: "unix:/tmp/kitty-2")
-        XCTAssertEqual(result, .partial(MuteToggleResult(windowID: 4, muted: true, changed: true), status: 1),
-                       "a mute whose title write failed is partial success")
-        XCTAssertEqual(calls.first?.0, ["mute-toggle", "--window-id", "4", "--json"])
-        XCTAssertEqual(calls.first?.1["KITTY_LISTEN_ON"], "unix:/tmp/kitty-2")
+        let result = amx.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: "rs-current"))
+        XCTAssertEqual(result, .partial(MuteToggleResult(muted: true, changed: true), status: 1))
+        XCTAssertEqual(calls.first?.0, ["mute-toggle", "--runtime-session", "rs-current", "--json"])
+        XCTAssertEqual(calls.first?.1["AMX_RUNTIME_SESSION_ID"], "rs-current")
 
         let failed = AMXEnvelope.decode(MuteToggleResult.self, stdout: Data(#"{"schema_version":1,"error":{"code":"mute_toggle_failed","message":"toggle mute: no such window"}}"#.utf8), status: 1)
         guard case let .failure(.command(error, _)) = failed else { return XCTFail("\(failed)") }

@@ -13,8 +13,10 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/layout"
@@ -38,11 +40,13 @@ func viewConfig() *config.Config {
 	}
 }
 
-// viewSession is one live row: a tab, a window, a project, and a profile.
+// viewSession is one live tmux row with a stable tile identity.
 func viewSession(tabID int, project, profile, harnessName string) session.RunningSession {
 	return session.RunningSession{
 		TabID:     tabID,
 		WindowID:  tabID * 10,
+		Backend:   runtimesession.BackendTmux,
+		Pane:      backend.PaneID(strconv.Itoa(tabID * 10)),
 		Key:       fmt.Sprintf("%s-%d", project, tabID),
 		Base:      project,
 		Project:   project,
@@ -386,13 +390,13 @@ func TestTheFiveOutputSituationsReachTheTiles(t *testing.T) {
 	sessions := viewSessions(4)
 	in := viewInput(160, 45, sessions)
 	in.Previews = map[session.PaneTarget]Preview{
-		session.KittyPaneTarget(sessions[0].WindowID): {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("building the index\n")},
-		session.KittyPaneTarget(sessions[1].WindowID): {Content: dashboard.InspectorReady},
-		session.KittyPaneTarget(sessions[2].WindowID): {Content: dashboard.InspectorFailed, Error: "kitty: no such window"},
-		session.KittyPaneTarget(sessions[3].WindowID): {Content: dashboard.InspectorVanished},
+		paneTargetForWindow(sessions[0].WindowID): {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("building the index\n")},
+		paneTargetForWindow(sessions[1].WindowID): {Content: dashboard.InspectorReady},
+		paneTargetForWindow(sessions[2].WindowID): {Content: dashboard.InspectorFailed, Error: "tmux: no such pane"},
+		paneTargetForWindow(sessions[3].WindowID): {Content: dashboard.InspectorVanished},
 	}
 	joined := strings.Join(plain(renderLines(t, in)), "\n")
-	for _, want := range []string{"building the index", "(no output)", "error: kitty: no such window", "(session not running)"} {
+	for _, want := range []string{"building the index", "(no output)", "error: tmux: no such pane", "(session not running)"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("the grid does not say %q", want)
 		}
@@ -458,8 +462,8 @@ func TestStylingDoesNotLeakBetweenTiles(t *testing.T) {
 
 	in := viewInput(100, 24, sessions) // two columns, one row
 	in.Previews = map[session.PaneTarget]Preview{
-		session.KittyPaneTarget(left.WindowID):  {Content: dashboard.InspectorReady, Output: []string{"\x1b[31mbleeding red"}},
-		session.KittyPaneTarget(right.WindowID): {Content: dashboard.InspectorReady, Output: []string{"innocent"}},
+		paneTargetForWindow(left.WindowID):  {Content: dashboard.InspectorReady, Output: []string{"\x1b[31mbleeding red"}},
+		paneTargetForWindow(right.WindowID): {Content: dashboard.InspectorReady, Output: []string{"innocent"}},
 	}
 	lines := renderLines(t, in)
 
@@ -503,7 +507,7 @@ func TestEveryTileRowIsSealed(t *testing.T) {
 	in := viewInput(160, 45, sessions)
 	in.Previews = map[session.PaneTarget]Preview{}
 	for i, s := range sessions {
-		in.Previews[session.KittyPaneTarget(s.WindowID)] = Preview{
+		in.Previews[paneTargetForWindow(s.WindowID)] = Preview{
 			Content: dashboard.InspectorReady,
 			Output:  []string{fmt.Sprintf("\x1b[3%dmunclosed %d", i%8, i)},
 		}
@@ -534,7 +538,7 @@ func TestWideGraphemesDoNotBreakTheGrid(t *testing.T) {
 		in := viewInput(size[0], size[1], sessions)
 		in.Previews = map[session.PaneTarget]Preview{}
 		for _, s := range sessions {
-			in.Previews[session.KittyPaneTarget(s.WindowID)] = Preview{
+			in.Previews[paneTargetForWindow(s.WindowID)] = Preview{
 				Content: dashboard.InspectorReady,
 				Output:  []string{"▶ 実行中… 🚀🚀🚀", "ok"},
 			}
@@ -631,7 +635,7 @@ func TestRenderIsPure(t *testing.T) {
 	sessions := viewSessions(5)
 	in := viewInput(120, 30, sessions)
 	in.Previews = map[session.PaneTarget]Preview{
-		session.KittyPaneTarget(sessions[0].WindowID): {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("one\ntwo\n")},
+		paneTargetForWindow(sessions[0].WindowID): {Content: dashboard.InspectorReady, Output: dashboard.SplitOutput("one\ntwo\n")},
 	}
 	in.Selected = 2
 
@@ -833,9 +837,9 @@ func TestTheRenderingHalfPerformsNoIO(t *testing.T) {
 // daemon's protocol constants — and nothing that could read a transcript, a plan,
 // a socket or a file of its own. Second, the calls into tui/commands: only the
 // topology and preview reads, Focus, the view preference, and their tickers. Every
-// other command in that package either writes Kitty or asks the daemon for
+// other command in that package either changes a terminal or asks the daemon for
 // something this surface has no business asking, so the allowlist being short is
-// the whole assertion. A navigation key cannot reach Kitty because there is no
+// the whole assertion. A navigation key cannot change a terminal because there is no
 // call in the package it could reach it through.
 func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 	allowedImports := map[string]bool{
@@ -846,8 +850,7 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"charm.land/bubbletea/v2": true,
 
 		"github.com/sglavoie/agentmux/internal/config":          true,
-		"github.com/sglavoie/agentmux/internal/daemon/protocol": true, // KittySnapshotStaleAfter
-		"github.com/sglavoie/agentmux/internal/kitty":           true, // the client type, handed to the seams
+		"github.com/sglavoie/agentmux/internal/daemon/protocol": true, // TopologyStaleAfter
 		"github.com/sglavoie/agentmux/internal/session":         true,
 		"github.com/sglavoie/agentmux/tui/commands":             true,
 		"github.com/sglavoie/agentmux/tui/dashboard":            true, // shared NeedsYou predicate
@@ -865,14 +868,12 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 		"commands.Tick":                true,
 		// The capture is a READ of a pane's terminal text and its cadence. It is
 		// listed beside RefreshOverview rather than beside Focus for that reason:
-		// commands.CaptureScreen reads through the pane's backend (`kitten @
-		// get-text` on Kitty, a backend capturer elsewhere), which observes a pane
+		// commands.CaptureScreen reads through the pane's backend, which observes a pane
 		// without touching it, so adding it leaves the "browsing the overview
 		// cannot change anything" claim exactly where it was.
 		"commands.CaptureScreen": true,
 		"commands.CaptureTick":   true,
-		// Which sources those reads go through: Kitty, and the portable
-		// backend's capturer for sessions Kitty cannot see. It builds a value
+		// The tmux capture source builds a value
 		// and reaches nothing.
 		"commands.OverviewCaptureSources": true,
 	}
@@ -908,7 +909,7 @@ func TestTheLifecycleHalfReachesTheWorldOnlyThroughItsSeams(t *testing.T) {
 // TestTheActingHalfMutatesOnlyThroughADispatchedAction is the acting half's
 // structural rule.
 //
-// The observing half's rule above says a navigation key cannot reach Kitty
+// The observing half's rule above says a navigation key cannot change a terminal
 // because there is no call it could reach it through. This one says where those
 // calls ARE, and it is deliberately an allowlist rather than a permission: every
 // entry is an effect that some session action dispatches, and a command appearing
@@ -932,7 +933,6 @@ func TestTheActingHalfMutatesOnlyThroughADispatchedAction(t *testing.T) {
 
 		"github.com/sglavoie/agentmux/internal/actions":   true, // the shared typed action registry
 		"github.com/sglavoie/agentmux/internal/config":    true,
-		"github.com/sglavoie/agentmux/internal/kitty":     true, // the client type, handed to the seams
 		"github.com/sglavoie/agentmux/internal/session":   true,
 		"github.com/sglavoie/agentmux/tui/commands":       true,
 		"github.com/sglavoie/agentmux/tui/dashboard":      true,

@@ -353,7 +353,7 @@ func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, ef
 	// (see stampUnseenLocked), so it must read st.Effective.Icon while that is
 	// still the PREVIOUS icon — before the write below overwrites it.
 	h.recordFlightStateLocked(windowID, st, effective, now)
-	stampUnseenLocked(st, effective.Icon, h.windowFocusedFromSnapshotLocked(windowID))
+	stampUnseenLocked(st, effective.Icon, false)
 	if effective.Icon != previousIcon || st.Unseen != previousUnseen {
 		// One publication owns one transition instant even when the icon and unseen
 		// bit change together.

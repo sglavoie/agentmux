@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/notification"
@@ -13,7 +12,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
@@ -51,7 +49,7 @@ func codexScreenIdleFields(
 	_ *state.WindowState,
 	_ probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 ) screenIdleFields {
 	return screenIdleFields{
 		sessionTitle: titleParts.Base,
@@ -61,85 +59,11 @@ func codexScreenIdleFields(
 	}
 }
 
-// ProbeCodexScreenPrompts scans managed Codex windows and applies any visible
-// prompt found on the current screen. The screen is authoritative for Codex:
-// edit/request_user_input prompts can replace existing bolt/key guards with the
-// lower-priority elicitation state, while terminal and special-purpose icons are
-// never overwritten. A stopped Codex tab gets one extra conservative check for
-// the cleared idle UI because Codex does not emit an immediate hook for idle
-// `/clear`.
-func (h *Handler) ProbeCodexScreenPrompts(now time.Time) {
-	client, socket := h.kittyListTarget()
-	if client == nil {
-		return
-	}
-	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
-	windows, err := client.ListWindows()
-	if err != nil {
-		slog.Debug("codex prompt probe: list windows failed", "err", err)
-		return
-	}
-	h.probeCodexScreenPromptsWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
-		h.screenTextCacheForSocket(socket))
-	h.renderSnapshotFor(windows, socket)
-}
-
-func (h *Handler) probeCodexScreenPromptsWithSnapshot(
-	now time.Time,
-	snapshot probes.Snapshot,
-	screens *activity.ScreenTextCache,
-) {
-	bindings := h.screenProbeBindings(snapshot, harness.Codex)
-	bindings = append(bindings, h.screenProbeTerminalBindings(snapshot, harness.Codex, now.Unix())...)
-	for _, binding := range bindings {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
-		if !ok {
-			continue
-		}
-		h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, screens)
-	}
-
-	// Preserve the historical foreground fallback for a tab with no managed
-	// target. The executable check is positive Codex producer evidence; encode
-	// that as an explicit known-producer direct binding rather than allowing an
-	// empty harness to fall through configuration's default-to-Claude path.
-	for i := range snapshot.Windows() {
-		for j := range snapshot.Windows()[i].Tabs {
-			tab := &snapshot.Windows()[i].Tabs[j]
-			win, ok := probes.CodexForegroundTarget(tab)
-			if !ok {
-				continue
-			}
-			binding, found := probes.NewBinding(
-				snapshot,
-				conversation.Identity{Harness: harness.Codex},
-				win.ID,
-				win.ID,
-			)
-			if !found {
-				continue
-			}
-			h.stateMu.Lock()
-			slot := h.runtimeRoutes.kittySlotOf(snapshot.Socket(), win.ID)
-			foreign := h.windowOfOtherInstanceLocked(slot, snapshot.Socket())
-			h.stateMu.Unlock()
-			if foreign {
-				continue
-			}
-			binding.LegacyDirectManaged = true
-			binding.SourceStateSlot = slot
-			binding.TargetStateSlot = slot
-			binding.KittySocket = snapshot.Socket()
-			h.probeCodexBinding(now, binding, palette.ParseTitleParts(tab.Title), win.UserVars, screens)
-		}
-	}
-}
-
 func (h *Handler) probeCodexBinding(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	screens *activity.ScreenTextCache,
 ) {
 	titleParts, userVars, ok := h.codexProbeTargetContext(binding, titleParts, userVars)
@@ -175,8 +99,8 @@ func (h *Handler) probeCodexBinding(
 func (h *Handler) codexProbeTargetContext(
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
-) (palette.TitleParts, kitty.UserVars, bool) {
+	userVars probeWindowVars,
+) (palette.TitleParts, probeWindowVars, bool) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	if !h.screenProbeBindingCurrentLocked(binding) {
@@ -184,15 +108,9 @@ func (h *Handler) codexProbeTargetContext(
 	}
 	st, ok := h.windowStateLocked(binding.TargetSlot())
 	if !ok || st == nil {
-		return titleParts, userVars, true
+		return titleParts, userVars, false
 	}
-	// A legacy direct stopped title may intentionally repair title-only drift
-	// while the in-process reducer is empty (including a deferred Stop that has
-	// advanced only the receipt). Preserve that snapshot stop candidate; routed
-	// bindings always derive their branch from the target reducer.
-	if st.Effective.Icon != "" || !binding.LegacyDirectManaged || titleParts.State != "stop" {
-		titleParts.State = st.Effective.Icon
-	}
+	titleParts.State = st.Effective.Icon
 	titleParts.Muted = titleParts.Muted || st.Muted
 	if st.LastSessionTitle != "" {
 		titleParts.Base = st.LastSessionTitle
@@ -234,11 +152,11 @@ func (h *Handler) applyCodexClearObservation(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 ) {
 	windowID := binding.TargetSlot()
 	targetHarness := harness.NormalizeKnown(userVars.EffectiveHarness())
-	if targetHarness == "" && binding.LegacyDirectManaged {
+	if targetHarness == "" && binding.StoppedCodexRecovery {
 		targetHarness = harness.Codex
 	}
 	req := protocol.Request{
@@ -276,7 +194,7 @@ func (h *Handler) applyCodexClearObservation(
 			h.recordSupersededStopHold(supersededHold)
 		}
 	}()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, func(icon string) bool {
 		return icon == "" || icon == "stop"
 	}) {
 		slog.Debug("codex clear probe: discarded stale observation", "window_id", windowID)
@@ -346,7 +264,7 @@ func (h *Handler) applyCodexClearObservation(
 	h.appendEventLocked(windowID, eventRow)
 	h.syncRendererMetadataLocked(windowID)
 	// A real clear must always publish both durable reducer acknowledgement and
-	// title cleanup, including when the stopped icon existed only in the Kitty
+	// title cleanup, including when the stopped icon existed only in the cached
 	// snapshot and the in-process reducer was previously empty.
 	h.markWindowDirtyLocked(windowID)
 }
@@ -362,7 +280,7 @@ func (h *Handler) recordCodexPromptProbeStateLocked(
 	windowID int,
 	baseTitle string,
 	currentIconState string,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	classification activity.CodexPromptClassification,
 	defaultCodexOwnership bool,
 	originWindowID int,
@@ -462,7 +380,7 @@ func (h *Handler) appendCodexPromptProbeEventLocked(
 	windowID int,
 	baseTitle string,
 	currentIconState string,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	classification activity.CodexPromptClassification,
 	resultIconState string,
 	suppressed bool,
@@ -521,7 +439,7 @@ func (h *Handler) probeCodexWindow(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	screens *activity.ScreenTextCache,
 ) {
 	targetWindowID := binding.TargetSlot()
@@ -529,7 +447,7 @@ func (h *Handler) probeCodexWindow(
 	// cached eligibility evidence. Reject it before beginning the screen read if
 	// any reducer event landed since; the apply path rechecks after the read.
 	h.stateMu.Lock()
-	fresh := h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+	fresh := h.screenProbeBindingEligibilityCurrentLocked(binding, func(icon string) bool {
 		return codexPromptProbeCanOverwrite(icon)
 	})
 	h.stateMu.Unlock()
@@ -573,12 +491,12 @@ func (h *Handler) applyCodexPromptObservation(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	classification activity.CodexPromptClassification,
 ) {
 	windowID := binding.TargetSlot()
 	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, func(icon string) bool {
 		return codexPromptProbeCanOverwrite(icon)
 	}) {
 		h.stateMu.Unlock()
@@ -591,7 +509,7 @@ func (h *Handler) applyCodexPromptObservation(
 	allowed, effectiveAction := h.guard.TryUpdate(windowID, classification.Action, true)
 	if !allowed {
 		h.appendCodexPromptProbeEventLocked(now, windowID, titleParts.Base, titleParts.State, userVars,
-			classification, protocol.IconStatePreserve, true, binding.LegacyDirectManaged, binding.SourceSlot())
+			classification, protocol.IconStatePreserve, true, binding.StoppedCodexRecovery, binding.SourceSlot())
 		h.stateMu.Unlock()
 		return
 	}
@@ -601,7 +519,7 @@ func (h *Handler) applyCodexPromptObservation(
 		iconState = classification.IconState
 	}
 	before, effective := h.recordCodexPromptProbeStateLocked(now, windowID, titleParts.Base, titleParts.State,
-		userVars, classification, binding.LegacyDirectManaged, binding.SourceSlot())
+		userVars, classification, binding.StoppedCodexRecovery, binding.SourceSlot())
 	h.stateMu.Unlock()
 
 	if effective.Icon == iconState && before.Icon != effective.Icon {
@@ -662,14 +580,14 @@ func (h *Handler) probeCodexClearWindow(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	screens *activity.ScreenTextCache,
 ) {
 	targetWindowID := binding.TargetSlot()
 	// Bind the stale-stop eligibility from the cached title to its reducer
 	// receipt before either slow read. The apply path rechecks after both.
 	h.stateMu.Lock()
-	fresh := h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+	fresh := h.screenProbeBindingEligibilityCurrentLocked(binding, func(icon string) bool {
 		return icon == "" || icon == "stop"
 	})
 	h.stateMu.Unlock()

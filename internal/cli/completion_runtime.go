@@ -91,7 +91,7 @@ func runtimeSessionDescription(record runtimesession.Record) string {
 
 // CompleteBackends offers the launch backends, for every --backend flag.
 func CompleteBackends(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
-	return []string{string(runtimesession.BackendKitty), string(runtimesession.BackendTmux)}, cobra.ShellCompDirectiveNoFileComp
+	return []string{string(runtimesession.BackendTmux)}, cobra.ShellCompDirectiveNoFileComp
 }
 
 // CompleteProjects suggests configured, unarchived project titles, each

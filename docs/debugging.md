@@ -5,7 +5,7 @@ intermittent icon or notification problem can be investigated after the fact.
 Start with the offline-first workflow. `tail` and `explain` read persisted state
 without contacting the daemon. `status` performs a read-only daemon health call
 without autostarting it, while `probe` sends a side-effect-free diagnostic
-request; neither mutates reducer or Kitty state:
+request; neither mutates reducer or terminal state:
 
 ```bash
 amx debug status
@@ -21,10 +21,8 @@ All four commands accept the same selectors: `--harness`, `--profile`,
 reports use schema v2; bundle manifests and causal-record wrappers also use
 schema v2. `probe`, `capture`, and `replay` remain schema v1. `tail --follow`
 follows only new persisted records and does not require a running daemon.
-For a Kitty target, `probe` uses the current `KITTY_LISTEN_ON` with its window
-number. Outside that Kitty instance, pass both `--window ID` and
-`--kitty-socket unix:/path/to/socket`; a window number alone is ambiguous
-across Kitty instances and is refused. Runtime-session probes use their ID.
+For a managed tmux session, `probe` uses its runtime session ID. Outside the
+session, pass `--runtime-session <id>`.
 
 When the first report is inconclusive, capture the exact selector and preserve
 a redacted artifact:
@@ -36,14 +34,14 @@ amx debug replay agent-mux-debug.tar.gz
 ```
 
 Bundle creation gathers the same read-only live health evidence as `status`
-plus a doctor snapshot, so it may contact the daemon and Kitty. It does not
-mutate either one. Add `--include-asl` when the failure crosses into
+plus a doctor snapshot, so it may contact the daemon. It does not
+mutate it. Add `--include-asl` when the failure crosses into
 agent-session-loop; see [Bundle modes and sharing](#bundle-modes-and-sharing).
 
 `replay` is strictly offline. It accepts an immutable journal directory, debug
 bundle, or `export-events` file and reconstructs routing, reducer decisions,
 restart boundaries, duplicate suppression, and render groups without opening a
-Kitty connection or daemon socket. Its schema-v1 report accepts both v1 and v2
+terminal connection or daemon socket. Its schema-v1 report accepts both v1 and v2
 diagnostic bundles and causal-record wrappers.
 
 ## Read-only snapshots, ordering, and graph limits
@@ -107,7 +105,7 @@ an error-outcome `hook.failure` marks a request failed only as a legacy fallback
 when no correlated `hook.delivery` exists. Intermediate error-outcome
 `hook.ipc_attempt` records are ignored, so a transient transport error that a
 later successful or duplicate terminal delivery resolves never contributes to
-the count. Neither does a hook declined as `outside_kitty`: a harness session
+the count. Neither does a hook declined outside a managed runtime session: a harness session
 started in an IDE or another terminal still runs the hooks its home installs,
 and there is nothing for Agent Mux to deliver them to. Drops are expected around a daemon restart:
 the daemon client performs bounded auto-start retries within the hook
@@ -133,15 +131,16 @@ counts.
 ## Tracing a harness process exit
 
 When `spec commit` (or another pipe-mode invocation) leaves a bolt behind,
-capture the Kitty window ID before reproducing it, then trace both discovery
+capture the runtime session's daemon slot before reproducing it, then trace both discovery
 and settlement:
 
 ```bash
 spec commit
-amx debug tail --stage hook.process_detection --window "$KITTY_WINDOW_ID" --last 20 --json
-amx debug tail --stage daemon.process_lifecycle --window "$KITTY_WINDOW_ID" --last 20 --json
-amx debug explain --window "$KITTY_WINDOW_ID" --json
-amx daemon export-events --window "$KITTY_WINDOW_ID" --last 100 --pretty=false |
+AMX_SLOT=$(amx daemon export-events --current-window --last 1 --pretty=false | jq -r '.windows[0].window_id')
+amx debug tail --stage hook.process_detection --window "$AMX_SLOT" --last 20 --json
+amx debug tail --stage daemon.process_lifecycle --window "$AMX_SLOT" --last 20 --json
+amx debug explain --window "$AMX_SLOT" --json
+amx daemon export-events --runtime-session "$AMX_RUNTIME_SESSION_ID" --last 100 --pretty=false |
   jq '.windows[] as $w | $w.events[] | select(.event == "HarnessProcessExited") as $exit | {exit: $exit, render: [$w.renderer.generations[]? | select(.generation == $exit.render_generation)]}'
 ```
 
@@ -195,8 +194,8 @@ native_session_max_mib = 128
 ```
 
 At the default `journal_detail = "standard"`, the hook client samples healthy
-traffic: success-class intermediate stages (`hook.kitty_detection`,
-`hook.window_resolution`, `hook.payload_read`, `hook.validation`,
+traffic: success-class intermediate stages (`hook.runtime_session`,
+`hook.payload_read`, `hook.validation`,
 `hook.process_detection`, `hook.capture`, `hook.ipc_attempt`,
 `hook.acknowledgement`) are not persisted, so one healthy hook event costs a
 few journal records instead of a dozen. `hook.delivery` is always written and
@@ -218,17 +217,14 @@ permissions or retention.
 Raw hook payload capture is separate and off by default:
 
 ```bash
-amx debug capture start --window 42 --duration 10m --include-hook-payloads
 amx debug capture start --runtime-session rs-0123456789abcdef0123456789abcdef --include-hook-payloads
 amx debug capture status
 amx debug capture stop
 ```
 
-A capture is scoped to a Kitty window, a runtime session, and/or a harness.
-With none named it is scoped to the session the command is typed in: its
-runtime session when it has one, else its Kitty window. A tmux session's hooks
-carry no window ID, so `--runtime-session` (or that default) is the only way
-to scope a capture to one.
+A capture is scoped to a runtime session and/or a harness. With none named it
+uses the managed session the command is typed in. Use `--runtime-session` to
+scope a capture when running the command elsewhere.
 
 Non-interactive capture start also requires `--yes`. Captures expire after at
 most 60 minutes, share a fixed 64 MiB quota, are purged after 24 hours, and are
@@ -280,7 +276,7 @@ decodes it into typed values, so a field a newer ASL adds is dropped at the
 boundary rather than published unreviewed.
 
 Bundle creation never depends on any of it succeeding. If ASL, AgentMux's
-bridge, or Kitty is unavailable — or ASL predates the subcommand, is disabled
+bridge is unavailable — or ASL predates the subcommand, is disabled
 in `[defaults.asl]`, hangs, exceeds the read ceiling, or emits something
 unreadable — `asl-export.json` is absent and both `manifest.json` and
 `asl-correlation.json` name the reason. Repeated capture over frozen inputs is
@@ -300,7 +296,7 @@ Claude observer receipts such as `InstructionsLoaded`, `CwdChanged`, and
 `WorktreeCreate` are intentionally not installed because they require matcher
 or response semantics Agent Mux does not own. Codex edit approvals and
 `request_user_input` waits are screen-authoritative: an early native tool-start
-receipt remains active, and the daemon's conservative Kitty-screen probe alone
+receipt remains active, and the daemon's conservative screen probe alone
 raises or retracts the visible question. Conservative here is exact and applies
 to the stop fallback on both screen harnesses: the classifier computes every
 veto first and unconditionally and only then consults *positive* terminal
@@ -358,7 +354,7 @@ request, or source-event ID from `tail`.
 | --- | --- | --- |
 | Disabled or untrusted hook | `debug status` activation finding; explanation `hook_disabled` or `hook_untrusted` | Correct the effective harness/profile setting, then run `amx config hooks-sync` |
 | Invalid payload | `hook.validation` rejected and quarantined `daemon.decision`; raw body absent unless temporary capture was authorized | `amx debug explain --request <id>` |
-| Missing Kitty | `hook.kitty_detection` rejected with `outside_kitty`; reached only when the hook carries no `AMX_RUNTIME_SESSION_ID` | Confirm the hook came from a managed session: a tmux session sets `AMX_RUNTIME_SESSION_ID` (delivered via `hook.runtime_session`), a Kitty session sets `KITTY_LISTEN_ON` |
+| Missing runtime session | `hook.runtime_session` rejects a hook without a managed session identity | Confirm the hook came from an Agent Mux session carrying `AMX_RUNTIME_SESSION_ID` |
 | Invalid runtime session | `hook.runtime_session` rejected with `invalid_runtime_session` | Check the `AMX_RUNTIME_SESSION_ID` the harness inherited; it must be one Agent Mux issued |
 | Daemon unavailable | Numbered `hook.ipc_attempt` and `hook.daemon_autostart` stages ending in retryable delivery failure | Check `amx debug status`, daemon log, and binary identity |
 | Retry exhaustion | ASL `agent_mux_delivery` contains all attempts and final retryable outcome | Repair availability; ASL itself remains fail-open |
@@ -369,9 +365,9 @@ request, or source-event ID from `tail`.
 | Quarantined identity | `quarantined` decision with synthesized fallback identity and low confidence | Fix missing/malformed session identity; do not infer ownership from titles |
 | Reducer suppression | Decision reason such as reordered, duplicate source sequence, guard, or protected-state precedence | Inspect before/after reducer evidence in `debug explain --json` |
 | Missing terminal hook / process exit | `hook.process_detection`, a committed `daemon.process_lifecycle`, `HarnessProcessExited`, and explanation `process_lifecycle_recovery` share the exact fingerprint and render generation | Use the tracing commands above; distinguish `missing` from `replaced_instance`, then confirm the linked renderer generation completed |
-| Render failure | `daemon.renderer.failed`, retained dirty generation, and doctor renderer drift | Restore Kitty remote control; the same generation remains retryable |
+| Render failure | `daemon.renderer.failed`, retained dirty generation, and doctor renderer drift | Check `amx backend status` and the tmux server; the same generation remains retryable |
 | Notification dispatch failure | `daemon.notification.dispatch` or `daemon.notification.focus` failed with `send_failed`, `backend_timeout`, or `focus_failed`; explanation `notification_failure` | Inspect the backend error and daemon lifecycle; do not treat delivery failure as policy suppression |
-| Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `quiet_hours`, `snoozed`, `cooldown`, `backend_unavailable`, `focus_unavailable`, `focus_target_missing`, `focus_target_stale`, `focus_no_viewer`, `focus_delegated`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Run `amx daemon status` and `amx doctor` for Alerter capability failures. For focus failures, verify the originating Kitty socket and window still exist; for a tmux session, `focus_no_viewer` means no workspace was connected and no terminal was attached to switch, and `focus_delegated` means the companion app asked for the session itself. Change notification policy only if the suppression was unintended |
+| Notification suppression | `daemon.notification.decision` or `daemon.notification.focus` suppressed with `muted`, `pipe_mode`, `config_disabled`, `quiet_hours`, `snoozed`, `cooldown`, `backend_unavailable`, `focus_unavailable`, `focus_target_missing`, `focus_target_stale`, `focus_no_viewer`, `focus_delegated`, `unsupported_action`, `interaction_timeout`, or dismissal; `daemon.notification.dispatch` cancelled with `daemon_shutdown`; explanation `notification_suppression` | Run `amx daemon status` and `amx doctor` for Alerter capability failures. For focus failures, check that the runtime session is still live. `focus_no_viewer` means no workspace was connected and no terminal was attached to switch, and `focus_delegated` means the companion app asked for the session itself. Change notification policy only if the suppression was unintended |
 | Quota exhaustion | Capture/native status reports the bounded quota and denied or pruned write | Stop/purge capture or reduce retention; active native launches remain protected |
 | Restart recovery | Daemon lifecycle boundary plus restored reducer facts and later render generation | Compare CLI/daemon build, then replay the journal or bundle offline |
 | Failed paired release gate | `<pair-id>.json` in the evidence directory: the failing step's `exit_code` and `output_tail`, with every later step recorded `not-run` | Read the record, not the terminal scrollback. See below |
@@ -392,7 +388,7 @@ The step names map to what to look at next:
 | Failing step | What it means | First response |
 | --- | --- | --- |
 | (no steps ran, a repository is `clean: false`) | A working tree had uncommitted changes | Commit or stash; `dirty` in the record names the paths |
-| `cockpit-smoke` at `backend status --check` or the tmux round trip | No usable tmux: none on `PATH` (or at `[defaults.tmux] path`), older than 3.5, or it started no live pane | `amx backend status` names the tmux tried and why; install tmux 3.5 or newer. The gate needs no Kitty |
+| `cockpit-smoke` at `backend status --check` or the tmux round trip | No usable tmux: none on `PATH` (or at `[defaults.tmux] path`), older than 3.5, or it started no live pane | `amx backend status` names the tmux tried and why; install tmux 3.5 or newer |
 | `harness-compat` | A harness is outside the pinned window or unreadable | `asl harness-compat --json`; `unknown` warns, `incompatible` blocks |
 | `contract-sync` | The vendored corpus drifted from ASL's canonical one | Re-vendor `internal/aslcontract/corpus`, then `just test` |
 | `paired-integration` | The installed `asl` is missing or speaks a different protocol | `amx config asl-sync --check`, then the ASL dimension table above |
@@ -409,8 +405,8 @@ produced it; `"result"` says whether the pair passed. Check both.
 `just check` includes a deterministic fake-harness acceptance fixture covering
 the hook command, journal, Unix IPC, daemon decision, duplicate acknowledgement,
 renderer, notification suppression, share bundle, replay, restart-safe evidence,
-and ASL correlation. It has no model usage and never contacts a real provider,
-Kitty instance, or notification backend.
+and ASL correlation. It has no model usage and never contacts a real provider
+or notification backend.
 
 Actual provider smoke is operator-attended and deliberately separate:
 
@@ -425,10 +421,10 @@ Actual provider smoke is operator-attended and deliberately separate:
    operator intentionally incurred and recorded the provider/model usage.
 
 The native-notification protocol smoke does not require provider/model usage.
-Create a disposable, unfocused Kitty window with a unique managed session ID,
-send one terminal lifecycle event from that window, and leave the notification
+Create a disposable, unfocused tmux session with a unique runtime session ID,
+send one terminal lifecycle event from that session, and leave the notification
 untouched through alerter's five-minute protocol timeout. Keep the disposable
-window open so renderer ticks continue. The exact-window tail must contain
+session running so renderer ticks continue. Its exact-session tail must contain
 `daemon.notification.dispatch` as `sent/send_success`, followed by
 `daemon.notification.focus` as `suppressed/interaction_timeout`, with no
 `failed/send_failed` or `failed/backend_timeout`. Record the baseline and final

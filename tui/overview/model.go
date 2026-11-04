@@ -12,8 +12,7 @@
 // that is the design rather than a convenience. Like tui/customization it is a
 // sibling of the root tui package rather than one of its leaves: cmd/dashboard
 // runs it directly, and the root does not import it. The root model warms
-// transcripts, plans, health and agent-session-loop discovery on startup, owns
-// the two Kitty writes a refresh may perform, and carries a dozen modes'
+// transcripts, plans, health and agent-session-loop discovery on startup, and carries a dozen modes'
 // state; an overview raised over a pane needs none of it and must not pay for
 // any of it. So this package constructs nothing from tui and imports nothing
 // from it.
@@ -25,11 +24,8 @@
 // what lets the package-level acceptance sequences drive the real Update/View
 // loop — startup, coalescing, staleness, focus success and failure, and an
 // action parked and completed — against a frozen clock, scripted snapshots,
-// and a recording Kitty client, with no daemon, no wall clock, and no sleeps
-// anywhere. The Kitty client is stored only to be handed to the default seams
-// that reach it, which is why a test may construct the model with a nil
-// client: with the seams replaced there is no path that touches it, and a
-// regression that grew one would panic rather than pass.
+// with no daemon, no wall clock, and no sleeps anywhere. The injected command
+// seams let tests record effects without launching a terminal command.
 //
 // Three properties are the package rather than details of it.
 //
@@ -43,9 +39,9 @@
 // commands.RefreshOverview — the dashboard's own reader with its write budget
 // removed — and never commands.Refresh, so it cannot consume the dashboard's
 // pending selection request. Startup, every refresh, every navigation key, the
-// `?` help overlay, and browsing the `a` actions menu write nothing to Kitty at
+// `?` help overlay, and browsing the `a` actions menu leave terminal state alone,
 // all, and `c` is no exception either, since it saves only the daemon's
-// in-memory compact preference. Every Kitty MUTATION is therefore one the
+// in-memory compact preference. Every terminal mutation is therefore one the
 // operator explicitly asked for: the focus call that Enter, a digit, a click on
 // a tile, and the menu's Open entry share, and the twelve session actions the menu dispatches
 // under the same declarations, availability rules, and confirm_destructive
@@ -74,7 +70,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
@@ -110,7 +105,7 @@ type deps struct {
 	// message it produces carries that sequence back, which is what lets the
 	// controller tell its own completion from one that was superseded.
 	topology func(seq, sourceWindowID int) tea.Cmd
-	// focus acts on one Kitty tab. It is the read-only surface's one exception,
+	// focus acts on one session. It is the read-only surface's one exception,
 	// reached by Enter, by a digit, and by the menu's Open entry.
 	focus func(tabID int) tea.Cmd
 	// action runs one dispatched session action. Every mutation the grid can ask
@@ -138,14 +133,14 @@ type deps struct {
 }
 
 // defaultDeps binds the seams to the real world. It is the one place in the
-// package that names a clock or builds a command that can reach Kitty.
-func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
+// package that names a clock or builds a command that can reach the terminal.
+func defaultDeps(cfg *config.Config, client any) deps {
 	return deps{
 		preferences: commands.OverviewPreferences,
 		topology: func(seq, sourceWindowID int) tea.Cmd {
-			return commands.RefreshOverview(client, cfg, seq, sourceWindowID)
+			return commands.RefreshOverview(cfg, seq, sourceWindowID)
 		},
-		focus: func(tabID int) tea.Cmd { return commands.Focus(client, tabID) },
+		focus: func(tabID int) tea.Cmd { return commands.Focus(tabID) },
 		action: func(d sessionactions.Dispatch) tea.Cmd {
 			return actionCommand(cfg, client, d)
 		},
@@ -154,7 +149,7 @@ func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 		},
 		tick: commands.Tick,
 		capture: func(req commands.CaptureRequest) tea.Cmd {
-			return commands.CaptureScreen(commands.OverviewCaptureSources(client), req)
+			return commands.CaptureScreen(commands.OverviewCaptureSources(), req)
 		},
 		captureTick: commands.CaptureTick,
 		now:         time.Now,
@@ -170,7 +165,7 @@ func defaultDeps(cfg *config.Config, client kitty.KittyClient) deps {
 // value to keep in step.
 type model struct {
 	cfg    *config.Config
-	client kitty.KittyClient
+	client any
 	deps   deps
 
 	interval      time.Duration
@@ -271,7 +266,7 @@ type model struct {
 // would be discarded along with its copy, and the first interval tick would see
 // an idle controller and start a second concurrent startup refresh. Init's job
 // is therefore only to DISPATCH the refresh this constructor already reserved.
-func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) model {
+func newModel(cfg *config.Config, client any, sourceWindowID int) model {
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {
 		interval = defaultRefreshInterval
@@ -375,10 +370,10 @@ func (m model) selectedSession() (session.RunningSession, bool) {
 // leaves the first session selected instead.
 //
 // The signal handler is left off, as it is for the other surfaces raised in a
-// Kitty overlay window: this model binds ctrl+c itself as dismissal, and a
+// overlay window: this model binds ctrl+c itself as dismissal, and a
 // second handler racing that binding would make which of the two wins depend on
 // scheduling.
-func Run(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) error {
+func Run(cfg *config.Config, client any, sourceWindowID int) error {
 	p := tea.NewProgram(newModel(cfg, client, sourceWindowID), tea.WithoutSignalHandler())
 	_, err := p.Run()
 	return err

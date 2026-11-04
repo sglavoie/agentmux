@@ -13,7 +13,7 @@
 // sequence at all. A capture is arbitrary bytes from somebody else's terminal,
 // and an unterminated SGR in the left tile would otherwise paint the right one.
 //
-// Nothing here reads a clock, a config file, Kitty, or the daemon. Now, the
+// Nothing here reads a clock, a config file, the terminal, or the daemon. Now, the
 // sessions, and every preview are supplied.
 
 package overview
@@ -158,7 +158,7 @@ type Input struct {
 	// SourceTabID is the managed tab this overview was opened from, or zero
 	// for an unmanaged source. It is independent of the keyboard selection.
 	SourceTabID int
-	// Previews is keyed by Kitty window ID. A session with no entry is showing a
+	// Previews is keyed by pane target. A session with no entry is showing a
 	// read that has not landed yet — InspectorLoading — which is the true state of
 	// every tile on the first frame and is distinct from a read that came back
 	// empty.

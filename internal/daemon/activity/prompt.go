@@ -6,7 +6,7 @@ import (
 )
 
 // CodexPromptKind identifies the user-blocking Codex TUI prompt visible in a
-// Kitty screen scrape. The kinds themselves are harness knowledge and live in
+// terminal screen capture. The kinds themselves are harness knowledge and live in
 // internal/screenstate; this alias and the constants below exist so daemon
 // callers keep naming them without importing that package.
 type CodexPromptKind = screenstate.CodexPromptKind
@@ -64,7 +64,7 @@ func codexPromptResult(kind CodexPromptKind, action string) CodexPromptClassific
 }
 
 // ClaudePromptKind identifies the user-blocking Claude Code prompt visible in a
-// Kitty screen scrape. Like the Codex kinds above it is harness knowledge
+// terminal screen capture. Like the Codex kinds above it is harness knowledge
 // living in internal/screenstate; this alias and the constants below exist so
 // daemon callers keep naming them without importing that package.
 type ClaudePromptKind = screenstate.ClaudePromptKind

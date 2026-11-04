@@ -10,7 +10,7 @@ import (
 func TestCodexNewClearsCompletionWithTruncatedFooterOnEitherBackend(t *testing.T) {
 	fresh := readCodexCapture(t, "codex_new_narrow.txt")
 	finished := tmuxCapture(t, "codex_idle_completed_t0.txt")
-	eachProbedBackendOf(t, probedCodex, func(t *testing.T, s *probedSession) {
+	eachProbedTmuxOf(t, probedCodex, func(t *testing.T, s *probedSession) {
 		for range 2 {
 			now := codexStopped(t, s)
 			notified := s.rec.len()

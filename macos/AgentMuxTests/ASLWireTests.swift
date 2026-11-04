@@ -30,7 +30,7 @@ final class ASLWireTests: XCTestCase {
         let reply = """
         {"ok":true,"asl_result":{"status":{"mode":"auto","available":true,"mutations_enabled":true,"restart_count":0},
         "snapshot":{"protocol":2,"rows":[{"row_id":"r1","plan_dir":"/p","label":"api","run_id":"run-1","session_id":"3",
-        "primary_state":"waiting","urgency_rank":1,"window":{"kitty_window_id":7},"question":{"context_kind":"question",
+        "primary_state":"waiting","urgency_rank":1,"question":{"context_kind":"question",
         "question_id":"q1","unanswered_count":2,"question_ids":["q1","q2"],"asked_at":"2026-10-03T10:00:00Z"},
         "actions":["question.reply","question.resolve"],"disabled_reasons":{"run.resume":"not paused"},
         "action_token":"tok","warnings":null}],"digest":"d"},
@@ -91,7 +91,7 @@ final class ASLWireTests: XCTestCase {
     // MARK: Menu
 
     private func session(_ id: Int, run: String = "", icon: String = "question") -> CompanionSession {
-        var s = CompanionSession(windowID: id)
+        var s = WorkspaceFixture.tmux(id, project: "p\(id)")
         s.iconState = icon
         s.attention = icon == "question"
         s.project = "p\(id)"
@@ -99,10 +99,9 @@ final class ASLWireTests: XCTestCase {
         return s
     }
 
-    private func waiting(_ run: String, window: Int, unanswered: Int = 1, plan: String = "") -> CompanionASLWaiting {
+	private func waiting(_ run: String, unanswered: Int = 1, plan: String = "") -> CompanionASLWaiting {
         var w = try! JSONDecoder().decode(CompanionASLWaiting.self, from: Data("{}".utf8))
         w.runID = run
-        w.windowID = window
         w.unanswered = unanswered
         w.planDir = plan
         return w
@@ -126,32 +125,20 @@ final class ASLWireTests: XCTestCase {
 
     func testAnswerFollowsTheSessionItsRunBelongsTo() {
         let list = entries([session(1, run: "run-a"), session(2, icon: "bolt")],
-                           [waiting("run-a", window: 1, unanswered: 3, plan: "/plans/api")])
+						   [waiting("run-a", unanswered: 3, plan: "/plans/api")])
         let found = answers(list)
         XCTAssertEqual(found.count, 1)
-        XCTAssertEqual(found.first?.0, ASLAnswerTarget(runID: "run-a", planDir: "/plans/api", windowID: 1))
+		XCTAssertEqual(found.first?.0, ASLAnswerTarget(runID: "run-a", planDir: "/plans/api"))
         XCTAssertEqual(found.first?.1, "Answer… (3 questions)")
         XCTAssertEqual(found.first?.2, true)
         let index = list.firstIndex { if case .answer = $0 { return true }; return false }!
         guard case let .session(row) = list[index - 1] else { return XCTFail("Answer… does not follow its row") }
-        XCTAssertEqual(row.windowID, 1)
+        XCTAssertEqual(row.runtimeSessionID, WorkspaceFixture.runtimeID(1))
         XCTAssertTrue(row.title.hasPrefix("❓"))
     }
 
-    func testAnswerBindsByWindowOnlyWhenUnambiguous() {
-        // One session with the window ID and no run of its own: bound.
-        XCTAssertEqual(answers(entries([session(4)], [waiting("run-b", window: 4)])).first?.2, true)
-        // Two Kitty instances both have a window 4: not bound to either.
-        var other = session(4)
-        other.kittySocket = "unix:/tmp/other"
-        let ambiguous = entries([session(4), other], [waiting("run-b", window: 4, plan: "/plans/web")])
-        XCTAssertEqual(answers(ambiguous).map(\.1), ["❓ web · Answer…"])
-        XCTAssertEqual(answers(ambiguous).first?.2, false)
-        XCTAssertTrue(ambiguous.contains(.header("Supervisor questions")))
-    }
-
     func testUnlistedRunsGetTheirOwnSection() {
-        let list = entries([], [waiting("run-z", window: 0)])
+		let list = entries([], [waiting("run-z")])
         XCTAssertTrue(list.contains(.info("No live sessions")))
         XCTAssertEqual(answers(list).map(\.1), ["❓ run-z · Answer…"])
         XCTAssertTrue(answers(entries([session(1, icon: "bolt")], [])).isEmpty)

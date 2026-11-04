@@ -10,7 +10,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -61,7 +60,7 @@ func claudeScreenIdleFields(
 	st *state.WindowState,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 ) screenIdleFields {
 	fields := screenIdleFields{
 		sessionTitle: titleParts.Base,
@@ -82,28 +81,6 @@ func claudeScreenIdleFields(
 	return fields
 }
 
-// ProbeClaudeScreenStop scans managed Claude windows for a finished interactive
-// turn — a normal completion or a user interruption — whose native Stop hook
-// never arrived, leaving a stuck ⚡. It lists windows, runs the probe against the
-// snapshot, and renders. Production drives the probe from runScreenProbes with
-// the cached snapshot; this wrapper mirrors ProbeClaudeContextLimit for callers
-// (and tests) that want the full list+render round-trip.
-func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
-	client, socket := h.kittyListTarget()
-	if client == nil {
-		return
-	}
-	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
-	windows, err := client.ListWindows()
-	if err != nil {
-		slog.Debug("claude stop probe: list windows failed", "err", err)
-		return
-	}
-	h.probeClaudeScreenStopWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
-		h.screenTextCacheForSocket(socket))
-	h.renderSnapshotFor(windows, socket)
-}
-
 // probeClaudeScreenStopWithSnapshot walks the Claude routes in one snapshot and
 // hands each to the shared screen idle probe body (screen_idle_probe.go). The
 // only Claude-specific step left here is the busy-title recovery below.
@@ -114,47 +91,6 @@ func (h *Handler) ProbeClaudeScreenStop(now time.Time) {
 // empty target to ⚡. Otherwise, only a target whose current reduced icon is a
 // stuck ⚡ is considered: any other visible state is either already terminal or a
 // higher-precedence icon the idle path must never downgrade.
-func (h *Handler) probeClaudeScreenStopWithSnapshot(
-	now time.Time,
-	snapshot probes.Snapshot,
-	screens *activity.ScreenTextCache,
-) {
-	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
-		if !ok {
-			continue
-		}
-		_, _, source, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.SourceWindowID)
-		if !ok {
-			continue
-		}
-		titleParts := palette.ParseTitleParts(tab.Title)
-
-		// A description title recovers a hook-missed empty tab to ⚡ before the
-		// bolt-only idle eligibility gate inside the shared body. The helper
-		// revalidates the exact snapshot binding and only mutates an empty reduced
-		// icon; terminal and higher-precedence states are never replaced.
-		//
-		// It deliberately does not veto the screen read that follows. Claude keeps
-		// a description title long after its turn ends, so a title that stopped the
-		// probe here would leave an idle pane permanently unable to settle. A
-		// committed promotion bumps ShadowSeq and so fails the eligibility check on
-		// this same tick; every other tick reads the screen, which is authoritative
-		// for whether a turn is actually running.
-		if activity.ClaudeWindowTitleHasDescriptionMarker(source.Title) {
-			h.recoverClaudeBusyTitle(now, binding, titleParts, target.UserVars, source.Title)
-		}
-
-		// Labelling an already-blocked pane is disjoint from settling a stuck ⚡:
-		// this reads only 🔑/❓ windows and the idle probe below reads only ⚡
-		// ones, so no pane is classified twice and the per-tick screen cache is
-		// never asked for a capture both would want.
-		h.stampClaudePromptKind(binding, screens)
-
-		h.probeScreenIdle(now, claudeScreenIdleSpec, binding, titleParts, target.UserVars, source.Title, screens)
-	}
-}
-
 // stampClaudePromptKind labels a Claude window that is ALREADY blocked with
 // which prompt is on its screen, feeding state.WindowState.PromptKind — the
 // same field the Codex prompt probe writes (see
@@ -168,7 +104,7 @@ func (h *Handler) probeClaudeScreenStopWithSnapshot(
 //
 // The blocking-icon gate is also what bounds the cost. It runs before the
 // screen read, so an ordinary working or resting pane pays nothing, and a pane
-// that IS blocked is a pane whose user is being waited on — one cached Kitty
+// that IS blocked is a pane whose user is being waited on — one cached terminal
 // capture per probe tick is not a cost anyone is counting. The gate is
 // promptKindBlockingIcon, the same predicate stampPromptKindLocked clears
 // against, so this can never write a kind that the next publish would strip.
@@ -180,7 +116,7 @@ func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activit
 	targetWindowID := binding.TargetSlot()
 
 	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, "", promptKindBlockingIcon) {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, promptKindBlockingIcon) {
 		h.stateMu.Unlock()
 		return
 	}
@@ -209,7 +145,7 @@ func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activit
 	// before it mutates: the prompt may have been answered while the capture was
 	// in flight, and a kind written onto a window that has moved on is the stale
 	// reason this whole field is arranged to prevent.
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, "", promptKindBlockingIcon) {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, promptKindBlockingIcon) {
 		return
 	}
 	st, ok := h.windowStateLocked(targetWindowID)
@@ -221,7 +157,7 @@ func (h *Handler) stampClaudePromptKind(binding probes.Binding, screens *activit
 
 // recoverClaudeBusyTitle promotes an empty managed Claude target to active from
 // the pane title's busy marker. It deliberately performs no screen read: the
-// marker is already part of the causally-bound Kitty snapshot, and the caller
+// marker is already part of the causally-bound pane capture, and the caller
 // scrapes the screen on the same tick. Existing icons are left untouched,
 // including stop and every attention/error state. Promotion is one-shot per
 // marker body (see WindowState.promotedBusyBody): a title that outlives the turn
@@ -233,7 +169,7 @@ func (h *Handler) recoverClaudeBusyTitle(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	sourceWindowTitle string,
 ) {
 	targetWindowID := binding.TargetSlot()

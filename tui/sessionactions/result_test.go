@@ -45,10 +45,10 @@ func TestResultCarriesActionRequestAndTarget(t *testing.T) {
 
 // TestNonSuccessOutcomesAreDistinct keeps the four outcomes apart. Refused and
 // failed in particular must not collapse: one is the dashboard declining to
-// try, the other an attempt that reached Kitty and did not work.
+// try, the other an attempt that reached tmux and did not work.
 func TestNonSuccessOutcomesAreDistinct(t *testing.T) {
 	refused := Result{Action: commands.CloseSession, Outcome: OutcomeRefused, Detail: commands.ReasonLocked}
-	failed := Result{Action: commands.CloseSession, Outcome: OutcomeFailed, Detail: "kitty refused", Err: errors.New("closed")}
+	failed := Result{Action: commands.CloseSession, Outcome: OutcomeFailed, Detail: "tmux refused", Err: errors.New("closed")}
 	cancelled := Result{Action: commands.OverrideProfile, Outcome: OutcomeCancelled}
 
 	for _, result := range []Result{refused, failed, cancelled, {}} {

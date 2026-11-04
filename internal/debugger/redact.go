@@ -52,7 +52,7 @@ var (
 		event evidence evidence_graph evidence_ids expected_sequences expires_at external files files_read findings finished_at
 		first_failed_stage first_missing_stage from generated_at go_version graph_depth harness harness_counts harness_session_id health healthy
 		hook_silence_seconds hook_status hooks id identity issues journal journal_enabled journal_keep_days journal_max_mib journal_snapshot journal_snapshot_scope kind legacy_claim_files
-		kitty_available last_seen last_seen_age_seconds last_seen_events latency_ms launch_id launch_max_bytes level local_only
+		last_seen last_seen_age_seconds last_seen_events latency_ms launch_id launch_max_bytes level local_only
 		limits managed max_bytes max_edges max_nodes message missing_steps mode module native native_keep_days native_logging native_max_mib
 		native_session_max_mib nodes normalized_source_id normalized_source_sequence observed_at observed_schemas observed_steps oldest_spool_mod_time outcome outcomes
 		override parent_trace_id path payload_hmac payload_size pid producer_source_id producer_source_sequence profile profile_count
@@ -84,7 +84,7 @@ var (
 		last_duration_ms max_duration_ms failure_class ended released detached known live tmux servers attached
 		unattached reads limit commands timeouts in_flight max_in_flight queued max_queue_ms
 		backend launch_backend server running agents min_version problems severity candidates verified
-		versions amx go kitty notifier notifier_version companion_app tmux_source tmux_min
+		versions amx go notifier notifier_version companion_app tmux_source tmux_min
 		duration_ms live_sessions attached_sessions
 	`)
 )
@@ -337,7 +337,7 @@ func isShareStringField(key string) bool {
 		"last_process_exit_observation", "before_icon", "after_icon", "before_source_kind", "after_source_kind",
 		"journal_detail",
 		// Backend and runtime health: fixed vocabularies and release numbers.
-		"failure_class", "launch_backend", "severity", "min_version", "amx", "go", "tmux", "kitty", "daemon",
+		"failure_class", "launch_backend", "severity", "min_version", "amx", "go", "tmux", "daemon",
 		"notifier", "notifier_version", "companion_app", "tmux_source", "tmux_min",
 		// Closed enums published by the ASL diagnostics export and by the
 		// cross-system correlation derived from it. Each is a fixed vocabulary

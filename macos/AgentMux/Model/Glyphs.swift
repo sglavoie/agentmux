@@ -1,8 +1,7 @@
 import Foundation
 
-/// The state glyphs Agent Mux paints into Kitty tab titles, read from the
-/// `internal/palette/icons.json` bundled with the app, so the menu bar and the
-/// tabs draw a state with the same character.
+/// State glyphs read from `internal/palette/icons.json` bundled with the app,
+/// so the menu bar and workspace use the same characters.
 struct Glyphs: Equatable {
     /// icon state → glyph (`"key"` → `"🔑"`).
     let states: [String: String]

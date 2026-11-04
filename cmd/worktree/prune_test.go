@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/worktree"
 )
@@ -50,8 +50,7 @@ func TestPrunableSelectsOnlyCleanInactiveValidWorktrees(t *testing.T) {
 }
 
 func TestWorktreePrunePreviewsThenRemoves(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	manager := resetWorktreeCommandsTestState(t)
 	t.Cleanup(func() {
 		worktreePruneCmd.SetOut(nil)
 		for _, flag := range []string{"yes", "merged", "delete-branch", "json"} {
@@ -94,8 +93,7 @@ func TestWorktreePrunePreviewsThenRemoves(t *testing.T) {
 }
 
 func TestWorktreePruneDeleteBranchExcludesUnmergedCandidate(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	manager := resetWorktreeCommandsTestState(t)
 	merged := false
 	manager.entries[0].ReachableFromSource = &merged
 	t.Cleanup(func() {
@@ -118,8 +116,7 @@ func TestWorktreePruneDeleteBranchExcludesUnmergedCandidate(t *testing.T) {
 }
 
 func TestWorktreePruneMergedRechecksMergeAtRemoval(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
+	manager := resetWorktreeCommandsTestState(t)
 	merged := true
 	manager.entries[0].ReachableFromSource = &merged
 	t.Cleanup(func() {
@@ -143,7 +140,10 @@ func TestWorktreePruneMergedRechecksMergeAtRemoval(t *testing.T) {
 }
 
 func TestWorktreePruneLeavesAnActiveWorktreeAlone(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t) // the fixture's live session sits in wt-1
+	manager := resetWorktreeCommandsTestState(t)
+	worktreeCommandsTmuxSessions = func(backend.TargetLauncher, *config.Config) ([]session.RunningSession, error) {
+		return []session.RunningSession{{RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef", Backend: "tmux", Directory: manager.entries[0].Path}}, nil
+	}
 	t.Cleanup(func() { worktreePruneCmd.SetOut(nil); _ = worktreePruneCmd.Flags().Set("yes", "false") })
 	if err := worktreePruneCmd.Flags().Set("yes", "true"); err != nil {
 		t.Fatal(err)
@@ -162,11 +162,10 @@ func TestWorktreePruneLeavesAnActiveWorktreeAlone(t *testing.T) {
 // removal, reported as incomplete: "kept" would send the operator looking for
 // a checkout that is gone. The exit stays nonzero, since not all was done.
 func TestWorktreePruneReportsACheckoutRemovedWithoutItsBranchAsRemoved(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	merged := true
 	manager.entries[0].ReachableFromSource = &merged
 	manager.branchErr = errors.New("branch wt-branch is not fully merged")
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) { return nil, nil }
 	t.Cleanup(func() {
 		worktreePruneCmd.SetOut(nil)
 		for _, flag := range []string{"yes", "delete-branch", "json"} {

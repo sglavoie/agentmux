@@ -15,7 +15,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         var rows = [
             F.tmux(1, project: "api", profile: "work"),
             F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 300_000),
-            F.kitty(4, project: "web", icon: "key", attention: true, changedAtMS: 60_000),
+            F.tmux(4, project: "web", icon: "key", attention: true, changedAtMS: 60_000),
         ]
         rows[1].unseen = true
         return rows
@@ -63,12 +63,12 @@ final class WorkspaceInspectorTests: XCTestCase {
         // completed under Done, though it has waited the least.
         var listed = sessions
         listed[2].presentationChangedAtMS = 540_000
-        let waiting = WorkspaceInspector.waiting(listed, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
+        let waiting = WorkspaceInspector.waiting(listed, now: now, glyphs: .fallback)
         XCTAssertEqual(waiting.map(\.title), ["web — work", "api — personal"], "not the one that waited longest first")
-        XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 1m · Kitty", "Turn complete · 5m"])
+        XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 1m", "Turn complete · 5m"])
         XCTAssertEqual(waiting.map(\.glyph), ["🔑", "✓"])
         XCTAssertEqual(waiting.map(\.key), [
-            AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4), .embedded(F.runtimeID(2)),
+            .embedded(F.runtimeID(4)), .embedded(F.runtimeID(2)),
         ])
     }
 
@@ -89,30 +89,30 @@ final class WorkspaceInspectorTests: XCTestCase {
             F.tmux(1, project: "api", icon: "key", attention: true),
             F.tmux(2, project: "docs", icon: "stop", attention: true),
             looping,
-            F.kitty(4, project: "web", icon: "key", attention: true),
-            F.kitty(5, project: "zed", icon: "question", attention: true),
+            F.tmux(4, project: "web", icon: "key", attention: true),
+            F.tmux(5, project: "zed", icon: "question", attention: true),
             F.tmux(6, project: "ops", icon: "error", attention: true),
         ]
         var tmuxRun = CompanionASLWaiting()
         tmuxRun.runID = "run-3"
         tmuxRun.planDir = "/plans/loop"
-        var kittyRun = CompanionASLWaiting()
-        kittyRun.runID = "run-5"
-        kittyRun.planDir = "/plans/zed"
-        kittyRun.windowID = 5
+        var otherRun = CompanionASLWaiting()
+        otherRun.runID = "run-5"
+        otherRun.planDir = "/plans/zed"
+        otherRun.runtimeSessionID = F.runtimeID(5)
 
-        let rows = WorkspaceInspector.waiting(waiting, asl: [tmuxRun, kittyRun], snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
+        let rows = WorkspaceInspector.waiting(waiting, asl: [tmuxRun, otherRun], now: now, glyphs: .fallback)
         let answers = Dictionary(uniqueKeysWithValues: rows.map { ($0.title.components(separatedBy: " — ")[0], $0.answer) })
         XCTAssertEqual(answers["api"], .some(.prompt(runtimeSessionID: F.runtimeID(1))), "a prompt in a session the workspace embeds")
         XCTAssertEqual(answers["docs"], .some(nil), "a stopped agent asks nothing")
         XCTAssertEqual(answers["ops"], .some(nil))
         XCTAssertEqual(answers["loop"], .some(.asl(ASLAnswerTarget(runID: "run-3", planDir: "/plans/loop"))),
                        "a supervisor question is the run's mailbox to answer, never the pane's")
-        XCTAssertEqual(answers["web"], .some(nil), "a Kitty session's prompt is answered in Kitty")
-        XCTAssertEqual(answers["zed"], .some(.asl(ASLAnswerTarget(runID: "run-5", planDir: "/plans/zed", windowID: 5))),
-                       "a run is answered whichever terminal it is in")
+        XCTAssertEqual(answers["web"], .some(.prompt(runtimeSessionID: F.runtimeID(4))))
+		XCTAssertEqual(answers["zed"], .some(.asl(ASLAnswerTarget(runID: "run-5", planDir: "/plans/zed"))))
         XCTAssertEqual(WorkspaceInspector.waiting(waiting, now: now, glyphs: .fallback).compactMap(\.answer),
-                       [.prompt(runtimeSessionID: F.runtimeID(1)), .prompt(runtimeSessionID: F.runtimeID(3))],
+                       [.prompt(runtimeSessionID: F.runtimeID(1)), .prompt(runtimeSessionID: F.runtimeID(3)),
+                        .prompt(runtimeSessionID: F.runtimeID(4)), .prompt(runtimeSessionID: F.runtimeID(5))],
                        "with no waiting run known, only prompts are offered")
     }
 
@@ -227,9 +227,9 @@ final class WorkspaceInspectorTests: XCTestCase {
             .init(label: "Changes", value: "uncommitted"),
         ]))
 
-        let kitty = WorkspaceInspector.inspection(sessions[2], snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback)
-        XCTAssertFalse(kitty.embedded)
-        XCTAssertTrue(kitty.sections[1].fields.contains(.init(label: "Terminal", value: "window 4")))
+        let other = WorkspaceInspector.inspection(sessions[2], now: now, glyphs: .fallback)
+        XCTAssertTrue(other.embedded)
+        XCTAssertTrue(other.sections[1].fields.contains(.init(label: "Terminal", value: "tmux %4")))
     }
 
     func testTheInspectorAndItsTabAreKeptInDefaults() throws {
@@ -288,7 +288,7 @@ final class WorkspaceInspectorTests: XCTestCase {
                       "as a click on its line in the session list does")
 
         lines[0].press()
-        XCTAssertEqual(app.external.map(\.project), ["web"], "a Kitty session comes forward in Kitty")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)))
 
         var settled = sessions
         settled[1].attention = false
@@ -310,7 +310,7 @@ final class WorkspaceInspectorTests: XCTestCase {
 
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
         XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🔑 web — work", "✓ docs — work"])
-        XCTAssertEqual(lines.map { $0.answerButton?.title }, ["Answer…", nil, nil], "only what can be answered from here has the button")
+        XCTAssertEqual(lines.map { $0.answerButton?.title }, ["Answer…", "Answer…", nil])
 
         let button = try XCTUnwrap(lines[0].answerButton)
         XCTAssertTrue(button.refusesFirstResponder)
@@ -326,7 +326,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let children = (lines[0].accessibilityChildren() ?? []).compactMap { $0 as? NSAccessibilityProtocol }
         XCTAssertEqual(children.map { $0.accessibilityRole() }, [.button, .button], "answer and context remain accessible")
         XCTAssertEqual(children.first?.accessibilityLabel(), "Answer api — personal")
-        XCTAssertEqual(lines[1].accessibilityChildren()?.count, 1, "context remains available without an answer")
+        XCTAssertEqual(lines[1].accessibilityChildren()?.count, 2)
         XCTAssertEqual(button.accessibilityLabel(), "Answer api — personal")
 
         button.performClick(nil)
@@ -353,7 +353,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
         try XCTUnwrap(lines.first { $0.row.key == .embedded(F.runtimeID(2)) }?.answerButton).performClick(nil)
         XCTAssertEqual(app.answers, [.asl(ASLAnswerTarget(runID: "run-2", planDir: "/plans/api"))])
-        XCTAssertNil(lines.first { $0.row.key.windowID == 4 }?.answerButton, "the Kitty session next to it has no run and no button")
+        XCTAssertNotNil(lines.first { $0.row.key == .embedded(F.runtimeID(4)) }?.answerButton)
     }
 
     func testTheSessionTabFollowsThePaneAndItsButtonsAskTheApp() throws {
@@ -377,10 +377,9 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.openTerminalBesideSession()
         XCTAssertEqual(workspace.inspector.model.inspection?.title, "api — personal")
 
-        workspace.select(AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
+        workspace.select(.embedded(F.runtimeID(4)))
         buttons = workspace.inspector.actionButtons
-        XCTAssertEqual(buttons.map(\.isEnabled), [false, false, false, true, true, true, true],
-                       "a Kitty session is named, colored, and given its icon in Kitty")
+        XCTAssertEqual(buttons.map(\.isEnabled), [true, true, true, true, true, true, true])
     }
 
     func testAnIdentifierIsCopiedByAClickOnItsLine() throws {

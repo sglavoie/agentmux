@@ -4,8 +4,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
-	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // Route decisions recorded onto SessionEvent.RouteDecision: the firing pane
@@ -23,8 +21,6 @@ const (
 	RouteLookupSourceNotFound      = "source_not_found"
 	RouteLookupSourceFound         = "source_found"
 )
-
-const maxRoutingEvidenceWindows = 16
 
 func EnsureRequestTraceID(req protocol.Request) protocol.Request {
 	if (req.Type == protocol.TypeHookEvent || req.Type == protocol.TypeStateUpdate) && req.TraceID == "" {
@@ -89,31 +85,15 @@ func NewRoutingEvidence(sourceWindowID int) *protocol.RoutingEvidence {
 	}
 }
 
-func PopulateRoutingCandidates(evidence *protocol.RoutingEvidence, tab *kitty.Tab, source, owner *kitty.Window) {
-	if evidence == nil || tab == nil {
-		return
-	}
-	evidence.ConsideredWindowCount = len(tab.Windows)
-	for i := range tab.Windows {
-		if len(evidence.ConsideredWindows) >= maxRoutingEvidenceWindows {
-			break
-		}
-		win := &tab.Windows[i]
-		profile := win.UserVars.EffectiveProfile()
-		harnessName := harness.NormalizeKnown(win.UserVars.EffectiveHarness())
-		evidence.ConsideredWindows = append(evidence.ConsideredWindows, protocol.RoutingWindowEvidence{
-			WindowID: win.ID,
-			Harness:  harnessName,
-			Profile:  profile,
-			Managed:  profile != "" || harnessName != "",
-			Active:   win.IsActive,
-			Source:   source != nil && win.ID == source.ID,
-			Owner:    owner != nil && win.ID == owner.ID,
-		})
-	}
+// RouteTarget is the identity and presentation context needed for a routing
+// decision, independent of how the terminal supplied it.
+type RouteTarget struct {
+	WindowID int
+	Harness  string
+	Profile  string
 }
 
-func ChooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason string, target *kitty.Window) {
+func ChooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason string, target *RouteTarget) {
 	if evidence == nil {
 		return
 	}
@@ -125,12 +105,12 @@ func ChooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason s
 		}
 		return
 	}
-	evidence.TargetWindowID = target.ID
-	evidence.EffectiveHarness = harness.NormalizeKnown(target.UserVars.EffectiveHarness())
-	evidence.EffectiveProfile = target.UserVars.EffectiveProfile()
+	evidence.TargetWindowID = target.WindowID
+	evidence.EffectiveHarness = target.Harness
+	evidence.EffectiveProfile = target.Profile
 	evidence.OwnerMatched = evidence.TargetWindowID > 0 && decision == RouteDecisionOwner
 	for _, candidate := range evidence.ConsideredWindows {
-		if candidate.WindowID == target.ID {
+		if candidate.WindowID == target.WindowID {
 			continue
 		}
 		evidence.RejectedAlternatives = append(evidence.RejectedAlternatives, protocol.RejectedRouteEvidence{
@@ -138,18 +118,6 @@ func ChooseRoute(evidence *protocol.RoutingEvidence, decision, selectionReason s
 			Reason:   protocol.DecisionReasonNotSelected,
 		})
 	}
-}
-
-func RoutingWindowByID(tab *kitty.Tab, windowID int) *kitty.Window {
-	if tab == nil || windowID <= 0 {
-		return nil
-	}
-	for i := range tab.Windows {
-		if tab.Windows[i].ID == windowID {
-			return &tab.Windows[i]
-		}
-	}
-	return nil
 }
 
 func PropagateIngressTrace(dst *protocol.Request, src protocol.Request) {

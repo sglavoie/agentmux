@@ -74,7 +74,7 @@ func TestClickingATileFocusesTheSessionDrawnThere(t *testing.T) {
 				if quits(t, cmd) {
 					t.Fatal("a click must wait for the focus to be confirmed before exiting")
 				}
-				if _, cmd = send(t, next, commands.FocusDoneMsg{}); !quits(t, cmd) {
+				if _, cmd = send(t, next, commands.AttachDoneMsg{Switched: true}); !quits(t, cmd) {
 					t.Fatal("a confirmed click focus did not exit")
 				}
 			}

@@ -118,7 +118,6 @@ func writePlanState(t *testing.T, stateRoot, planDir, cwd string) {
 			"workspace_root":            cwd,
 			"registry_digest":           nil,
 			"harness":                   "claude",
-			"kitty_window_id":           nil,
 			"phase":                     "turn",
 			"session_id":                nil,
 			"turn_index":                nil,

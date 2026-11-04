@@ -32,13 +32,11 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.recentLimit, 15)
         XCTAssertTrue(preferences.useAppNotifications)
         XCTAssertNil(preferences.snoozeUntil)
-        XCTAssertEqual(preferences.kittySocketOverride, "")
         XCTAssertEqual(preferences.environment, [:])
         XCTAssertEqual(preferences.launchBackend, .workspace)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
         XCTAssertTrue(preferences.confirmBeforeClosing)
         XCTAssertNil(preferences.defaultFontSize)
-        XCTAssertEqual(preferences.dashboardPlace, .workspace)
     }
 
     func testWorkspacePreferencesRoundTripAndRejectUnknownValues() {
@@ -46,10 +44,10 @@ final class AppPreferencesTests: XCTestCase {
         var preferences = AppPreferences()
         preferences.launchBackend = .workspace
         preferences.openWorkspaceAtLaunch = true
-        preferences.dashboardPlace = .kitty
+        defaults.set("unsupported", forKey: "amxDashboardPlace")
         preferences.save(to: defaults)
         XCTAssertEqual(defaults.string(forKey: "amxLaunchBackend"), "workspace")
-        XCTAssertEqual(defaults.string(forKey: "amxDashboardPlace"), "kitty")
+        XCTAssertNil(defaults.string(forKey: "amxDashboardPlace"))
         XCTAssertEqual(AppPreferences.load(from: defaults), preferences)
 
         // The hidden default earlier builds read is the same key, so an
@@ -64,14 +62,13 @@ final class AppPreferencesTests: XCTestCase {
         let stray = AppPreferences.load(from: defaults)
         XCTAssertEqual(stray.launchBackend, .workspace)
         XCTAssertFalse(stray.openWorkspaceAtLaunch)
-        XCTAssertEqual(stray.dashboardPlace, .workspace)
     }
 
     func testKeysAreThePlannedNames() {
         XCTAssertEqual(AppPreferences.Key.all, [
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
-            "amxKittySocketOverride", "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
+            "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
             "amxSidebarZoomPercent", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
         ])
     }
@@ -90,7 +87,6 @@ final class AppPreferencesTests: XCTestCase {
         preferences.recentLimit = 5
         preferences.useAppNotifications = false
         preferences.snoozeUntil = Date(timeIntervalSince1970: 1_800_000_000)
-        preferences.kittySocketOverride = "unix:/tmp/kitty-1"
         preferences.environment = ["AMX_CONFIG": "~/x.toml", "PATH": "/bin"]
         preferences.save(to: defaults)
 
@@ -432,10 +428,6 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertTrue(model.snoozeDescription.hasPrefix("Snoozed until "), "snoozed_until is a Unix second")
         XCTAssertNotEqual(model.snoozeDescription, "Not snoozed")
         XCTAssertTrue(model.isSnoozed)
-        model.preferences.kittySocketOverride = "/tmp/kitty"
-        XCTAssertNotNil(model.kittySocketProblem)
-        model.preferences.kittySocketOverride = "tcp:localhost:1234"
-        XCTAssertNil(model.kittySocketProblem)
     }
 
     @MainActor
@@ -497,23 +489,6 @@ final class AppPreferencesTests: XCTestCase {
         controller.show()
         defer { controller.window.close() }
         XCTAssertEqual(reads, 2, "showing Settings re-reads it rather than showing the launch-time status")
-    }
-
-    func testKittySettingsShowOnlyWhileKittyIsInUseOrNamed() {
-        var preferences = AppPreferences()
-        XCTAssertFalse(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences),
-                       "a tmux-only setup is not shown a Kitty socket")
-        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: true, preferences: preferences))
-        preferences.kittySocketOverride = "unix:/tmp/kitty-1"
-        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences),
-                      "a socket set earlier stays visible so it can be cleared")
-        preferences.kittySocketOverride = "  "
-        XCTAssertFalse(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences))
-        preferences.launchBackend = .kitty
-        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences))
-        preferences.launchBackend = .workspace
-        preferences.dashboardPlace = .kitty
-        XCTAssertTrue(PreferencesModel.showsKittySettings(kittyInUse: false, preferences: preferences))
     }
 
     func testDaemonSettingsButtonsAreTitleCase() {

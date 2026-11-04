@@ -21,7 +21,6 @@ type projectionSeed struct {
 	Phase          string
 	WorkspaceRoot  string
 	Harness        string
-	KittyWindowID  int
 	SessionID      string
 	QuestionID     string
 	TurnIndex      any
@@ -93,10 +92,6 @@ func projectionDocument(t *testing.T, planDir string, seed projectionSeed) map[s
 	if seed.WorkspaceRoot != "" {
 		workspaceRoot = canonical(t, seed.WorkspaceRoot)
 	}
-	var kittyWindowID any
-	if seed.KittyWindowID > 0 {
-		kittyWindowID = seed.KittyWindowID
-	}
 	var harnessName any
 	if seed.Harness != "" {
 		harnessName = seed.Harness
@@ -122,7 +117,6 @@ func projectionDocument(t *testing.T, planDir string, seed projectionSeed) map[s
 		"workspace_root":            workspaceRoot,
 		"registry_digest":           registryDigest,
 		"harness":                   harnessName,
-		"kitty_window_id":           kittyWindowID,
 		"phase":                     phase,
 		"session_id":                sessionID,
 		"turn_index":                turnIndex,

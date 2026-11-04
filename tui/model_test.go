@@ -8,7 +8,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
@@ -23,21 +22,8 @@ func stubStateQuery(t *testing.T, query func() (protocol.Response, error)) {
 	t.Cleanup(func() { commands.StateQuery = previous })
 }
 
-// stubLocalKittySocket pins the Kitty instance the refresh believes it is
-// running inside, so a test that expects the daemon's answer to be consumed
-// does not depend on whether `go test` was launched from inside Kitty. The
-// refresh takes nothing from a daemon it cannot prove shares its instance —
-// neither the window tree nor the per-window state keyed by that instance's
-// window IDs.
-func stubLocalKittySocket(t *testing.T, socket string) {
-	t.Helper()
-	previous := commands.LocalKittySocket
-	commands.LocalKittySocket = func() string { return socket }
-	t.Cleanup(func() { commands.LocalKittySocket = previous })
-}
-
 // stubUnreachableDaemon is the common case: no daemon at all, so the refresh
-// must fall back to listing Kitty directly.
+// keeps the last tmux rows and marks daemon state unavailable.
 func stubUnreachableDaemon(t *testing.T) {
 	t.Helper()
 	stubStateQuery(t, func() (protocol.Response, error) {
@@ -61,8 +47,7 @@ func testModel() Model {
 			{Name: "personal", Color: "yellow"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	return NewModel(cfg, client)
 }
 
@@ -110,7 +95,7 @@ func withListRows(m Model, rows ...session.RunningSession) Model {
 }
 
 // loadSessions feeds a set of RunningSession values into the model
-// as if they came from a Kitty query.
+// as if they came from a session query.
 func loadSessions(m Model, sessions []session.RunningSession) Model {
 	return applySessions(m, commands.SessionsMsg{Sessions: sessions})
 }
@@ -286,7 +271,6 @@ func testModelWithSessions() Model {
 			{Title: "dotfiles", Directory: "/home/user/dotfiles", Account: "personal"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	return NewModel(cfg, client)
 }

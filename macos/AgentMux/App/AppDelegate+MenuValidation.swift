@@ -16,10 +16,9 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(showSwitcher(_:)), #selector(showCommandPalette(_:)),
         #selector(splitWorkspaceShell(_:)), #selector(splitWorkspaceChanges(_:)),
         #selector(focusOtherWorkspacePane(_:)), #selector(swapWorkspacePanes(_:)), #selector(collapseWorkspacePane(_:)),
-        #selector(goToSession(_:)), #selector(showSessionInKitty(_:)),
+        #selector(goToSession(_:)),
         #selector(selectNextSession(_:)), #selector(selectPreviousSession(_:)),
         #selector(selectNextProjectTab(_:)), #selector(selectPreviousProjectTab(_:)),
-        #selector(showNextSessionInKitty(_:)), #selector(showPreviousSessionInKitty(_:)),
         #selector(toggleRecentPlace(_:)),
         #selector(toggleWorkspaceSidebar(_:)), #selector(toggleWorkspaceInspector(_:)), #selector(revealInWorkspaceSidebar(_:)),
         #selector(biggerWorkspaceSidebars(_:)), #selector(smallerWorkspaceSidebars(_:)), #selector(resetWorkspaceSidebars(_:)),
@@ -56,10 +55,9 @@ extension AppDelegate: NSMenuItemValidation {
             return workspace?.shownSessionRow?.embeddedRuntimeSessionID != nil
         case #selector(closeWorkspaceView(_:)):
             item.title = closeWorkspaceViewTitle
-        case #selector(goToSession(_:)), #selector(showSessionInKitty(_:)):
+        case #selector(goToSession(_:)):
             let name = workspace?.sessionName(at: item.tag)
-            let inKitty = item.action == #selector(showSessionInKitty(_:)) && workspace?.sessionIsInKitty(at: item.tag) == true
-            item.title = WorkspaceWindowController.sessionItemTitle(at: item.tag, name: name, inKitty: inKitty)
+            item.title = WorkspaceWindowController.sessionItemTitle(at: item.tag, name: name)
             return name != nil
         case #selector(togglePinSession(_:)):
             item.title = workspace?.pinShownTitle ?? WorkspaceWindowController.pinShownSessionTitle
@@ -94,13 +92,5 @@ extension AppDelegate: NSMenuItemValidation {
     /// What the inspector's item does now.
     nonisolated static func inspectorItemTitle(shown: Bool) -> String {
         shown ? "Hide Inspector" : "Show Inspector"
-    }
-}
-
-extension AppDelegate: NSMenuDelegate {
-    /// The Session menu, as it opens: its Show in Kitty submenu follows the
-    /// sessions the digits go to.
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        WorkspaceMenu.updateKittyItems(in: menu, workspace: workspace)
     }
 }

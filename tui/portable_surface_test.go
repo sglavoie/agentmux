@@ -27,15 +27,14 @@ func producesQuit(cmd tea.Cmd) bool {
 	return false
 }
 
-// Focusing a Kitty tab takes the operator to that tab, so the dashboard quits.
-// An attached tmux view ran in the dashboard's own terminal and has given it
-// back, so the dashboard carries on.
+// A switched terminal needs its popup dashboard to close. An attached tmux
+// view that returns to the dashboard's terminal leaves the dashboard running.
 func TestTheDashboardSurvivesAnAttachedView(t *testing.T) {
 	t.Parallel()
 
 	m := testModelWithSessions()
-	if _, cmd := m.Update(commands.FocusDoneMsg{}); !producesQuit(cmd) {
-		t.Fatal("a Kitty focus must still quit the dashboard")
+	if _, cmd := m.Update(commands.AttachDoneMsg{Switched: true}); !producesQuit(cmd) {
+		t.Fatal("a switched terminal left its popup dashboard open")
 	}
 	next, cmd := m.Update(commands.AttachDoneMsg{})
 	if producesQuit(cmd) {
@@ -72,10 +71,7 @@ func TestAViewThatRanInThisTerminalDoesNotQuitTheDashboard(t *testing.T) {
 	t.Parallel()
 
 	m := testModelWithSessions()
-	if _, cmd := m.Update(commands.PickerOpenDoneMsg{}); !producesQuit(cmd) {
-		t.Fatal("opening a Kitty tab must still quit the dashboard")
-	}
-	if _, cmd := m.Update(commands.PickerOpenDoneMsg{Stay: true}); producesQuit(cmd) {
+	if _, cmd := m.Update(commands.PickerOpenDoneMsg{}); producesQuit(cmd) {
 		t.Fatal("a shell or editor that ran in this terminal quit the dashboard")
 	}
 }
@@ -90,39 +86,11 @@ func TestAPortableLaunchLeavesTheDashboardRunning(t *testing.T) {
 		return cmd
 	}
 	commands.Portable = commands.PortableTerminals{}
-	if !producesQuit(finish()) {
-		t.Fatal("a Kitty launch must still hand the operator to the new tab")
+	if producesQuit(finish()) {
+		t.Fatal("the dashboard should stay open after launching a tmux session")
 	}
 	commands.Portable = commands.PortableTerminals{Launch: runtimesession.BackendTmux}
 	if producesQuit(finish()) {
 		t.Fatal("a tmux launch opens no tab, so the dashboard must stay")
-	}
-}
-
-// The sort order is computed, never held by a terminal: without Kitty the
-// command is still offered, moves nothing, and says the sessions are in order.
-func TestResortWithoutKittySaysSessionsAreAlwaysInSortOrder(t *testing.T) {
-	t.Parallel()
-
-	m := testModelWithSessions()
-	resort := commandByID(t, commands.ResortTabs)
-	if availability := resort.AvailabilityFor(m, commands.Context{}); !availability.Available {
-		t.Fatalf("resort inside Kitty is unavailable: %s", availability.Reason)
-	}
-	m.client = nil
-	if availability := resort.AvailabilityFor(m, commands.Context{}); !availability.Available {
-		t.Fatalf("resort without Kitty is refused: %s", availability.Reason)
-	}
-	msg := commands.Resort(nil, "alpha")()
-	if msg != (commands.ResortDoneMsg{AlwaysSorted: true}) {
-		t.Fatalf("resort without Kitty returned %#v, want it to report the sessions always sorted", msg)
-	}
-	updated, _ := m.Update(msg)
-	got := updated.(Model)
-	if got.actionErr != nil {
-		t.Fatalf("resort without Kitty left an error: %v", got.actionErr)
-	}
-	if len(got.toasts) == 0 || got.toasts[len(got.toasts)-1].Text != resortAlwaysSortedText {
-		t.Fatalf("toasts = %+v, want %q", got.toasts, resortAlwaysSortedText)
 	}
 }

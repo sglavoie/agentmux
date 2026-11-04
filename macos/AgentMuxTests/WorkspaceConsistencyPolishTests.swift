@@ -29,17 +29,17 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
         XCTAssertTrue(rows.allSatisfy { $0.detail.hasPrefix("Waiting for your answer") })
     }
 
-    func testLongSharedIdentitySuffixesAndKittyInstancesRemainDistinct() {
+    func testLongSharedIdentitySuffixesRemainDistinct() {
         var one = WorkspaceFixture.tmux(1, project: "api")
         var two = one
         one.runtime?.sessionID = "rs-10000000000000000000000000000001"
         two.runtime?.sessionID = "rs-20000000000000000000000000000001"
-        let sessions = [one, two, WorkspaceFixture.kitty(1, project: "api", socket: "/tmp/one"), WorkspaceFixture.kitty(1, project: "api", socket: "/tmp/two")]
+        let sessions = [one, two, WorkspaceFixture.tmux(3, project: "api"), WorkspaceFixture.tmux(4, project: "api")]
         XCTAssertEqual(Set(WorkspaceSidebar.rows(sessions).map(\.displayName)).count, 4)
         XCTAssertEqual(WorkspaceSidebar.rows([one])[0].displayName, "api — work")
-        let kitty = WorkspaceSidebar.rows((1...3).map { WorkspaceFixture.kitty($0, project: "api", socket: "/a/very/long/shared/kitty/socket") })
-        XCTAssertEqual(Set(kitty.map(\.qualifier)).count, 3)
-        XCTAssertTrue(kitty.allSatisfy { $0.qualifier.count <= 8 }, "the common socket path must not consume the row")
+        let rows = WorkspaceSidebar.rows((1...3).map { WorkspaceFixture.tmux($0, project: "api") })
+        XCTAssertEqual(Set(rows.map(\.qualifier)).count, 3)
+        XCTAssertTrue(rows.allSatisfy { $0.qualifier.count <= 8 })
     }
 
     func testResolutionIsScopedPersistsAndRecurrenceReopensTheNotice() throws {

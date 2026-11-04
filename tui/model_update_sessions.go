@@ -8,7 +8,6 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/plans"
@@ -23,7 +22,7 @@ import (
 
 // The live-topology refresh controller. Every refresh the dashboard performs —
 // the startup load, each interval tick, and the follow-up after an action
-// changed Kitty — enters through requestTopologyRefresh, which is what makes
+// changed a session — enters through requestTopologyRefresh, which is what makes
 // "at most one refresh in flight" a property of the model rather than a habit
 // of its callers.
 
@@ -66,7 +65,7 @@ func (m *Model) settleTopologyRefresh(seq int) bool {
 // while the one just finished was out. It is called only after a success: a
 // failed refresh clears the pending bit instead, so a run of ticks that piled
 // up during an outage cannot turn into an immediate retry storm against a
-// daemon or a Kitty that is still down. The next scheduled tick asks again.
+// daemon or a terminal that is still down. The next scheduled tick asks again.
 func (m *Model) catchUpTopologyRefresh() tea.Cmd {
 	if m.topologyRefreshInFlight || !m.topologyRefreshPending {
 		return nil
@@ -144,7 +143,7 @@ func (m Model) handleSessionsMsg(msg commands.SessionsMsg) (tea.Model, tea.Cmd) 
 }
 
 // handleRefreshErr processes a commands.ErrMsg: a refresh that could reach
-// neither the daemon nor Kitty. The session list is deliberately left as it
+// neither the daemon nor the terminal. The session list is deliberately left as it
 // was — a dashboard showing a slightly old list beats one that empties itself
 // because a subprocess timed out — and the pending bit is dropped so the retry
 // waits for the next tick rather than firing immediately.
@@ -159,22 +158,6 @@ func (m Model) handleRefreshErr(msg commands.ErrMsg) (tea.Model, tea.Cmd) {
 	}
 	m.topologyRefreshPending = false
 	m.err = msg.Err
-	return m, nil
-}
-
-// handleActiveLoopsMsg stores the latest active-loop discovery result. Older
-// in-flight refreshes are ignored so a slow discovery cannot restore stale
-// candidates after a newer refresh has already completed. Tab loop markers
-// are rendered by the daemon; these candidates remain for detail views only.
-func (m Model) handleActiveLoopsMsg(msg commands.ActiveLoopsMsg) (tea.Model, tea.Cmd) {
-	if msg.Seq != m.activeLoopRefreshSeq {
-		return m, nil
-	}
-	m.activeLoopRefreshErr = msg.Err
-	if msg.Err != nil {
-		return m, nil
-	}
-	m.activeLoopCandidates = append([]agentloop.Candidate(nil), msg.Candidates...)
 	return m, nil
 }
 
@@ -231,49 +214,14 @@ func (m Model) handleCopyDone(msg commands.CopyDoneMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// resortAlwaysSortedText is what Resort Tabs answers on a surface with no
-// Kitty tabs.
-const resortAlwaysSortedText = "Sessions are always in sort order"
-
-// handleResortDone processes a commands.ResortDoneMsg: records any error, pushes a
-// success or failure toast, and triggers a session refresh.
-func (m Model) handleResortDone(msg commands.ResortDoneMsg) (tea.Model, tea.Cmd) {
-	m.actionErr = msg.Err
-	var cmds []tea.Cmd
-	var t Toast
-	switch {
-	case msg.Err != nil:
-		t = Toast{Severity: toastError, Text: "Resort failed: " + msg.Err.Error()}
-	case msg.AlwaysSorted:
-		t = Toast{Severity: toastInfo, Text: resortAlwaysSortedText}
-	default:
-		t = Toast{Severity: toastSuccess, Text: "Tabs resorted"}
-	}
-	// The outcome replaces the "Resorting tabs…" notice on the same channel, so
-	// the pending one cannot outlive it and reappear as "Still waiting".
-	if c := m.replaceToastByID(resortToastID, t); c != nil {
-		cmds = append(cmds, c)
-	}
-	if c := m.requestTopologyRefresh(); c != nil {
-		cmds = append(cmds, c)
-	}
-	return m, tea.Batch(cmds...)
-}
-
-// handlePickerOpenDone processes a single or aggregate commands.PickerOpenDoneMsg:
-// quits on success or surfaces the error in the header and triggers a refresh
-// on failure.
+// handlePickerOpenDone processes a single or aggregate commands.PickerOpenDoneMsg.
+// The opened view returns to this surface, which refreshes its session list.
 func (m Model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		m.actionErr = msg.Err
 		return m, m.requestTopologyRefresh()
 	}
-	// A view that ran in this terminal took the operator nowhere, so there is
-	// no other tab to leave them in.
-	if msg.Stay {
-		return m, m.requestTopologyRefresh()
-	}
-	return m, tea.Quit
+	return m, m.requestTopologyRefresh()
 }
 
 // handleAttachDone processes a commands.AttachDoneMsg: the operator came back
@@ -285,21 +233,11 @@ func (m Model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd)
 		m.actionErr = msg.Err
 	}
 	// The terminal under this popup now shows the session: leaving is what
-	// uncovers it, as focusing a Kitty tab leaves the dashboard behind.
+	// uncovers it, as focusing a session leaves the dashboard behind.
 	if msg.Switched {
 		return m, tea.Quit
 	}
 	return m, m.requestTopologyRefresh()
-}
-
-// handleFocusDone processes a commands.FocusDoneMsg: quits on success or records the
-// error.
-func (m Model) handleFocusDone(msg commands.FocusDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.Err != nil {
-		m.actionErr = msg.Err
-		return m, nil
-	}
-	return m, tea.Quit
 }
 
 // handlePeekDone processes a commands.PeekDoneMsg: records any error from the overlay
@@ -681,7 +619,7 @@ func (m Model) handleViewerMessagesLoaded(msg viewerMessagesLoadedMsg) (tea.Mode
 // This file is the model-bound half of the effect layer. The tea.Cmd builders
 // themselves live in tui/commands, which knows nothing about the root model;
 // what remains here is the wiring that charges the model's injected seams — the
-// daemon transport, the Kitty client, the transcript readers, the handoff and
+// daemon transport, the tmux client, the transcript readers, the handoff and
 // worktree runners — against those builders.
 
 func (m Model) clearStatusCmd(s session.RunningSession) tea.Cmd {
@@ -696,7 +634,7 @@ func (m Model) markActiveCmd(s session.RunningSession) tea.Cmd {
 // indexed-conversation action needs. A nil handoff or worktree runner tells the
 // registry to use its real workflow.
 func (m Model) conversationDependencies(readers map[string]transcript.Reader) actions.Dependencies {
-	deps := commands.TerminalDependencies(m.client, m.cfg)
+	deps := commands.TerminalDependencies(m.cfg)
 	deps.Readers = readers
 	deps.Daemon = m.actionDaemon()
 	deps.Handoff = m.handoffRunner
@@ -724,15 +662,14 @@ func (m Model) actionDaemon() func(protocol.Request) (protocol.Response, error) 
 }
 
 // modelBackgroundCommands contains the long-running environment-facing
-// effects started by the model. Production uses the normal Kitty, daemon,
-// hook, and active-loop implementations; the in-process UI harness replaces
+// effects started by the model. Production uses the normal tmux, daemon,
+// and hook implementations; the in-process UI harness replaces
 // every entry with a deterministic fixture command.
 type modelBackgroundCommands struct {
 	// topologyRefresh takes the refresh sequence and the startup source window
 	// ID; the message it produces carries that sequence back so the controller
 	// can tell its own completion from an obsolete one.
 	topologyRefresh func(Model, int, int) tea.Cmd
-	activeLoops     func(int) tea.Cmd
 	health          func(Model, bool, bool) tea.Cmd
 	detail          func(int) tea.Cmd
 	worktrees       func(Model, int) tea.Cmd
@@ -748,7 +685,7 @@ type modelBackgroundCommands struct {
 	aslAction func(Model, int, bool, string, aslbridge.ActionRequest) tea.Cmd
 	// scrollback reads one pane's scrollback for the inspector. Nil is
 	// production: the read goes to the backend hosting the pane. The UI harness
-	// sets it for a fixture whose sessions no fake Kitty client can answer for.
+	// sets it for a fixture whose sessions no fake tmux client can answer for.
 	scrollback func(windowID int) (string, error)
 	// pageText suspends the surface for a pager over text it already holds.
 	// Nil is production; the UI harness has no terminal to hand a pager.
@@ -758,9 +695,8 @@ type modelBackgroundCommands struct {
 func defaultModelBackgroundCommands() modelBackgroundCommands {
 	return modelBackgroundCommands{
 		topologyRefresh: func(m Model, seq, sourceWindowID int) tea.Cmd {
-			return commands.Refresh(m.client, m.cfg, m.sortMode, seq, sourceWindowID)
+			return commands.Refresh(m.cfg, m.sortMode, seq, sourceWindowID)
 		},
-		activeLoops: commands.ActiveLoopRefresh,
 		health: func(m Model, checkDaemon, checkHooks bool) tea.Cmd {
 			return commands.Health(m.cfg, m.amxBin, checkDaemon, checkHooks)
 		},
@@ -812,13 +748,6 @@ func (m Model) runTopologyRefreshCmd(seq, sourceWindowID int) tea.Cmd {
 		return m.backgroundCommands.topologyRefresh(m, seq, sourceWindowID)
 	}
 	return defaultModelBackgroundCommands().topologyRefresh(m, seq, sourceWindowID)
-}
-
-func (m Model) runActiveLoopRefreshCmd(seq int) tea.Cmd {
-	if m.backgroundCommands.activeLoops != nil {
-		return m.backgroundCommands.activeLoops(seq)
-	}
-	return defaultModelBackgroundCommands().activeLoops(seq)
 }
 
 func (m Model) runHealthCmd(checkDaemon, checkHooks bool) tea.Cmd {

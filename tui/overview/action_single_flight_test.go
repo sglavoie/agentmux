@@ -208,7 +208,7 @@ func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
 	t.Run("a reported completion frees the tile", func(t *testing.T) {
 		for name, done := range map[string]commands.ActionDoneMsg{
 			"succeeded":   {},
-			"failed":      {Err: errors.New("kitty refused")},
+			"failed":      {Err: errors.New("tmux refused")},
 			"unconfirmed": {Unconfirmed: true},
 		} {
 			t.Run(name, func(t *testing.T) {
@@ -456,7 +456,7 @@ func TestReviewLifecycleGuardSurvivesCorrelationPressure(t *testing.T) {
 	t.Run("a reported completion frees the tile", func(t *testing.T) {
 		for name, done := range map[string]commands.ActionDoneMsg{
 			"succeeded":   {},
-			"failed":      {Err: errors.New("kitty refused")},
+			"failed":      {Err: errors.New("tmux refused")},
 			"unconfirmed": {Unconfirmed: true},
 		} {
 			t.Run(name, func(t *testing.T) {

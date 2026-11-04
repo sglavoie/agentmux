@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -16,7 +16,7 @@ func TestKeybindingsViewIncludesHarnessIconPicker(t *testing.T) {
 	for _, want := range []string{
 		"Sessions",
 		"f5",
-		"set tab harness icon (overlay picker)",
+		"set session harness icon (picker)",
 	} {
 		if !strings.Contains(flattened, want) {
 			t.Fatalf("keybinding reference missing %q:\n%s", want, view)
@@ -33,15 +33,15 @@ func TestKeybindingsViewIncludesTheLiveSessionOverview(t *testing.T) {
 	for _, want := range []string{
 		"Overlays",
 		"f2",
-		"open or focus the live session overview",
+		"open the live session overview",
 	} {
 		if !strings.Contains(flattened, want) {
 			t.Fatalf("keybinding reference missing %q:\n%s", want, view)
 		}
 	}
 
-	var overview kittykeys.Action
-	for _, action := range kittykeys.Actions {
+	var overview keybindings.Action
+	for _, action := range keybindings.Tmux {
 		if action.Key == "f2" {
 			overview = action
 		}
@@ -51,12 +51,6 @@ func TestKeybindingsViewIncludesTheLiveSessionOverview(t *testing.T) {
 	}
 	if !strings.Contains(flattened, overview.Description) {
 		t.Fatalf("reference text and catalog description disagree: %q missing from\n%s", overview.Description, view)
-	}
-	// A reference that advertised the singleton while the command opened a second
-	// copy would be worse than one that said nothing, so the sentence and the
-	// command's own description have to make the same promise.
-	if !strings.Contains(overview.Description, "focus") {
-		t.Fatalf("f2 description %q does not advertise focusing an open overview", overview.Description)
 	}
 }
 
@@ -228,18 +222,18 @@ func TestKeybindingsFooterShowsNavigationAndCloseHints(t *testing.T) {
 }
 
 // The app's workspace shows the same reference with its own keys: what it
-// binds, in its own words, and none of Kitty's tab shortcuts.
+// binds, in its own words, and none of the terminal's tab shortcuts.
 func TestKeybindingsReferenceListsTheWorkspaceKeys(t *testing.T) {
-	view := (keybindingsModel{actions: kittykeys.Workspace}).View().Content
+	view := (keybindingsModel{actions: keybindings.Workspace}).View().Content
 	flattened := strings.ReplaceAll(stripAnsi(view), "\n", "")
-	for _, action := range kittykeys.Workspace {
+	for _, action := range keybindings.Workspace {
 		if !strings.Contains(flattened, action.Key) || !strings.Contains(flattened, action.Description) {
 			t.Errorf("workspace reference missing %s (%s):\n%s", action.Key, action.Description, view)
 		}
 	}
-	for _, kittyOnly := range []string{"ctrl+shift+d", "switch to tab", "overlay picker"} {
-		if strings.Contains(flattened, kittyOnly) {
-			t.Errorf("workspace reference still says %q", kittyOnly)
+	for _, unsupportedOnly := range []string{"ctrl+shift+d", "switch to tab", "overlay picker"} {
+		if strings.Contains(flattened, unsupportedOnly) {
+			t.Errorf("workspace reference still says %q", unsupportedOnly)
 		}
 	}
 }

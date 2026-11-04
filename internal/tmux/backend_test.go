@@ -234,8 +234,6 @@ func TestPersonalConfigIsolation(t *testing.T) {
 	f := newFixture(t, Options{})
 	t.Setenv("TMUX", "/tmp/parent-tmux,1,0")
 	t.Setenv("TMUX_PANE", "%99")
-	t.Setenv("KITTY_WINDOW_ID", "42")
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty-parent")
 	t.Setenv("AMX_RUNTIME_SESSION_ID", "rs-00000000000000000000000000000000")
 	out := filepath.Join(f.dir, "env.out")
 	f.launch(t, "isolated", []string{"/bin/sh", "-c", `env > "$1"; printf '\0END\0' >> "$1"; exec sleep 600`, "sh", out}, nil)
@@ -253,7 +251,7 @@ func TestPersonalConfigIsolation(t *testing.T) {
 	if got := f.tmux(t, "show-environment", "-g"); strings.Contains(got, personalMarker) {
 		t.Errorf("personal environment leaked into the server: %q", got)
 	}
-	for _, leaked := range []string{"TMUX=/tmp/parent-tmux", "TMUX_PANE=%99", "KITTY_WINDOW_ID=", "KITTY_LISTEN_ON=", "AMX_RUNTIME_SESSION_ID=", personalMarker} {
+	for _, leaked := range []string{"TMUX=/tmp/parent-tmux", "TMUX_PANE=%99", "AMX_RUNTIME_SESSION_ID=", personalMarker} {
 		if strings.Contains(env, leaked) {
 			t.Errorf("pane environment contains %q", leaked)
 		}
@@ -271,7 +269,7 @@ func TestPersonalConfigIsolation(t *testing.T) {
 	if data, err := os.ReadFile(f.server.ConfigPath()); err != nil || string(data) != Config {
 		t.Errorf("server configuration is not AgentMux's: %v", err)
 	}
-	t.Logf("observed: with personal ~/.tmux.conf and XDG tmux.conf setting @amx_personal/prefix C-a/remain-on-exit off/history-limit 7, the private server reports @amx_personal unset, prefix None, remain-on-exit on, history-limit 50000; pane env has TMUX=%s and no parent TMUX/KITTY_*/AMX_RUNTIME_SESSION_ID; TMUX_TMPDIR stayed empty", f.server.Socket())
+	t.Logf("observed: with personal ~/.tmux.conf and XDG tmux.conf setting @amx_personal/prefix C-a/remain-on-exit off/history-limit 7, the private server reports @amx_personal unset, prefix None, remain-on-exit on, history-limit 50000; pane env has TMUX=%s and no parent TMUX/AMX_RUNTIME_SESSION_ID; TMUX_TMPDIR stayed empty", f.server.Socket())
 }
 
 func TestPersonalConfigIsolationRejectsSharedDirectory(t *testing.T) {
@@ -612,7 +610,7 @@ func TestRefsRejectForeignTargetSyntax(t *testing.T) {
 func TestClientEnvStripsTerminalIdentity(t *testing.T) {
 	t.Parallel()
 
-	got := clientEnv([]string{"PATH=/bin", "TMUX=x", "TMUX_PANE=%1", "KITTY_WINDOW_ID=3", "KITTY_PID=9",
+	got := clientEnv([]string{"PATH=/bin", "TMUX=x", "TMUX_PANE=%1",
 		"WINDOWID=5", "CLAUDECODE=1", "AMX_RUNTIME_SESSION_ID=rs-x", "AMX_WORKSPACE_HOSTED=1", "AMX_WORKSPACE_CONFIRMATION_FILE=/policy", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"})
 	want := []string{"PATH=/bin", "CLAUDE_CONFIG_DIR=/p", "TMUX_TMPDIR=/t"}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {

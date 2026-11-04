@@ -138,7 +138,7 @@ type ProcessLifecycleSourceEvidence struct {
 }
 
 // ReducerInputEvidence is the complete sanitized input needed to replay one
-// reducer admission without the original hook payload, daemon, or Kitty. It is
+// reducer admission without the original hook payload, daemon, or terminal. It is
 // emitted only by schemas v9+. Every field is state-machine metadata; prompt
 // bodies, tool arguments, filesystem paths, and native-log content are never
 // retained here.

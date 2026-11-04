@@ -8,7 +8,7 @@
 // the question the selection actually asked instead: what is in this family.
 //
 // Every fact on it was already stamped on the rows at discovery time, so drawing
-// it costs no Kitty call, no Git probe, and no config lookup beyond the colors —
+// it costs no terminal call, no Git probe, and no config lookup beyond the colors —
 // which is the second reason it is a card and not a terminal read.
 //
 // It wears the inspector's GEOMETRY and keeps its own SEMANTICS. Six metadata

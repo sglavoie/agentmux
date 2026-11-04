@@ -23,7 +23,6 @@ func setupExportOutputTest(t *testing.T, output string) {
 			export: func(int) (protocol.EventsExport, error) { return protocol.EventsExport{}, nil },
 		}
 	}
-	newDaemonExportKitty = func() cli.KittyWindowLister { return fakeKittyWindowLister{} }
 	daemonExportNow = func() time.Time { return time.Unix(100, 0) }
 	daemonExportEventsWindow = 0
 	daemonExportEventsCurrentWindow = false

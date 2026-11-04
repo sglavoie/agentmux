@@ -8,7 +8,7 @@ import (
 )
 
 func TestWorktreeListOnATerminalIsATableWithAHeader(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	worktreeListIsTerminal = func(io.Writer) bool { return true }
 
 	var out bytes.Buffer
@@ -29,7 +29,7 @@ func TestWorktreeListOnATerminalIsATableWithAHeader(t *testing.T) {
 }
 
 func TestAnEmptyWorktreeListSaysSoOnlyOnATerminal(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	manager.entries = nil
 
 	var out bytes.Buffer

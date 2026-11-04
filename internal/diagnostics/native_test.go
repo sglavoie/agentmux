@@ -160,7 +160,7 @@ func TestMaintainNativeProtectsRecentlyPreparedLaunchFromConcurrentPruning(t *te
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "starting.log")); err != nil {
-		t.Fatalf("recent launch was pruned before Kitty could report it active: %v", err)
+		t.Fatalf("recent launch was pruned before tmux could report it active: %v", err)
 	}
 	if report.ExcessBytes != 19 {
 		t.Fatalf("report = %+v, want visible deferred excess", report)

@@ -42,7 +42,7 @@ type worktreeActionDoneMsg struct {
 
 func worktreeListCmd(m Model, seq int) tea.Cmd {
 	return func() tea.Msg {
-		result, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.client, m.cfg), actions.WorktreeList, actions.Request{})
+		result, err := commands.Registry.Execute(context.Background(), commands.TerminalDependencies(m.cfg), actions.WorktreeList, actions.Request{})
 		if err != nil {
 			return worktreesLoadedMsg{seq: seq, err: err}
 		}
@@ -299,9 +299,8 @@ func (m Model) openSelectedWorktree(action actions.ID) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.actionErr = nil
-	if m.client == nil {
-		// Outside Kitty there is no tab to open the checkout in, so the shell
-		// or editor runs in this terminal and returns here.
+	if commands.Portable.Desktop == nil {
+		// A terminal without a desktop workspace runs the shell or editor here.
 		done := func(err error) tea.Msg {
 			return worktreeActionDoneMsg{action: action, result: actions.Result{Message: "Returned from worktree"}, err: err}
 		}
@@ -320,7 +319,7 @@ func worktreeLifecycleActionCmd(m Model, action actions.ID, request actions.Requ
 		readers = buildTranscriptReaders()
 	}
 	return func() tea.Msg {
-		deps := commands.TerminalDependencies(m.client, m.cfg)
+		deps := commands.TerminalDependencies(m.cfg)
 		deps.Readers = readers
 		result, err := commands.Registry.Execute(context.Background(), deps, action, request)
 		return worktreeActionDoneMsg{action: action, result: result, err: err}
@@ -563,7 +562,7 @@ func (m Model) handleWorktreeReopenDone(msg worktreeActionDoneMsg) (tea.Model, t
 		if msg.result.Data["continuation"] == actions.DataContinuationAttach {
 			if live, ok := msg.result.Data["session"].(actions.WorktreeLiveSession); ok {
 				updated, refresh := m.startWorktreeRefresh()
-				return updated, tea.Batch(refresh, commands.Focus(m.client, live.TabID))
+				return updated, tea.Batch(refresh, commands.Focus(live.TabID))
 			}
 		}
 		text := msg.result.Message

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -33,10 +34,10 @@ func (f *fakeSubscription) Close() error { f.closed = true; return nil }
 
 func snapshotFrame(t *testing.T, seq uint64, icons ...string) protocol.StreamFrame {
 	t.Helper()
-	snap := protocol.CompanionSnapshot{V: 1, Daemon: protocol.CompanionDaemon{Ready: true}, Kitty: protocol.CompanionKitty{Ready: true}}
+	snap := protocol.CompanionSnapshot{V: 1, Daemon: protocol.CompanionDaemon{Ready: true}}
 	for i, icon := range icons {
 		attention := protocol.AttentionStates[icon]
-		snap.Sessions = append(snap.Sessions, protocol.CompanionSession{WindowID: i + 1, IconState: icon, Attention: attention})
+		snap.Sessions = append(snap.Sessions, protocol.CompanionSession{Runtime: &protocol.CompanionRuntime{SessionID: fmt.Sprintf("runtime-%d", i+1)}, IconState: icon, Attention: attention})
 		if attention {
 			snap.Attention.Total++
 		}
@@ -86,9 +87,9 @@ func TestDebugSubscribeTextStopsAfterFrames(t *testing.T) {
 	}
 	first, third := snapshotFrame(t, 1, "bolt"), snapshotFrame(t, 3, "stop")
 	want := "subscribed: sub-1 protocol=1 server_max=1 heartbeat=15000ms features=snapshot,heartbeat\n" +
-		"#1 snapshot digest=" + frameDigest(first) + " ready=true kitty_ready=true sessions=1 attention=0 [1:bolt]\n" +
+		"#1 snapshot digest=" + frameDigest(first) + " ready=true sessions=1 attention=0 [runtime-1:bolt]\n" +
 		"#2 heartbeat\n" +
-		"#3 snapshot digest=" + frameDigest(third) + " ready=true kitty_ready=true sessions=1 attention=1 [1:stop*]\n"
+		"#3 snapshot digest=" + frameDigest(third) + " ready=true sessions=1 attention=1 [runtime-1:stop*]\n"
 	if out != want {
 		t.Fatalf("output:\n%s\nwant:\n%s", out, want)
 	}

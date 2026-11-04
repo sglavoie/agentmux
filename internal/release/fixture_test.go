@@ -17,7 +17,7 @@ import (
 // release is a gate that is discovered to be broken during a release.
 //
 // So the whole procedure runs here against a stand-in world: two throwaway Git
-// repositories, an ephemeral SSH signing key, a fake `just`, a `kitty` that fails, a
+// repositories, an ephemeral SSH signing key, a fake `just`, a
 // fake `sw_vers`, and a fake ASL wrapper, all under t.TempDir() with the fakes
 // staged ahead of everything else on the PATH of every command the gate runs.
 // That PATH, and the FAKE_* switches the fakes read, travel through the
@@ -79,7 +79,7 @@ func newFixture(t *testing.T) *fixture {
 	f.stageFakeCommands(t)
 	f.stageSigningKey(t)
 
-	// The fakes go first so they shadow any real `just`, `kitty`, or `sw_vers`
+	// The fakes go first so they shadow any real `just` or `sw_vers`
 	// on the developer's machine; the rest of PATH is kept because `git` and
 	// `ssh-keygen` are deliberately real.
 	f.setenv("PATH", f.fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
@@ -163,11 +163,6 @@ func (f *fixture) stageAgentMuxCheckout(t *testing.T) {
 func (f *fixture) stageFakeCommands(t *testing.T) {
 	t.Helper()
 	writeScript(t, filepath.Join(f.fakeBin, "sw_vers"), "#!/bin/sh\necho "+fakeOSVersion+"\n")
-	// Kitty is an optional backend: a gate that runs it fails here, as it
-	// would on a machine that has none.
-	for _, name := range []string{"kitty", "kitten"} {
-		writeScript(t, filepath.Join(f.fakeBin, name), "#!/bin/sh\necho 'the release gate must not run "+name+"' >&2\nexit 1\n")
-	}
 	writeScript(t, filepath.Join(f.fakeBin, "just"), `#!/bin/sh
 recipe="$1"
 if [ -n "${FAKE_JUST_LOG:-}" ]; then

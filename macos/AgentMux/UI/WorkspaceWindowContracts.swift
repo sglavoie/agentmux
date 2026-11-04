@@ -28,9 +28,6 @@ protocol WorkspaceDelegate: AnyObject {
     /// A terminal running a utility view: never an attachment, never a
     /// session.
     func makeUtilityTerminal(_ view: WorkspaceUtilityView) -> Result<WorkspaceTerminal, WorkspaceTerminalProblem>
-    /// Focuses a session that is a window of another app and brings that app
-    /// forward.
-    func focusExternally(_ row: WorkspaceRow)
     /// The window was shown or closed.
     func workspaceVisibilityChanged(_ visible: Bool)
     /// The pane moved to another session or view, or to none.

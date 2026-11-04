@@ -43,14 +43,8 @@ var ErrAppBackendUnavailable = errors.New("no companion app holds the notificati
 type AppNotice struct {
 	NotificationID string `json:"notification_id"`
 	WindowID       int    `json:"window_id"`
-	// KittySocket is the Kitty instance WindowID lives in, as the daemon
-	// captured it for the target. Window IDs repeat across instances, so the
-	// app needs both to know which Kitty to raise and which pane to mute. It
-	// is empty when the notice is not navigable or no socket was recorded.
-	KittySocket string `json:"kitty_socket,omitempty"`
-	// Navigable says a click can show a session: a Kitty pane named by
-	// KittySocket and WindowID, or the runtime session named below, which the
-	// app asks for with focus_session. Profile-wide notices, such as hook
+	// Navigable says a click can show the runtime session named below.
+	// Profile-wide notices, such as hook
 	// silence, are informational and have nothing to show.
 	Navigable bool     `json:"navigable"`
 	Title     string   `json:"title"`
@@ -60,16 +54,10 @@ type AppNotice struct {
 	SessionID string   `json:"session_id,omitempty"`
 	Actions   []string `json:"actions,omitempty"`
 	// RuntimeSessionID and Backend name the AgentMux runtime session the
-	// notice is about, when one holds its slot. For a session whose backend is
-	// not Kitty they are the notice's only target: WindowID is zero, because
-	// the daemon's slot for such a session is not a window any Kitty has.
+	// notice is about, when one holds its slot.
 	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
 	Backend          string `json:"backend,omitempty"`
 }
-
-// BackendKindKitty is the NotificationTarget.Backend of a Kitty session, the
-// only backend whose slot is a window ID an app can hand back to Kitty.
-const BackendKindKitty = "kitty"
 
 // AppInteraction is one report about a delivered notice. Disposition is a
 // protocol.Disposition* value, or one of the two the backend synthesizes
@@ -136,8 +124,7 @@ const BackendKindTmux = "tmux"
 // appActions is what a notice offers besides its click. A permission prompt
 // offers no answer: the operator must look at the pane before answering it.
 // What it can offer is a way to look and answer without going there, for a
-// session `amx send` can write to. Muting needs a session to mute: a Kitty
-// window, or a runtime session the app mutes with `mute-toggle
+// session `amx send` can write to. Muting uses `mute-toggle
 // --runtime-session`. Answering needs an ASL run with a question.
 func appActions(target NotificationTarget, action string, trace NotificationTrace) []string {
 	if action == "permission" {
@@ -147,7 +134,7 @@ func appActions(target NotificationTarget, action string, trace NotificationTrac
 		return nil
 	}
 	var actions []string
-	if target.Navigable && (target.WindowID > 0 || target.sessionFocus()) {
+	if target.sessionFocus() {
 		actions = append(actions, protocol.NotificationActionMute)
 	}
 	actions = append(actions, protocol.NotificationActionSnooze)
@@ -238,7 +225,7 @@ func (n *Notifier) dispatchToApp(parent context.Context, app AppBackend, target 
 	navigable := target.Navigable && windowID > 0
 	notice := AppNotice{
 		NotificationID:   newNotificationID(),
-		WindowID:         target.focusWindowID(),
+		WindowID:         0,
 		Navigable:        navigable,
 		Title:            title,
 		Subtitle:         subtitle,
@@ -248,12 +235,6 @@ func (n *Notifier) dispatchToApp(parent context.Context, app AppBackend, target 
 		Actions:          appActions(target, action, trace),
 		RuntimeSessionID: target.RuntimeSessionID,
 		Backend:          target.Backend,
-	}
-	if target.Backend != "" && target.Backend != BackendKindKitty {
-		notice.WindowID = 0
-	}
-	if navigable {
-		notice.KittySocket = target.KittyListenOn
 	}
 	id := notice.NotificationID
 	tracked := n.trackAppNotice(id, windowID)

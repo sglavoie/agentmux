@@ -15,7 +15,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/planrun"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -29,7 +28,6 @@ import (
 type ID string
 
 const (
-	Focus          ID = "session.focus"
 	Launch         ID = "session.launch"
 	Continue       ID = "session.continue"
 	Fork           ID = "session.fork"
@@ -119,20 +117,15 @@ type Definition struct {
 }
 
 // Dependencies are the injected seams an action can use.  Actions do not
-// construct Kitty clients, read configuration files, or reach into Bubble Tea.
+// read configuration files or reach into Bubble Tea.
 //
 // Terminal operations on a live session (focus, title, metadata, close,
-// launch) go through Terminal. Kitty remains the topology source for the
-// session-package helpers that still read Kitty's window tree, and when
-// Terminal is nil the Kitty adapter over it serves as the terminal.
+// launch) go through Terminal or Tmux.
 //
-// New agents launch on the backend Backend selects: Kitty by default, or the
-// private tmux server in Tmux. Actions on an existing session always use the
-// backend that session records, whatever Backend says.
+// New agents launch on the private tmux server.
 type Dependencies struct {
-	Kitty    kitty.KittyClient
 	Terminal backend.Backend
-	// Backend selects where launches go. Empty means Kitty.
+	// Backend selects where launches go. Empty means tmux.
 	Backend runtimesession.BackendKind
 	// Tmux is the private tmux server, required to launch on tmux or to act
 	// on a tmux-hosted session.
@@ -152,8 +145,7 @@ type Dependencies struct {
 	// host shows agents. It is a notification: it cannot fail the action.
 	Launched func(session.LaunchResult)
 	// Utility, when set, shows a shell or an editor where the surface's host
-	// shows such views: the desktop workspace. It is asked only when there is
-	// no Kitty to open a tab in, and an error means the host did not take the
+	// shows such views: the desktop workspace. An error means the host did not take the
 	// view, which is then left to the caller (DataContinuationHere).
 	Utility         func(UtilityView) error
 	ActiveLoops     func() ([]agentloop.Candidate, error)
@@ -177,7 +169,7 @@ type WorktreeLifecycle interface {
 
 // Request holds the typed targets and plain parameters supplied to one action.
 // Project is a configured launch template, while Session is an already-live
-// Kitty-backed session. Plan is a split plan directory.
+// tmux session. Plan is a split plan directory.
 type Request struct {
 	Session      *session.RunningSession
 	Project      *config.Session
@@ -199,7 +191,7 @@ type UtilityView struct {
 	Path string
 }
 
-// The continuations an open reports when there was no Kitty tab to open.
+// The continuations an open reports when the host has no view to open.
 const (
 	// DataContinuationWorkspace: the desktop workspace took the view.
 	DataContinuationWorkspace = "workspace"
@@ -220,7 +212,7 @@ func UtilityHere(result Result) (UtilityView, bool) {
 	return UtilityView{Editor: editor, Path: path}, path != ""
 }
 
-// openUtility opens a shell or an editor with no Kitty tab to put it in: in
+// openUtility opens a shell or an editor: in
 // the host's own view when there is one, and otherwise by handing the view
 // back to the caller.
 func (d Dependencies) openUtility(id ID, editor bool, path string) (Result, error) {
@@ -314,73 +306,53 @@ func (e *PartialResultError) Unwrap() error {
 	return e.ActionError
 }
 
-// terminal returns the backend for terminal operations, or nil when neither
-// Terminal nor Kitty is injected.
+// terminal returns the backend for terminal operations.
 func (d Dependencies) terminal() backend.Backend {
 	if d.Terminal != nil {
 		return d.Terminal
 	}
-	if d.Kitty == nil {
-		return nil
-	}
-	return kitty.NewBackend(d.Kitty)
+	return d.Tmux
 }
 
 // launchRuntime is the backend new agents launch on.
 func (d Dependencies) launchRuntime(id ID) (session.Runtime, error) {
 	switch d.Backend {
-	case "", runtimesession.BackendKitty:
-		if d.Kitty == nil || d.Config == nil {
-			return session.Runtime{}, dependencyError(id, "Kitty client and configuration")
-		}
-		return session.Runtime{Kitty: d.Kitty, Registry: d.Runtimes}, nil
-	case runtimesession.BackendTmux:
+	case "", runtimesession.BackendTmux:
 		if d.Tmux == nil || d.Config == nil {
 			return session.Runtime{}, dependencyError(id, "tmux server and configuration")
 		}
-		return session.Runtime{Kitty: d.Kitty, Tmux: d.Tmux, Registry: d.Runtimes}, nil
+		return session.Runtime{Tmux: d.Tmux, Registry: d.Runtimes}, nil
 	default:
-		return session.Runtime{}, &Error{Code: "invalid_backend", Action: id, Message: fmt.Sprintf("unknown session backend %q (kitty or tmux)", d.Backend)}
+		return session.Runtime{}, &Error{Code: "invalid_backend", Action: id, Message: fmt.Sprintf("unknown session backend %q (expected tmux)", d.Backend)}
 	}
 }
 
 // runtimeFor is the backend hosting running.
 func (d Dependencies) runtimeFor(id ID, running session.RunningSession) (session.Runtime, error) {
-	if running.BackendKind() == runtimesession.BackendTmux {
-		if d.Tmux == nil || d.Config == nil {
-			return session.Runtime{}, dependencyError(id, "tmux server and configuration")
-		}
-		return session.Runtime{Kitty: d.Kitty, Tmux: d.Tmux, Registry: d.Runtimes}, nil
+	if running.BackendKind() != runtimesession.BackendTmux {
+		return session.Runtime{}, &Error{Code: "invalid_backend", Action: id, Message: fmt.Sprintf("session backend %q is unsupported", running.BackendKind())}
 	}
-	if d.Kitty == nil || d.Config == nil {
-		return session.Runtime{}, dependencyError(id, "Kitty client and configuration")
+	if d.Tmux == nil || d.Config == nil {
+		return session.Runtime{}, dependencyError(id, "tmux server and configuration")
 	}
-	return session.Runtime{Kitty: d.Kitty, Registry: d.Runtimes}, nil
+	return session.Runtime{Tmux: d.Tmux, Registry: d.Runtimes}, nil
 }
 
-// missingTerminal names the terminal an action on running needs and lacks: the
-// backend that session runs on, not Kitty whatever it is.
+// missingTerminal names the terminal an action on running needs and lacks.
 func missingTerminal(id ID, running session.RunningSession) error {
-	if running.BackendKind() == runtimesession.BackendTmux {
-		return dependencyError(id, "tmux server")
-	}
-	return dependencyError(id, "Kitty client")
+	return dependencyError(id, "tmux server")
 }
 
 // sessionTerminal is the terminal of the backend hosting running, or nil.
 func (d Dependencies) sessionTerminal(running session.RunningSession) backend.Backend {
-	if running.BackendKind() == runtimesession.BackendTmux {
-		if d.Tmux == nil {
-			return nil
-		}
-		return d.Tmux
+	if running.BackendKind() != runtimesession.BackendTmux {
+		return nil
 	}
 	return d.terminal()
 }
 
-// launchData records where a launch went. Backend is always reported so a
-// caller reads the same shape from either backend; the runtime session is
-// reported when the launch registered one, and Launched is told about it.
+// launchData records where a launch went. Backend and the registered runtime
+// session are reported, and Launched is told about the session.
 func (d Dependencies) launchData(data map[string]any, launched session.LaunchResult) map[string]any {
 	if d.Launched != nil && launched.RuntimeSessionID != "" {
 		d.Launched(launched)

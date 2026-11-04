@@ -50,18 +50,16 @@ func TestAStateRootThatPublishesAnotherContractSetIsCaught(t *testing.T) {
 	}
 }
 
-// A state root still publishing the reviewed predecessor is read normally by
-// the reconciler, so doctor must not call it a mismatch: the two would
-// disagree about a pairing that is observing correctly.
-func TestAStateRootOnTheReviewedPredecessorIsNotAMismatch(t *testing.T) {
+// A state root on an older contract is incompatible with the current projection.
+func TestAStateRootOnAnOlderContractIsAMismatch(t *testing.T) {
 	resetDoctorTestState(t)
 	aslDoctorStat = func(string) error { return nil }
 
 	in := pairedInputs()
-	in.Reconcile.ContractSetID = aslcontract.LoopCompatibleContractSetID
+	in.Reconcile.ContractSetID = "asl-amx-1.0000000000000000"
 	dim := dimension(t, evaluateASLIntegration(in), aslDimensionContract)
-	if dim.Status == aslStatusFail {
-		t.Errorf("contract = fail (%s), want the reviewed predecessor accepted", dim.Detail)
+	if dim.Status != aslStatusFail {
+		t.Errorf("contract = %s (%s), want the older contract refused", dim.Status, dim.Detail)
 	}
 }
 

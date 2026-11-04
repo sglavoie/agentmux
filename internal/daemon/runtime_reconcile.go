@@ -112,12 +112,9 @@ func (h *Handler) reconcileRuntimeSessions(now time.Time) {
 	}
 }
 
-// observeRuntimeMutes is the mute observation of a session with no Kitty
-// window. A Kitty pane's mute is read from every Kitty listing
-// (setMutedFromSnapshot); a tmux session's is the same variable on its pane,
-// which the reconciliation pass has just read. It is the cache notification
-// suppression consults and the companion snapshot publishes, and like the
-// Kitty one it is never durable: the next pass reads it again.
+// observeRuntimeMutes applies the mute values the reconciliation pass read
+// from tmux panes. Notifications and companion snapshots consult this cache;
+// the next pass refreshes it.
 func (h *Handler) observeRuntimeMutes(mutes []tmux.Muted) {
 	if len(mutes) == 0 {
 		return
@@ -138,11 +135,8 @@ func (h *Handler) observeRuntimeMutes(mutes []tmux.Muted) {
 	}
 }
 
-// observeRuntimeColors is the color observation of a session with no Kitty
-// window. Kitty paints a tab in the color picked for it; a tmux session has
-// no tab, so the pick stays on its pane and the companion snapshot publishes
-// it for whoever lists the session. It is kept beside the session's label
-// and, like the mute, read again by every pass.
+// observeRuntimeColors reads each session's picked color from its tmux pane
+// and publishes it through the companion snapshot.
 func (h *Handler) observeRuntimeColors(colors []tmux.Colored) {
 	if len(colors) == 0 {
 		return
@@ -164,8 +158,7 @@ func (h *Handler) observeRuntimeColors(colors []tmux.Colored) {
 	}
 }
 
-// observeRuntimeNames is the name observation of a session with no Kitty
-// window: the name the operator gave it stays on its pane, and the companion
+// observeRuntimeNames is the name observation of a tmux session: the name the operator gave it stays on its pane, and the companion
 // snapshot publishes it for whoever lists the session. Like the color it is
 // kept beside the session's label and read again by every pass.
 func (h *Handler) observeRuntimeNames(names []tmux.Named) {
@@ -189,8 +182,7 @@ func (h *Handler) observeRuntimeNames(names []tmux.Named) {
 	}
 }
 
-// observeRuntimeTitles is the title observation of a session with no Kitty
-// window. Its launch titled it with its harness's icon and the icon picker
+// observeRuntimeTitles is the title observation of a tmux session. Its launch titled it with its harness's icon and the icon picker
 // rewrites that title; with no tab to show it, the companion snapshot
 // publishes the icon the title carries. Like the color it is kept beside the
 // session's label and read again by every pass.
@@ -215,10 +207,7 @@ func (h *Handler) observeRuntimeTitles(titles []tmux.Titled) {
 	}
 }
 
-// observeRuntimeViewers is the focus observation of a session with no Kitty
-// window. A Kitty pane is seen when a snapshot shows it focused
-// (refreshFocusFromSnapshotLocked); a tmux session has no focus to read, but
-// its server knows when a terminal attached to it and when that terminal was
+// observeRuntimeViewers reads when a terminal attached to a session and was
 // last used. Either one, at or after the moment the session came to rest, is
 // the operator having looked at it, and clears the unseen bit.
 //
@@ -227,9 +216,7 @@ func (h *Handler) observeRuntimeTitles(titles []tmux.Titled) {
 // open. Only an attach or a use that is not older than the rest counts. tmux
 // reports both in whole seconds, so the rest is compared at the same grain.
 //
-// Like the Kitty observation this only ever clears the bit, and the clear is
-// a durable mutation: it marks the slot dirty so the runtime checkpoint
-// records it. Kitty slots are left to the Kitty observation.
+// Clearing the unseen bit is a durable mutation recorded in the checkpoint.
 func (h *Handler) observeRuntimeViewers(viewed []tmux.Viewed, observedAt time.Time) {
 	if len(viewed) == 0 {
 		return
@@ -304,7 +291,7 @@ func (h *Handler) adoptRuntimeSessions() {
 			continue
 		}
 		target, ok := runtimeTargetOf(record.Target)
-		if !ok || target.backend == string(runtimesession.BackendKitty) {
+		if !ok || target.backend != string(runtimesession.BackendTmux) {
 			continue
 		}
 		// As on the hook path, the occupant's liveness is read off stateMu

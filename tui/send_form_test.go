@@ -95,7 +95,7 @@ func TestSendIsOfferedOnlyWhereThereIsAPaneToWriteTo(t *testing.T) {
 	}{
 		"tmux session":           {tmuxTestRow("stop"), ""},
 		"tmux session, asking":   {tmuxTestRow("key"), ""},
-		"Kitty tab":              {session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", State: "stop"}, commands.ReasonSendNeedsTmux},
+		"unbound session":        {session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", State: "stop"}, commands.ReasonSendNeedsTmux},
 		"run with no question":   {supervising, ""},
 		"run's question is open": {asking, commands.ReasonSendASLQuestion},
 	} {
@@ -109,9 +109,9 @@ func TestSendIsOfferedOnlyWhereThereIsAPaneToWriteTo(t *testing.T) {
 	}
 
 	// The key is dead on a row that cannot be sent to.
-	kitty := withListRows(testModelWithSessions(), session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", State: "stop"})
-	if m := pressKey(kitty, keySend); m.mode != ModeList || m.send.Active {
-		t.Fatalf("%q on a Kitty row opened the form (mode %v)", keySend, m.mode)
+	unbound := withListRows(testModelWithSessions(), session.RunningSession{TabID: 1, WindowID: 11, Base: "api", Account: "work", State: "stop"})
+	if m := pressKey(unbound, keySend); m.mode != ModeList || m.send.Active {
+		t.Fatalf("%q on an unbound row opened the form (mode %v)", keySend, m.mode)
 	}
 }
 

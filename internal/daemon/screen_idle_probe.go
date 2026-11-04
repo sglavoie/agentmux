@@ -10,7 +10,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 )
@@ -28,7 +27,7 @@ import (
 //  1. the reducer receipt is revalidated under stateMu BEFORE the slow
 //     off-lock screen read, so a concurrent prompt (or any reducer event)
 //     landing after snapshot capture discards the stale route without paying
-//     for a Kitty round-trip;
+//     for a tmux capture;
 //  2. the read and the classification happen off the lock;
 //  3. applyAuthoritativeIdle rechecks the same receipt under stateMu before it
 //     mutates anything, so evidence that went stale during the read is dropped.
@@ -59,7 +58,7 @@ type screenIdleSpec struct {
 	// section as the eligibility recheck. It is per-harness because the two
 	// probes genuinely disagree about pipe mode and about which mute flags a
 	// routed binding may read.
-	fields func(st *state.WindowState, binding probes.Binding, titleParts palette.TitleParts, userVars kitty.UserVars) screenIdleFields
+	fields func(st *state.WindowState, binding probes.Binding, titleParts palette.TitleParts, userVars probeWindowVars) screenIdleFields
 }
 
 // screenIdleFields is the presentation/notification context read off the
@@ -84,7 +83,7 @@ func (h *Handler) probeScreenIdle(
 	spec screenIdleSpec,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	sourceWindowTitle string,
 	screens *activity.ScreenTextCache,
 ) {
@@ -96,7 +95,7 @@ func (h *Handler) probeScreenIdle(
 	// work for the probe to settle, so bail without a screen read and drop any
 	// in-flight stabilization streak.
 	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, activity.ScreenProbeEligibleIcon) {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, activity.ScreenProbeEligibleIcon) {
 		// The probe no longer owns this window: the route moved, the receipt
 		// advanced, the pane was recreated, or the reduced icon left ⚡. Whatever
 		// the classifier was refusing, it is not refusing it for this binding any
@@ -294,20 +293,12 @@ func (h *Handler) userActiveRetirableByProbe(windowID int) bool {
 // probe outside it. Those paths keep the same "one read per pane" guarantee
 // without reaching for a nil check at every call site. The cache itself lives
 // in internal/daemon/activity; this binds it to the handler's screen observer,
-// which is the Kitty client unless SetScreenObserver installed another.
+// which is the installed observer when one is available.
 //
 // A pane behind a runtime slot is read through the backend its session is
 // registered on (runtimeScreenRouter); every other pane goes to that observer.
 func (h *Handler) screenTextCacheFor() *activity.ScreenTextCache {
-	return h.screenTextCacheForSocket(h.snapshots.View().Socket())
-}
-
-func (h *Handler) screenTextCacheForSocket(socket string) *activity.ScreenTextCache {
-	base := h.screenObserver
-	if base == nil {
-		base = activity.KittyScreenObserver(scopedKittyClient(h.kittyClient, socket))
-	}
-	screens := activity.NewScreenObservationCache(runtimeScreenRouter{h: h, base: base})
+	screens := activity.NewScreenObservationCache(runtimeScreenRouter{h: h, base: h.screenObserver})
 	// Every read through to a backend is tallied for health; a cached answer
 	// is not a read.
 	screens.OnRead(h.recordScreenRead)
@@ -315,7 +306,7 @@ func (h *Handler) screenTextCacheForSocket(socket string) *activity.ScreenTextCa
 }
 
 // SetScreenObserver makes the screen probes read pane screens through
-// observer. Passing nil restores the Kitty client.
+// observer. Passing nil leaves only registered runtime panes readable.
 func (h *Handler) SetScreenObserver(observer backend.Observer) {
 	h.screenObserver = observer
 }

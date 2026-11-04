@@ -9,7 +9,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
@@ -50,13 +49,9 @@ type launchEnvelope struct {
 func TestProjectLaunchOnTmuxReportsTheRuntimeSession(t *testing.T) {
 	f := useTmux(t)
 	selectBackend(t, "")
-	client := &recordingKittyClient{}
-	out, err := runProject(t, "launch", tmuxProjectConfig(t), client, true, "", "API")
+	out, err := runProject(t, "launch", tmuxProjectConfig(t), true, "", "API")
 	if err != nil {
 		t.Fatalf("launch: %v\n%s", err, out)
-	}
-	if len(client.launched) != 0 {
-		t.Fatalf("a tmux launch opened %d Kitty tabs", len(client.launched))
 	}
 	var envelope launchEnvelope
 	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
@@ -64,7 +59,7 @@ func TestProjectLaunchOnTmuxReportsTheRuntimeSession(t *testing.T) {
 	}
 	data := envelope.Data
 	if envelope.SchemaVersion != 1 || !data.Changed || data.Backend != "tmux" || data.TabID != 0 || data.WindowID != 0 {
-		t.Fatalf("envelope = %+v, want a changed tmux launch without Kitty IDs", envelope)
+		t.Fatalf("envelope = %+v, want a changed tmux launch with runtime identity", envelope)
 	}
 	id, err := runtimesession.ParseID(data.RuntimeSessionID)
 	if err != nil {
@@ -85,21 +80,6 @@ func TestProjectLaunchOnTmuxReportsTheRuntimeSession(t *testing.T) {
 	panes, err := f.Backend.Discover()
 	if err != nil || len(panes) != 1 || panes[0].Ref.ID != record.Target.Ref {
 		t.Fatalf("panes = %+v, %v; want the registered pane", panes, err)
-	}
-}
-
-func TestProjectLaunchOnKittyReportsTheBackend(t *testing.T) {
-	client := &recordingKittyClient{windows: []kitty.OSWindow{{ID: 1, IsFocused: true}}}
-	out, err := runProject(t, "launch", testConfig(), client, true, "work", "API")
-	if err != nil {
-		t.Fatalf("launch: %v\n%s", err, out)
-	}
-	var envelope launchEnvelope
-	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
-		t.Fatal(err)
-	}
-	if envelope.Data.Backend != "kitty" || envelope.Data.RuntimeSessionID != "" || len(client.launched) != 1 {
-		t.Fatalf("envelope = %+v, want a kitty launch without a runtime session", envelope)
 	}
 }
 
@@ -126,8 +106,7 @@ func TestProjectLaunchBackendErrorsUseTheErrorEnvelope(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			cfg := test.setup(t)
 			selectBackend(t, test.backend)
-			client := &recordingKittyClient{}
-			out, err := runProject(t, "launch", cfg, client, true, "work", "API")
+			out, err := runProject(t, "launch", cfg, true, "work", "API")
 			var exit *cli.ExitError
 			if !errors.As(err, &exit) || exit.Code != 1 {
 				t.Fatalf("err = %v, want a quiet exit 1", err)
@@ -137,9 +116,6 @@ func TestProjectLaunchBackendErrorsUseTheErrorEnvelope(t *testing.T) {
 			}
 			if err := json.Unmarshal([]byte(out), &envelope); err != nil || envelope.Error.Code != test.code {
 				t.Fatalf("out = %s (%v), want error code %s", out, err, test.code)
-			}
-			if len(client.launched) != 0 {
-				t.Fatal("a failed launch opened a Kitty tab")
 			}
 		})
 	}

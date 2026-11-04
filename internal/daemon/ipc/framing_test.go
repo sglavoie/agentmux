@@ -32,7 +32,7 @@ func TestServer_HandlesPartialWrites(t *testing.T) {
 
 // TestNewServer_SocketIsOwnerOnly pins the Unix socket file mode to 0600 so
 // that other local users cannot connect to the daemon and inject state
-// updates for arbitrary Kitty windows. net.Listen("unix") applies the
+// updates for arbitrary session slots. net.Listen("unix") applies the
 // process umask, which typically yields a world-accessible 0755 socket; the
 // daemon must override that explicitly.
 func TestNewServer_SocketIsOwnerOnly(t *testing.T) {

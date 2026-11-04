@@ -52,7 +52,7 @@ enum WorkspaceWaitingContext {
             }
         }
         guard !row.key.runtimeSessionID.isEmpty else {
-            return .unavailable(SecretText("Open this session in Kitty to read its current output."))
+            return .unavailable(SecretText("This session has no runtime ID to read its current output."))
         }
         switch look(row.key.runtimeSessionID) {
         case let .failure(error): return .failed(SecretText(PromptAnswerState.text(error)))

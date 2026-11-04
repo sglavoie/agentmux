@@ -231,18 +231,6 @@ func TestLaunchProgressFinalIsSuccess(t *testing.T) {
 	assertStatusBarContains(t, m, "2/2")
 }
 
-func TestResortDoneUsesStatusBarToast(t *testing.T) {
-	t.Parallel()
-
-	m := testModel()
-	updated, cmd := m.Update(commands.ResortDoneMsg{})
-	m = updated.(Model)
-	if cmd == nil {
-		t.Fatal("expected resort completion to return refresh/tick command")
-	}
-	assertStatusBarContains(t, m, "Tabs resorted")
-}
-
 func TestCopyDoneErrorUsesStatusBarToast(t *testing.T) {
 	t.Parallel()
 

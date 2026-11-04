@@ -3,7 +3,7 @@ package session
 import "testing"
 
 // TestProjectName_ProjectOnlyContract pins the new base-title contract:
-// projectName treats the stripped Kitty title as an exact project title and
+// projectName treats the stripped session title as an exact project title and
 // does not try to infer or remove a profile prefix on its own.
 func TestProjectName_ProjectOnlyContract(t *testing.T) {
 	t.Parallel()

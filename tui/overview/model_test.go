@@ -2,9 +2,8 @@
 // with every seam replaced, so each one is a statement about what an operator's
 // keypress or a daemon's answer DOES rather than about how it is implemented.
 //
-// Three properties make them deterministic. The Kitty client is nil, so any
-// regression that reached Kitty outside the two seams would panic rather than
-// pass. The clock is a field the test advances, so freshness is asserted at exact
+// Two properties make them deterministic. The clock is a field the test
+// advances, so freshness is asserted at exact
 // ages instead of near them. And the injected commands RECORD and return nothing,
 // so every message this package consumes is one the test chose to send — which is
 // what lets a stale completion, a coalesced tick, and a focus answered after a
@@ -133,7 +132,7 @@ func (r *recorder) install(m *model) {
 func (r *recorder) captureWindows() []int {
 	out := make([]int, 0, len(r.captures))
 	for _, req := range r.captures {
-		out = append(out, req.WindowID)
+		out = append(out, windowIDOfTarget(req.Target))
 	}
 	return out
 }
@@ -141,7 +140,7 @@ func (r *recorder) captureWindows() []int {
 // lastCaptureFor is the newest request issued for one window.
 func (r *recorder) lastCaptureFor(windowID int) (commands.CaptureRequest, bool) {
 	for i := len(r.captures) - 1; i >= 0; i-- {
-		if r.captures[i].WindowID == windowID {
+		if windowIDOfTarget(r.captures[i].Target) == windowID {
 			return r.captures[i], true
 		}
 	}
@@ -497,7 +496,7 @@ func TestAnObsoleteCompletionDoesNotSettleTheReadInFlight(t *testing.T) {
 }
 
 // TestAFailedReadRetainsTheListAndWaitsForTheNextTick is the anti-storm rule plus
-// the retention rule. A daemon and a Kitty that are both down stay down for more
+// the retention rule. A daemon and tmux that are both down stay down for more
 // than a moment, and a surface that emptied itself over a timed-out subprocess
 // would be worse than one showing a slightly old list.
 func TestAFailedReadRetainsTheListAndWaitsForTheNextTick(t *testing.T) {
@@ -514,7 +513,7 @@ func TestAFailedReadRetainsTheListAndWaitsForTheNextTick(t *testing.T) {
 		t.Fatal("a tick during the outstanding read left no pending request")
 	}
 
-	outage := errors.New("kitten @ ls: signal: killed")
+	outage := errors.New("tmux list-sessions: signal: killed")
 	m = only(t, m, commands.ErrMsg{Seq: live, Err: outage})
 	if len(r.topology) != 2 {
 		t.Fatalf("a failure dispatched %d immediate retries, want 0", len(r.topology)-2)
@@ -548,7 +547,7 @@ func TestAFailedReadRetainsTheListAndWaitsForTheNextTick(t *testing.T) {
 
 // TestRepeatedFailuresCostOneReadPerInterval generalizes the anti-storm rule over
 // a sustained outage, which is the shape an operator actually meets: a daemon
-// restarting, or Kitty gone while the overlay window is still up.
+// restarting, or tmux unavailable while the overlay window is still up.
 func TestRepeatedFailuresCostOneReadPerInterval(t *testing.T) {
 	m, r := started(t, 0)
 	m = only(t, m, commands.ErrMsg{Seq: m.refreshActiveSeq, Err: errors.New("down")})
@@ -758,7 +757,7 @@ func TestRefreshMovesTilesToTheirTierWhileRetainingTierOrderAndSelection(t *test
 	}
 
 	// A card moves to the tier its new status belongs in, but no tier is
-	// sorted again when Kitty returns the rows in a different order.
+	// sorted again when tmux returns the rows in a different order.
 	working.State = "key"
 	attention.State = "bolt"
 	newcomer := viewSession(4, "aardvark", "work", "codex")
@@ -887,13 +886,14 @@ func TestAnAnchorChangeKeepsTheSelectionAndDropsTheStaleCapture(t *testing.T) {
 
 	m.previews = map[session.PaneTarget]Preview{}
 	for _, s := range before {
-		m.previews[session.KittyPaneTarget(s.WindowID)] = Preview{Output: []string{"captured"}}
+		m.previews[paneTargetForWindow(s.WindowID)] = Preview{Output: []string{"captured"}}
 	}
 
 	after := viewSessions(3)
 	for i := range after {
 		if after[i].TabID == selected {
 			after[i].WindowID = oldWindow + 1000
+			after[i].Pane = paneTargetForWindow(after[i].WindowID).Pane
 		}
 	}
 	m = only(t, m, commands.TickMsg{})
@@ -905,7 +905,7 @@ func TestAnAnchorChangeKeepsTheSelectionAndDropsTheStaleCapture(t *testing.T) {
 	if m.selectedWindowID != oldWindow+1000 {
 		t.Fatalf("the selection's anchor window is %d, want the new %d", m.selectedWindowID, oldWindow+1000)
 	}
-	if _, ok := m.previews[session.KittyPaneTarget(oldWindow)]; ok {
+	if _, ok := m.previews[paneTargetForWindow(oldWindow)]; ok {
 		t.Fatalf("the capture of the retired window %d survived; it would be painted as a live terminal", oldWindow)
 	}
 	if len(m.previews) != 2 {
@@ -923,7 +923,7 @@ func TestPruningDoesNotReachBackIntoAnEarlierModel(t *testing.T) {
 	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
 	m.previews = map[session.PaneTarget]Preview{}
 	for _, s := range sessions {
-		m.previews[session.KittyPaneTarget(s.WindowID)] = Preview{Output: []string{"captured"}}
+		m.previews[paneTargetForWindow(s.WindowID)] = Preview{Output: []string{"captured"}}
 	}
 	previous := m
 
@@ -945,13 +945,13 @@ func TestAClosedSessionTakesItsCaptureWithIt(t *testing.T) {
 	m = only(t, m, tea.WindowSizeMsg{Width: 160, Height: 45})
 	m.previews = map[session.PaneTarget]Preview{}
 	for _, s := range before {
-		m.previews[session.KittyPaneTarget(s.WindowID)] = Preview{Output: []string{"captured"}}
+		m.previews[paneTargetForWindow(s.WindowID)] = Preview{Output: []string{"captured"}}
 	}
 	gone := before[2]
 
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, before[:2]))
-	if _, ok := m.previews[session.KittyPaneTarget(gone.WindowID)]; ok {
+	if _, ok := m.previews[paneTargetForWindow(gone.WindowID)]; ok {
 		t.Fatalf("the closed session's capture at window %d survived", gone.WindowID)
 	}
 	if len(m.previews) != 2 {
@@ -1000,7 +1000,7 @@ func TestTheSelectedSessionVanishingSelectsTheNearestSurvivor(t *testing.T) {
 func TestTheEmptyTransitionsBothWays(t *testing.T) {
 	all := viewSessions(4)
 	m, _ := loadedAt(t, all, 3)
-	m.previews = map[session.PaneTarget]Preview{session.KittyPaneTarget(all[3].WindowID): {Output: []string{"captured"}}}
+	m.previews = map[session.PaneTarget]Preview{paneTargetForWindow(all[3].WindowID): {Output: []string{"captured"}}}
 
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, nil))
@@ -1053,13 +1053,13 @@ func TestEnterFocusesTheCapturedTabAndExitsOnlyOnSuccess(t *testing.T) {
 		t.Fatal("Enter returned no command")
 	}
 	if quits(t, cmd) {
-		t.Fatal("Enter quit before Kitty confirmed the focus")
+		t.Fatal("Enter quit before tmux confirmed the switch")
 	}
 	if m.focusTabID != target {
 		t.Fatalf("the pending focus is against tab %d, want the captured %d", m.focusTabID, target)
 	}
 
-	m, cmd = send(t, m, commands.FocusDoneMsg{})
+	m, cmd = send(t, m, commands.AttachDoneMsg{Switched: true})
 	if !quits(t, cmd) {
 		t.Fatal("a confirmed focus did not exit the overview")
 	}
@@ -1103,7 +1103,7 @@ func TestAFailedFocusStaysOnTheOverviewWithTheReason(t *testing.T) {
 	target := m.selectedTabID
 
 	m = press(t, m, "enter")
-	m, cmd := send(t, m, commands.FocusDoneMsg{Err: errors.New("no matching tab")})
+	m, cmd := send(t, m, commands.AttachDoneMsg{Err: errors.New("no matching tab")})
 	if quits(t, cmd) {
 		t.Fatal("a failed focus exited the overview")
 	}
@@ -1148,7 +1148,7 @@ func TestADuplicateEnterWhileFocusIsPendingIsIgnored(t *testing.T) {
 	if m.focusTabID == m.selectedTabID {
 		t.Fatal("the cursor did not move off the pending focus target; the case proves nothing")
 	}
-	m, cmd := send(t, m, commands.FocusDoneMsg{})
+	m, cmd := send(t, m, commands.AttachDoneMsg{Switched: true})
 	if !quits(t, cmd) {
 		t.Fatal("the confirmed focus did not exit")
 	}
@@ -1163,7 +1163,7 @@ func TestAFocusCompletionWithNothingPendingIsDropped(t *testing.T) {
 	sessions := viewSessions(4)
 	m, _ := loadedAt(t, sessions, 0)
 
-	m, cmd := send(t, m, commands.FocusDoneMsg{})
+	m, cmd := send(t, m, commands.AttachDoneMsg{Switched: true})
 	if quits(t, cmd) {
 		t.Fatal("an unsolicited focus completion exited the overview")
 	}
@@ -1171,7 +1171,7 @@ func TestAFocusCompletionWithNothingPendingIsDropped(t *testing.T) {
 		t.Fatalf("an unsolicited completion recorded %v", m.focusErr)
 	}
 
-	m, cmd = send(t, m, commands.FocusDoneMsg{Err: errors.New("late")})
+	m, cmd = send(t, m, commands.AttachDoneMsg{Err: errors.New("late")})
 	if quits(t, cmd) {
 		t.Fatal("an unsolicited failure exited the overview")
 	}
@@ -1220,7 +1220,7 @@ func TestDismissalWorksDuringPendingWork(t *testing.T) {
 //
 // Every movement key, a resize, and a full render are driven over a loaded model,
 // and the only thing that may have happened is the read the controller asked for.
-// No focus, and — because the Kitty client is nil — no Kitty call of any kind,
+// No focus, and — because the effect seams record every request — no terminal call of any kind,
 // which would have panicked.
 func TestNavigationAndRenderingNeverActOnASession(t *testing.T) {
 	sessions := viewSessions(9)
@@ -1357,7 +1357,7 @@ func TestTheFeedbackRowDistinguishesTheLifecycleStates(t *testing.T) {
 	t.Run("a delayed refresh outranks emptiness", func(t *testing.T) {
 		m, r := started(t, 0)
 		m = only(t, m, snapshot(firstRefreshSeq, 0, nil))
-		r.now = r.now.Add(protocol.KittySnapshotStaleAfter)
+		r.now = r.now.Add(protocol.TopologyStaleAfter)
 		got := m.feedback()
 		if !strings.HasPrefix(got, "Session refresh delayed") {
 			t.Fatalf("feedback = %q, want the delay warning rather than a claim about an unrefreshable list", got)
@@ -1382,7 +1382,7 @@ func TestTheFeedbackRowDistinguishesTheLifecycleStates(t *testing.T) {
 		sessions := viewSessions(3)
 		m, r := loadedAt(t, sessions, 0)
 		m = press(t, m, "enter")
-		m = only(t, m, commands.FocusDoneMsg{Err: errors.New("no matching tab")})
+		m = only(t, m, commands.AttachDoneMsg{Err: errors.New("no matching tab")})
 		r.now = r.now.Add(time.Minute)
 		if got := m.feedback(); !strings.HasPrefix(got, "Focus failed: ") {
 			t.Fatalf("feedback = %q, want the operator's own failed action first", got)
@@ -1612,6 +1612,7 @@ func TestFeedbackNamesATmuxOutageWhileItsTilesAreKept(t *testing.T) {
 // a switch that was refused, leaves it up.
 func TestAPopupOverviewEndsOnceItsTerminalIsSwitched(t *testing.T) {
 	m, _ := newTestModel(0)
+	m.focusTabID = 1
 	if _, cmd := m.Update(commands.AttachDoneMsg{Switched: true}); !quits(t, cmd) {
 		t.Fatal("the popup stayed over the session it switched the terminal to")
 	}

@@ -4,8 +4,7 @@ import AppKit
 extension AppDelegate {
     // MARK: Function keys
 
-    // F1 to F11 do in the workspace what Kitty binds them to for its tabs.
-    // The ones about a session act on the one the pane is on.
+    // F1 to F11 act on the session the workspace pane shows.
 
     @objc func showKeybindings(_ sender: Any?) { showWorkspaceView(.keybindings) }
     @objc func focusNextSession(_ sender: Any?) { followingFocus { $0.selectNeighbor(1, sessionsOnly: true) } }
@@ -16,35 +15,29 @@ extension AppDelegate {
     @objc func markSessionActive(_ sender: Any?) { sendOperatorEvent("user_active") }
 
     static let noSessionShown = "No session is shown in the workspace."
-    static let pickerNeedsEmbedded = "The icon and color pickers open here for sessions the workspace embeds; a Kitty session has them in Kitty."
+    static let pickerNeedsEmbedded = "The icon and color pickers need a running tmux session."
 
     func openPicker(_ kind: WorkspaceUtilityView.Kind) {
         guard let workspace, workspace.shownSessionRow != nil else { return refuse(Self.noSessionShown) }
         if !workspace.openPicker(kind) { refuse(Self.pickerNeedsEmbedded) }
     }
 
-    /// What `amx hook-indicator` is given to name a session: its runtime
-    /// session, or its window in the Kitty that issued it.
+    /// What `amx hook-indicator` is given to name a runtime session.
     nonisolated static func hookTarget(_ target: WorkspaceTarget) -> [String] {
         switch target {
         case let .embedded(id): return ["--runtime-session", id]
-        case let .kitty(_, windowID): return ["--window-id", String(windowID)]
         }
     }
 
     /// F8 and F11: tells the daemon the operator cleared the shown session's
-    /// state, or marked it active, the way Kitty's own keys do.
+    /// state, or marked it active.
     func sendOperatorEvent(_ event: String) {
         guard let row = workspace?.shownSessionRow else { return refuse(Self.noSessionShown) }
         guard let command else { return refuse(AMXWording.unavailable(notFound: preferences.binaryMenuProblem)) }
-        var socket: String?
-        if case let .kitty(rowSocket, _) = row.target {
-            socket = rowSocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : rowSocket
-            guard socket?.isEmpty == false else { return refuse(KittyEndpoint.listenOnMissing) }
-        }
+        guard case .embedded = row.target else { return refuse(Self.noSessionShown) }
         let arguments = ["hook-indicator", event] + Self.hookTarget(row.target) + ["--strict"]
         let title = Self.operatorEventFailedTitle(event, name: row.displayName)
-        amxRunner.run({ command.run(arguments, kittyListenOn: socket) }, onMain: { [weak self] result in
+        amxRunner.run({ command.run(arguments) }, onMain: { [weak self] result in
             guard let self else { return }
             switch result {
             case let .success(output) where output.status == 0:
@@ -83,22 +76,19 @@ extension AppDelegate {
     /// line a right-click was on.
     func workspaceToggleMute(_ row: WorkspaceRow) {
         switch row.target {
-        case let .kitty(socket, windowID):
-            toggleMute(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: "", muted: row.muted))
         case let .embedded(id):
             guard command != nil else { return refuse(AMXWording.unavailable(notFound: preferences.binaryMenuProblem)) }
             toggleMute(runtimeSessionID: id)
         }
     }
 
-    /// `amx mute-toggle --runtime-session`: a session the workspace embeds
-    /// has no window to name. Like the Kitty path, it shows the change at
+    /// `amx mute-toggle --runtime-session` shows the change at
     /// once, so a second click (or a banner's Mute) before the daemon
     /// publishes it does not toggle the session back.
     func toggleMute(runtimeSessionID id: String, banner: Bool = false) {
         guard let command else { return }
         let key = AttentionCycler.Key.embedded(id)
-        if let listed = store.sessions.first(where: { $0.embeddedRuntimeSessionID == id }) {
+        if let listed = store.managedSessions.first(where: { $0.embeddedRuntimeSessionID == id }) {
             store.expectMute(key, muted: !listed.muted)
         }
         amxRunner.run({ command.json(MuteToggleResult.self, MuteToggleResult.arguments(runtimeSessionID: id)) },

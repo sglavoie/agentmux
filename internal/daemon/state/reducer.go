@@ -8,9 +8,9 @@ import (
 // window's visible state in production: reduceStateUpdate folds every
 // normalized hook event into it and publishes the reduced result (via
 // publishEffectiveLocked) as the authoritative visible icon and loop state,
-// and its facts persist as the schema-v2 user-var payload. The reducer itself
+// and its facts persist in the checkpoint payload. The reducer itself
 // stays deliberately decoupled from the live Handler, StateGuard, WindowState,
-// renderer, and Kitty I/O: it reads no clock (callers pass `now`), touches no
+// renderer, and terminal I/O: it reads no clock (callers pass `now`), touches no
 // globals, and performs no rendering.
 //
 // The model replaces the tab's last-write-wins scalar action with source-scoped

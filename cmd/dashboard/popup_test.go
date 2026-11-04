@@ -11,7 +11,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -27,7 +26,6 @@ type popupWorld struct {
 }
 
 type dashboardStart struct {
-	client kitty.KittyClient
 	source int
 }
 
@@ -37,8 +35,8 @@ func newPopupWorld(t *testing.T, titles ...string) *popupWorld {
 	oldRun, oldConfig, oldOpenConfig := runDashboard, loadRunnableConfig, loadOpenDashboardConfig
 	oldCurrent, oldRegistry, oldPortable := viewCurrentSession, viewRegistryPath, commands.Portable
 	oldEnviron := workspaceViewEnviron
-	runDashboard = func(_ *config.Config, client kitty.KittyClient, source int) error {
-		w.started = append(w.started, dashboardStart{client, source})
+	runDashboard = func(_ *config.Config, source int) error {
+		w.started = append(w.started, dashboardStart{source})
 		return nil
 	}
 	loadRunnableConfig = func() (*config.Config, error) { return w.cfg, nil }
@@ -129,11 +127,11 @@ func TestPopupDashboardOpensOnItsSessionAndSwitchesTheTerminal(t *testing.T) {
 	// The popup runs in the environment of the session it is over.
 	viewCurrentSession = func() string { return string(w.ids["alpha"]) }
 
-	if err := Run(0, "", View{Popup: true}); err != nil {
+	if err := Run("", View{Popup: true}); err != nil {
 		t.Fatal(err)
 	}
-	if len(w.started) != 1 || w.started[0].client != nil {
-		t.Fatalf("dashboards started = %+v, want one with no Kitty client", w.started)
+	if len(w.started) != 1 {
+		t.Fatalf("dashboards started = %+v, want one with no injected terminal client", w.started)
 	}
 	if want := commands.PortableSelection(w.ids["alpha"]); w.started[0].source != want || want < commands.PortableIDBase {
 		t.Fatalf("the dashboard opened on %d, want the row of the session it is over (%d)", w.started[0].source, want)
@@ -162,7 +160,7 @@ func TestPopupDashboardOpensOnItsSessionAndSwitchesTheTerminal(t *testing.T) {
 // attaches it, as before, and only opens on the session it was asked for.
 func TestDashboardSelectsARuntimeSessionWithoutBecomingAPopup(t *testing.T) {
 	w := newPopupWorld(t, "alpha", "bravo")
-	if err := Run(0, "", View{Select: string(w.ids["bravo"])}); err != nil {
+	if err := Run("", View{Select: string(w.ids["bravo"])}); err != nil {
 		t.Fatal(err)
 	}
 	if len(w.started) != 1 || w.started[0].source != commands.PortableSelection(w.ids["bravo"]) {
@@ -171,12 +169,12 @@ func TestDashboardSelectsARuntimeSessionWithoutBecomingAPopup(t *testing.T) {
 	if commands.Portable.Switch != nil {
 		t.Fatal("a dashboard that owns its terminal was given a terminal to switch")
 	}
-	if err := Run(0, "", View{Select: "not-a-session"}); err == nil {
+	if err := Run("", View{Select: "not-a-session"}); err == nil {
 		t.Fatal("--select accepted something that is not a runtime session ID")
 	}
 }
 
-func runOpenDashboardOutsideKitty(t *testing.T, jsonOut bool) (string, error) {
+func runOpenDashboardWithTerminalContext(t *testing.T, jsonOut bool) (string, error) {
 	t.Helper()
 	oldJSON := openDashboardJSON
 	openDashboardJSON = jsonOut
@@ -189,10 +187,10 @@ func runOpenDashboardOutsideKitty(t *testing.T, jsonOut bool) (string, error) {
 	return out.String(), err
 }
 
-// open-dashboard outside Kitty opens the popup over the terminal used last,
+// open-dashboard opens the popup over the terminal used last,
 // on the session it shows; with no terminal attached it starts the dashboard
 // where it was typed.
-func TestOpenDashboardOutsideKittyOpensAPopupOverTheLastTerminal(t *testing.T) {
+func TestOpenDashboardOpensAPopupOverTheLastTerminal(t *testing.T) {
 	w := newPopupWorld(t, "alpha", "bravo")
 	oldBinary, oldStart, oldHere := openDashboardBinary, openDashboardStartPopup, openDashboardHere
 	t.Cleanup(func() { openDashboardBinary, openDashboardStartPopup, openDashboardHere = oldBinary, oldStart, oldHere })
@@ -206,15 +204,15 @@ func TestOpenDashboardOutsideKittyOpensAPopupOverTheLastTerminal(t *testing.T) {
 	openDashboardHere = func() error { here++; return nil }
 
 	// Nobody is attached: the dashboard starts here, and --json says why not.
-	if _, err := runOpenDashboardOutsideKitty(t, false); err != nil || here != 1 || len(popups) != 0 {
+	if _, err := runOpenDashboardWithTerminalContext(t, false); err != nil || here != 1 || len(popups) != 0 {
 		t.Fatalf("with no terminal attached: %v, started here %d times, popups %v", err, here, popups)
 	}
-	if out, err := runOpenDashboardOutsideKitty(t, true); err == nil || !strings.Contains(out, "no_attached_terminal") || here != 1 {
+	if out, err := runOpenDashboardWithTerminalContext(t, true); err == nil || !strings.Contains(out, "no_attached_terminal") || here != 1 {
 		t.Fatalf("--json with no terminal attached = %q, %v", out, err)
 	}
 
 	client := w.attach(t, "bravo")
-	out, err := runOpenDashboardOutsideKitty(t, true)
+	out, err := runOpenDashboardWithTerminalContext(t, true)
 	if err != nil {
 		t.Fatalf("open-dashboard: %v\n%s", err, out)
 	}

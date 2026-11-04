@@ -112,7 +112,7 @@ the query was typed there. The selector flags narrow the search the way they nar
 		for i := range views {
 			listed[i] = views[i].sessionView
 		}
-		markLive(listed, live, sessionCommandsCurrentWindow())
+		markLive(listed, live)
 		for i := range views {
 			views[i].sessionView = listed[i]
 		}

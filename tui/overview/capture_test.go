@@ -21,6 +21,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/backend"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -51,12 +53,21 @@ func windows(m model) []int {
 	return out
 }
 
+func paneTargetForWindow(id int) session.PaneTarget {
+	return session.PaneTarget{Backend: runtimesession.BackendTmux, Pane: backend.PaneID(strconv.Itoa(id))}
+}
+
+func windowIDOfTarget(target session.PaneTarget) int {
+	id, _ := strconv.Atoi(target.Pane.ID)
+	return id
+}
+
 // visibleWindows is what the scheduler considers on screen right now.
 func visibleWindows(m model) []int {
 	tiles := m.visibleTiles()
 	out := make([]int, 0, len(tiles))
 	for _, tile := range tiles {
-		out = append(out, tile.target.KittyWindowID())
+		out = append(out, windowIDOfTarget(tile.target))
 	}
 	return out
 }
@@ -120,8 +131,8 @@ func TestNineVisibleTilesStartFourReads(t *testing.T) {
 			t.Fatalf("generation %d was issued twice; two tiles would accept each other's text", req.Generation)
 		}
 		seen[req.Generation] = true
-		if got, want := [2]int{req.Width, req.Height}, extents[req.WindowID]; got != want {
-			t.Fatalf("window %d was asked for %dx%d, want its tile's %dx%d", req.WindowID, got[0], got[1], want[0], want[1])
+		if got, want := [2]int{req.Width, req.Height}, extents[windowIDOfTarget(req.Target)]; got != want {
+			t.Fatalf("window %d was asked for %dx%d, want its tile's %dx%d", windowIDOfTarget(req.Target), got[0], got[1], want[0], want[1])
 		}
 	}
 }
@@ -132,13 +143,13 @@ func TestNineVisibleTilesStartFourReads(t *testing.T) {
 func tileExtents(m model) map[int][2]int {
 	out := map[int][2]int{}
 	for _, tile := range m.visibleTiles() {
-		out[tile.target.KittyWindowID()] = [2]int{tile.width, tile.height}
+		out[windowIDOfTarget(tile.target)] = [2]int{tile.width, tile.height}
 	}
 	return out
 }
 
 // TestABurstOfTicksCoalescesIntoTheQueueItAlreadyHas is the cadence rule. A
-// hundred ticks behind a slow Kitty must leave the queue exactly as long as one,
+// hundred ticks behind a slow tmux capture must leave the queue exactly as long as one,
 // because a tick asks for every visible tile and enqueue declines the ones that
 // are already spoken for.
 func TestABurstOfTicksCoalescesIntoTheQueueItAlreadyHas(t *testing.T) {
@@ -163,7 +174,7 @@ func TestABurstOfTicksCoalescesIntoTheQueueItAlreadyHas(t *testing.T) {
 
 // TestTheCadenceIsTheOperatorsAndIndependentOfTheTopologyInterval. The window
 // tree is read in seconds and a terminal's last lines in milliseconds; tying them
-// together would either poll Kitty's window list ten times a second or leave
+// together would either poll session list ten times a second or leave
 // every preview two seconds behind the pane beside it.
 func TestTheCadenceIsTheOperatorsAndIndependentOfTheTopologyInterval(t *testing.T) {
 	for _, tc := range []struct{ configured, wantMs int }{
@@ -246,9 +257,9 @@ func TestNoWindowIsEverReadTwiceAtOnce(t *testing.T) {
 		if _, held := m.captures.byRequest[req.RequestID]; !held {
 			continue
 		}
-		live[req.WindowID]++
-		if live[req.WindowID] > 1 {
-			t.Fatalf("window %d has %d reads outstanding, want at most 1", req.WindowID, live[req.WindowID])
+		live[windowIDOfTarget(req.Target)]++
+		if live[windowIDOfTarget(req.Target)] > 1 {
+			t.Fatalf("window %d has %d reads outstanding, want at most 1", windowIDOfTarget(req.Target), live[windowIDOfTarget(req.Target)])
 		}
 	}
 	if m.captures.inFlight() > maxCapturesInFlight {
@@ -293,13 +304,13 @@ func TestTheBoundHoldsThroughPagesResizesAndFreshTrees(t *testing.T) {
 			visible[windowID] = true
 		}
 		for windowIDTarget := range m.previews {
-			windowID := windowIDTarget.KittyWindowID()
+			windowID := windowIDOfTarget(windowIDTarget)
 			if !visible[windowID] {
 				t.Fatalf("round %d retained a capture of window %d, which is not on screen", round, windowID)
 			}
 		}
 		for _, windowIDTarget := range m.captures.queue {
-			windowID := windowIDTarget.KittyWindowID()
+			windowID := windowIDOfTarget(windowIDTarget)
 			if !visible[windowID] {
 				t.Fatalf("round %d left window %d queued, which is not on screen", round, windowID)
 			}
@@ -344,8 +355,8 @@ func TestOffPageTilesAreNeverRead(t *testing.T) {
 		m = only(t, m, commands.CaptureTickMsg{})
 	}
 	for _, req := range r.captures {
-		if !onPage[req.WindowID] {
-			t.Fatalf("window %d was read while off-page; only %v are visible", req.WindowID, visibleWindows(m))
+		if !onPage[windowIDOfTarget(req.Target)] {
+			t.Fatalf("window %d was read while off-page; only %v are visible", windowIDOfTarget(req.Target), visibleWindows(m))
 		}
 	}
 	if len(r.captures) != 2 {
@@ -429,13 +440,13 @@ func TestAReplyForAResizedTileReleasesItsSlotAndIsNotPainted(t *testing.T) {
 	}
 	extents := tileExtents(m)
 	for _, req := range refetch {
-		if got, want := [2]int{req.Width, req.Height}, extents[req.WindowID]; got != want {
+		if got, want := [2]int{req.Width, req.Height}, extents[windowIDOfTarget(req.Target)]; got != want {
 			t.Fatalf("the refetch of window %d asked for %dx%d, want the new tile's %dx%d",
-				req.WindowID, got[0], got[1], want[0], want[1])
+				windowIDOfTarget(req.Target), got[0], got[1], want[0], want[1])
 		}
 		for _, old := range stale {
-			if old.WindowID == req.WindowID && old.Generation == req.Generation {
-				t.Fatalf("window %d was refetched at the same generation %d; the stale reply would have been accepted", req.WindowID, req.Generation)
+			if windowIDOfTarget(old.Target) == windowIDOfTarget(req.Target) && old.Generation == req.Generation {
+				t.Fatalf("window %d was refetched at the same generation %d; the stale reply would have been accepted", windowIDOfTarget(req.Target), req.Generation)
 			}
 		}
 	}
@@ -481,7 +492,7 @@ func TestAShrunkTileIsRecutRatherThanRefetched(t *testing.T) {
 		t.Fatalf("%d captures survived a shrink, want all 4", len(m.previews))
 	}
 	for windowIDTarget, p := range m.previews {
-		windowID := windowIDTarget.KittyWindowID()
+		windowID := windowIDOfTarget(windowIDTarget)
 		extent := after[windowID]
 		if len(p.Output) != extent[1] {
 			t.Fatalf("window %d holds %d lines in a %d-line tile", windowID, len(p.Output), extent[1])
@@ -513,10 +524,10 @@ func TestRetainedTextNeverOutgrowsItsTile(t *testing.T) {
 
 		extents := map[int][2]int{}
 		for _, tile := range m.visibleTiles() {
-			extents[tile.target.KittyWindowID()] = [2]int{tile.width, tile.height}
+			extents[windowIDOfTarget(tile.target)] = [2]int{tile.width, tile.height}
 		}
 		for windowIDTarget, p := range m.previews {
-			windowID := windowIDTarget.KittyWindowID()
+			windowID := windowIDOfTarget(windowIDTarget)
 			extent, ok := extents[windowID]
 			if !ok {
 				t.Fatalf("at %dx%d a capture of the invisible window %d is retained", size[0], size[1], windowID)
@@ -560,8 +571,8 @@ func TestADuplicateReplyReleasesNothing(t *testing.T) {
 	if m.captures.inFlight() != maxCapturesInFlight {
 		t.Fatalf("duplicate replies left %d reads in flight, want %d", m.captures.inFlight(), maxCapturesInFlight)
 	}
-	if got := m.previews[session.KittyPaneTarget(req.WindowID)].Output; len(got) != 1 || got[0] != "once" {
-		t.Fatalf("window %d shows %q; a duplicate repainted a settled tile", req.WindowID, got)
+	if got := m.previews[paneTargetForWindow(windowIDOfTarget(req.Target))].Output; len(got) != 1 || got[0] != "once" {
+		t.Fatalf("window %d shows %q; a duplicate repainted a settled tile", windowIDOfTarget(req.Target), got)
 	}
 }
 
@@ -574,7 +585,7 @@ func TestAnUnsolicitedReplyIsDropped(t *testing.T) {
 	dispatched := len(r.captures)
 
 	m, cmd := send(t, m, commands.CaptureOutputMsg{
-		Request: commands.CaptureRequest{WindowID: windows(m)[0], Generation: 1, RequestID: 9999},
+		Request: commands.CaptureRequest{Target: paneTargetForWindow(windows(m)[0]), Generation: 1, RequestID: 9999},
 		Lines:   []string{"from nowhere"},
 	})
 	if cmd != nil {
@@ -600,7 +611,7 @@ func TestAFailedReadOccupiesItsOwnTileAndIsRetriedOnTheCadence(t *testing.T) {
 	m = reply(t, m, broken, nil, errors.New("no matching window"))
 	m = reply(t, m, healthy, []string{"still working"}, nil)
 
-	failed := m.previews[session.KittyPaneTarget(broken.WindowID)]
+	failed := m.previews[paneTargetForWindow(windowIDOfTarget(broken.Target))]
 	if failed.Content != dashboard.InspectorFailed {
 		t.Fatalf("the failed window shows content state %v, want InspectorFailed", failed.Content)
 	}
@@ -610,7 +621,7 @@ func TestAFailedReadOccupiesItsOwnTileAndIsRetriedOnTheCadence(t *testing.T) {
 	if len(failed.Output) != 0 {
 		t.Fatalf("the failed tile kept %q", failed.Output)
 	}
-	ok := m.previews[session.KittyPaneTarget(healthy.WindowID)]
+	ok := m.previews[paneTargetForWindow(windowIDOfTarget(healthy.Target))]
 	if ok.Content != dashboard.InspectorReady || len(ok.Output) != 1 {
 		t.Fatalf("the healthy tile beside a failure shows %v/%q", ok.Content, ok.Output)
 	}
@@ -628,7 +639,7 @@ func TestAFailedReadOccupiesItsOwnTileAndIsRetriedOnTheCadence(t *testing.T) {
 	}
 	before := len(r.captures)
 	m = only(t, m, commands.CaptureTickMsg{})
-	retried, found := r.lastCaptureFor(broken.WindowID)
+	retried, found := r.lastCaptureFor(windowIDOfTarget(broken.Target))
 	if !found || len(r.captures) <= before {
 		t.Fatal("the tick after a failure retried nothing")
 	}
@@ -654,14 +665,14 @@ func TestAnEmptyCaptureIsNotLoading(t *testing.T) {
 	empty := r.captures[0]
 	m = reply(t, m, empty, nil, nil)
 
-	landed, ok := m.previews[session.KittyPaneTarget(empty.WindowID)]
+	landed, ok := m.previews[paneTargetForWindow(windowIDOfTarget(empty.Target))]
 	if !ok {
 		t.Fatal("an empty capture stored nothing, so its tile is indistinguishable from one still loading")
 	}
 	if landed.Content != dashboard.InspectorReady {
 		t.Fatalf("an empty capture stored content state %v, want InspectorReady", landed.Content)
 	}
-	if _, pending := m.previews[session.KittyPaneTarget(r.captures[1].WindowID)]; pending {
+	if _, pending := m.previews[paneTargetForWindow(windowIDOfTarget(r.captures[1].Target))]; pending {
 		t.Fatal("the tile whose read has not landed already holds a capture")
 	}
 
@@ -684,24 +695,24 @@ func TestAClosedSessionsReplyIsDroppedAndItsSlotReleased(t *testing.T) {
 
 	survivors := make([]session.RunningSession, 0, len(sessions))
 	for _, s := range m.sessions {
-		if s.WindowID != doomed.WindowID {
+		if s.WindowID != windowIDOfTarget(doomed.Target) {
 			survivors = append(survivors, s)
 		}
 	}
 	m = only(t, m, commands.TickMsg{})
 	m = only(t, m, snapshot(m.refreshActiveSeq, 0, survivors))
-	if _, still := m.captures.targets[session.KittyPaneTarget(doomed.WindowID)]; still {
-		t.Fatalf("window %d is still a capture target after its session closed", doomed.WindowID)
+	if _, still := m.captures.targets[paneTargetForWindow(windowIDOfTarget(doomed.Target))]; still {
+		t.Fatalf("window %d is still a capture target after its session closed", windowIDOfTarget(doomed.Target))
 	}
 
 	before := m.captures.inFlight()
 	m = reply(t, m, doomed, []string{"from a window that is gone"}, nil)
-	if p, painted := m.previews[session.KittyPaneTarget(doomed.WindowID)]; painted {
+	if p, painted := m.previews[paneTargetForWindow(windowIDOfTarget(doomed.Target))]; painted {
 		t.Fatalf("the closed window's reply was painted: %+v", p)
 	}
 	for _, req := range r.captures {
-		if req.WindowID == doomed.WindowID && req.RequestID != doomed.RequestID {
-			t.Fatalf("window %d was read again after its session closed", doomed.WindowID)
+		if windowIDOfTarget(req.Target) == windowIDOfTarget(doomed.Target) && req.RequestID != doomed.RequestID {
+			t.Fatalf("window %d was read again after its session closed", windowIDOfTarget(doomed.Target))
 		}
 	}
 	if m.captures.inFlight() != before {
@@ -717,12 +728,13 @@ func TestAnAnchorChangeInvalidatesTheReadThatWasOut(t *testing.T) {
 	sessions := viewSessions(3)
 	m, r := atSize(t, sessions, 0, 160, 45)
 	outstanding := inFlightRequests(r, m)[0]
-	oldWindow := outstanding.WindowID
+	oldWindow := windowIDOfTarget(outstanding.Target)
 
 	restarted := make([]session.RunningSession, 0, len(m.sessions))
 	for _, s := range m.sessions {
 		if s.WindowID == oldWindow {
 			s.WindowID = oldWindow + 1000
+			s.Pane = paneTargetForWindow(s.WindowID).Pane
 		}
 		restarted = append(restarted, s)
 	}
@@ -739,10 +751,10 @@ func TestAnAnchorChangeInvalidatesTheReadThatWasOut(t *testing.T) {
 	}
 
 	m = reply(t, m, outstanding, []string{"from the retired window"}, nil)
-	if _, painted := m.previews[session.KittyPaneTarget(oldWindow)]; painted {
+	if _, painted := m.previews[paneTargetForWindow(oldWindow)]; painted {
 		t.Fatalf("the retired window %d holds a capture", oldWindow)
 	}
-	if _, stolen := m.previews[session.KittyPaneTarget(newWindow)]; stolen {
+	if _, stolen := m.previews[paneTargetForWindow(newWindow)]; stolen {
 		t.Fatalf("the retired window's text was painted into its replacement %d", newWindow)
 	}
 }
@@ -756,13 +768,13 @@ func TestAnOldSnapshotCannotPaintAnotherSession(t *testing.T) {
 	live := inFlightRequests(r, m)
 
 	for i, req := range live {
-		m = reply(t, m, req, []string{"belongs to window " + itoa(req.WindowID)}, nil)
+		m = reply(t, m, req, []string{"belongs to window " + itoa(windowIDOfTarget(req.Target))}, nil)
 		if got := len(m.previews); got != i+1 {
 			t.Fatalf("%d replies produced %d captures", i+1, got)
 		}
 	}
 	for windowIDTarget, p := range m.previews {
-		windowID := windowIDTarget.KittyWindowID()
+		windowID := windowIDOfTarget(windowIDTarget)
 		want := "belongs to window " + itoa(windowID)
 		if len(p.Output) != 1 || p.Output[0] != want {
 			t.Fatalf("window %d shows %q, want %q", windowID, p.Output, want)
@@ -832,7 +844,7 @@ func TestAConfirmedFocusStopsTheScheduler(t *testing.T) {
 	dispatched := len(r.captures)
 
 	m = press(t, m, "enter")
-	m, cmd := send(t, m, commands.FocusDoneMsg{})
+	m, cmd := send(t, m, commands.AttachDoneMsg{Switched: true})
 	if !quits(t, cmd) {
 		t.Fatal("a confirmed focus did not exit the overview")
 	}
@@ -857,7 +869,7 @@ func TestAFailedFocusLeavesTheCapturesRunning(t *testing.T) {
 	dispatched := len(r.captures)
 
 	m = press(t, m, "enter")
-	m = only(t, m, commands.FocusDoneMsg{Err: errors.New("no matching tab")})
+	m = only(t, m, commands.AttachDoneMsg{Err: errors.New("no matching tab")})
 	if m.captures.stopped {
 		t.Fatal("a failed focus stopped the capture scheduler; the surface the operator is left on would freeze")
 	}
@@ -907,7 +919,7 @@ func TestRepliesReleasedInArbitraryOrderUnderRealGoroutines(t *testing.T) {
 		for i := len(parked) - 1; i >= 0; i-- {
 			next, cmd := send(t, m, commands.CaptureOutputMsg{
 				Request: parked[i],
-				Lines:   []string{"window " + itoa(parked[i].WindowID)},
+				Lines:   []string{"window " + itoa(windowIDOfTarget(parked[i].Target))},
 			})
 			m = next
 			spawn(cmd)
@@ -925,7 +937,7 @@ func TestRepliesReleasedInArbitraryOrderUnderRealGoroutines(t *testing.T) {
 		t.Fatalf("%d tiles hold a capture, want all %d", len(m.previews), len(sessions))
 	}
 	for windowIDTarget, p := range m.previews {
-		windowID := windowIDTarget.KittyWindowID()
+		windowID := windowIDOfTarget(windowIDTarget)
 		if len(p.Output) != 1 || p.Output[0] != "window "+itoa(windowID) {
 			t.Fatalf("window %d shows %q", windowID, p.Output)
 		}

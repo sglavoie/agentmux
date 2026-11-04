@@ -212,12 +212,13 @@ func TestSessionSearchFindsConversationsByMessageText(t *testing.T) {
 		// the table says which row it is, as session list does.
 		sessionListIsTerminal = func(io.Writer) bool { return true }
 		sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) {
-			return map[string]liveConversation{"codex:codex-race": {WindowID: 7, TabID: 2}}, true
+			return map[string]liveConversation{"codex:codex-race": {RuntimeSessionID: "rs-current"}}, true
 		}
-		sessionCommandsCurrentWindow = func() int { return 7 }
+		previousCurrent := currentRuntimeSession
+		currentRuntimeSession = func() string { return "rs-current" }
 		t.Cleanup(func() {
 			sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return nil, false }
-			sessionCommandsCurrentWindow = func() int { return 0 }
+			currentRuntimeSession = previousCurrent
 		})
 		out, err := run(t, nil, "race")
 		if err != nil {

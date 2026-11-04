@@ -86,7 +86,7 @@ func TestRenderActionsBoxExpandsForActionRows(t *testing.T) {
 
 	// The explanation still reaches the operator — it is drawn for whatever is
 	// selected, which on a freshly opened menu is Open session.
-	if !strings.Contains(stripAnsi(raw), "Kitty tab") {
+	if !strings.Contains(stripAnsi(raw), "show the selected tmux session here") {
 		t.Fatalf("the selected entry's explanation is missing:\n%s", stripAnsi(raw))
 	}
 }
@@ -336,7 +336,7 @@ func TestDashboardOverlaysReserveStatusBar(t *testing.T) {
 		{name: "confirm", m: confirm, popup: "End session", status: "Confirm end session"},
 		{name: "config picker", m: configPicker, popup: "Restart with profile", status: "Choose profile"},
 		{name: "help", m: help, popup: "Keyboard Shortcuts", status: "Help"},
-		{name: "detail", m: detail, popup: "api", status: "Session details: window 42"},
+		{name: "detail", m: detail, popup: "api", status: "Session details: tmux session"},
 	}
 
 	for _, tc := range cases {

@@ -494,7 +494,7 @@ func TestHealthOverlayNamesStaleAndColdTopologySeparately(t *testing.T) {
 	t.Parallel()
 
 	warm := healthModel(t)
-	warm.topologyObservedAt = healthOverlayNow.Add(-protocol.KittySnapshotStaleAfter - time.Second)
+	warm.topologyObservedAt = healthOverlayNow.Add(-protocol.TopologyStaleAfter - time.Second)
 	issue, _ := dashboard.FindHealthIssue(healthIssues(warm), dashboard.HealthIssueTopology)
 	if issue.State != dashboard.HealthWarning {
 		t.Fatalf("aged tree = %s, want warning", issue.State.Label())
@@ -505,12 +505,12 @@ func TestHealthOverlayNamesStaleAndColdTopologySeparately(t *testing.T) {
 
 	cold := healthModel(t)
 	cold.topologyObservedAt = time.Time{}
-	cold.err = errors.New("kitty: connection refused")
+	cold.err = errors.New("tmux: connection refused")
 	issue, _ = dashboard.FindHealthIssue(healthIssues(cold), dashboard.HealthIssueTopology)
 	if issue.State != dashboard.HealthFailed {
 		t.Fatalf("cold failure = %s, want failed", issue.State.Label())
 	}
-	if !strings.Contains(healthBody(cold), "no session list: kitty: connection refused") {
+	if !strings.Contains(healthBody(cold), "no session list: tmux: connection refused") {
 		t.Fatalf("cold failure is not reported as one:\n%s", healthBody(cold))
 	}
 }

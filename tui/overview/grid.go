@@ -2,7 +2,7 @@
 // tiles fit on a terminal, which page a selection is on, where each tile sits,
 // and what a keypress moves the selection to.
 //
-// Everything here is a function of its arguments. No clock is read, no Kitty
+// Everything here is a function of its arguments. No clock is read, no terminal
 // call is made, no daemon is asked, and no file is opened — a whole overview is
 // rendered from a supplied session slice, a supplied set of previews, and a
 // supplied Now, which is what lets a grid be asserted byte-for-byte at a pinned

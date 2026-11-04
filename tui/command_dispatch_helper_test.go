@@ -158,18 +158,6 @@ func drainMsgs(t *testing.T, cmd tea.Cmd) []tea.Msg {
 	}
 }
 
-// actionDoneFrom is drainMsgs for the one message a caller usually wants.
-func actionDoneFrom(t *testing.T, cmd tea.Cmd) commands.ActionDoneMsg {
-	t.Helper()
-	for _, msg := range drainMsgs(t, cmd) {
-		if done, ok := msg.(commands.ActionDoneMsg); ok {
-			return done
-		}
-	}
-	t.Fatalf("no commands.ActionDoneMsg among the messages the command produced")
-	return commands.ActionDoneMsg{}
-}
-
 // pressRowAction is runRowAction for a caller that only wants the model.
 func pressRowAction(t *testing.T, m Model, key string) Model {
 	t.Helper()

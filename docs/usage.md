@@ -11,7 +11,7 @@
 - [Live session overview](#live-session-overview)
 - [The agent-session-loop cockpit](#the-agent-session-loop-cockpit)
 - [Launcher](#launcher): [launch destinations](#launch-destinations),
-  [the tmux backend, and Kitty](#the-tmux-backend-and-kitty),
+  [the tmux backend](#the-tmux-backend),
   [launching from a shell](#launching-from-a-shell)
 - [Answering or prompting an agent without attaching](#answering-or-prompting-an-agent-without-attaching) (`amx send`)
 - [Managed worktrees](#managed-worktrees)
@@ -36,8 +36,8 @@ This opens the dashboard, or focuses the existing dashboard tab if one is
 already running. To go straight to Past Sessions with no dashboard behind it,
 run `amx past-sessions` or press `Ctrl+Shift+Y` in a terminal; leaving Past
 Sessions then closes it. `⌘Y` in Agent Mux.app opens native Conversation History. When opened with the bundled `Ctrl+Shift+D` binding, the
-dashboard selects the session it was opened from: the attached tmux session
-or the Kitty tab. An unmanaged source leaves the current/default selection alone.
+dashboard selects the attached tmux session it was opened from. An unmanaged
+source leaves the current/default selection alone.
 
 The dashboard answers a small keymap. Everything else it can do is reached
 through two surfaces it opens: `a` for the row under the cursor, `:` for the
@@ -51,7 +51,7 @@ says where each key went.
 - `j`/`k` or `↑`/`↓`: move the cursor, or scroll the inspector when it has focus
 - `PgUp`/`PgDn`, `Home`/`End`: page, or jump to the ends of the focused pane
 - `g`/`G`: aliases for `Home`/`End`; `Ctrl+D`/`Ctrl+U`: half-page down/up in the focused pane
-- `Enter`: open the selected session (attach on tmux, focus its tab on Kitty); on a family summary, fold or
+- `Enter`: open the selected tmux session; on a family summary, fold or
   unfold the family instead
 - `n`/`N`: move to the next/previous **Needs you** session. A target inside a
   folded family unfolds it and lands the cursor on the row; nothing is focused,
@@ -79,8 +79,8 @@ says where each key went.
   without attaching](#answering-or-prompting-an-agent-without-attaching)), so
   the same refusals apply: text is not typed onto a prompt, a key is not
   pressed where nothing is asked, and a session running an agent-session-loop
-  run asks you to send a second time to confirm. The key is dead on a Kitty
-  row, and on a row whose run has a question open, which is answered from Runs.
+  run asks you to send a second time to confirm. The key is disabled on a row
+  whose run has a question open, which is answered from Runs.
   The Text half supports paste, arrow keys, Home/End, Ctrl+Home/End,
   Ctrl+w or Alt+Backspace to delete a word, and Page Up/Down to navigate long
   drafts. Paste never presses keys in the Keys half. Escape keeps an unsent
@@ -144,13 +144,12 @@ longer dispatches. `:` does not open the palette from other modes.
 
 Rows marked with `🔁` have at least one active `agent-session-loop` run whose
 workspace matches the project row. Loop matching canonicalizes the workspace
-path, prefers the same harness when a matching managed Kitty tab or row is open,
+path, prefers the same harness when a matching managed row is open,
 and falls back to legacy CWD-only matching for older loop state or unknown
-harnesses. Agent Mux also mirrors `🔁` into the Kitty project tab that owns the
-loop while it is active, preserving existing state, star, and mute icons.
+harnesses. Agent Mux displays `🔁` on the session while its loop is active.
 Finished runs stop counting as active when loop discovery sees
 `run_finished_at` in `state.json`, and the `AgentSessionLoopFinished` hook
-clears active-class icons while reconciling the tab-title `🔁` marker.
+clears active-class icons while reconciling the `🔁` marker.
 
 The dashboard keeps identity metadata out of the list entirely. A row is three
 cells — the name, a Status phrase saying what it is doing, and the run timer —
@@ -334,7 +333,7 @@ Between the list and the footer is the **feedback slot**, one reserved row that
 is genuinely blank when there is nothing to report. Action errors, in-progress
 work, transient toasts, and undo feedback appear there. Standing state never
 does: counts belong to the group headings, a session's state to its own row icon
-and the inspector, and every health reading — a delayed Kitty refresh included —
+and the inspector, and every health reading — including a delayed refresh —
 to the header. A row that always said something would be a row the eye stops
 checking.
 
@@ -343,16 +342,14 @@ own footer and status-line behavior unchanged.
 
 The detail pane's event history persists through terminal hooks (`Stop`,
 `SessionEnd`, etc.) and through the watchdog's stale sweep, so you can still
-review what a session did after its icon clears. History is held in memory per
-Kitty window and capped at 5 000 events (oldest dropped); it is released only
-when the window closes or the daemon restarts.
+review what a session did after its icon clears. History is held in memory per session and capped at 5 000 events (oldest
+dropped); it is released when the session ends or the daemon restarts.
 
 ## Dashboard views and continuity
 
 The default TUI opens on the live-session dashboard and selects the session
-it was opened from when possible: the tmux session a popup is over, or the
-Kitty tab. It runs in any terminal; Kitty is one of two backends and is never
-required ([The tmux backend](#the-tmux-backend-and-kitty)). `/` filters the live-session
+it was opened from when possible: the tmux session a popup is over. It runs in
+any terminal ([The tmux backend](#the-tmux-backend)). `/` filters the live-session
 list; `:` opens the command palette, from which **Search All Past Sessions**
 opens Past Sessions and **Search Plans** opens Plans.
 
@@ -368,17 +365,16 @@ under `--json` as that envelope too: a name that is no command of its group
 (`amx session lst`) is `unknown_command`, with the commands it may have meant
 as candidates, and a flag that does not parse or an argument a command does
 not take is `invalid_arguments`. A bare group (`amx worktree`) prints its help.
-`--window` and `--window-id` both name a Kitty window wherever either is
-accepted, and `amx version` prints what `amx --version` does.
+`amx version` prints what `amx --version` does.
 
 ```bash
-amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or Kitty could not be asked), and that last reply (empty when there was none) when piped
+amx session list              # a table with relative ages, message counts (prompts and replies with text, not tool calls or the background-task notices Claude Code writes as prompts), short session IDs any command accepts, and each conversation's title (its opening prompt when the harness named it nothing) followed by `→` and the opening of the agent's last reply, so runs of the same prompt read apart, in a terminal, the 25 most recent unless -n says otherwise; every session as tab-separated RFC 3339 rows, with full IDs followed by the opening prompt, the title (empty when there is none), the message count, a LIVE field (`here`, `live`, empty when closed, `?` when the daemon or tmux could not be asked), and that last reply (empty when there was none) when piped
 amx session list --json
 amx session list --since 7d   # only sessions active in the last week (or 2w, 12h, 90m, …)
 amx session list --here -n 5  # the five latest sessions started in this directory or below it
 amx session list --harness codex --profile codex-work   # both repeatable
 amx session list --project amx   # one project's sessions; "amx" reaches "🐱amx" as project launch reads it, and a directory-named project works too (repeatable)
-amx session list --live       # only conversations open right now, in a Kitty tab or a tmux session; refused, not empty, when the daemon (or Kitty, for a Kitty tab) cannot say
+amx session list --live       # only conversations open in a tmux session; refused, not empty, when the daemon or tmux cannot say
 amx session list --all        # also automated sessions (ASL runs, subagents, exec), hidden by default as in Past Sessions
 amx session continue "$(amx session list | fzf | cut -f5)"   # pick by opening prompt
 amx session search race daemon            # conversations mentioning both words, newest first, with match counts and a matched line (one you or the agent wrote before tool output); the conversation you search from comes last, and a terminal says how many automated sessions also match
@@ -471,8 +467,7 @@ command cannot open is `activity_unavailable`.
 `amx session changes` reviews a Git checkout against `--base` (`HEAD` unless
 given): staged and unstaged changes to tracked files, and untracked paths.
 Name the checkout with exactly one of `--directory`, or `--runtime-session`
-for the directory a live tmux session's agent is working in; a Kitty session
-is reviewed by `--directory`. It writes nothing, and runs no Git hook,
+for the directory a live tmux session's agent is working in. It writes nothing, and runs no Git hook,
 external diff driver, or textconv.
 
 ```bash
@@ -515,11 +510,10 @@ works: `amx session continue 7f67dc81`. An exact ID always wins over a longer
 one it begins, and a prefix that several conversations share is refused with
 every candidate.
 
-`session continue` opens the exact live session when one exists—attaching on
-tmux or focusing its Kitty tab—and otherwise resumes the closed conversation. `session list` and `session search`
+`session continue` attaches to the exact live tmux session when one exists
+and otherwise resumes the closed conversation. `session list` and `session search`
 in a terminal mark those conversations with `●` in a LIVE column, and the one
-open in the window the command runs in with `here`; `session show` identifies their live backend target, and all three put the tab under `live` in `--json`; when the daemon or
-Kitty cannot be asked, the column and line are left out rather than reporting
+open in the window the command runs in with `here`; `session show` identifies their live backend target, and all three put the tab under `live` in `--json`; when the daemon or tmux cannot be asked, the column and line are left out rather than reporting
 nothing open. Native forks are used for Claude
 and Codex. Copilot forks use a portable handoff because Copilot does not expose
 native fork semantics. Worktree forks create a tracked isolated Git worktree
@@ -585,9 +579,8 @@ output keeps its original colors.
 amx overview
 ```
 
-`F2` opens the same surface from an attached tmux terminal, the macOS workspace,
-or Kitty. It is a grid of managed tmux sessions and, when available, sessions
-in the current Kitty instance. Each tile has a
+`F2` opens the same surface from an attached tmux terminal or the macOS workspace.
+It is a grid of managed tmux sessions. Each tile has a
 three-line header — which session, what it is doing and for how long, and what
 is running it — and a live preview of that pane's screen below a divider. It
 answers "what is every session doing right now" in one glance, which the list
@@ -669,8 +662,7 @@ under the same rules and the same confirmations, as `a` on a dashboard row.
   focusing its pane or marking its completion read. No matches leaves selection
   unchanged.
 - `Enter`: open the selected session. A tmux session attaches here (F12 returns),
-  or switches the hosting terminal when the overview is a popup; a Kitty
-  session focuses its tab and leaves. The target is captured when you press
+  or switches the hosting terminal when the overview is a popup. The target is captured when you press
   the key, so a refresh cannot hand you a different pane. A failure leaves
   you on the overview with
   the reason on the feedback row and the same tile selected, which is the only
@@ -731,14 +723,9 @@ it on the next refresh. A tile whose read has not landed yet says `(loading…)`
 a pane that has genuinely printed nothing says `(no output)`, which is a
 different answer.
 
-Inside Kitty, the overview is a singleton: invoking it again focuses the
-existing overview tab and keeps its selection and page. A failed Kitty listing
-or focus is reported rather than treated as an absent overview. A terminal
-outside Kitty runs the overview locally; a tmux popup uses the attached terminal.
+The overview runs locally in a terminal; a tmux popup uses the attached terminal.
 
-Kitty rows use the daemon's published window snapshot when attributable to the
-current Kitty instance, falling back to a direct listing. Tmux rows come from
-the private server and runtime registry. A delayed refresh keeps the last good
+Rows come from the private tmux server and runtime registry. A delayed refresh keeps the last good
 list and says `Session refresh delayed; showing cached sessions (Ns old)`;
 a partial tmux outage is identified separately. Cached rows do not prove that
 their agents are still running.
@@ -864,9 +851,8 @@ its own badge/metadata columns.
 - `o` opens the directory of every project `enter` would launch: the selected
   projects the filter shows, or the highlighted one when nothing is selected,
   skipping hidden selections and staying open when there is nothing to open.
-  Each opens in a Kitty tab, or in a shell view of the desktop workspace; in a
-  plain terminal outside Kitty only the first opens, in a shell here, and a
-  warning counts the rest.
+  Each opens in a shell view of the desktop workspace. In a plain terminal
+  only the first opens, in a shell here, and a warning counts the rest.
 - `?` shows the keymap,
 - `esc` clears an active filter first and leaves the launcher on a second
   press; `q` leaves it in one step. Neither quits Agent Mux — `Ctrl+C` does.
@@ -896,11 +882,11 @@ focusing the existing tab.
 
 | Entry point | Destination |
 | --- | --- |
-| CLI launch commands | `--backend`, then `[defaults] launch_backend`, then tmux |
-| Terminal dashboard | `--backend`, then configured backend, then tmux in every terminal |
-| App → Launch Project | App Settings → **Launch projects in**: Workspace (default), Kitty, or Follow CLI configuration; the last reads the CLI default again before launching |
+| CLI launch commands | tmux, from any terminal |
+| Terminal dashboard | tmux, from any terminal |
+| App → Launch Project | Workspace (tmux), shown in embedded Ghostty terminals |
 | App → Run a Plan | Workspace (tmux), shown beside the supervisor selection |
-| Open an existing live session | Its recorded backend; launch preferences do not move it |
+| Open an existing live session | Its tmux session; launch preferences do not move it |
 
 The launcher header names its actual destination and its source (`--backend`,
 `config.toml`, the workspace host, or the tmux default).
@@ -913,42 +899,32 @@ highlighted project's effective profile, including a one-time override. App
 Settings also reports the CLI backend so an override is visible. The app's
 Launch Project menu repeats the destination above the profile groups.
 
-### The tmux backend, and Kitty
+### The tmux backend
 
-The dashboard and the overview run in any terminal — stock Ghostty, Terminal,
-or Kitty without its tab integration — by hosting agents on AgentMux's private
-tmux server. Nothing about that server is the operator's: it has its own
-socket and configuration and never reads `~/.tmux.conf`. Kitty is the other
-backend, where a session is a Kitty tab; it is optional, set up by
-`just install-kitty` and the `kitty.conf` lines in the README, and nothing
-here needs it: install, `amx doctor`, the release gate, and every command
-below work on a machine that has none.
+The dashboard and the overview run in any terminal by hosting agents on
+Agent Mux's private tmux server. The macOS app embeds Ghostty to display
+those sessions. The server has its own socket and configuration and never
+reads `~/.tmux.conf`.
 
 | Where `amx` runs | New agents launch on | Sessions listed |
 | --- | --- | --- |
-| inside Kitty | tmux | Kitty tabs and tmux sessions |
-| inside Kitty, `amx --backend kitty` | Kitty tabs | Kitty tabs, plus tmux sessions when the private server exists |
-| any other terminal (tmux installed) | tmux | tmux sessions |
-| any other terminal, `amx --backend kitty` | Kitty | Kitty, through `KITTY_LISTEN_ON` as before |
+| any terminal (tmux installed) | tmux | tmux sessions |
 
 `amx overview` and `amx past-sessions` follow the same flag, configuration,
 and default precedence.
 
 The launch commands (`amx project launch`, `amx session continue|fork|
 fork-worktree|handoff`) take `--backend` too. Without it they launch where
-`[defaults] launch_backend` says. Set it to `tmux` to use no Kitty at all:
+`[defaults] launch_backend` says. The supported value is `tmux`:
 
 ```toml
 [defaults]
 launch_backend = "tmux"
 ```
 
-Unset or empty, it means `tmux`. Use `launch_backend = "kitty"` or
-`--backend kitty` to keep launching in Kitty tabs. If tmux is unavailable,
-launches report the setup failure instead of silently switching destinations.
-A session already running is always reached on its recorded backend,
-whatever is set now. Legacy session records with an empty backend still
-identify Kitty sessions.
+Unset or empty also selects `tmux`. Other values are rejected. If tmux
+is unavailable, launches report the setup failure. Existing tmux
+sessions keep running across app and terminal restarts.
 
 **Which tmux.** The private server needs tmux 3.5 or newer. `amx` uses, in
 order: `[defaults.tmux] path` from `config.toml` or `AMX_TMUX`, either of
@@ -974,8 +950,7 @@ read from the runtime-session registry alone (no daemon, no tmux), and
 `amx close` kills only the pane its launch tagged with that runtime session,
 on the server generation it was registered on. Closing a session whose agent
 already stopped cleans up what is left of it, and closing one that is already
-gone succeeds with `closed: false` under `--json`. It refuses a Kitty runtime
-session (`unsupported_backend`): close its tab instead.
+gone succeeds with `closed: false` under `--json`.
 
 #### When tmux cannot be used, and what doctor reports
 
@@ -996,7 +971,7 @@ daemon is doing for the sessions:
 backend: launches go to tmux; tmux 3.7c (bundled, verified); server running with 30 agents in 30 sessions
 runtime sessions: 30 live (30 on tmux, 1 server), 4 with a terminal attached, 26 unattached; reconciled 1.2s ago in 15ms (412 passes, 0 failed)
 screen captures: 320 read, 2 failed, last good one 1.2s ago (slowest 31ms); tmux clients: 1450 run, at most 2 at once (limit 4), 0 timed out
-versions: amx 0.8.0, daemon 0.8.0, go1.26.0, tmux 3.7c (needs 3.5 or newer), kitty 0.43.1
+versions: amx 0.8.0, daemon 0.8.0, go1.26.0, tmux 3.7c (needs 3.5 or newer)
 ```
 
 The `backend:` and `versions:` lines are read by `doctor` itself, so they are
@@ -1020,12 +995,7 @@ The daemon reads the private server once every two seconds, with one tmux
 client however many agents there are, and spaces failing passes out to thirty
 seconds so a server that does not answer cannot hold its maintenance loop. No
 program runs more than four tmux clients at once; the rest wait their turn.
-Doctor's Kitty findings — `kitty`, `kitty_snapshot_stale`, and
-`renderer_drift` — are raised only where Kitty is in use: launches go to it,
-the command runs in a Kitty window, or the daemon holds a current topology of
-one. There, a Kitty that does not answer is a failure. Where launches go to
-tmux and nothing names a live Kitty, the report says `kitty: not in use` and
-`renderer drift: not checked`, and raises none of the three.
+
 
 None of this reads a pane. The lines, the JSON, the `daemon.runtime_reconcile`
 journal records (one when passes start failing, one when they recover, one for
@@ -1062,10 +1032,9 @@ What changes for a tmux session, and only for it:
   quit: the new row appears on the next refresh.
 - **Utility views run in this terminal.** Peek pages the pane's scrollback in
   `less`; open-shell, open-editor, the plan editor, and the worktree shell and
-  editor suspend the dashboard, run in place, and return to it. Inside Kitty a
-  Kitty session keeps its native overlay pager and new tabs.
+  editor suspend the dashboard, run in place, and return to it.
 - **The function keys work in the attached terminal.** The private tmux
-  configuration binds what `agent-mux.conf` binds in Kitty, so a plain
+  configuration binds the same session shortcuts in a plain
   terminal attached to a session has the same keys: **F1** the keybinding
   reference, **F2** the overview, **F5** and **F6** the icon and color
   pickers, **ctrl+shift+d** the dashboard, and **ctrl+shift+y** Past
@@ -1074,8 +1043,7 @@ What changes for a tmux session, and only for it:
   clear, **F10** mute, **F11** mark active; **F3** the scrollback markers;
   **F12** detach. A key acts on the session the terminal is on. In Agent
   Mux.app the main menu takes these keys first, as before. ctrl+shift+d and
-  ctrl+shift+y need a terminal that reports modified keys (the kitty
-  keyboard protocol or xterm's modifyOtherKeys); `amx open-dashboard` opens
+  ctrl+shift+y need a terminal that reports modified keys; `amx open-dashboard` opens
   the dashboard popup from anywhere.
 - **Going to another session switches the terminal.** F7, F9, and F4 (and
   `amx focus-prev-managed`, `focus-next-managed`, and `focus-next`, which
@@ -1094,8 +1062,7 @@ What changes for a tmux session, and only for it:
   the dashboard and the overview open over the session you are in, selected
   on it. `enter` on a row switches the terminal to that session and closes
   the popup; `q` closes it and leaves you where you were. A terminal shows
-  one popup at a time, so there is one dashboard per terminal, as a Kitty
-  session had one dashboard tab. Peek, the project shell, and the editor run
+  one popup at a time, so there is one dashboard per terminal. Peek, the project shell, and the editor run
   inside the popup rather than taking over the terminal. `amx` typed in a
   terminal that is attached to nothing is still an ordinary full-screen
   dashboard, where `enter` attaches and F12 comes back. `amx --select
@@ -1103,20 +1070,16 @@ What changes for a tmux session, and only for it:
 - **Sessions are always in sort order.** The order (`[defaults] sort`, pins
   first) is computed, not held by a terminal, and the dashboard, the overview,
   and what the daemon publishes to Agent Mux.app all list sessions in it.
-  Only Kitty's tabs can be out of it, so without Kitty `Resort Tabs` moves
-  nothing and says so.
-- **The terminal shows the session's state.** The daemon renders what a Kitty
-  tab showed, the state icon ahead of the session's title, into the session,
-  and the terminal attached to it takes that as its own title, so the tab of
-  whatever terminal emulator you use reads like a Kitty tab. A plain terminal
+
+- **The terminal shows the session's state.** The daemon renders the state icon
+  ahead of the session's title, and the attached terminal uses that title. A plain terminal
   also gets one line under the pane with the same text on the session's
   color; in Agent Mux.app the sidebar says all of that, and the line stays
   off. The line belongs to whichever terminal attached last. It follows the
   daemon within a couple of seconds, and with no daemon running it keeps what
   was last rendered.
-- **The pickers edit a tmux session.** Outside Kitty `amx color-picker` and
-  `amx icon-picker` open in the terminal they are typed in and edit a tmux
-  session instead of a Kitty tab: the one named by `--runtime-session`, else
+- **The pickers edit a tmux session.** `amx color-picker` and `amx icon-picker`
+  open in the terminal they are typed in and edit the session: the one named by `--runtime-session`, else
   the one the command is typed in, else the only one running; with several and
   none named they list them and open nothing. The icon goes into the session's
   title, where its launch already put its harness's `[harness_emojis]` icon,
@@ -1125,9 +1088,7 @@ What changes for a tmux session, and only for it:
   profile's: the dashboard draws the
   session's rows in it, Agent Mux.app draws the session's sidebar line on
   it, and a plain terminal's status line is drawn on it. "reset" returns to the
-  profile's color. Inside Kitty
-  both stay overlays on the tab, and `--runtime-session` reaches a tmux session
-  from there. `amx keybindings` opens in place.
+  profile's color. `amx keybindings` opens in place.
 - **A tmux session can be given a name.** `amx name-session --runtime-session
   <id> <name>` keeps a name with the session, on one line and at most 64
   characters, and `amx name-session --runtime-session <id> --clear` removes
@@ -1136,7 +1097,7 @@ What changes for a tmux session, and only for it:
   shows the name above the session's profile in its sidebar, and names a
   session itself with ⌘R or a right-click on its line.
 - **A session can be pinned above every other.** The pin is the `★` in front
-  of the session's title, Kitty tab or tmux session alike, so the dashboard
+  of the session's title, so the dashboard
   and Agent Mux.app list the same pins: the dashboard under a **Pinned**
   heading above Needs you, the app in its **Pinned** group above Needs
   attention. A pinned session that is waiting stays under Pinned; it still
@@ -1158,9 +1119,7 @@ What changes for a tmux session, and only for it:
   second time. Past Sessions, Plans, Worktrees (fork, reopen, shell, editor),
   and the agent-session-loop Runs view work unchanged.
 
-Restart, close, lock, mute, clear, and mark-active act on whichever backend
-hosts the row, so one dashboard can hold Kitty tabs and tmux sessions side by
-side.
+Restart, close, lock, mute, clear, and mark-active act on the selected tmux session.
 
 ### Launching from a shell
 
@@ -1190,12 +1149,11 @@ selector launches nothing and lists the configured projects it could have meant
 (`ambiguous_project` or `not_found`, with `candidates` whose `id` is
 `profile/title`); an unmatched title lists only the projects whose titles
 contain it, when there are any. Like `enter` in the launcher, `project launch` always starts a
-new session (a new tab on Kitty). Its `--json` data is `{action, changed,
+new tmux session. Its `--json` data is `{action, changed,
 message, project, tab_id, window_id, backend, runtime_session_id}`. `backend`
 is where the session launched. `runtime_session_id` is the runtime session a
 tmux launch registered, the one `amx attach` takes, and is omitted otherwise.
-`tab_id` and `window_id` name the new Kitty tab when exactly one new tab
-carrying the title appeared, and are omitted otherwise.
+`tab_id` and `window_id` are omitted for tmux launches.
 
 `--launch-profile PROFILE` uses another configured profile and its harness for
 this launch. `--profile` still selects the source project template. The override
@@ -1208,7 +1166,7 @@ session keeps the project's title, profile, arguments, and environment, and
 directory used.
 
 A project whose directory is missing or is not a directory is never launched,
-because Kitty would quietly open the tab somewhere else: `project launch`
+because the agent would run in the wrong place: `project launch`
 refuses with `directory_unusable`, naming the project and the problem, and the
 launcher marks the row `(missing)` and its preview's `dir:` line with the
 reason. `amx project list --missing` lists every such project.
@@ -1219,14 +1177,8 @@ it out, naming it refuses with `project_archived`, and `config validate` and
 `doctor` do not warn about its directory. Overseer policy still reads it, so
 archiving a project never lifts an `asl_overseer` exclusion.
 
-`amx open-dashboard` brings the dashboard forward without drawing it in the
-calling terminal: it focuses a running dashboard (the singleton rule) or opens
-one in a new tab, and `--json` reports `{window_id, tab_id, opened}`. It refuses
-rather than opening a second dashboard when Kitty cannot be listed or the
-running one cannot be focused.
-
-With no Kitty at all (neither `KITTY_LISTEN_ON` nor a Kitty window), the
-dashboard is the popup of a terminal attached to a tmux session:
+`amx open-dashboard` opens the dashboard as a popup of a terminal attached
+to a tmux session:
 `amx open-dashboard` opens it over the terminal used last, selected on the
 session that terminal shows, and `--json` reports that terminal as `client`
 with `window_id` and `tab_id` zero. A terminal that already shows a popup
@@ -1234,19 +1186,11 @@ keeps it. With no terminal attached anywhere, the dashboard starts in the
 terminal the command is typed in, and `--json` refuses with
 `no_attached_terminal` instead.
 
-Both work from outside Kitty when `KITTY_LISTEN_ON` names the instance's
-remote-control socket:
-
-```bash
-KITTY_LISTEN_ON=unix:/tmp/kitty-12345 amx project launch --title API --json
-KITTY_LISTEN_ON=unix:/tmp/kitty-12345 amx open-dashboard --json
-```
-
 ## Answering or prompting an agent without attaching
 
 `amx send` writes to a running agent's terminal with nothing attached, and
-takes the session from nobody who has it. It works on tmux sessions only (see
-[The tmux backend, and Kitty](#the-tmux-backend-and-kitty)); the dashboard's
+takes the session from nobody who has it. It works on tmux sessions (see
+[The tmux backend](#the-tmux-backend)); the dashboard's
 `t` form and Agent Mux.app's prompt answer panel run it underneath.
 
 ```bash
@@ -1299,7 +1243,7 @@ for it moves. An agent that was already working moves by itself, so it is not
 watched and stays `accepted`. `--json` reports `{runtime_session_id, backend,
 project, operation_id, input, screen, delivery}` and never the text, which is
 passed to tmux on standard input and appears in no argument list, log, or
-journal. A Kitty runtime session is refused (`unsupported_backend`).
+journal.
 
 **Looking first.** `amx send ID --look` sends nothing and prints the last
 rows of the agent's screen; with `--json` it reports `{runtime_session_id,
@@ -1317,9 +1261,9 @@ branch, path, profile, harness, and lifecycle labels. `j`/`k`, `g`/`G`, and
 shell, `O` opens the configured editor, and `r` refreshes Git and activity
 facts.
 
-`Enter` smart-reopens the selected worktree. A sole live Kitty session is
-focused. Multiple live sessions open a picker that identifies the project,
-profile, harness, Kitty tab/window, candidate ID, and native harness session ID
+`Enter` smart-reopens the selected worktree. A sole live tmux session is
+opened. Multiple live sessions open a picker that identifies the project,
+profile, harness, candidate ID, and native harness session ID
 when known. With no live session, Agent Mux resumes the newest indexed
 conversation inside the checkout or launches a fresh session. If recorded
 profile provenance is no longer usable, the normal profile picker requests an
@@ -1355,8 +1299,8 @@ Cleanup is always explicit:
 The TUI shows refusal reasons known from its latest snapshot before opening a
 confirmation, then the shared action performs fresh activity, dirtiness, lock,
 registration, metadata, ref, and ancestry checks immediately before mutation.
-Agent Mux never force-removes a worktree, deletes an unmerged branch, closes a
-Kitty session, stops an active loop, or acts on a worktree outside its managed
+Agent Mux never force-removes a worktree, deletes an unmerged branch, stops an
+active loop, or acts on a worktree outside its managed
 root. Partial cleanup is reported with the durable steps that succeeded; the
 inventory refreshes and retains the recovery row instead of presenting the
 operation as all-or-nothing.
@@ -1371,28 +1315,22 @@ amx worktree list [--json]
 amx worktree show <selector> [--json]
 amx worktree diff <selector> [--committed] [--patch] [--json]
 amx worktree land <selector> --yes [--remove] [--json]
-amx worktree reopen <selector> [--live-session <candidate>] [--profile <name>] [--backend kitty|tmux] [--json]
-amx worktree shell <selector> [--backend kitty|tmux] [--json]
-amx worktree edit <selector> [--backend kitty|tmux] [--json]
+amx worktree reopen <selector> [--live-session <candidate>] [--profile <name>] [--backend tmux] [--json]
+amx worktree shell <selector> [--backend tmux] [--json]
+amx worktree edit <selector> [--backend tmux] [--json]
 amx worktree remove <selector> --yes [--delete-branch] [--json]
 amx worktree forget <selector> --yes [--json]
 amx worktree prune [--merged] [--yes] [--delete-branch] [--json]
 ```
 
-The worktree commands follow the launch backend (`--backend`, else
-`[defaults] launch_backend`). On Kitty, `reopen` launches a tab and `shell`
-and `edit` open one. On tmux nothing reads Kitty: `reopen` launches on the
-private server, what runs there is what counts as a live session in a
+The worktree commands use tmux. `reopen` launches on the private server, what runs there is what counts as a live session in a
 worktree, and `shell` and `edit` open a workspace view when Agent Mux.app
 hosts the terminal and otherwise run the shell or the editor in the terminal
 the command was typed in. With `--json` they run nothing there and report
 `"continuation": "here"` with the path, for the caller to open.
 
-`list` and `show` count a worktree's live sessions from each backend on its
-own: agents on the private tmux server are counted even when launches go to
-Kitty, and a Kitty that cannot be asked from this terminal leaves them
-counted, with a warning that the sessions in Kitty are not (`land` and
-`remove` refuse while any count is incomplete).
+`list` and `show` count a worktree's live tmux sessions. `land` and `remove`
+refuse while the live count cannot be determined.
 
 `prune` selects every worktree `remove` would accept on its own — present,
 valid, clean, unlocked, attached to a branch, and used by no live session or

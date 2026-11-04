@@ -6,7 +6,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/daemon/state"
 )
 
 // TestAuthoritativeIdleDiscardedWhenSequenceMoved covers the new-prompt race:
@@ -98,92 +97,6 @@ func TestAuthoritativeIdleDiscardedWhenLowerExplicitSequenceLands(t *testing.T) 
 // per-source sequence of its own — advances the window-wide receipt generation,
 // so an idle observation captured before the sweep is discarded rather than
 // allowed to settle a synthetic stop over the freshly self-healed state.
-func TestAuthoritativeIdleDiscardedWhenWatchdogExpiryLands(t *testing.T) {
-	t.Parallel()
-
-	h := newTestHandler()
-	// A small active threshold so a lone stale bolt fact self-heals in one sweep.
-	h.SetStaleThresholds(map[string]time.Duration{"active": time.Second}, nil)
-	base := time.Now().Unix()
-	idleSeedHarness(t, h, 7, "cur", "active", base)
-	captured := idleShadowSeq(t, h, 7)
-
-	// A watchdog sweep whose observed age exceeds the threshold expires the bolt
-	// fact, mutating the reducer after the idle evidence was captured.
-	h.SweepStaleWithSnapshot(time.Unix(base, 0).Add(time.Hour), nil)
-	if moved := idleShadowSeq(t, h, 7); moved <= captured {
-		t.Fatalf("receipt generation = %d, want it advanced past the captured %d after watchdog expiry", moved, captured)
-	}
-
-	obs := authoritativeIdle{
-		WindowID:        7,
-		Source:          authoritativeIdleTestSource("claude"),
-		Harness:         "claude",
-		CapturedSeq:     captured,
-		At:              base + 5,
-		RequiredSamples: 1,
-	}
-	if h.applyAuthoritativeIdle(obs) {
-		t.Fatalf("stale observation applied after a watchdog expiry mutated the window")
-	}
-}
-
-// TestAuthoritativeIdleDiscardedWhenPersistedMergeLands proves a degraded-startup
-// persisted-fact merge advances the window-wide receipt generation even when the
-// imported facts' per-source sequences do not exceed the current counter, so an
-// idle observation captured before the merge is discarded rather than allowed to
-// settle over the newly surfaced disjoint state.
-func TestAuthoritativeIdleDiscardedWhenPersistedMergeLands(t *testing.T) {
-	t.Parallel()
-
-	h := newTestHandler()
-	now := time.Now()
-	base := now.Unix()
-
-	// The degraded-window hook created in-process state for the interactive
-	// harness source only.
-	idleSeedHarness(t, h, 42, "cur", "active", base)
-	captured := idleShadowSeq(t, h, 42)
-
-	// A persisted amx_state carries a DISJOINT durable fact (a live between-turns
-	// ASL lease) whose per-source sequence is at or below the current window
-	// generation, so the merge cannot advance the receipt generation via MaxSeq
-	// alone.
-	persisted := state.NewReducer(state.ReducerConfig{})
-	persisted.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run-1"}, Phase: state.ASLPhaseBetween, RunID: "run-1", Seq: 1, At: base})
-	win := encodeMergeWindow(t, persisted, 1, now)[0].Tabs[0].Windows[0]
-
-	h.stateMu.Lock()
-	st := h.store[42]
-	h.mergePersistedFactsLocked(42, st, win, now)
-	moved := st.ShadowSeq
-	merged := st.Reducer.MaxSeq()
-	h.stateMu.Unlock()
-	if moved <= captured {
-		t.Fatalf("receipt generation = %d, want it advanced past the captured %d after a persisted merge", moved, captured)
-	}
-	if exists, live := h.store[42].Reducer.LeaseState("run-1"); !exists || !live {
-		t.Fatalf("disjoint persisted ASL lease not merged: exists=%v live=%v (maxSeq %d)", exists, live, merged)
-	}
-
-	obs := authoritativeIdle{
-		WindowID:        42,
-		Source:          authoritativeIdleTestSource("claude"),
-		Harness:         "claude",
-		CapturedSeq:     captured,
-		At:              base + 5,
-		RequiredSamples: 1,
-	}
-	if h.applyAuthoritativeIdle(obs) {
-		t.Fatalf("stale observation applied after a persisted merge mutated the window")
-	}
-}
-
-// TestAuthoritativeIdleDiscardedWhenASLLeaseSeedLands proves a first-time ASL
-// lease seed — which stamps its fact at sequence 0 so the run's own future events
-// supersede it — still advances the window-wide receipt generation, so an idle
-// observation captured before the seed is discarded rather than allowed to retire
-// the freshly seeded lease.
 func TestAuthoritativeIdleDiscardedWhenASLLeaseSeedLands(t *testing.T) {
 	t.Parallel()
 

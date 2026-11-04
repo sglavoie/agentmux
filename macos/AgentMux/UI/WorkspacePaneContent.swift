@@ -5,8 +5,6 @@ enum WorkspacePaneContent: Equatable {
     case empty
     case review
     case terminal(runtimeSessionID: String)
-    /// The selected session is a Kitty window.
-    case external(AttentionCycler.Key)
     /// Its terminal ended while its session is still listed: it was attached
     /// elsewhere, or detached with F12.
     case detached(runtimeSessionID: String)

@@ -22,12 +22,12 @@ func TestStatusEvidenceFollowsWinningFactAndSurvivesRestore(t *testing.T) {
 			r := state.NewReducer(state.ReducerConfig{})
 			r.Apply(protocol.ReducerEvent{Source: tc.source, Action: "permission", Seq: 1, At: 100})
 			st := state.WindowState{Reducer: r, Effective: r.Reduce(110)}
-			encoded, err := st.MarshalUserVar()
+			encoded, err := st.MarshalStatePayload()
 			if err != nil {
 				t.Fatal(err)
 			}
 			var restored state.WindowState
-			if err := restored.UnmarshalUserVar(encoded); err != nil {
+			if err := restored.UnmarshalStatePayload(encoded); err != nil {
 				t.Fatal(err)
 			}
 			h := newTestHandler()

@@ -451,7 +451,7 @@ func TestHelpKeymapPaintsItsKeysLikeKeys(t *testing.T) {
 // TestHelpActOnRowFollowsTheSessionActionTable pins the Act on row section to
 // sessionactions.MenuDefinitions: every menu mnemonic is listed with the
 // label and description the menu itself draws, in menu order, and Enter is
-// described for both backends rather than as a Kitty tab focus.
+// described as a tmux attach.
 func TestHelpActOnRowFollowsTheSessionActionTable(t *testing.T) {
 	t.Parallel()
 
@@ -468,7 +468,7 @@ func TestHelpActOnRowFollowsTheSessionActionTable(t *testing.T) {
 	last := -1
 	for _, def := range sessionactions.MenuDefinitions() {
 		if def.Mnemonic.Key == keyEnter {
-			want := "  enter     " + strings.ToLower(def.MenuLabel) + " (attach on tmux, focus tab on Kitty)"
+			want := "  enter     " + strings.ToLower(def.MenuLabel) + " (attach tmux session)"
 			if !strings.Contains(joined, want) {
 				t.Errorf("Act on row lacks %q:\n%s", want, joined)
 			}
@@ -493,6 +493,6 @@ func TestHelpActOnRowFollowsTheSessionActionTable(t *testing.T) {
 		}
 	}
 	if strings.Contains(joined, "focus the session's tab") {
-		t.Error("Act on row still describes Enter as a Kitty-only tab focus")
+		t.Error("Act on row still describes Enter as a terminal tab focus")
 	}
 }

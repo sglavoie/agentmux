@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
+	"github.com/sglavoie/agentmux/tui/cmdtest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
@@ -34,7 +34,7 @@ func mustConsequence(id commands.ID) string {
 // as the case asks for it.
 func sessionActionModel(confirms bool, rows ...session.RunningSession) Model {
 	m := testModelWithSessions()
-	m.client = kittytest.NewClient(nil)
+	m.client = nil
 	m.width = 160
 	m.height = 50
 	m.cfg.Defaults.ConfirmDestructive = confirms
@@ -363,11 +363,8 @@ func TestStaleTargetIsRefusedRatherThanRetargeted(t *testing.T) {
 	updated, cmd := m.Update(keyPress(keyY))
 	m = updated.(Model)
 
-	if cmd != nil {
-		// A refusal may still carry the toast ticker, but it must not carry work.
-		if len(m.client.(*kittytest.Client).CallsFor("CloseWindow")) != 0 {
-			t.Fatal("a stale confirmation closed a window")
-		}
+	if cmd != nil && !cmdtest.IsTimer(cmd) {
+		t.Fatal("a stale confirmation scheduled terminal work")
 	}
 	if got := m.activeUndoEntries(); len(got) != 0 {
 		t.Fatalf("undo entries = %v, want none for a refused action", got)
@@ -465,7 +462,7 @@ func TestActionDoneCorrelatesWithItsDispatch(t *testing.T) {
 
 	// An uncorrelated completion — an undo, a direct key, a reply already
 	// reported — is still the model's to record.
-	failure := errors.New("kitty refused")
+	failure := errors.New("terminal action refused")
 	updated, _ = m.Update(commands.ActionDoneMsg{Err: failure})
 	m = updated.(Model)
 	if !errors.Is(m.actionErr, failure) {

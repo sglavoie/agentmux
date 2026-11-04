@@ -15,9 +15,7 @@ import (
 // Showing a runtime session, seen from the daemon.
 //
 // A click on a notification or a menu row is a request to see one session. A
-// Kitty session is a window, and focus_window names it. A runtime session on
-// another backend has no window behind its slot, so it is named by its
-// runtime session and shown wherever something can show it: a connected
+// runtime session is shown wherever something can show it: a connected
 // workspace is asked for its native view of the session, and with none the
 // terminal the operator used last on the session's server, among those the
 // workspace does not host, is switched to it.
@@ -96,10 +94,9 @@ func (h *Handler) focusRuntimeSession(raw string) (protocol.FocusSessionResult, 
 	if h.runtimeDirectory == nil {
 		return protocol.FocusSessionResult{}, protocol.FocusSessionErrorUnknown
 	}
-	// A Kitty session is a window of another application, which focus_window
-	// names; an unreadable registry is no evidence that a session exists.
+	// An unreadable registry is no evidence that a session exists.
 	record, found, _ := h.runtimeDirectory.Lookup(id)
-	if !found || record.Target == nil || record.Target.Instance.Kind == runtimesession.BackendKitty {
+	if !found || record.Target == nil || record.Target.Instance.Kind != runtimesession.BackendTmux {
 		return protocol.FocusSessionResult{}, protocol.FocusSessionErrorUnknown
 	}
 	if record.State != runtimesession.StateLive {

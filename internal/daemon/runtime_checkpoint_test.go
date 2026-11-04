@@ -9,7 +9,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/hookevent"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -21,9 +20,6 @@ func checkpointHandler(t *testing.T, path string, directory *fakeRuntimeDirector
 	t.Helper()
 	h := newTestHandler()
 	h.SetStopConfirm(0, 0, false)
-	h.SetKittyClient(&fakeKittyClient{windows: hookEventWindows("api", []kitty.Window{
-		{ID: 7, IsActive: true, UserVars: kitty.UserVars{Profile: "managed", Harness: "claude"}},
-	})})
 	h.SetRuntimeSessionDirectory(directory)
 	h.SetRuntimeCheckpointPath(path)
 	return h
@@ -68,21 +64,18 @@ func reducerRuntime(h *Handler, slot int) string {
 }
 
 // TestRuntimeCheckpointSurvivesDaemonRestart: a tmux session's facts and
-// binding, and a Kitty session's binding, come back in a new daemon; the tmux
-// session's next event lands on its restored state instead of replacing it.
+// binding come back in a new daemon. Its next event extends restored state.
 func TestRuntimeCheckpointSurvivesDaemonRestart(t *testing.T) {
 	t.Parallel()
 
 	path := filepath.Join(t.TempDir(), runtimeCheckpointFileName)
 	directory := newFakeRuntimeDirectory()
-	onTmux, onKitty := newRuntimeID(t), newRuntimeID(t)
+	onTmux := newRuntimeID(t)
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%3")
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
 
 	before := checkpointHandler(t, path, directory)
 	requireAccepted(t, before.Handle(runtimeHook(t, onTmux, "UserPromptSubmit", hookevent.HookPayload{SessionID: "tmux-conv"})))
 	requireAccepted(t, before.Handle(runtimeHook(t, onTmux, "SubagentStart", hookevent.HookPayload{SessionID: "tmux-conv", AgentID: "agent-1"})))
-	requireAccepted(t, before.Handle(runtimeHook(t, onKitty, "UserPromptSubmit", hookevent.HookPayload{SessionID: "kitty-conv"})))
 	tmuxFacts := slotFacts(before, slotOf(t, before, onTmux))
 	before.maintainRuntimeSessions(time.Now())
 
@@ -91,22 +84,18 @@ func TestRuntimeCheckpointSurvivesDaemonRestart(t *testing.T) {
 	if !ok || tmuxEntry.Backend != "tmux" || tmuxEntry.Pane != "%3" || tmuxEntry.Generation != "tmux-t-1" || tmuxEntry.State == "" {
 		t.Fatalf("tmux checkpoint entry = %+v (present %v)", tmuxEntry, ok)
 	}
-	kittyEntry, ok := checkpointEntry(file, onKitty)
-	if !ok || kittyEntry.Backend != "kitty" || kittyEntry.Pane != "7" || kittyEntry.State != "" {
-		t.Fatalf("Kitty checkpoint entry = %+v (present %v); Kitty state belongs in amx_state", kittyEntry, ok)
-	}
 	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("checkpoint mode = %v, err %v", info.Mode(), err)
 	}
 
 	after := checkpointHandler(t, path, directory)
 	report := after.restoreRuntimeCheckpoint(time.Now())
-	if report.Corrupt || report.Outcomes[string(onTmux)] != runtimeRestoreRestored || report.Outcomes[string(onKitty)] != runtimeRestoreRestored {
+	if report.Corrupt || report.Outcomes[string(onTmux)] != runtimeRestoreRestored {
 		t.Fatalf("restore report = %+v", report)
 	}
 	slot := slotOf(t, after, onTmux)
 	if !isRuntimeSyntheticSlot(slot) {
-		t.Fatalf("tmux runtime restored onto Kitty-range slot %d", slot)
+		t.Fatalf("tmux runtime restored onto an invalid slot %d", slot)
 	}
 	restored := slotFacts(after, slot)
 	if len(restored) != len(tmuxFacts) || !hasFact(restored, protocol.SourceHarness, "claude:tmux-conv") ||
@@ -116,9 +105,6 @@ func TestRuntimeCheckpointSurvivesDaemonRestart(t *testing.T) {
 	if got := reducerRuntime(after, slot); got != string(onTmux) {
 		t.Fatalf("restored reducer bound to %q; want %s", got, onTmux)
 	}
-	if kittySlot, ok := boundSlot(after, onKitty); !ok || kittySlot != 7 {
-		t.Fatalf("Kitty runtime binding = %d, %v; want slot 7", kittySlot, ok)
-	}
 
 	// The session's next event extends the restored state rather than
 	// replacing it as a different session's would.
@@ -127,23 +113,6 @@ func TestRuntimeCheckpointSurvivesDaemonRestart(t *testing.T) {
 		t.Fatalf("post-restart event discarded restored facts: %+v", slotFacts(after, slot))
 	}
 
-	// A Kitty restore that lands after the checkpoint (a degraded Kitty
-	// startup) binds the rebuilt reducer to the checkpointed session.
-	kittyPayload := func() string {
-		before.stateMu.Lock()
-		defer before.stateMu.Unlock()
-		payload, err := before.store[7].MarshalUserVar()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return payload
-	}()
-	after.restoreFromUserVars(hookEventWindows("api", []kitty.Window{
-		{ID: 7, UserVars: kitty.UserVars{Profile: "managed", Harness: "claude", AMXState: kittyPayload}},
-	}), time.Now())
-	if got := reducerRuntime(after, 7); got != string(onKitty) {
-		t.Fatalf("Kitty-restored reducer bound to %q; want %s", got, onKitty)
-	}
 }
 
 // TestRuntimeCheckpointFreshEventsWinOverRestoredState: an event accepted
@@ -367,13 +336,13 @@ func TestRuntimeCheckpointRejectsInvalidAndConflictingEntries(t *testing.T) {
 	good, badState, holder, displaced := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(good, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%1")
 	directory.put(badState, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%2")
-	directory.put(holder, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "k1", "7")
-	directory.put(displaced, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "k1", "7")
+	directory.put(holder, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%7")
+	directory.put(displaced, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "g1", "%7")
 	file := runtimeCheckpointFile{SchemaVersion: runtimeCheckpointSchemaVersion, Sessions: []runtimeCheckpointEntry{
 		{RuntimeSessionID: "not-a-runtime-id", Backend: "tmux", Instance: tmuxT, Generation: "g1", Pane: "%9"},
 		{RuntimeSessionID: string(good), Backend: "tmux", Instance: tmuxT, Generation: "g1", Pane: "%1"},
 		{RuntimeSessionID: string(badState), Backend: "tmux", Instance: tmuxT, Generation: "g1", Pane: "%2", State: "{broken"},
-		{RuntimeSessionID: string(displaced), Backend: "kitty", Instance: kittyA, Generation: "k1", Pane: "7"},
+		{RuntimeSessionID: string(displaced), Backend: "tmux", Instance: tmuxT, Generation: "g1", Pane: "%7"},
 	}}
 	data, err := json.Marshal(file)
 	if err != nil {
@@ -396,8 +365,8 @@ func TestRuntimeCheckpointRejectsInvalidAndConflictingEntries(t *testing.T) {
 			t.Fatalf("outcome for %s = %q; want %q", id, got, want)
 		}
 	}
-	if slot, ok := boundSlot(h, holder); !ok || slot != 7 || !hasFact(slotFacts(h, 7), protocol.SourceHarness, "claude:holder") {
-		t.Fatal("a checkpoint displaced the live holder of Kitty slot 7")
+	if slot, ok := boundSlot(h, holder); !ok || !hasFact(slotFacts(h, slot), protocol.SourceHarness, "claude:holder") {
+		t.Fatal("a checkpoint displaced the live holder of tmux pane %7")
 	}
 	if _, bound := boundSlot(h, badState); bound {
 		t.Fatal("an entry with a malformed payload was bound")
@@ -405,7 +374,7 @@ func TestRuntimeCheckpointRejectsInvalidAndConflictingEntries(t *testing.T) {
 	h.stateMu.Lock()
 	reserved := len(h.runtimeRoutes.synthetic)
 	h.stateMu.Unlock()
-	if reserved != 1 {
+	if reserved != 2 {
 		t.Fatalf("%d synthetic slots reserved; a declined restore must not keep one", reserved)
 	}
 }

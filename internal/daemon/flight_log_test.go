@@ -9,7 +9,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/flightlog"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 func TestFlightLogCountsEffectivePresentationChangesAcrossSourcesOnly(t *testing.T) {
@@ -66,15 +65,5 @@ func TestFlightLogKeepsRecordedRunOwnerWhenItsSlotHasBeenReused(t *testing.T) {
 	r := flightlog.Build(snapshot, flightlog.Filters{Period: "all"}, time.Now().Add(time.Second), []string{"codex"})
 	if len(r.Sessions) != 1 || r.Sessions[0].Key != "rs-original" || r.Sessions[0].ConversationID != "codex:original-conversation" || r.Sessions[0].Project != "" {
 		t.Fatalf("run attributed to replacement: %+v", r.Sessions)
-	}
-}
-
-func TestFlightLogUsesTheMatchingKittySocketForLaunchIdentity(t *testing.T) {
-	h := NewHandler(nil, nil)
-	h.runtimeRoutes.kittyBySlot = map[int]kittySlotKey{100: {socket: "unix:other", windowID: 1}}
-	h.otherKittyTrees = map[string][]kitty.OSWindow{"unix:other": {{Tabs: []kitty.Tab{{Windows: []kitty.Window{{ID: 1, UserVars: kitty.UserVars{LaunchID: "other-launch", Project: "Other project"}}}}}}}}
-	e := h.flightEventLocked(100, &state.WindowState{LastHarness: "codex"}, time.Now())
-	if e.Key != "launch:other-launch" || e.Project != "Other project" {
-		t.Fatalf("lost other-socket launch identity: %+v", e)
 	}
 }

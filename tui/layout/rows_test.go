@@ -31,7 +31,7 @@ func TestWrapWordsHardBreakIsRuneSafe(t *testing.T) {
 // a wrapped line as fitting its column budget without re-measuring it.
 func TestWrapWordsNeverExceedsWidth(t *testing.T) {
 	inputs := []string{
-		"Focus the Kitty window running this session",
+		"Focus the tmux session",
 		"~/projects/monorepo-services/authentication-gateway/cmd/server",
 		"日本語のセッション名がとても長い場合でも折り返す",
 		"a  b   c",
@@ -182,7 +182,7 @@ func TestDetailBlockIsAlwaysExactlyHeight(t *testing.T) {
 		nil,
 		{""},
 		{"Short."},
-		{"Unavailable: the session is already focused", "Focus the Kitty window running this session"},
+		{"Unavailable: the session is already focused", "Focus the tmux session"},
 		{strings.Repeat("word ", 80)},
 	}
 	for _, height := range []int{1, 2, 3, 5} {

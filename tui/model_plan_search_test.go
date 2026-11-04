@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 // seedPlanDir writes a plan directory under root with the given files
@@ -32,9 +33,8 @@ func seedPlanDir(t *testing.T, root, name string, files map[string]string) strin
 
 // planSearchTestModel returns a Model with two on-disk plan dirs indexed and
 // the model placed directly into ModePlanSearch with the empty-query result
-// set already populated. The mock runner is returned so callers can inspect
-// the kitten calls issued by command dispatches under test.
-func planSearchTestModel(t *testing.T) (Model, *kitty.MockRunner) {
+// set already populated.
+func planSearchTestModel(t *testing.T) Model {
 	t.Helper()
 	root := t.TempDir()
 	seedPlanDir(t, root, "alpha-aabb112233cc", map[string]string{
@@ -64,8 +64,7 @@ func planSearchTestModel(t *testing.T) (Model, *kitty.MockRunner) {
 	cfg := &config.Config{}
 	cfg.Defaults.PlansDirectory = root
 	cfg.Defaults.Editor = "myeditor"
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 
 	m := Model{
 		mode:        ModePlanSearch,
@@ -76,7 +75,7 @@ func planSearchTestModel(t *testing.T) (Model, *kitty.MockRunner) {
 		plansIndex:  idx,
 		planResults: results,
 	}
-	return m, runner
+	return m
 }
 
 // TestEnterPlanSearch_TransitionsModeAndDispatchesRefresh verifies the
@@ -91,8 +90,7 @@ func TestEnterPlanSearch_TransitionsModeAndDispatchesRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadIndexAt: %v", err)
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 
 	m := Model{
 		mode:       ModeList,
@@ -154,7 +152,7 @@ func TestEnterPlanSearchLoadsFilesystemCacheAsynchronously(t *testing.T) {
 func TestPlanSearchResultsPreserveSelectionAndLastGoodRows(t *testing.T) {
 	t.Parallel()
 
-	m, _ := planSearchTestModel(t)
+	m := planSearchTestModel(t)
 	m.planCursor = 1
 	selectedPath := m.planResults[m.planCursor].Meta.DirPath
 	selected := m.planResults[1]
@@ -192,7 +190,7 @@ func TestPlanSearchResultsPreserveSelectionAndLastGoodRows(t *testing.T) {
 func TestPlanSearch_TypingShrinksResultSet(t *testing.T) {
 	t.Parallel()
 
-	m, _ := planSearchTestModel(t)
+	m := planSearchTestModel(t)
 	if len(m.planResults) != 2 {
 		t.Fatalf("setup: want 2 results, got %d", len(m.planResults))
 	}
@@ -243,7 +241,7 @@ func TestPlanSearch_TypingShrinksResultSet(t *testing.T) {
 func TestPlanSearchLowercaseOIsSortKey(t *testing.T) {
 	t.Parallel()
 
-	m, _ := planSearchTestModel(t)
+	m := planSearchTestModel(t)
 	m.planSortMode = plans.SortByMatches
 
 	updated, cmd := m.Update(keyPress("o"))
@@ -275,47 +273,33 @@ func TestPlanSearchLowercaseOIsSortKey(t *testing.T) {
 	}
 }
 
-// TestPlanSearch_OpenInEditorInvokesLaunch verifies pressing `e` on a row
-// dispatches a tea.Cmd that drives kitten @ launch with the plan's directory.
-func TestPlanSearch_OpenInEditorInvokesLaunch(t *testing.T) {
-	t.Parallel()
-
-	m, runner := planSearchTestModel(t)
-
+func TestPlanSearchOpensEditorInWorkspace(t *testing.T) {
+	previous := commands.Portable
+	t.Cleanup(func() { commands.Portable = previous })
+	var shown []protocol.WorkspaceViewRequest
+	commands.Portable = commands.PortableTerminals{Desktop: func(request protocol.WorkspaceViewRequest) error {
+		shown = append(shown, request)
+		return nil
+	}}
+	m := planSearchTestModel(t)
 	_, cmd := m.Update(keyPress("e"))
 	if cmd == nil {
-		t.Fatal("`e` keypress produced nil cmd; want openPlanInEditorCmd")
+		t.Fatal("e produced no command")
 	}
-
-	// Drain the command — it invokes session.OpenPathInEditor synchronously,
-	// which in turn issues the kitten @ launch call on the mock runner.
 	if msg := cmd(); msg != nil {
 		if errMsg, ok := msg.(planEditorErrMsg); ok {
-			t.Fatalf("openPlanInEditorCmd surfaced an error: %v", errMsg.err)
+			t.Fatalf("opening editor: %v", errMsg.err)
 		}
 	}
-
-	launchCalled := false
-	for _, c := range runner.Calls {
-		if c.Name != "kitten" {
-			continue
-		}
-		for _, a := range c.Args {
-			if a == "launch" {
-				launchCalled = true
-				break
-			}
-		}
-	}
-	if !launchCalled {
-		t.Error("expected kitten @ launch call after `e` keypress")
+	if len(shown) != 1 || shown[0].Kind != protocol.WorkspaceViewEditor || shown[0].Path != m.planResults[m.planCursor].Meta.DirPath {
+		t.Fatalf("workspace editor requests = %+v", shown)
 	}
 }
 
 func TestPlanSearchEnterRemainsViewAction(t *testing.T) {
 	t.Parallel()
 
-	m, _ := planSearchTestModel(t)
+	m := planSearchTestModel(t)
 
 	updated, cmd := m.Update(keyPress("enter"))
 	got := updated.(Model)

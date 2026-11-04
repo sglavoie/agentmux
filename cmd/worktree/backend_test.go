@@ -12,14 +12,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 	"github.com/spf13/cobra"
 )
 
 // worktreeOnTmux selects the tmux backend for the worktree commands, on a
-// private server, with every Kitty seam failing the test if it is reached.
+// private server, with the tmux backend serving every terminal operation.
 type worktreeOnTmux struct {
 	fixture   *tmuxtest.Fixture
 	workspace []protocol.WorkspaceViewRequest
@@ -34,16 +33,7 @@ func useWorktreeTmux(t *testing.T) *worktreeOnTmux {
 	t.Setenv("HOME", t.TempDir())
 	previousTmux := cli.NewTmuxBackend
 	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return w.fixture.Backend, nil }
-	previousInside, previousWorkspace, previousRun := worktreeCommandsInsideKitty, worktreeCommandsWorkspace, worktreeCommandsRunHere
-	worktreeCommandsNewKitty = func() kitty.KittyClient {
-		t.Error("a worktree command on tmux built a Kitty client")
-		return nil
-	}
-	worktreeCommandsLiveSessions = func(kitty.KittyClient, *config.Config) ([]session.RunningSession, error) {
-		t.Error("a worktree command on tmux listed Kitty sessions")
-		return nil, nil
-	}
-	worktreeCommandsInsideKitty = func() bool { return false }
+	previousWorkspace, previousRun := worktreeCommandsWorkspace, worktreeCommandsRunHere
 	worktreeCommandsWorkspace = func(view protocol.WorkspaceViewRequest) error {
 		if !w.hosted {
 			return errors.New(protocol.WorkspaceViewErrorUnavailable)
@@ -63,7 +53,7 @@ func useWorktreeTmux(t *testing.T) *worktreeOnTmux {
 	}
 	t.Cleanup(func() {
 		cli.NewTmuxBackend = previousTmux
-		worktreeCommandsInsideKitty, worktreeCommandsWorkspace, worktreeCommandsRunHere = previousInside, previousWorkspace, previousRun
+		worktreeCommandsWorkspace, worktreeCommandsRunHere = previousWorkspace, previousRun
 		for _, command := range commands {
 			_ = command.Flags().Set(cli.BackendFlag, "")
 		}
@@ -82,12 +72,12 @@ func runWorktree(t *testing.T, command *cobra.Command, jsonOutput bool, args ...
 	return out.String(), err
 }
 
-// TestWorktreeShellAndEditWorkWithoutKitty: on the tmux backend a worktree
+// TestWorktreeShellAndEditWorkOnTmux: on the tmux backend a worktree
 // shell or editor opens in the workspace when it hosts the terminal, and
 // otherwise runs where the command was typed; --json reports that instead of
-// running anything. Kitty is never asked.
-func TestWorktreeShellAndEditWorkWithoutKitty(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+// running anything. All terminal operations use tmux.
+func TestWorktreeShellAndEditWorkOnTmux(t *testing.T) {
+	manager := resetWorktreeCommandsTestState(t)
 	root := manager.entries[0].Path
 	w := useWorktreeTmux(t)
 	t.Setenv("SHELL", "/bin/zsh")
@@ -133,7 +123,7 @@ func TestWorktreeShellAndEditWorkWithoutKitty(t *testing.T) {
 // TestWorktreeLiveSessionsComeFromTmux: what runs on the private tmux server
 // is what keeps a worktree in use when tmux is the backend.
 func TestWorktreeLiveSessionsComeFromTmux(t *testing.T) {
-	manager, _ := resetWorktreeCommandsTestState(t)
+	manager := resetWorktreeCommandsTestState(t)
 	root := manager.entries[0].Path
 	useWorktreeTmux(t)
 	previous := worktreeCommandsTmuxSessions

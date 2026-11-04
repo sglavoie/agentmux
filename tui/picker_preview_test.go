@@ -6,7 +6,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -87,8 +86,7 @@ func TestPickerPreviewEmojiTitleReservesIconColumn(t *testing.T) {
 			{Title: "🗣commscoach", Directory: "/home/user/commscoach", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
@@ -203,8 +201,7 @@ func TestPickerPreviewRunningPeek(t *testing.T) {
 			{Title: "api", Directory: "/home/user/api", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 99, Base: "api", Account: "work"},
@@ -234,8 +231,7 @@ func TestPickerPreviewUsesNewestDuplicateInSessionOrder(t *testing.T) {
 			{Title: "api", Directory: "/home/user/api", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},
@@ -269,8 +265,7 @@ func TestPickerPreviewMovementRefetchesWindow(t *testing.T) {
 			{Title: "notes", Account: "personal"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},
@@ -313,8 +308,7 @@ func TestPickerExitRestartsListPreviewTicker(t *testing.T) {
 			{Title: "api", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 11, Base: "api", Account: "work"},

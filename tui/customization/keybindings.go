@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/tui/chrome"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/sglavoie/agentmux/tui/theme"
@@ -16,15 +16,15 @@ type keybindingsModel struct {
 	width  int
 	height int
 	offset int
-	// actions is what the reference lists; nil is Kitty's own bindings.
-	actions []kittykeys.Action
+	// actions is what the reference lists; nil uses the tmux bindings.
+	actions []keybindings.Action
 }
 
-func (m keybindingsModel) listed() []kittykeys.Action {
+func (m keybindingsModel) listed() []keybindings.Action {
 	if m.actions != nil {
 		return m.actions
 	}
-	return kittykeys.Actions
+	return keybindings.Tmux
 }
 
 func (m keybindingsModel) Init() tea.Cmd {
@@ -190,12 +190,12 @@ func (m keybindingsModel) View() tea.View {
 }
 
 // RunKeybindingsOverlay renders the keybinding reference and blocks until the
-// user dismisses it. Designed to run inside a Kitty overlay window.
+// user dismisses it.
 func RunKeybindingsOverlay() error { return RunKeybindingsReference(nil) }
 
-// RunKeybindingsReference renders a reference of actions, or of Kitty's own
-// bindings when actions is nil, and blocks until the user dismisses it.
-func RunKeybindingsReference(actions []kittykeys.Action) error {
+// RunKeybindingsReference renders a reference of actions and blocks until the
+// user dismisses it.
+func RunKeybindingsReference(actions []keybindings.Action) error {
 	p := tea.NewProgram(keybindingsModel{actions: actions}, tea.WithoutSignalHandler())
 	_, err := p.Run()
 	return err

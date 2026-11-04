@@ -36,8 +36,7 @@ Existing comments and optional settings are preserved. Setup refuses a config
 that already has projects; use amx config edit to add more. The project directory
 must exist. Setup offers to sync this profile's hooks, checks launch requirements,
 and summarizes effective destinations. Keep leaves the launch destination unset:
-CLI launch commands and terminal dashboards use the default private tmux server.
-Choose kitty explicitly to launch new agents in Kitty tabs.`,
+CLI launch commands and terminal dashboards use the private tmux server.`,
 	RunE: runConfigSetup,
 }
 
@@ -162,10 +161,10 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if strings.TrimSpace(current.Defaults.LaunchBackend) == "" {
-		if _, err := fmt.Fprintln(out, "Keep uses the tmux default in every terminal; choose kitty for new Kitty tabs."); err != nil {
+		if _, err := fmt.Fprintln(out, "Keep uses the tmux default in every terminal."); err != nil {
 			return err
 		}
-		backend, err := setupChoice(reader, out, "Default backend (keep, tmux, or kitty)", "keep", "keep", config.LaunchBackendTmux, config.LaunchBackendKitty)
+		backend, err := setupChoice(reader, out, "Default backend (keep or tmux)", "keep", "keep", config.LaunchBackendTmux)
 		if err != nil {
 			return err
 		}
@@ -229,7 +228,7 @@ func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool
 	}
 	fmt.Fprintf(&summary, "\nLaunch destinations\n  CLI: %s (%s; --backend overrides)\n  Dashboard in this terminal: %s\n", cliBackend, source, dashboardBackend)
 	if strings.TrimSpace(cfg.Defaults.LaunchBackend) == "" {
-		summary.WriteString("  Dashboard elsewhere: tmux in every terminal, including Kitty.\n")
+		summary.WriteString("  Dashboard elsewhere: tmux in every terminal.\n")
 	}
 	summary.WriteString("  macOS app: its Launch Project preference applies; check Settings → Launch destination.\n\nLaunch checks\n  Configuration: valid; project directory exists.\n")
 	for _, account := range cfg.Profiles {
@@ -253,13 +252,6 @@ func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool
 	}
 	if dashboardBackend == config.LaunchBackendTmux && !status.Usable() {
 		summary.WriteString("  Dashboard launch blocked: resolve the tmux problems above before launching here.\n")
-	}
-	if cliBackend == config.LaunchBackendKitty || dashboardBackend == config.LaunchBackendKitty {
-		if path, err := setupLookPath("kitten"); err == nil {
-			fmt.Fprintf(&summary, "  Kitty client: %s; run inside a Kitty instance configured for remote control.\n", path)
-		} else {
-			summary.WriteString("  Kitty client missing: install/configure Kitty, or choose tmux with amx config edit.\n")
-		}
 	}
 	switch {
 	case syncErr != nil:

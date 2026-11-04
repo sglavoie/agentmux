@@ -33,10 +33,9 @@ const StepCockpitSmoke = "cockpit-smoke"
 // The order is the gate's argument, not an implementation detail:
 //
 //   - environment first, because an unsupported harness should cost seconds
-//     rather than surfacing after a twenty-minute stress run. No terminal is
-//     probed here: Kitty is an optional backend, so a machine without it
-//     releases the pair, and the tmux the pair runs on is judged by the cockpit
-//     smoke against the installation rather than by a version string;
+//     rather than surfacing after a twenty-minute stress run. The installed
+//     tmux is judged by the cockpit smoke against the installation rather
+//     than by a version string;
 //   - build next, so the artifact being released exists before anything claims
 //     to have tested it;
 //   - verify next, cheapest gate first (`just check`) and the long stress and
@@ -49,8 +48,7 @@ const StepCockpitSmoke = "cockpit-smoke"
 //     the two installed programs, while the cockpit smoke needs a real tmux
 //     and the daemon the install phase restarted, and a gate should exhaust
 //     what it can judge on its own before it depends on the machine around it.
-//     The smoke runs from any terminal; the Kitty one is `just kitty-smoke`,
-//     which no gate runs.
+//     The smoke runs from any terminal.
 //
 // A step that fails stops the run. Continuing past a failure would produce
 // evidence in which later steps ran against a state the record does not

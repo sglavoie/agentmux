@@ -7,8 +7,7 @@ extension AppDelegate {
         trackVisibility(of: controller, \.briefingVisible)
         controller.model.onFocus = { [weak self] key in
             guard let self, self.store.feed == .live else { return }
-            let socket = self.store.snapshot?.kitty.socket ?? ""
-            guard let session = self.store.sessions.first(where: { AttentionCycler.key($0, snapshotSocket: socket) == key }) else {
+            guard let session = self.store.managedSessions.first(where: { AttentionCycler.key($0) == key }) else {
                 self.refuse("This session is no longer live. Refresh the briefing or read its conversation."); return
             }
             self.focus(.focusing(session, title: MenuBuilder.name(of: session)))
@@ -31,8 +30,8 @@ extension AppDelegate {
     /// Snapshots keep live state current without refreshing transcript history
     /// or generating summaries in the background.
     func refreshBriefing() {
-        briefingWindow?.model.update(projects: projects.state.value ?? [], sessions: store.sessions,
-            asl: store.snapshot?.asl.waiting ?? [], socket: store.snapshot?.kitty.socket ?? "",
+        briefingWindow?.model.update(projects: projects.state.value ?? [], sessions: store.managedSessions,
+            asl: store.snapshot?.asl.waiting ?? [],
             live: store.feed == .live, order: attentionOrder)
     }
 }

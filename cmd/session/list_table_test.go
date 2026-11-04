@@ -229,8 +229,8 @@ func TestSessionLinesEndWithMessagesAndLive(t *testing.T) {
 
 	last := time.Date(2026, 10, 6, 15, 21, 0, 0, time.UTC)
 	views := []sessionView{
-		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "aaaa1111", Snippet: "s", MessageCount: 343, Live: &liveConversation{WindowID: 7, Here: true}},
-		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "bbbb2222", Snippet: "s", MessageCount: 3, Live: &liveConversation{WindowID: 9}},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "aaaa1111", Snippet: "s", MessageCount: 343, Live: &liveConversation{RuntimeSessionID: "rs-a", Here: true}},
+		{Harness: "claude", Profile: "p", Project: "x", LastAt: last, ID: "bbbb2222", Snippet: "s", MessageCount: 3, Live: &liveConversation{RuntimeSessionID: "rs-b"}},
 		{Harness: "codex", Profile: "q", Project: "y", LastAt: last, ID: "cccc3333", Snippet: "s", MessageCount: 0},
 	}
 	fields := func(liveKnown bool) [][]string {

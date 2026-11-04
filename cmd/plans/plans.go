@@ -32,16 +32,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/planrun"
 	"github.com/sglavoie/agentmux/internal/plans"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/spf13/cobra"
 )
 
 var (
 	planLoadConfig = cli.LoadRunnableConfig
-	planNewKitty   = func() kitty.KittyClient { return cli.NewKittyClient() }
 	planDescribe   = plans.Describe
 	// planASL replaces the installed agent-session-loop in tests; nil is the
 	// configured command.
@@ -183,9 +180,6 @@ func runPlanRun(cmd *cobra.Command, args []string) error {
 		// where none is available.
 		if err := cli.SelectBackend(cmd, &deps); err != nil {
 			return planActionError(cmd, jsonOutput, err)
-		}
-		if deps.Backend == runtimesession.BackendKitty {
-			deps.Kitty = planNewKitty()
 		}
 	}
 	result, err := actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actions.PlanRun, actions.Request{Plan: &plan, Parameters: parameters})

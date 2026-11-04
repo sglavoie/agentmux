@@ -24,29 +24,17 @@ import (
 // that is merely newer from one that is incompatible.
 const CompanionProtocolVersion = 1
 
-// CompanionSnapshotVersion versions the CompanionSnapshot payload on its own,
-// independently of the protocol version that frames it, so the snapshot can
-// grow a breaking shape without renaming every other companion message.
-const CompanionSnapshotVersion = 1
+// CompanionSnapshotVersion versions the runtime-session snapshot independently
+// of the framing protocol. Version 2 is the current and only published shape.
+const CompanionSnapshotVersion = 2
 
-// CompanionSnapshotVersionRuntime is the mixed-backend snapshot: every v1
-// field, plus a runtime block on each session an AgentMux runtime session
-// owns, plus the sessions that run on a backend other than Kitty. Those carry
-// no window, tab, OS-window, or socket field at all — a tmux pane has no Kitty
-// identity, and inventing one would let an old client focus the wrong window.
-// A daemon sends it only to a subscriber that asked for
-// CompanionFeatureRuntimeSessions; every other subscriber keeps receiving v1,
-// which lists Kitty sessions only.
-const CompanionSnapshotVersionRuntime = 2
-
-// CompanionFeatureRuntimeSessions is the subscribe feature that negotiates
-// CompanionSnapshotVersionRuntime. The ack echoes it only when the daemon
-// granted it, so a client knows which snapshot shape the stream carries.
+// CompanionFeatureRuntimeSessions remains in subscribe acknowledgements so
+// existing desktop clients can recognize the runtime-session shape.
 const CompanionFeatureRuntimeSessions = "runtime_sessions"
 
 // CompanionSessionCap bounds how many sessions one snapshot carries. Every
-// field on a session is clamped, so this cap is what keeps a single snapshot
-// frame under CompanionFrameMaxBytes however many windows Kitty holds.
+// field on a session is clamped, so this cap helps keep a snapshot frame under
+// CompanionFrameMaxBytes however many sessions are running.
 const CompanionSessionCap = 512
 
 // CompanionWaitingCap bounds the ASL waiting list for the same reason.
@@ -56,14 +44,10 @@ const CompanionWaitingCap = 64
 // transport drops and counts a frame above it rather than writing it.
 const CompanionFrameMaxBytes = 1 << 20
 
-// Companion request types. None of them is serialized behind the hook ingress
-// queue and none is deduplicated by request ID: subscribe is a stream rather
-// than an event, focus_window acts on Kitty rather than on reducer state, and
-// snooze and disposition are idempotent by construction, so the at-most-once
-// machinery the hook path needs would only add latency to them.
+// Companion request types stay outside the hook ingress queue. Subscribe is a
+// stream, and snooze and disposition are idempotent by construction.
 const (
 	TypeSubscribe               MessageType = "subscribe"
-	TypeFocusWindow             MessageType = "focus_window"
 	TypeNotificationSnooze      MessageType = "notification_snooze"
 	TypeNotificationDisposition MessageType = "notification_disposition"
 	TypeNotificationTest        MessageType = "notification_test"
@@ -73,7 +57,6 @@ const (
 // test can assert all of them stay off the serialized path in one place.
 var CompanionMessageTypes = []MessageType{
 	TypeSubscribe,
-	TypeFocusWindow,
 	TypeNotificationSnooze,
 	TypeNotificationDisposition,
 	TypeNotificationTest,
@@ -105,7 +88,7 @@ type SubscribeRequest struct {
 	ClientVersion string          `json:"client_version,omitempty"`
 	AMXBuild      *buildinfo.Info `json:"amx_build,omitempty"`
 	// Features names optional behaviors the client understands:
-	// CompanionFeatureRuntimeSessions selects the snapshot shape, and
+	// CompanionFeatureRuntimeSessions is accepted for older clients, and
 	// CompanionFeatureWorkspaceViews asks for workspace_view frames.
 	Features                []string `json:"features,omitempty"`
 	NotificationBackend     bool     `json:"notification_backend,omitempty"`
@@ -123,28 +106,8 @@ type SubscriptionAck struct {
 	Features          []string `json:"features,omitempty"`
 }
 
-// FocusWindowRequest asks the daemon to focus one window in one Kitty
-// instance. KittySocket must be an endpoint the daemon already knows; the
-// daemon never dials an address a client supplied.
-type FocusWindowRequest struct {
-	KittySocket string `json:"kitty_socket"`
-	WindowID    int    `json:"window_id"`
-}
-
-// Focus refusal codes. They travel in Response.Error so a client can branch on
-// them without parsing prose.
-const (
-	FocusErrorStaleTarget   = "stale_target"
-	FocusErrorUnknownSocket = "unknown_socket"
-)
-
-// FocusWindowResult reports where the focused window lives, so a client can
-// bring the right OS window forward.
-type FocusWindowResult struct {
-	WindowID   int `json:"window_id"`
-	TabID      int `json:"tab_id"`
-	OSWindowID int `json:"os_window_id"`
-}
+// FocusErrorStaleTarget reports a runtime session whose agent has ended.
+const FocusErrorStaleTarget = "stale_target"
 
 // Snooze modes for SnoozeRequest.Mode.
 const (
@@ -305,9 +268,7 @@ type Bye struct {
 type CompanionSnapshot struct {
 	V            int                   `json:"v"`
 	Daemon       CompanionDaemon       `json:"daemon"`
-	Kitty        CompanionKitty        `json:"kitty"`
 	Notification CompanionNotification `json:"notification"`
-	Dashboard    CompanionDashboard    `json:"dashboard"`
 	Attention    CompanionAttention    `json:"attention"`
 	ASL          CompanionASL          `json:"asl"`
 	Sessions     []CompanionSession    `json:"sessions"`
@@ -325,17 +286,6 @@ type CompanionDaemon struct {
 	DegradedReason string          `json:"degraded_reason,omitempty"`
 }
 
-// CompanionKitty describes the window tree the sessions were read from. Socket
-// is the instance that tree belongs to; Sockets lists every instance a session
-// in this snapshot lives in, which is how a client knows it is looking at more
-// than one Kitty.
-type CompanionKitty struct {
-	Ready   bool     `json:"ready"`
-	Stale   bool     `json:"stale,omitempty"`
-	Socket  string   `json:"socket,omitempty"`
-	Sockets []string `json:"sockets,omitempty"`
-}
-
 // CompanionNotification is the delivery posture a companion shows read-only.
 // QuietHours is the configured "HH:MM-HH:MM" window verbatim, and QuietNow
 // whether it covers the moment of projection.
@@ -346,15 +296,6 @@ type CompanionNotification struct {
 	Indefinite   bool   `json:"indefinite,omitempty"`
 	QuietHours   string `json:"quiet_hours,omitempty"`
 	QuietNow     bool   `json:"quiet_now,omitempty"`
-}
-
-// CompanionDashboard locates a running amx dashboard, if any.
-type CompanionDashboard struct {
-	Open        bool   `json:"open"`
-	KittySocket string `json:"kitty_socket,omitempty"`
-	OSWindowID  int    `json:"os_window_id,omitempty"`
-	TabID       int    `json:"tab_id,omitempty"`
-	WindowID    int    `json:"window_id,omitempty"`
 }
 
 // CompanionAttention counts sessions by what they ask of the operator. Total is
@@ -380,11 +321,8 @@ type CompanionASL struct {
 // fetches the body through asl_question when the operator opens it, so the
 // stream never holds prose a subscriber was not asked to show.
 type CompanionASLWaiting struct {
-	RunID   string `json:"run_id"`
-	PlanDir string `json:"plan_dir,omitempty"`
-	// WindowID is the Kitty window driving the run. A v2 run driven from a
-	// non-Kitty runtime session has none and names RuntimeSessionID instead.
-	WindowID                int    `json:"window_id,omitempty"`
+	RunID                   string `json:"run_id"`
+	PlanDir                 string `json:"plan_dir,omitempty"`
 	RuntimeSessionID        string `json:"runtime_session_id,omitempty"`
 	Unanswered              int    `json:"unanswered"`
 	LatestQuestionID        string `json:"latest_question_id,omitempty"`
@@ -392,19 +330,13 @@ type CompanionASLWaiting struct {
 }
 
 // CompanionSession is one live managed session. Timestamps are Unix seconds
-// except PresentationChangedAtMS, which mirrors WindowStateSnapshot. The Kitty
-// fields are set exactly when the session lives in Kitty; in a v2 snapshot a
-// session on another backend has only Runtime to be addressed by.
+// except PresentationChangedAtMS, which mirrors WindowStateSnapshot. Runtime
+// is the session identity used by focus and other actions.
 type CompanionSession struct {
 	StatusEvidence *StatusEvidence        `json:"status_evidence,omitempty"`
-	WindowID       int                    `json:"window_id,omitempty"`
-	TabID          int                    `json:"tab_id,omitempty"`
-	OSWindowID     int                    `json:"os_window_id,omitempty"`
-	KittySocket    string                 `json:"kitty_socket,omitempty"`
 	Harness        string                 `json:"harness,omitempty"`
 	Profile        string                 `json:"profile,omitempty"`
 	Project        string                 `json:"project,omitempty"`
-	BaseTitle      string                 `json:"base_title,omitempty"`
 	Conversation   *conversation.Identity `json:"conversation,omitempty"`
 	ASLRunID       string                 `json:"asl_run_id,omitempty"`
 	IconState      string                 `json:"icon_state,omitempty"`
@@ -412,9 +344,8 @@ type CompanionSession struct {
 	Unseen         bool                   `json:"unseen,omitempty"`
 	Attention      bool                   `json:"attention,omitempty"`
 	Muted          bool                   `json:"muted,omitempty"`
-	Locked         bool                   `json:"locked,omitempty"`
 	Looping        bool                   `json:"looping,omitempty"`
-	// Pinned is the ★ in front of the session's tab or group title
+	// Pinned is the ★ in front of the session's group title
 	// (`amx pin-session`): the operator listed it above every other session.
 	Pinned                  bool   `json:"pinned,omitempty"`
 	BusySinceAt             int64  `json:"busy_since_at,omitempty"`
@@ -422,26 +353,21 @@ type CompanionSession struct {
 	PresentationChangedAtMS int64  `json:"presentation_changed_at_ms,omitempty"`
 	Branch                  string `json:"branch,omitempty"`
 	Dirty                   bool   `json:"dirty,omitempty"`
-	// TabColor is the background a session with no Kitty tab is listed on,
-	// as "#rrggbb": its palette color's bright background, which black text
-	// reads on. Only a v2 snapshot carries it, and the daemon leaves it empty
-	// for a Kitty session, whose tab Kitty itself paints.
+	// TabColor is the background the session is listed on, as "#rrggbb": its
+	// palette color's bright background, which black text reads on.
 	TabColor string `json:"tab_color,omitempty"`
-	// Name is the name the operator gave a session with no Kitty tab
-	// (`amx name-session`), empty for none. Only a v2 snapshot carries it.
+	// Name is the name the operator gave a session, empty for none.
 	Name string `json:"name,omitempty"`
-	// HarnessIcon is the harness badge a session with no Kitty tab is listed
+	// HarnessIcon is the harness badge a session is listed
 	// with: its harness's configured emoji, or the one the icon picker put
-	// in its title, empty for none. Only a v2 snapshot carries it.
+	// in its title, empty for none.
 	HarnessIcon string `json:"harness_icon,omitempty"`
-	// Runtime names the AgentMux runtime session that owns this session. Only
-	// a v2 snapshot carries it.
+	// Runtime names the AgentMux runtime session that owns this session.
 	Runtime *CompanionRuntime `json:"runtime,omitempty"`
 }
 
 // CompanionRuntime is a session's AgentMux runtime identity and the backend
-// target it runs at. Pane is the backend's own reference (a Kitty window ID in
-// decimal, a tmux pane ID), opaque to the client.
+// target it runs at. Pane is the tmux pane ID, opaque to the client.
 type CompanionRuntime struct {
 	SessionID  string `json:"session_id"`
 	Backend    string `json:"backend"`
@@ -539,9 +465,7 @@ type WorkspaceViewResult struct {
 
 // TypeFocusSession asks the daemon to bring one runtime session in front of
 // the operator, wherever it can be shown. It is the click of a notification
-// or a menu row for a session with no Kitty window, and deliberately a
-// request of its own: focus_window names a window in a Kitty instance, and a
-// runtime session has neither.
+// or a menu row for a runtime session.
 //
 // A connected workspace is asked to show the session (a FrameWorkspaceView
 // with Raise set). With none, the terminal the operator used last on the
@@ -556,7 +480,7 @@ type FocusSessionRequest struct {
 }
 
 // Focus-session refusal codes, in Response.Error. A session that stopped
-// answers FocusErrorStaleTarget, as a closed window does for focus_window.
+// answers FocusErrorStaleTarget.
 const (
 	// FocusSessionErrorInvalid: the request names no runtime session.
 	FocusSessionErrorInvalid = "invalid_session"

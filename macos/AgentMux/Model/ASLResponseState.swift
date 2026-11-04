@@ -14,7 +14,6 @@ import Foundation
 struct ASLAnswerTarget: Equatable {
     var runID = ""
     var planDir = ""
-    var windowID = 0
 
     /// The row in `rows` this target names: the run ID decides, and the plan
     /// directory is used only when no run ID was given.

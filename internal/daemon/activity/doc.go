@@ -11,7 +11,7 @@
 // as the reducer state it is about to settle, so an internal mutex would hide
 // an atomicity requirement rather than satisfy it.
 //
-// It must never import the daemon root, and it performs no Kitty, IPC, or
+// It must never import the daemon root, and it performs no terminal, IPC, or
 // journal I/O. Deciding what an idle observation DOES to a window stays in the
 // root, which owns the reducer, the renderer, and the notifier.
 package activity

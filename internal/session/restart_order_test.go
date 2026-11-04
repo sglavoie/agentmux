@@ -2,50 +2,21 @@ package session
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 )
 
 // Restart and profile replacement must start the new agent before they close
-// the old one, on either backend: a launch that fails then leaves the agent
+// the old one: a launch that fails leaves the agent
 // the operator had. These tests watch the order the backend is asked in, not
 // only what is left afterwards.
 
 var errLaunchRefused = errors.New("launch refused by the test")
-
-// orderedKitty is a Kitty that records the order of the commands that create
-// and end a tab. It lists no tabs, so nothing is deduplicated.
-type orderedKitty struct {
-	empty      []byte
-	failLaunch bool
-	order      []string
-	closed     []string
-}
-
-func (k *orderedKitty) Run(_ string, args ...string) ([]byte, []byte, error) {
-	switch {
-	case slices.Contains(args, "ls"):
-		return k.empty, nil, nil
-	case slices.Contains(args, "launch"):
-		k.order = append(k.order, "launch")
-		if k.failLaunch {
-			return nil, []byte("refused"), errLaunchRefused
-		}
-	case slices.Contains(args, "close-tab"):
-		k.order = append(k.order, "close")
-		k.closed = append(k.closed, args[len(args)-1])
-	}
-	return nil, nil, nil
-}
 
 // orderedTmux is a real tmux backend that records the same order and counts
 // the agents alive at the moment the old one is closed.
@@ -93,50 +64,6 @@ func replacements(project config.Session) map[string]replaceFunc {
 		"profile replacement": func(rt Runtime, running RunningSession, cfg *config.Config) (LaunchResult, error) {
 			return RestartWithAccountTemplateOn(rt, running, project, cfg.Accounts[1], cfg)
 		},
-	}
-}
-
-func TestRestartLaunchesBeforeClosingOnKitty(t *testing.T) {
-	t.Parallel()
-
-	empty, err := os.ReadFile(filepath.Join("..", "..", "testdata", "kitty_ls_empty.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	project := config.Session{Title: "api", Directory: t.TempDir(), Profile: "work"}
-	cfg := &config.Config{
-		Defaults:      config.Defaults{Sort: "alpha"},
-		HarnessEmojis: map[string]string{"claude": "🦊", "codex": "🤖"},
-		Accounts: []config.Account{
-			{Name: "work", Harness: harness.Claude, Color: "blue"},
-			{Name: "home", Harness: harness.Codex, Color: "yellow"},
-		},
-		Sessions: []config.Session{project},
-	}
-	running := RunningSession{TabID: 42, WindowID: 43, Title: "api", Base: "api", Profile: "work", Project: "api", Directory: project.Directory}
-
-	for name, replace := range replacements(project) {
-		t.Run(name, func(t *testing.T) {
-			runner := &orderedKitty{empty: empty}
-			if _, err := replace(KittyRuntime(kitty.NewClientWithSocket(runner, "")), running, cfg); err != nil {
-				t.Fatalf("%s: %v", name, err)
-			}
-			if !slices.Equal(runner.order, []string{"launch", "close"}) {
-				t.Fatalf("order = %v; want the launch and then the close", runner.order)
-			}
-			if !slices.Equal(runner.closed, []string{"--match=id:42"}) {
-				t.Fatalf("closed %v; want only the replaced tab, id:42", runner.closed)
-			}
-		})
-		t.Run(name+" when the launch fails", func(t *testing.T) {
-			runner := &orderedKitty{empty: empty, failLaunch: true}
-			if _, err := replace(KittyRuntime(kitty.NewClientWithSocket(runner, "")), running, cfg); err == nil {
-				t.Fatalf("%s succeeded with a refused launch", name)
-			}
-			if !slices.Equal(runner.order, []string{"launch"}) {
-				t.Fatalf("order = %v; want a failed launch and the old tab left alone", runner.order)
-			}
-		})
 	}
 }
 

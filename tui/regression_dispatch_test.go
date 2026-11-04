@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
@@ -96,8 +95,7 @@ func TestConfigPickerEnterProjectIdxOOBSafe(t *testing.T) {
 			{Title: "api", Directory: "/api", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 
 	// Simulate "user opened the launch-profile picker for a project index
@@ -137,8 +135,7 @@ func TestConfigPickerEnterNegativeCursorSafe(t *testing.T) {
 			{Name: "work", Color: "blue"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m.configPickerAccounts = cfg.Accounts
 	m.configPickerCursor = -1

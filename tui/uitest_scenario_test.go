@@ -8,8 +8,6 @@ import (
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-func intPtr(n int) *int { return &n }
-
 // TestUITestScenarioParseValid verifies a well-formed scenario decodes into the
 // expected struct with actions and assertions preserved in order.
 func TestUITestScenarioParseValid(t *testing.T) {
@@ -22,7 +20,7 @@ func TestUITestScenarioParseValid(t *testing.T) {
 		"actions": [{"type": "key", "key": "a"}],
 		"assertions": [
 			{"type": "mode_equals", "mode": "actions"},
-			{"type": "kitty_calls", "op": "FocusTab", "count": 0}
+			{"type": "no_layout_issues"}
 		]
 	}`)
 	sc, err := parseUITestScenario(data)
@@ -41,8 +39,8 @@ func TestUITestScenarioParseValid(t *testing.T) {
 	if len(sc.Assertions) != 2 || sc.Assertions[0].Type != UITestAssertModeEquals {
 		t.Errorf("unexpected assertions: %+v", sc.Assertions)
 	}
-	if sc.Assertions[1].Count == nil || *sc.Assertions[1].Count != 0 {
-		t.Errorf("expected explicit count 0 on kitty_calls, got %+v", sc.Assertions[1].Count)
+	if sc.Assertions[1].Type != UITestAssertNoLayoutIssues {
+		t.Errorf("unexpected second assertion: %+v", sc.Assertions[1])
 	}
 }
 
@@ -62,7 +60,6 @@ func TestUITestScenarioParseRejectsBadInput(t *testing.T) {
 		"unknown assertion": `{"fixture": "basic", "size": {"width": 80, "height": 24}, "assertions": [{"type": "glows"}]}`,
 		"empty text assert": `{"fixture": "basic", "size": {"width": 80, "height": 24}, "assertions": [{"type": "contains_text"}]}`,
 		"unknown mode":      `{"fixture": "basic", "size": {"width": 80, "height": 24}, "assertions": [{"type": "mode_equals", "mode": "orbit"}]}`,
-		"kitty no op":       `{"fixture": "basic", "size": {"width": 80, "height": 24}, "assertions": [{"type": "kitty_calls"}]}`,
 		"trailing object":   `{"fixture": "basic", "size": {"width": 80, "height": 24}}{"fixture": "basic", "size": {"width": 80, "height": 24}}`,
 		"trailing content":  `{"fixture": "basic", "size": {"width": 80, "height": 24}} not json`,
 	}
@@ -106,7 +103,6 @@ func TestUITestScenarioRunFixturePasses(t *testing.T) {
 			{Type: UITestAssertSelectedProfile, Value: "personal"},
 			{Type: UITestAssertContainsText, Text: "dotfiles"},
 			{Type: UITestAssertNoLayoutIssues},
-			{Type: UITestAssertKittyCalls, Op: "LaunchTab", Count: intPtr(0)},
 		},
 	}
 	res, err := RunUITestScenario(sc, UITestScenarioEnv{})
@@ -156,29 +152,6 @@ func TestUITestScenarioRunRecordsFailures(t *testing.T) {
 		if res.Failures[i].Kind != want {
 			t.Errorf("failure %d kind = %q, want %q", i, res.Failures[i].Kind, want)
 		}
-	}
-}
-
-// TestUITestScenarioKittyCalls verifies a scenario that focuses a tab records a
-// FocusTab call the kitty_calls assertion can match.
-func TestUITestScenarioKittyCalls(t *testing.T) {
-	sc := UITestScenario{
-		Name:    "focus records a call",
-		Fixture: "basic",
-		Size:    UITestSize{Width: 100, Height: 32},
-		Actions: []UITestAction{{Type: UITestActionKey, Key: "enter"}},
-		Assertions: []UITestAssertion{
-			{Type: UITestAssertKittyCalls, Op: "FocusTab"}, // >= 1
-			{Type: UITestAssertKittyCalls, Op: "FocusTab", Count: intPtr(1)},
-			{Type: UITestAssertKittyCalls, Op: "LaunchTab", Count: intPtr(0)},
-		},
-	}
-	res, err := RunUITestScenario(sc, UITestScenarioEnv{})
-	if err != nil {
-		t.Fatalf("RunUITestScenario error: %v", err)
-	}
-	if !res.OK {
-		t.Fatalf("expected OK, got failures: %+v", res.Failures)
 	}
 }
 
@@ -273,8 +246,6 @@ func TestUITestAssertionValidation(t *testing.T) {
 		{Type: UITestAssertModeEquals, Mode: "list"},
 		{Type: UITestAssertSelectedTitle, Value: "api"},
 		{Type: UITestAssertSelectedProfile, Value: "work"},
-		{Type: UITestAssertKittyCalls, Op: "FocusTab"},
-		{Type: UITestAssertKittyCalls, Op: "FocusTab", Count: intPtr(2)},
 		{Type: UITestAssertCursorEquals, Cursor: 1},
 	}
 	for _, a := range ok {
@@ -289,8 +260,6 @@ func TestUITestAssertionValidation(t *testing.T) {
 		{Type: UITestAssertModeEquals},
 		{Type: UITestAssertModeEquals, Mode: "orbit"},
 		{Type: UITestAssertSelectedTitle},
-		{Type: UITestAssertKittyCalls},
-		{Type: UITestAssertKittyCalls, Op: "FocusTab", Count: intPtr(-1)},
 		{Type: UITestAssertCursorEquals, Cursor: -1},
 	}
 	for _, a := range bad {

@@ -13,7 +13,7 @@
 // newer one.
 //
 // The RECONCILER decides what a fresh list does to the cursor. The selection is
-// an index, but its identity is the Kitty TAB — the one fact about a row that is
+// an index, but its identity is the session key — the one fact about a row that is
 // stable for the life of the pane — so reordering, a metadata change, an added
 // session and a resize all leave the cursor on the same session by construction
 // rather than by arithmetic. The anchor WINDOW is reconciled separately from it,
@@ -29,7 +29,7 @@
 // settled.
 //
 // Failure is retention, never truncation. A read that reached neither the daemon
-// nor Kitty leaves the rows, the freshness stamp and the selection exactly as
+// nor the terminal leaves the rows, the freshness stamp and the selection exactly as
 // they were and records the error; the surface then ages visibly out of its own
 // last successful capture instead of emptying itself because a subprocess timed
 // out.
@@ -83,7 +83,7 @@ func (m *model) settleRefresh(seq int) bool {
 //
 // It is called only after a SUCCESS. A failure clears the pending bit instead,
 // so a run of ticks that piled up during an outage cannot turn into an immediate
-// retry storm against a daemon or a Kitty that is still down — the next scheduled
+// retry storm against a daemon or terminal that is still down — the next scheduled
 // tick asks again, one interval later.
 func (m *model) catchUpRefresh() tea.Cmd {
 	if m.refreshInFlight || !m.refreshPending {
@@ -206,7 +206,7 @@ func (m *model) selectIndex(index int) {
 	m.selectedWindowID = m.sessions[index].WindowID
 }
 
-// indexOfTab finds the row for a Kitty tab.
+// indexOfTab finds the row for a session tab ID.
 func indexOfTab(sessions []session.RunningSession, tabID int) (int, bool) {
 	for index := range sessions {
 		if sessions[index].TabID == tabID {

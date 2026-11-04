@@ -7,7 +7,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -19,34 +18,18 @@ import (
 func MuteToggleCommand() *cobra.Command { return muteToggleCmd }
 
 var (
-	muteToggleWindowID       int
 	muteToggleRuntimeSession string
 	muteToggleJSON           bool
-	muteToggleClient         = cli.NewKittyClient
 )
 
 var muteToggleCmd = &cobra.Command{
 	Use:   "mute-toggle",
-	Short: "Toggle mute on the current Agent Mux session (Kitty tab or tmux session)",
-	Long: `Flips the cc_mute user var on the window identified by --window-id
-(or $KITTY_WINDOW_ID when the flag is zero) and rewrites the tab title so
-the 🔇 glyph appears or disappears immediately. Muted sessions suppress all
-macOS notifications originating from that window. It prints what it changed;
-if the window is not a managed Agent Mux session, the command is a silent
-no-op. With no window and no runtime session to go by, it fails
-(missing_parameter).
+	Short: "Toggle mute on a tmux session",
+	Long: `Toggles the mute state of a managed tmux session and updates its title.
+--runtime-session names the target explicitly; otherwise AMX_RUNTIME_SESSION_ID
+identifies the current session. A session that is not running is an error.
 
-With --runtime-session the session is named by its runtime session instead,
-which is how one on the tmux backend is muted: it has no Kitty window, and
-no Kitty is consulted. A runtime session that is not running there is an
-error rather than a no-op, because it was named exactly. With neither flag
-and outside Kitty, a command that runs in a managed session
-(AMX_RUNTIME_SESSION_ID) mutes that session the same way.
-
-With --json it reports {window_id, muted, changed}: muted is the window's
-mute state after the command, and changed is false for the no-op. A session
-named by --runtime-session reports runtime_session_id as well, and a
-window_id of zero.`,
+With --json it reports {window_id, runtime_session_id, muted, changed}.`,
 	Example: `  amx mute-toggle
   amx mute-toggle --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --json`,
 	Args: cobra.NoArgs,
@@ -54,10 +37,8 @@ window_id of zero.`,
 }
 
 func init() {
-	muteToggleCmd.Flags().IntVar(&muteToggleWindowID, "window-id", 0,
-		"Kitty window ID of the target tab (defaults to $KITTY_WINDOW_ID)")
 	muteToggleCmd.Flags().StringVar(&muteToggleRuntimeSession, "runtime-session", "",
-		"runtime session ID of a tmux session to mute instead of a Kitty tab")
+		"runtime session ID of the tmux session to mute")
 	cli.AddJSONFlag(muteToggleCmd, &muteToggleJSON)
 }
 
@@ -87,9 +68,7 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 	var result muteToggleResult
 	var err error
 	named := strings.TrimSpace(muteToggleRuntimeSession)
-	if named == "" && muteToggleWindowID == 0 {
-		// With nothing named and no Kitty window around it, the session
-		// this command runs in is the one meant.
+	if named == "" {
 		named = currentRuntimeSession()
 	}
 	if named != "" {
@@ -110,14 +89,8 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 			return cli.CommandFailure(cmd, muteToggleJSON, "not_found", err)
 		}
 	} else {
-		windowID := cli.WindowIDOrEnv(muteToggleWindowID)
-		if windowID == 0 {
-			// Nothing names a session at all: not the no-op of a Kitty window
-			// that is not managed, but a command that cannot know what it is for.
-			return cli.MissingParameter(cmd, muteToggleJSON, "--window-id",
-				"the Kitty window of the session to mute (default: $KITTY_WINDOW_ID), or --runtime-session for a tmux session")
-		}
-		result, err = muteToggle(muteToggleClient(), windowID)
+		return cli.MissingParameter(cmd, muteToggleJSON, "--runtime-session",
+			"the runtime session ID of the tmux session to mute (default: $AMX_RUNTIME_SESSION_ID)")
 	}
 	if err != nil && result.Changed && muteToggleJSON {
 		// The mute itself landed; only the title glyph did not. Report the
@@ -125,7 +98,7 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 		return cli.WriteJSONPartial(cmd, result, fmt.Errorf("toggle mute: update tab title: %w", err))
 	}
 	if err != nil {
-		return cli.CommandFailure(cmd, muteToggleJSON, "mute_toggle_failed", fmt.Errorf("toggle mute: %w", cli.PlainKittyError(err)))
+		return cli.CommandFailure(cmd, muteToggleJSON, "mute_toggle_failed", fmt.Errorf("toggle mute: %w", err))
 	}
 	if muteToggleJSON {
 		return cli.WriteJSON(cmd, result)
@@ -140,30 +113,11 @@ func runMuteToggle(cmd *cobra.Command, _ []string) error {
 
 // muteToggleSummary is the one line text mode prints for a mute that changed.
 func muteToggleSummary(result muteToggleResult) string {
-	target := fmt.Sprintf("Kitty window %d", result.WindowID)
-	if result.RuntimeSessionID != "" {
-		target = result.RuntimeSessionID
-	}
+	target := result.RuntimeSessionID
 	if result.Muted {
 		return "muted " + target
 	}
 	return "unmuted " + target
-}
-
-func muteToggle(client kitty.KittyClient, windowID int) (muteToggleResult, error) {
-	result := muteToggleResult{WindowID: windowID}
-	if windowID == 0 {
-		return result, nil
-	}
-	sessions, err := session.List(client)
-	if err != nil {
-		return result, err
-	}
-	rs, ok := session.FindByWindowID(sessions, windowID)
-	if !ok {
-		return result, nil
-	}
-	return applyMuteToggle(kitty.NewBackend(client), rs, result)
 }
 
 // muteToggleRuntime toggles the mute of the tmux session a runtime session

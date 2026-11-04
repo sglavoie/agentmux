@@ -48,7 +48,7 @@ func (t HookSilenceThresholds) Resolve(account string) time.Duration {
 }
 
 // HookSilenceWindowID maps an account name to a stable synthetic window ID used
-// as the notifier dedup key for hook-silence dispatches. Real Kitty window IDs
+// as the notifier dedup key for hook-silence dispatches. Runtime slot IDs
 // are positive ints; negating the FNV-32 hash places the synthetic IDs in a
 // non-overlapping negative range. The -1 offset prevents collision with the
 // zero value (uint32 hashes are 32-bit, so a 64-bit int can hold the full

@@ -17,7 +17,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/debugger"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hooks"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/spf13/cobra"
 )
 
@@ -93,20 +92,19 @@ func runDebugProbe(cmd *cobra.Command, _ []string) error {
 	// A probe is one fresh request, not a search of recorded ones: a selector
 	// it cannot put on that request would be silently ignored.
 	if unsupported := debugSetSelectors(debugProbeSelectors...); len(unsupported) != 0 {
-		return debugInvalid(fmt.Errorf("debug probe does not take %s; it accepts only --window, --%s, --harness, --trace, and --request",
+		return debugInvalid(fmt.Errorf("debug probe does not take %s; it accepts only --%s, --harness, --trace, and --request",
 			strings.Join(unsupported, ", "), debugRuntimeSessionFlag))
 	}
-	windowID, runtimeSession, err := debugSessionTarget(selector.WindowID)
+	if selector.WindowID != 0 {
+		return debugInvalid(errors.New("debug probe requires a runtime session ID; --window is not supported"))
+	}
+	_, runtimeSession, err := debugSessionTarget(selector.WindowID)
 	if err != nil {
 		return err
 	}
 	bin, _ := debugExecutable()
-	socket := debugProbeKittySocket
-	if socket == "" {
-		socket = kitty.NormalizeListenAddress(debugGetenv("KITTY_LISTEN_ON"), debugGetenv("KITTY_PID"))
-	}
 	report := debugger.Probe(debugProbeClient(), debugger.ProbeOptions{
-		WindowID: windowID, KittyListenOn: socket, RuntimeSessionID: runtimeSession, Harness: selector.Harness, TraceID: selector.TraceID, RequestID: selector.RequestID, AMXBin: bin,
+		RuntimeSessionID: runtimeSession, Harness: selector.Harness, TraceID: selector.TraceID, RequestID: selector.RequestID, AMXBin: bin,
 	})
 	if debugProbeJSON {
 		if err := writeIndentedJSON(cmd.OutOrStdout(), report); err != nil {

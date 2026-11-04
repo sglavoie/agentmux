@@ -4,8 +4,8 @@
 // NewOperationalLogger, and NewHandler/Handler.
 //
 // It owns the one thing none of its children may: the Handler itself, and
-// with it stateMu, every reducer mutation taken under it, the single renderer
-// writer, and every Kitty and IPC call the daemon makes. Its children hold
+// with it stateMu, every reducer mutation taken under it, the status writer,
+// and IPC. Its children hold
 // vocabulary, pure projections, and caller-locked trackers; this package
 // decides what an observation does to a window. It imports all twelve daemon
 // subpackages and none of them imports it back, which is what keeps the graph
@@ -21,21 +21,18 @@
 // ipc.SubscriptionHandler: a subscribe registers the sink, replays the latest
 // snapshot, and is acknowledged with a 15s heartbeat the hub then sends, and
 // health reports the subscribers as they identified themselves. Each publish
-// projects one copy into two snapshot versions: v1, the Kitty-only contract
-// every existing client reads, and v2, which a subscriber gets only by asking
-// for the runtime_sessions feature and which adds runtime-session identity and
-// the sessions on other backends — never with a synthesized Kitty window ID.
-// Such a session has no tab to name its project and profile, so the root
+// projects one copy into two snapshot versions: v1 for existing clients and
+// v2 for subscribers asking for the runtime_sessions feature. A session
+// has no tab to name its project and profile, so the root
 // labels it (runtime_labels.go): the project from its registry record as soon
 // as it claims a slot, and the profile from its pane metadata, read off
 // stateMu once per binding — after the checkpoint restore, before the socket
 // binds, and on maintenance for sessions that arrived since.
 //
 // Reducer state of runtime-session slots is checkpointed backend-neutrally
-// (runtime_checkpoint.go) beside the runtime-session registry: a Kitty slot
-// records only its binding, since amx_state keeps its state, while a tmux slot
-// records the same amx_state payload in the file. Startup restores the
-// checkpoint after the Kitty restore and before the socket binds; sessions the
+// (runtime_checkpoint.go) beside the runtime-session registry. Every slot
+// records its binding and reducer payload. Startup restores the checkpoint
+// before the socket binds; sessions the
 // registry no longer lists live at the same target are dropped, entries it
 // cannot answer for are retried on maintenance, a corrupt file is quarantined,
 // and state a fresh event created first only gains disjoint facts.
@@ -66,12 +63,10 @@
 // protocol.RuntimeHealth, with a daemon.runtime_reconcile journal record for
 // each edge (passes start failing, they recover, a pass found an agent
 // stopped). It holds counts, durations, and failure classes only, never what
-// a pane or an error said. A slot of a non-Kitty backend is never queued for
-// the Kitty writer: the runtime checkpoint is its durable state and is what
-// ends its dirty stretch (runtime_checkpoint.go).
+// a pane or an error said. The runtime checkpoint is the durable reducer state
+// and ends each slot's dirty stretch (runtime_checkpoint.go).
 //
-// A session on a backend other than Kitty is probed by the bodies a Kitty
-// window is (runtime_screen_probes.go): the Claude context-limit banner,
+// A session's pane is probed by runtime_screen_probes.go: the Claude context-limit banner,
 // busy-title recovery, and idle screen, the Codex prompt, idle, and cleared
 // screens, and the Copilot transcript probe, each of which settles a stuck
 // turn or confirms a held stop as it does for a window. Its binding comes
@@ -79,8 +74,8 @@
 // it, and its history are read from the registered pane through
 // RuntimeScreenReader and accepted only for that pane under the registered
 // server generation while its agent runs. A pane that cannot be read is no
-// evidence, as a failed get-text is: a held stop then waits for its deadline.
-// A stop of such a session is held for confirmation only when its pane can
+// evidence: a held stop then waits for its deadline.
+// A stop is held for confirmation only when its pane can
 // confirm it (terminalStopHoldArmableLocked).
 //
 // Such a session has no focus to read either. What clears its unseen bit is
@@ -89,18 +84,11 @@
 // in runtime_reconcile.go); a terminal that is merely still attached clears
 // nothing, since the desktop workspace keeps one on every session.
 //
-// The companion's focus_window request (handler_companion.go) is the one
-// companion request that dials Kitty. It accepts only a socket the daemon
-// learned itself (a kittySockets value, lastKittyListenOn, or the snapshot's
-// socket), copies that allowlist under stateMu, and runs the list, verify,
-// tab, and window steps through notification.FocusKittyWindow — the same
-// helper click-to-focus uses — with the lock released. A session with no
-// Kitty window is shown by the focus_session request instead
-// (focus_session.go), which names a runtime session: a connected workspace is
+// The focus_session request (focus_session.go) names a runtime session: a connected workspace is
 // sent a raised session view, and with none the terminal the operator used
 // last is switched to it (tmux.Switcher), off stateMu. A clicked notification
 // about such a session is the same request, and its target carries the
-// runtime session, never a slot as a window ID. The
+// runtime session. The
 // notification_snooze request sets, clears, or reads the notifier's in-memory
 // snooze and rings companionDirty on every change; a timed snooze that simply
 // runs out reaches subscribers on the 5s safety tick.

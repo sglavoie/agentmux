@@ -30,48 +30,27 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// maybeReconcileASLLeases runs reconciliation when the interval has elapsed
-// (or has never run). Called from the maintenance tick with the fresh
-// snapshot.
-func (h *Handler) maybeReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
-	h.maybeReconcileASLLeasesFor(now, windows, h.currentKittyListenOn())
-}
-
-func (h *Handler) maybeReconcileASLLeasesFor(now time.Time, windows []kitty.OSWindow, socket string) {
+// maybeReconcileASLLeasesRuntime reconciles registered runtime sessions when
+// the interval has elapsed. Discovery and checkpoint work run off stateMu.
+func (h *Handler) maybeReconcileASLLeasesRuntime(now time.Time) {
 	h.stateMu.Lock()
 	due := h.lastASLReconcileAt.IsZero() || now.Sub(h.lastASLReconcileAt) >= asl.ReconcileInterval
 	h.stateMu.Unlock()
 	if due {
-		h.reconcileASLLeasesFor(now, windows, socket)
+		h.reconcileASLLeasesRuntime(now)
 	}
 }
 
-// ReconcileASLLeases reconciles immediately, bypassing the interval gate.
-// Discovery runs outside stateMu so a slow filesystem scan cannot block state
-// handlers. An empty snapshot says nothing about Kitty windows: without them,
-// candidates cannot be attributed to owners, and missing evidence must
-// preserve leases rather than revoke them, so Kitty leases are left exactly as
-// they are. Runtime sessions on other backends do not depend on the snapshot —
-// their runs are attributed by identity — so the sweep still runs for them, and
-// is skipped entirely only when there are none.
-func (h *Handler) ReconcileASLLeases(now time.Time, windows []kitty.OSWindow) {
-	h.reconcileASLLeasesFor(now, windows, h.currentKittyListenOn())
-}
-
-func (h *Handler) reconcileASLLeasesFor(now time.Time, windows []kitty.OSWindow, socket string) {
+func (h *Handler) reconcileASLLeasesRuntime(now time.Time) {
 	h.stateMu.Lock()
 	h.lastASLReconcileAt = now
 	runtimeState := h.hasRuntimeASLStateLocked()
 	h.stateMu.Unlock()
-
-	if len(windows) == 0 && !runtimeState {
+	if !runtimeState {
 		return
 	}
-	// Paused runs have no loop process. Historical projections must not seed
-	// leases onto new Kitty windows whose IDs happen to match an old run.
 	result, err := daemonLoopDiscoverPlans(agentloop.DiscoverOptions{
 		StateRoot: h.aslStateRoot(),
 		Cache:     h.aslProjectionCache,
@@ -81,82 +60,34 @@ func (h *Handler) reconcileASLLeasesFor(now time.Time, windows []kitty.OSWindow,
 		slog.Debug("asl reconcile skipped: discovery failed; preserving leases", "err", err)
 		return
 	}
-	h.reconcileASLDiscoveryFor(now, windows, result, socket)
+	h.reconcileASLDiscoveryCore(now, result)
 }
 
-// aslSeed is one discovered run attributed to its managed owner window.
+// aslSeed is one discovered run attributed to its runtime session.
 type aslSeed struct {
 	windowID  int
 	key       string
 	candidate agentloop.Candidate
-	// runtime marks a seed attributed by a runtime session's claim on the run
-	// rather than by workspace matching.
-	runtime bool
 }
 
-// reconcileASLDiscoveryFor folds one successful sweep into the per-window
-// reducers using the Kitty socket that supplied the snapshot.
-func (h *Handler) reconcileASLDiscoveryFor(now time.Time, windows []kitty.OSWindow, result agentloop.DiscoveryResult, socket string) {
+// reconcileASLDiscoveryCore folds a successful sweep into per-session reducers.
+func (h *Handler) reconcileASLDiscoveryCore(now time.Time, result agentloop.DiscoveryResult) {
 	sweep := asl.NewSweep(result)
-
-	// Attribute each present candidate to the managed owner window(s) of its
-	// workspace, reusing the exact matching policy lifecycle fan-out uses so
-	// reconciliation and live events can never disagree about ownership.
-	kittyEvidence := len(windows) > 0
 	present := result.Candidates(false)
-	var seeds []aslSeed
-	for _, candidate := range present {
-		// Leases are keyed by run identity only. The pre-identity window-keyed
-		// key is gone with the legacy parser: the projection always carries a
-		// run ID, and a window-keyed lease cannot be matched against evidence,
-		// so seeding one would create a fact nothing could ever retire.
-		if candidate.RunID == "" {
-			continue
-		}
-		targets, _ := matchManagedLoopTargets(windows, []agentloop.Candidate{candidate})
-		for _, target := range targets {
-			seeds = append(seeds, aslSeed{windowID: target.windowID, key: candidate.RunID, candidate: candidate})
-		}
-	}
-
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
-	ambiguousWindowIDs := h.ambiguousKittyWindowIDsLocked()
-	kept := seeds[:0]
-	for _, seed := range seeds {
-		if ambiguousWindowIDs[seed.candidate.WindowID] {
-			// ASL's durable projection has no Kitty socket. A scan cannot
-			// place this run by raw number, but a runtime claim below can.
-			continue
-		}
-		kept = append(kept, seed)
-	}
-	seeds = kept
-	for i := range seeds {
-		seeds[i].windowID = h.runtimeRoutes.kittySlotOf(socket, seeds[i].windowID)
-	}
 	// Leases, supervisor targets, and question projections all move below; the
 	// signal never blocks, and the hub's copy waits for this section to end.
 	h.companionDirty()
 	h.aslMetrics.RecordSweep(now, result)
 	changedWindows := make(map[int]bool)
 
-	// A run a runtime session claimed belongs to that session's slot and to no
-	// other window. The claim replaces whatever workspace matching proposed for
-	// it above, which was computed off the lock and cannot see claims.
+	// A run belongs to the runtime session that claims it.
 	claims := h.aslRuntimeClaimsLocked()
-	if len(claims) > 0 {
-		kept := seeds[:0]
-		for _, seed := range seeds {
-			if _, claimed := claims[seed.key]; !claimed {
-				kept = append(kept, seed)
-			}
-		}
-		seeds = kept
-		for _, candidate := range present {
-			if slot, claimed := claims[candidate.RunID]; claimed && candidate.RunID != "" {
-				seeds = append(seeds, aslSeed{windowID: slot, key: candidate.RunID, candidate: candidate, runtime: true})
-			}
+	var seeds []aslSeed
+	for _, candidate := range present {
+		if slot, claimed := claims[candidate.RunID]; claimed && candidate.RunID != "" {
+			seeds = append(seeds, aslSeed{windowID: slot, key: candidate.RunID, candidate: candidate})
 		}
 	}
 
@@ -174,7 +105,7 @@ func (h *Handler) reconcileASLDiscoveryFor(now time.Time, windows []kitty.OSWind
 		}
 		h.aslSupervisors.Register(asl.SupervisorTarget{
 			WindowID:       seed.windowID,
-			OriginWindowID: seed.supervisorOriginWindowID(),
+			OriginWindowID: seed.windowID,
 			Candidate:      seed.candidate,
 		})
 		if h.seedASLLeaseLocked(now, seed) {
@@ -206,8 +137,8 @@ func (h *Handler) reconcileASLDiscoveryFor(now time.Time, windows []kitty.OSWind
 					"ASL run belongs to another runtime session; supervisor question projection retired")
 				continue
 			}
-			if !kittyEvidence && !isRuntimeSyntheticSlot(windowID) {
-				// No snapshot, no verdict on a Kitty window's lease.
+			if !isRuntimeSyntheticSlot(windowID) {
+				// No runtime session owns this historical lease.
 				if h.aslMissStreak.Streak(ref) > 0 {
 					liveRefs[ref] = true
 				}
@@ -249,42 +180,6 @@ func (h *Handler) reconcileASLDiscoveryFor(now time.Time, windows []kitty.OSWind
 		h.syncRendererMetadataLocked(windowID)
 		h.markWindowDirtyLocked(windowID)
 	}
-}
-
-// ambiguousKittyWindowIDsLocked identifies raw window numbers claimed by
-// more than one Kitty socket. Discovery has no socket provenance, so its
-// window number alone cannot be used to seed a workspace lease for these.
-// Callers hold stateMu.
-func (h *Handler) ambiguousKittyWindowIDsLocked() map[int]bool {
-	firstSocket := make(map[int]string)
-	ambiguous := make(map[int]bool)
-	for key := range h.runtimeRoutes.kittyByKey {
-		if previous, seen := firstSocket[key.windowID]; seen && previous != key.socket {
-			ambiguous[key.windowID] = true
-		} else if !seen {
-			firstSocket[key.windowID] = key.socket
-		}
-	}
-	return ambiguous
-}
-
-// originWindowID names the pane a seeded run reports from. A run attributed by
-// a runtime session's claim originates from that session's slot; the window ID
-// its projection may carry is Kitty's and does not locate it.
-func (s aslSeed) originWindowID() int {
-	if s.runtime || s.candidate.WindowID <= 0 {
-		return s.windowID
-	}
-	return s.candidate.WindowID
-}
-
-// supervisorOriginWindowID is originWindowID without the fallback: a
-// workspace-matched run whose projection names no window keeps reporting none.
-func (s aslSeed) supervisorOriginWindowID() int {
-	if s.runtime {
-		return s.windowID
-	}
-	return s.candidate.WindowID
 }
 
 // releaseASLLeaseLocked converts one live lease into the finished fact its
@@ -358,7 +253,7 @@ func (h *Handler) seedASLLeaseLocked(now time.Time, seed aslSeed) bool {
 		return false
 	}
 	phase := asl.PhaseForDiscovered(seed.candidate.Phase)
-	originWindowID := seed.originWindowID()
+	originWindowID := seed.windowID
 	decision := st.Reducer.Apply(protocol.ReducerEvent{
 		Source:         protocol.SourceID{Kind: protocol.SourceASL, Key: seed.key},
 		Seq:            0,

@@ -234,7 +234,6 @@ func TestDiscoverHarnessProcessIgnoresOwnAndWrapperArguments(t *testing.T) {
 }
 
 func TestDiscoverHarnessProcessLegacyDeliveryPreservesPipeModeWithoutIdentity(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("AMX_CONFIG", t.TempDir()+"/missing-config.toml")
 

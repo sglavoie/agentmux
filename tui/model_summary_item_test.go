@@ -7,7 +7,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -26,10 +25,8 @@ import (
 // summary is also the change that discovers which action was unguarded.
 
 // summaryModel returns a model whose list holds one family summary followed by
-// the two sessions it speaks for, with the cursor parked on the summary. It
-// also returns the Kitty runner behind the client, so a caller can prove no
-// Kitty call was made, and the number of calls already spent on setup.
-func summaryModel(t *testing.T) (Model, *kitty.MockRunner, int) {
+// the two sessions it speaks for, with the cursor parked on the summary.
+func summaryModel(t *testing.T) Model {
 	t.Helper()
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
@@ -41,8 +38,7 @@ func summaryModel(t *testing.T) (Model, *kitty.MockRunner, int) {
 		// and the assertion would pass vacuously.
 		Sessions: []config.Session{{Title: "api", Directory: "/repo", Account: "work"}},
 	}
-	runner := kitty.NewMockRunner(nil)
-	m := NewModel(cfg, kitty.NewClientWithSocket(runner, ""))
+	m := NewModel(cfg, nil)
 	m.width, m.height = 120, 40
 
 	rows := []session.RunningSession{
@@ -71,12 +67,12 @@ func summaryModel(t *testing.T) (Model, *kitty.MockRunner, int) {
 	if s, ok := m.selectedSession(); ok {
 		t.Fatalf("setup: the summary resolved to session %+v; the fixture is not testing what it claims", s)
 	}
-	return m, runner, len(runner.Calls)
+	return m
 }
 
 // forbidDaemonMutations fails the test if any command reaches the daemon while
-// it is installed. Kitty is only half the blast radius: the status clear goes
-// out over the daemon request seam, not over kitten.
+// it is installed. A direct terminal action is only half the blast radius: the status clear goes
+// out over the daemon request seam, not through a terminal command.
 func forbidDaemonMutations(t *testing.T) {
 	t.Helper()
 	previous := commands.DaemonRequest
@@ -107,14 +103,14 @@ var summaryRowActionKeys = []string{
 }
 
 // TestSummaryItemRefusesEveryRowAction is the session's central safety claim: a
-// synthetic summary cannot trigger a Kitty or daemon mutation. Each key is
+// synthetic summary cannot trigger a session or daemon mutation. Each key is
 // driven against a freshly built fixture, and each must dispatch no command at
 // all — the action is not merely harmless, it is never issued.
 func TestSummaryItemRefusesEveryRowAction(t *testing.T) {
 	for _, key := range summaryRowActionKeys {
 		t.Run("key="+key, func(t *testing.T) {
 			forbidDaemonMutations(t)
-			m, runner, setupCalls := summaryModel(t)
+			m := summaryModel(t)
 
 			updated, cmd := m.Update(keyPress(key))
 			after := updated.(Model)
@@ -130,21 +126,18 @@ func TestSummaryItemRefusesEveryRowAction(t *testing.T) {
 			if id := after.targetSession.TabID; id != 0 {
 				t.Errorf("key %q captured target session tab %d from a summary", key, id)
 			}
-			if got := len(runner.Calls); got != setupCalls {
-				t.Errorf("key %q made %d Kitty call(s) with the cursor on a family summary: %+v", key, got-setupCalls, runner.Calls[setupCalls:])
-			}
 		})
 	}
 }
 
 // TestSummaryItemEnterFoldsAndReachesNoSession is Enter's half of the same
-// claim. Enter focuses a Kitty tab on every line but this one, and a summary
+// claim. Enter focuses a session on every line but this one, and a summary
 // speaks for two sessions at once, so the thing it must never do is pick one of
 // them. It folds instead — a change to the list, not to any session — and the
-// proof is that the fold happened and Kitty was never called.
+// proof is that the fold happened without selecting a session.
 func TestSummaryItemEnterFoldsAndReachesNoSession(t *testing.T) {
 	forbidDaemonMutations(t)
-	m, runner, setupCalls := summaryModel(t)
+	m := summaryModel(t)
 
 	updated, cmd := m.Update(keyPress(keyEnter))
 	after := updated.(Model)
@@ -161,9 +154,6 @@ func TestSummaryItemEnterFoldsAndReachesNoSession(t *testing.T) {
 	if id := after.targetSession.TabID; id != 0 {
 		t.Errorf("enter captured target session tab %d from a summary", id)
 	}
-	if got := len(runner.Calls); got != setupCalls {
-		t.Errorf("enter made %d Kitty call(s) on a family summary: %+v", got-setupCalls, runner.Calls[setupCalls:])
-	}
 }
 
 // TestSummaryItemRefusesEveryPaletteCommand covers the second entry point to the
@@ -173,7 +163,7 @@ func TestSummaryItemEnterFoldsAndReachesNoSession(t *testing.T) {
 // caller ignores that verdict.
 func TestSummaryItemRefusesEveryPaletteCommand(t *testing.T) {
 	forbidDaemonMutations(t)
-	m, runner, setupCalls := summaryModel(t)
+	m := summaryModel(t)
 
 	ctx := captureCommandContext(m)
 	if ctx.HasTarget {
@@ -195,9 +185,6 @@ func TestSummaryItemRefusesEveryPaletteCommand(t *testing.T) {
 			t.Errorf("session command %q dispatched %#v despite being unavailable", cmd.ID, teaCmd())
 		}
 	}
-	if got := len(runner.Calls); got != setupCalls {
-		t.Errorf("the palette made %d Kitty call(s) for a family summary: %+v", got-setupCalls, runner.Calls[setupCalls:])
-	}
 }
 
 // TestSummaryItemFooterOffersNoRowAction asserts the footer agrees with the key
@@ -206,7 +193,7 @@ func TestSummaryItemRefusesEveryPaletteCommand(t *testing.T) {
 func TestSummaryItemFooterOffersNoRowAction(t *testing.T) {
 	t.Parallel()
 
-	m, _, _ := summaryModel(t)
+	m := summaryModel(t)
 
 	if hasRow(m) {
 		t.Fatal("hasRow reported a row with the cursor on a family summary")
@@ -222,13 +209,13 @@ func TestSummaryItemFooterOffersNoRowAction(t *testing.T) {
 }
 
 // TestSummaryItemPreviewTracksNoWindow asserts the preview refresh does not
-// reach into Kitty for a summary. Window 0 is the "nothing running" sentinel
+// read a pane for a summary. Window 0 is the "nothing running" sentinel
 // fetchPreviewCmd short-circuits, so the pane paints its placeholder instead of
 // whichever member happened to be first.
 func TestSummaryItemPreviewTracksNoWindow(t *testing.T) {
 	t.Parallel()
 
-	m, runner, setupCalls := summaryModel(t)
+	m := summaryModel(t)
 	m.previewWindowID = 11 // as if the cursor had just left the first member
 
 	cmd := m.refreshPreviewForCursor()
@@ -245,9 +232,6 @@ func TestSummaryItemPreviewTracksNoWindow(t *testing.T) {
 	if msg.windowID != 0 || msg.text != "" || msg.err != nil {
 		t.Errorf("preview fetch = %+v, want the empty-window short circuit", msg)
 	}
-	if got := len(runner.Calls); got != setupCalls {
-		t.Errorf("preview refresh made %d Kitty call(s) for a summary: %+v", got-setupCalls, runner.Calls[setupCalls:])
-	}
 }
 
 // TestSummaryItemNavigationReachesItsMembers asserts the refusal above is about
@@ -256,7 +240,7 @@ func TestSummaryItemPreviewTracksNoWindow(t *testing.T) {
 func TestSummaryItemNavigationReachesItsMembers(t *testing.T) {
 	t.Parallel()
 
-	m, _, _ := summaryModel(t)
+	m := summaryModel(t)
 
 	if got, want := m.listItemCount(), 3; got != want {
 		t.Fatalf("listItemCount = %d, want %d (one summary plus two leaves)", got, want)
@@ -299,7 +283,7 @@ func TestSummaryItemNavigationReachesItsMembers(t *testing.T) {
 func TestSummaryItemRendersOneLine(t *testing.T) {
 	t.Parallel()
 
-	m, _, _ := summaryModel(t)
+	m := summaryModel(t)
 
 	withSummary := stripAnsi(renderListAt(m, m.width, 0))
 

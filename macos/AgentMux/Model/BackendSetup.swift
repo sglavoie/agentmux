@@ -3,8 +3,9 @@ import Foundation
 /// Where Launch Project starts an agent (`amxLaunchBackend`).
 enum LaunchBackendPreference: String, CaseIterable, Equatable {
     case followCLI = "follow-cli"
-    case kitty
     case workspace
+
+    static var allCases: [Self] { [.workspace, .followCLI] }
 
     /// Preserve the destination of the retired automatic preference on upgrade.
     static func stored(_ value: String?) -> Self {
@@ -15,7 +16,6 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
     var label: String {
         switch self {
         case .followCLI: return "Follow CLI configuration"
-        case .kitty: return "Kitty"
         case .workspace: return "Workspace (tmux)"
         }
     }
@@ -24,7 +24,6 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
         guard self == .followCLI else { return self }
         switch cliBackend {
         case "tmux": return .workspace
-        case "kitty": return .kitty
         default: return nil
         }
     }
@@ -32,7 +31,6 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
     func destination(cliBackend: String?) -> String {
         switch resolved(cliBackend: cliBackend) {
         case .workspace: return "workspace (tmux)"
-        case .kitty: return "Kitty"
         default: return "CLI configuration (checking destination)"
         }
     }
@@ -64,7 +62,7 @@ enum LaunchBackendPreference: String, CaseIterable, Equatable {
         if self == .followCLI {
             return "Launch Project and Recent conversation resumes follow config.toml: \(destination(cliBackend: cliBackend)). The destination is checked again before launching. Run a Plan always uses the workspace."
         }
-        let cli = cliBackend == "tmux" ? "tmux" : cliBackend == "kitty" ? "Kitty" : "unknown (check amx backend status)"
+        let cli = cliBackend == "tmux" ? "tmux" : "unknown (check amx backend status)"
         return "Launch Project uses \(destination(cliBackend: cliBackend)). This app preference overrides config.toml for that action. Command-line launches use \(cli) unless --backend overrides it. Run a Plan always uses the workspace."
     }
 

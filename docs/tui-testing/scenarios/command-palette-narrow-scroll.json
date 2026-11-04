@@ -21,7 +21,7 @@
     { "type": "cursor_equals", "cursor": 11 },
     { "type": "no_layout_issues" },
     { "type": "contains_text", "text": "Focus Selected Session" },
-    { "type": "contains_text", "text": "Jump to the selected session" },
+    { "type": "contains_text", "text": "Show the selected tmux session" },
     { "type": "contains_text", "text": "▲" },
     { "type": "contains_text", "text": "▼" }
   ]

@@ -31,9 +31,7 @@ type WindowStateSnapshot struct {
 	AgentTurn      *AgentTurnSnapshot `json:"agent_turn,omitempty"`
 	// ASLPhases contains the distinct phases of runs retaining a live lease.
 	ASLPhases []string `json:"asl_phases,omitempty"`
-	// ASLRunIDs names those runs. A Kitty window also carries its run in a
-	// user variable; a session with no Kitty window is tied to its run only
-	// here.
+	// ASLRunIDs names the runs associated with this session.
 	ASLRunIDs []string `json:"asl_run_ids,omitempty"`
 	// ASLQuestionOpen reports an unanswered supervisor mailbox question from
 	// the daemon's question projection. It remains true when another icon
@@ -55,8 +53,7 @@ type WindowStateSnapshot struct {
 	// Absent for every seen window, which also preserves the former response
 	// shape for clients that do not group on it.
 	Unseen bool `json:"unseen,omitempty"`
-	// Muted is the daemon's cache of the session's mute: read from Kitty
-	// listings for a Kitty window and from the pane for a tmux session. Absent
+	// Muted is the daemon's cache of the session's mute, read from its tmux pane. Absent
 	// when not muted, which preserves the former response shape.
 	Muted bool `json:"muted,omitempty"`
 	// Reason names WHY a blocked window is blocked: the harness prompt kind a
@@ -101,8 +98,7 @@ type WindowStateSnapshot struct {
 	Conversation *conversation.Identity `json:"conversation,omitempty"`
 }
 
-// WindowDebugMetadata is the daemon's per-window export snapshot. The live
-// Kitty-joined section is added later; for now exports can rely on the durable
+// WindowDebugMetadata is the daemon's per-window export snapshot. Exports rely on the durable
 // fields below even after a session ends or the tab disappears.
 type WindowDebugMetadata struct {
 	Stats    WindowDebugStats    `json:"stats"`
@@ -248,8 +244,7 @@ type ShadowMismatch struct {
 }
 
 // WindowDebugRenderer is the daemon-owned rendering state for a window. It
-// makes drift and repeated Kitty write failures visible without asking callers
-// to infer desired state from the mutable tab title.
+// makes drift and repeated checkpoint or status write failures visible.
 type WindowDebugRenderer struct {
 	DesiredIcon     string `json:"desired_icon"`
 	StateSet        bool   `json:"state_set"`
@@ -257,13 +252,12 @@ type WindowDebugRenderer struct {
 	LoopingSet      bool   `json:"looping_set"`
 	RenderFailures  int    `json:"render_failures"`
 	LastRenderError string `json:"last_render_error"`
-	KittyListenOn   string `json:"kitty_listen_on,omitempty"`
 
 	// Render-generation pipeline diagnostics. The window's Seq counter is its
 	// generation; each stage records the highest generation it has reached:
-	// queued (handed to the render queue), attempted (candidate built),
-	// persisted (amx_state landed), rendered (title landed or was already
-	// converged), failed (a Kitty write for that generation errored).
+	// queued (ready for persistence), attempted (candidate built),
+	// persisted (checkpoint landed), rendered (checkpoint settled),
+	// failed (a write for that generation errored).
 	QueuedGen    uint64 `json:"queued_gen,omitempty"`
 	AttemptedGen uint64 `json:"attempted_gen,omitempty"`
 	PersistedGen uint64 `json:"persisted_gen,omitempty"`
@@ -279,7 +273,7 @@ type WindowDebugRenderer struct {
 
 	// Generations is the bounded schema-v9 causal history for asynchronous
 	// rendering. A latest-generation pass may contain several source generations
-	// and request IDs when queue coalescing folded a burst into one Kitty write.
+	// and request IDs when queue coalescing folded a burst into one write.
 	Generations []RenderGenerationTrace `json:"generations,omitempty"`
 }
 

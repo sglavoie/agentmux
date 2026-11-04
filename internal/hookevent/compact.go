@@ -28,7 +28,6 @@ type compactPayload struct {
 	Trigger          string `json:"trigger,omitempty"`
 	CWD              string `json:"cwd,omitempty"`
 	Harness          string `json:"harness,omitempty"`
-	KittyWindowID    int    `json:"kitty_window_id,omitempty"`
 	PlanDir          string `json:"plan_dir,omitempty"`
 	RunID            string `json:"run_id,omitempty"`
 	StatePath        string `json:"state_path,omitempty"`
@@ -63,7 +62,6 @@ func CompactHookPayload(payload HookPayload) ([]byte, error) {
 		Trigger:          payload.Trigger,
 		CWD:              payload.CWD,
 		Harness:          payload.Harness,
-		KittyWindowID:    payload.EffectiveKittyWindowID(),
 		PlanDir:          payload.PlanDir,
 		RunID:            payload.EffectiveRunID(),
 		StatePath:        payload.StatePath,

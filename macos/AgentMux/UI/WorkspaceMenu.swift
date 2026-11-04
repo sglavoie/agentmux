@@ -15,30 +15,21 @@ import AppKit
 /// workspace keeps for itself; everything else reaches the agent.
 ///
 /// By default, every shortcut here holds ⌘, except Shift+Page Up and Shift+Page Down and
-/// the function keys F1 to F11, which do here what they do in Kitty
-/// (`functionKeys`): any other key with Control, Option, or no modifier at all
+/// the function keys F1 to F11 (`functionKeys`): any other key with Control, Option, or no modifier at all
 /// is the focused program's unless assigned in Settings › Workspace shortcuts.
 /// Where the keyboard goes then depends on what has it: a
 /// session's terminal gives it to the agent, the Dashboard's to the TUI, and
 /// the session list keeps the arrow keys and Return for itself.
 ///
 /// The digits are the sessions' places in the sidebar, from the top down; the
-/// Dashboard and the Overview have ⌘D and ⌘O. Going to a session with ⌘ alone stays
-/// in the workspace; with Shift, a session that lives in Kitty comes forward
-/// there, and the Show in Kitty submenu that lists those is shown only while
-/// one of the digits goes to a Kitty session (`updateKittyItems`). ⌘] and ⌘[
-/// stop at every session and every terminal under one; ⌘⇧→ and ⌘⇧← do the
-/// same. With Shift on the brackets, they go from session to session, as F9
-/// and F7 do, except that a Kitty session comes forward in Kitty. ⌘L goes
-/// back to where the pane was
-/// before, and again returns. ⌘P lists every session and view to go to by
+/// Dashboard and the Overview have ⌘D and ⌘O. Going to a session stays in the
+/// workspace. ⌘] and ⌘[ stop at every session and every terminal under one;
+/// ⌘⇧→ and ⌘⇧← do the same. F9 and F7 go from session to session. ⌘L goes
+/// back to where the pane was before, and again returns. ⌘P lists every session and view to go to by
 /// name. The review windows have ⌘⇧ and a letter (R, N, U, H, C) and Search
 /// Conversation ⌘⇧S; none of those letters is a Ghostty binding with ⌘⇧.
 enum WorkspaceMenu {
-    /// What each function key does, in the order the menu lists them: the
-    /// keys Kitty binds for its tabs, acting on the workspace's sessions.
-    /// F1 shows the same list (`kittykeys.Workspace`), and
-    /// `TestWorkspaceFunctionKeysMatchTheApp` holds the two together. F3 has
+    /// What each function key does, in the order the menu lists them. F3 has
     /// no target: it goes to the terminal that has the keyboard. Titles stay
     /// literals, one tuple a line, because that test reads this file; F4's
     /// is held to `AttentionCycler.commandTitle` by the app's own tests.
@@ -60,8 +51,6 @@ enum WorkspaceMenu {
     /// The keys of the first sessions in the sidebar, in its order: ⌘1 is the
     /// first one listed and ⌘0 the tenth.
     static let sessionKeys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-    /// What Shift types on each of `sessionKeys`.
-    static let shiftedSessionKeys = ["!", "@", "#", "$", "%", "^", "&", "*", "(", ")"]
 
     /// Makes the app's main menu unless it already has one, which is kept.
     @MainActor
@@ -192,10 +181,8 @@ enum WorkspaceMenu {
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), ".", target: target))
         session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "W", target: target))
         session.addItem(.separator())
-        // Three ways through the sidebar: ⌘] and ⌘[ stop at every session
-        // and every terminal under one; F9 and F7 (Function Keys) at sessions
-        // only, staying here; ⌘} and ⌘{ at sessions only, a Kitty one coming
-        // forward in Kitty.
+        // ⌘] and ⌘[ stop at every session and terminal under one; F9 and F7
+        // stop at sessions only.
         session.addItem(item(nextStopTitle, #selector(AppDelegate.selectNextSession(_:)), "]", target: target))
         session.addItem(item(previousStopTitle, #selector(AppDelegate.selectPreviousSession(_:)), "[", target: target))
         // Keep the bracket keys in the menu and accept the arrow chords as aliases.
@@ -210,18 +197,6 @@ enum WorkspaceMenu {
         }
         session.addItem(item("Next Tab in Project", #selector(AppDelegate.selectNextProjectTab(_:)), key(NSRightArrowFunctionKey), target: target))
         session.addItem(item("Previous Tab in Project", #selector(AppDelegate.selectPreviousProjectTab(_:)), key(NSLeftArrowFunctionKey), target: target))
-        // Hidden until a Kitty session is listed (`updateKittyItems`): with
-        // none they do what F9 and F7 do. Hidden, they keep their keys.
-        for (title, action, stepKey) in [
-            (nextSessionTitle, #selector(AppDelegate.showNextSessionInKitty(_:)), "}"),
-            (previousSessionTitle, #selector(AppDelegate.showPreviousSessionInKitty(_:)), "{"),
-        ] {
-            let step = item(title, action, stepKey, target: target)
-            step.identifier = raisingKittyIdentifier
-            step.isHidden = true
-            step.allowsKeyEquivalentWhenHidden = true
-            session.addItem(step)
-        }
         session.addItem(item("Back to Last Shown", #selector(AppDelegate.toggleRecentPlace(_:)), "l", target: target))
         session.addItem(.separator())
         let keys = submenu("Function Keys", in: session)
@@ -239,19 +214,6 @@ enum WorkspaceMenu {
             session.addItem(place)
         }
         session.addItem(.separator())
-        // The same places with Shift: a Kitty session is raised in Kitty.
-        // Only the Kitty sessions are listed; the others keep the key, which
-        // goes to them as the digit alone does.
-        let kitty = submenu(WorkspaceWindowController.showInKittyTitle, in: session)
-        session.items.last?.identifier = showInKittyIdentifier
-        for (index, key) in shiftedSessionKeys.enumerated() {
-            let place = item("Session \(index + 1) in Kitty", #selector(AppDelegate.showSessionInKitty(_:)), key, target: target)
-            place.tag = index
-            place.allowsKeyEquivalentWhenHidden = true
-            kitty.addItem(place)
-        }
-        session.delegate = target
-
         let window = submenu("Window", in: main)
         window.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
         window.addItem(item("Zoom", #selector(NSWindow.performZoom(_:)), ""))
@@ -271,32 +233,11 @@ enum WorkspaceMenu {
     static let findTitle = "Find in Terminal…"
     static let nextStopTitle = "Next Session or Terminal"
     static let previousStopTitle = "Previous Session or Terminal"
-    static let nextSessionTitle = "Next Session, Raising Kitty"
-    static let previousSessionTitle = "Previous Session, Raising Kitty"
-    static let showInKittyIdentifier = NSUserInterfaceItemIdentifier("amx.session.showInKitty")
-    /// ⌘} and ⌘{, shown only while a session in Kitty is listed.
-    static let raisingKittyIdentifier = NSUserInterfaceItemIdentifier("amx.session.raisingKitty")
     /// The View menu's sidebar and inspector items, whose titles the app
     /// sets to Show or Hide as each is (`WorkspaceWindowController`'s
     /// `isSidebarCollapsed` and `isInspectorCollapsed`).
     static let toggleSidebarIdentifier = NSUserInterfaceItemIdentifier("amx.view.toggleSidebar")
     static let toggleInspectorIdentifier = NSUserInterfaceItemIdentifier("amx.view.toggleInspector")
-
-    /// Shows the Session menu's Show in Kitty submenu only while one of the
-    /// digits goes to a session in Kitty, and lists only those sessions in
-    /// it. ⌘} and ⌘{ are shown while any listed session is in Kitty. The
-    /// hidden items keep their keys.
-    @MainActor
-    static func updateKittyItems(in session: NSMenu, workspace: WorkspaceWindowController?) {
-        for step in session.items where step.identifier == raisingKittyIdentifier {
-            step.isHidden = workspace?.listsKittySession != true
-        }
-        guard let holder = session.items.first(where: { $0.identifier == showInKittyIdentifier }) else { return }
-        holder.isHidden = workspace?.digitsReachKitty != true
-        for place in holder.submenu?.items ?? [] {
-            place.isHidden = workspace?.sessionIsInKitty(at: place.tag) != true
-        }
-    }
 
     private static func submenu(_ title: String, in main: NSMenu) -> NSMenu {
         let menu = NSMenu(title: title)

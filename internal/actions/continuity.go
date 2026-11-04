@@ -10,7 +10,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -18,7 +17,7 @@ import (
 )
 
 // continueConversation performs the smart-continuation decision at the action
-// boundary. It checks runtime ownership and fresh Kitty topology before
+// boundary. It checks runtime ownership before
 // returning an existing session. When no exact live owner exists, the
 // persisted transcript source is validated before a native resume starts.
 func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Result, error) {
@@ -41,42 +40,25 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 		}
 		return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: message}
 	}
-	// State slots are daemon-local IDs, not necessarily Kitty window IDs.
-	// Separate runtime owners and map local Kitty aliases before checking the
-	// fresh topology. A foreign instance cannot be disproved by a local list.
-	localStates := map[int]protocol.WindowStateSnapshot{}
+	// State slots are daemon-local IDs. A matching conversation without a
+	// runtime binding cannot safely be resumed until the daemon reconciles it.
 	runtimeOwners := map[string]protocol.RuntimeSlot{}
-	localSocket := kitty.NormalizedListenAddressFromEnv()
+	unbound := false
 	for slot, state := range response.States {
 		if state.Conversation == nil || !identity.Equal(*state.Conversation) {
 			continue
 		}
-		if bound, ok := response.RuntimeSlots[slot]; ok && bound.RuntimeSessionID != "" && bound.Backend != string(runtimesession.BackendKitty) {
+		if bound, ok := response.RuntimeSlots[slot]; ok && bound.RuntimeSessionID != "" && bound.Backend == string(runtimesession.BackendTmux) {
 			runtimeOwners[bound.RuntimeSessionID] = bound
-			continue
-		}
-		if key, ok := response.KittySlots[slot]; ok {
-			if localSocket == "" || key.Socket != localSocket {
-				return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: "conversation is open in another Kitty instance; continue it from that instance"}
-			}
-			localStates[key.WindowID] = state
 		} else {
-			localStates[slot] = state
+			unbound = true
 		}
 	}
-	var windows []kitty.OSWindow
-	if len(localStates) > 0 {
-		if deps.Kitty == nil {
-			return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: "Kitty client is required to check the live conversation"}
-		}
-		windows, err = deps.Kitty.ListWindows()
-		if err != nil {
-			return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: fmt.Sprintf("listing Kitty windows: %v", err)}
-		}
-	}
-	live, status := session.ResolveLiveConversationStatus(identity, localStates, windows)
-	if status == session.LiveConversationAmbiguous || len(runtimeOwners) > 1 || (len(runtimeOwners) > 0 && status == session.LiveConversationExact) {
+	if len(runtimeOwners) > 1 {
 		return Result{}, &Error{Code: "ambiguous_conversation", Action: Continue, Message: "multiple live sessions claim this conversation; refusing to focus or resume"}
+	}
+	if unbound {
+		return Result{}, &Error{Code: "live_lookup_unavailable", Action: Continue, Message: "a live conversation has no runtime session binding yet"}
 	}
 	for _, bound := range runtimeOwners {
 		return Result{
@@ -84,16 +66,6 @@ func continueConversation(deps Dependencies, meta transcript.SessionMeta) (Resul
 			Data: deps.launchData(map[string]any{"continuation": DataContinuationAttach}, session.LaunchResult{
 				Backend: runtimesession.BackendKind(bound.Backend), RuntimeSessionID: runtimesession.ID(bound.RuntimeSessionID),
 			}),
-		}, nil
-	}
-	if status == session.LiveConversationExact {
-		if err := deps.terminal().Focus(live.GroupRef()); err != nil {
-			return Result{}, err
-		}
-		return Result{
-			Changed: true,
-			Message: "focused live conversation",
-			Data:    map[string]any{"continuation": "focused", "tab_id": live.TabID, "window_id": live.WindowID},
 		}, nil
 	}
 	project, account, err := continuityLaunchTarget(deps, meta, identity, Continue)
@@ -177,7 +149,7 @@ func handoffConversation(ctx context.Context, deps Dependencies, meta transcript
 	}
 	request := handoff.Request{
 		Source: meta, Reader: reader, Config: deps.Config, TargetProfile: targetProfile,
-		LaunchDirectory: launchDirectory, Edit: edit, NoLaunch: noLaunch, Label: label, Kitty: deps.Kitty, Runtime: rt,
+		LaunchDirectory: launchDirectory, Edit: edit, NoLaunch: noLaunch, Label: label, Runtime: rt,
 		Preview: preview, Instruction: parameters["instruction"],
 	}
 	if content, ok := parameters["content"]; ok {

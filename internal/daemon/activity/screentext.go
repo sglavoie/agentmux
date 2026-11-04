@@ -1,12 +1,9 @@
 package activity
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // ScreenTextCache memoizes one visible-screen observation per source pane for
@@ -27,7 +24,7 @@ import (
 //     could show the banner to one probe and an idle composer to the other.
 //
 // The cache is per tick, never per daemon: a capture is only ever reused inside
-// one pass of runScreenProbesWithSnapshot, so no probe ever acts on a frame
+// one pass of the screen probe loop, so no probe ever acts on a frame
 // older than the tick it is running in. Entry points that drive a single probe
 // outside that loop build their own one-shot cache, which is the same
 // guarantee for a shorter tick.
@@ -46,7 +43,7 @@ import (
 // caller that broke that assumption.
 //
 // Only the visible screen is cached. The Codex clear probe's second
-// scrollback read is a different capture of a different size and stays
+// scrollback read is a different capture and stays
 // uncached, so the map can stay keyed on the pane alone.
 type ScreenTextCache struct {
 	observer backend.Observer
@@ -60,28 +57,9 @@ func (c *ScreenTextCache) OnRead(fn func(elapsed time.Duration, err error)) {
 	c.onRead = fn
 }
 
-// TextReader is the one Kitty capability the Kitty-backed cache needs: read
-// the text of a window matched by expression. The daemon's full Kitty client
-// satisfies it, and narrowing to this seam is what keeps the cache free of the
-// daemon root.
-type TextReader interface {
-	GetText(matchExpr, extent string) (string, error)
-}
-
 type screenEntry struct {
 	screen backend.Screen
 	err    error
-}
-
-// NewScreenTextCache builds the per-tick cache over the handler's Kitty client.
-func NewScreenTextCache(client TextReader) *ScreenTextCache {
-	return NewScreenObservationCache(kittyScreenObserver{client: client})
-}
-
-// KittyScreenObserver is the Kitty client as a screen observer, for a caller
-// that reads Kitty windows beside another backend's panes.
-func KittyScreenObserver(client TextReader) backend.Observer {
-	return kittyScreenObserver{client: client}
 }
 
 // NewScreenObservationCache builds the per-tick cache over any backend's
@@ -103,29 +81,4 @@ func (c *ScreenTextCache) Observe(pane backend.Ref) (backend.Screen, error) {
 	}
 	c.entries[pane] = screenEntry{screen: screen, err: err}
 	return screen, err
-}
-
-// kittyScreenObserver reads a Kitty window's screen through the daemon's
-// narrow text seam. It mirrors kitty.Backend.Observe, which needs the whole
-// KittyClient: get-text reports neither geometry nor screen mode, and the
-// instance is named by kind only.
-type kittyScreenObserver struct {
-	client TextReader
-}
-
-func (o kittyScreenObserver) Observe(pane backend.Ref) (backend.Screen, error) {
-	windowID, err := strconv.Atoi(pane.ID)
-	if err != nil || windowID <= 0 || pane.Scope != backend.ScopePane || strconv.Itoa(windowID) != pane.ID {
-		return backend.Screen{}, &backend.InvalidRefError{Ref: pane, Reason: "not a Kitty window ID"}
-	}
-	text, err := o.client.GetText(kitty.MatchWindowByID(windowID), "screen")
-	if err != nil {
-		return backend.Screen{}, err
-	}
-	return backend.Screen{
-		Instance:   runtimesession.BackendInstance{Kind: runtimesession.BackendKitty},
-		Pane:       pane,
-		Text:       text,
-		CapturedAt: time.Now(),
-	}, nil
 }

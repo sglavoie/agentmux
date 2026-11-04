@@ -28,7 +28,7 @@ func AccountPrefix(accountName string) string {
 	return ProfilePrefix(accountName)
 }
 
-// FormatTitle returns the managed Kitty tab base title for a session.
+// FormatTitle returns the managed session title.
 // The harness emoji (when configured via [harness_emojis]) is prepended as the
 // last prefix, immediately before the project name. Palette icons and the
 // star/mute markers are layered on top of this base title.

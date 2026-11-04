@@ -29,7 +29,7 @@
 //     interpret and the error is the entire truth about the surface.
 //  4. Still loading. Same cold state, no error yet: the read is simply out. This
 //     is what an operator sees for the first fraction of a second, and saying
-//     nothing there would be indistinguishable from an empty Kitty.
+//     nothing there would be indistinguishable from an empty terminal pane.
 //  5. A delayed refresh. A tree HAS landed, so the rows stay and the only
 //     question is how old they have become. This outranks emptiness because a
 //     list that cannot be refreshed might be stale about being empty, and "no
@@ -75,7 +75,7 @@ func (m model) feedback() string {
 		}
 		return "Loading live sessions…"
 	}
-	if age >= protocol.KittySnapshotStaleAfter {
+	if age >= protocol.TopologyStaleAfter {
 		return fmt.Sprintf("Session refresh delayed; showing cached sessions (%ds old)", int(age/time.Second))
 	}
 	if m.portableErr != nil {
@@ -98,7 +98,7 @@ func (m model) feedback() string {
 // recompute anything.
 //
 // The threshold it is compared against is the daemon's own
-// protocol.KittySnapshotStaleAfter, but the verdict is computed here rather than
+// protocol.TopologyStaleAfter, but the verdict is computed here rather than
 // taken from the daemon's Stale flag: that flag describes one snapshot at the
 // moment it answered and says nothing about a read that never reached a daemon.
 //

@@ -76,7 +76,7 @@ func (c Claude) Generate(ctx context.Context, input Input) (Content, error) {
 	env := []string{}
 	for _, item := range os.Environ() {
 		key, _, _ := strings.Cut(item, "=")
-		if strings.HasPrefix(key, "AMX_") || strings.HasPrefix(key, "amx_") || strings.HasPrefix(key, "KITTY_") || (strings.HasPrefix(key, "CLAUDE_CODE_") && !authenticationVariable(key)) || key == "CLAUDECODE" || key == "CLAUDE_CONFIG_DIR" || key == "TMUX" || key == "TMUX_PANE" {
+		if strings.HasPrefix(key, "AMX_") || strings.HasPrefix(key, "amx_") || (strings.HasPrefix(key, "CLAUDE_CODE_") && !authenticationVariable(key)) || key == "CLAUDECODE" || key == "CLAUDE_CONFIG_DIR" || key == "TMUX" || key == "TMUX_PANE" {
 			continue
 		}
 		env = append(env, item)

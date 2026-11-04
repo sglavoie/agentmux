@@ -13,7 +13,6 @@ extension AMXCommand {
     /// (`exitCode(waitStatus:)`) once it exits, on a background queue.
     func spawnDetached(
         _ arguments: [String],
-        kittyListenOn: String? = nil,
         extraEnvironment: [String: String] = [:],
         stderrPath: String? = nil,
         onExit: (@Sendable (pid_t, Int32) -> Void)? = nil
@@ -35,7 +34,7 @@ extension AMXCommand {
         }
 
         let argv = [binary.path] + arguments
-        let envp = environment(kittyListenOn: kittyListenOn)
+        let envp = environment()
             .merging(extraEnvironment) { _, extra in extra }
             .map { "\($0.key)=\($0.value)" }
         var cArgv: [UnsafeMutablePointer<CChar>?] = argv.map { strdup($0) } + [nil]

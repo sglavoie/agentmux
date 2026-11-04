@@ -7,8 +7,8 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -96,8 +96,7 @@ func TestNewModelDefaultsIdleThreshold(t *testing.T) {
 	cfg := &config.Config{
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 0},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	if m.idleThreshold <= 0 {
 		t.Errorf("expected non-zero idleThreshold default, got %v", m.idleThreshold)
@@ -110,8 +109,7 @@ func TestNewModelHonorsConfiguredIdleThreshold(t *testing.T) {
 	cfg := &config.Config{
 		Defaults: config.Defaults{Sort: "alpha", RefreshInterval: 2, IdleThreshold: 42},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	if want := 42 * time.Second; m.idleThreshold != want {
 		t.Errorf("expected idleThreshold=%v, got %v", want, m.idleThreshold)
@@ -198,10 +196,7 @@ func TestPickerProfileOverride_Persists(t *testing.T) {
 	}
 }
 
-func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-test")
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+func TestClearStatusCmdUsesDaemon(t *testing.T) {
 	oldDaemonRequest := commands.DaemonRequest
 	var gotRequest protocol.Request
 	commands.DaemonRequest = func(req protocol.Request) (protocol.Response, error) {
@@ -212,19 +207,17 @@ func TestClearStatusCmdUsesDaemonWithoutWritingTabTitle(t *testing.T) {
 
 	target := session.RunningSession{
 		TabID: 7, WindowID: 99, Base: "🦊api", State: "bolt", Account: "work", Starred: true, Muted: true, Looping: true,
+		Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef",
 	}
-	msg := commands.ClearStatus(client, target)()
+	msg := commands.ClearStatus(target)()
 	done, ok := msg.(commands.ActionDoneMsg)
 	if !ok {
 		t.Fatalf("expected commands.ActionDoneMsg, got %T", msg)
 	}
 	if done.Err != nil {
-		t.Errorf("expected nil error from mock Kitty client, got %v", done.Err)
+		t.Errorf("expected nil error, got %v", done.Err)
 	}
-	if len(runner.Calls) != 0 {
-		t.Errorf("clear must not write Kitty titles, got calls: %v", runner.Calls)
-	}
-	if gotRequest.Type != protocol.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.WindowID != 99 || gotRequest.KittyListenOn != "unix:/kitty-test" {
-		t.Errorf("daemon request = %+v, want user_clear for window 99", gotRequest)
+	if gotRequest.Type != protocol.TypeStateUpdate || gotRequest.Action != "user_clear" || gotRequest.RuntimeSessionID != string(target.RuntimeSessionID) || gotRequest.WindowID != 0 {
+		t.Errorf("daemon request = %+v, want user_clear for the runtime session", gotRequest)
 	}
 }

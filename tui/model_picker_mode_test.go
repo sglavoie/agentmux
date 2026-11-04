@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
@@ -308,9 +307,7 @@ func TestConfigPickerCurrentProfileCaseInsensitive(t *testing.T) {
 			{Title: "api", Directory: "/home/user/api", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
-	m := NewModel(cfg, client)
+	m := NewModel(cfg, nil)
 	m = loadSessions(m, []session.RunningSession{
 		{TabID: 1, WindowID: 10, Base: "api", Profile: "Work", Account: "Work"},
 	})

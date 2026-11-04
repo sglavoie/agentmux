@@ -91,30 +91,16 @@ final class AMXCommandTests: XCTestCase {
 
     // MARK: Environment
 
-    func testChildEnvironmentStripsInheritedKittyAndSetsTheSocket() {
+    func testChildEnvironmentAppliesLaunchValues() {
         let inherited = [
-            "KITTY_WINDOW_ID": "4", "KITTY_LISTEN_ON": "unix:/tmp/kitty-1", "KITTY_PID": "1",
             "PATH": "/usr/bin", "HOME": "/old", "LANG": "en_US.UTF-8", "AMX_CONFIG": "/inherited.toml",
         ]
         let launch = LaunchEnvironment(home: "/Users/me", path: "/opt/bin:/usr/bin", forwarded: ["AMX_CONFIG": "/shell.toml"])
-        let environment = AMXCommand.childEnvironment(inherited: inherited, launch: launch, kittyListenOn: "unix:/tmp/kitty-9")
-        XCTAssertEqual(environment["KITTY_LISTEN_ON"], "unix:/tmp/kitty-9")
-        XCTAssertNil(environment["KITTY_WINDOW_ID"])
-        XCTAssertNil(environment["KITTY_PID"])
+        let environment = AMXCommand.childEnvironment(inherited: inherited, launch: launch)
         XCTAssertEqual(environment["PATH"], "/opt/bin:/usr/bin")
         XCTAssertEqual(environment["HOME"], "/Users/me")
         XCTAssertEqual(environment["AMX_CONFIG"], "/shell.toml")
         XCTAssertEqual(environment["LANG"], "en_US.UTF-8")
-    }
-
-    func testChildEnvironmentWithoutASocketCarriesNoKittyAtAll() {
-        let launch = LaunchEnvironment(home: "/h", path: "/p")
-        for socket in [nil, ""] as [String?] {
-            let environment = AMXCommand.childEnvironment(
-                inherited: ["KITTY_LISTEN_ON": "unix:/tmp/kitty-1"], launch: launch, kittyListenOn: socket
-            )
-            XCTAssertTrue(environment.keys.filter { $0.hasPrefix("KITTY_") }.isEmpty)
-        }
     }
 
     // MARK: Runs
@@ -127,7 +113,7 @@ final class AMXCommandTests: XCTestCase {
         var command = AMXCommand(
             binary: URL(fileURLWithPath: "/bin/amx"),
             launchEnvironment: LaunchEnvironment(home: "/h", path: "/p"),
-            inheritedEnvironment: ["KITTY_WINDOW_ID": "3"]
+            inheritedEnvironment: ["TERM_PROGRAM": "Ghostty"]
         )
         command.runner = { executable, arguments, environment, timeout in
             recorder.calls.append((executable, arguments, environment, timeout))
@@ -136,18 +122,16 @@ final class AMXCommandTests: XCTestCase {
         return command
     }
 
-    func testJSONAppendsTheFlagOnceAndPassesTheSocket() {
+    func testJSONAppendsTheFlagOnce() {
         let recorder = Recorder()
         let out = ProcessOutput(status: 0, stdout: Data(#"{"schema_version":1,"data":{"window_id":2,"muted":true,"changed":true}}"#.utf8), stderr: Data())
         let amx = command(recorder, output: out)
-        XCTAssertEqual(amx.json(Mute.self, ["mute-toggle", "--window-id", "2"], kittyListenOn: "unix:/tmp/k"),
+        XCTAssertEqual(amx.json(Mute.self, ["mute-toggle", "--window-id", "2"]),
                        .success(Mute(windowID: 2, muted: true, changed: true)))
         _ = amx.json(Mute.self, ["mute-toggle", "--json"])
         XCTAssertEqual(recorder.calls.map(\.1), [["mute-toggle", "--window-id", "2", "--json"], ["mute-toggle", "--json"]])
         XCTAssertEqual(recorder.calls[0].0, "/bin/amx")
-        XCTAssertEqual(recorder.calls[0].2["KITTY_LISTEN_ON"], "unix:/tmp/k")
-        XCTAssertNil(recorder.calls[0].2["KITTY_WINDOW_ID"])
-        XCTAssertNil(recorder.calls[1].2["KITTY_LISTEN_ON"])
+        XCTAssertEqual(recorder.calls[0].2["TERM_PROGRAM"], "Ghostty")
         XCTAssertEqual(recorder.calls[0].3, AMXCommand.defaultTimeout)
     }
 
@@ -327,7 +311,7 @@ final class AMXCommandTests: XCTestCase {
     // MARK: Help probe
 
     static let rootHelp = """
-    Agent Mux is a multi-harness session manager for Kitty.
+    Agent Mux is a multi-harness session manager for Ghostty and tmux.
 
     Usage:
       amx [flags]
@@ -335,7 +319,7 @@ final class AMXCommandTests: XCTestCase {
 
     Available Commands:
       config             Manage amx configuration
-      mute-toggle        Toggle mute on the current Agent Mux session (Kitty tab or tmux session)
+      mute-toggle        Toggle mute on the current Agent Mux tmux session
       notifications      Inspect and test native notifications
       open-dashboard     Bring the dashboard forward, opening it if absent
       project            List and launch configured projects
@@ -357,7 +341,7 @@ final class AMXCommandTests: XCTestCase {
     /// cobra command groups, as `amx --help` prints them since its commands
     /// were grouped: the titles are arbitrary, so every group is read.
     static let groupedRootHelp = """
-    Agent Mux is a multi-harness session manager for Kitty.
+    Agent Mux is a multi-harness session manager for Ghostty and tmux.
 
     Usage:
       amx [flags]
@@ -370,8 +354,8 @@ final class AMXCommandTests: XCTestCase {
       open-dashboard     Focus the Agent Mux dashboard
       project            List configured projects and launch sessions from them
 
-    Kitty tabs:
-      mute-toggle        Toggle mute on the current Agent Mux session (Kitty tab or tmux session)
+    Session controls:
+      mute-toggle        Toggle mute on the current Agent Mux tmux session
 
     Setup and diagnostics:
       config             Manage amx configuration

@@ -6,7 +6,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
@@ -96,8 +95,7 @@ func TestPickerEscClearsThenExits(t *testing.T) {
 			{Title: "backend", Account: "work"},
 		},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 
@@ -142,8 +140,7 @@ func TestPickerSpaceWithEmptyFilteredIdxIsSafe(t *testing.T) {
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")
@@ -383,8 +380,7 @@ func TestCtrlCQuitsFromPickerSearchMode(t *testing.T) {
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 		Sessions:      []config.Session{{Title: "api", Account: "work"}},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 	m := NewModel(cfg, client)
 	m = loadSessions(m, nil)
 	m = pressKey(m, "l")

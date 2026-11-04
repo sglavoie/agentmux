@@ -29,32 +29,11 @@ func (h *Handler) handleStateQuery() protocol.Response {
 		}
 		watchdog[id] = entry
 	}
-	// Topology is read in the same critical section as the window states, under
-	// the established stateMu → SnapshotStore order. A publication landing
-	// between two separate reads would otherwise hand a dashboard states from
-	// one moment and a window tree from another, which is precisely the
-	// incoherence a single-round-trip refresh exists to avoid.
-	view, listClient, listSocket := h.kittyListSourceLocked()
 	runtimeSlots := h.runtimeSlotsLocked()
-	kittySlots := make(map[int]protocol.KittySlot, len(h.runtimeRoutes.kittyBySlot))
-	for slot, key := range h.runtimeRoutes.kittyBySlot {
-		kittySlots[slot] = protocol.KittySlot{Socket: key.socket, WindowID: key.windowID}
-	}
 	h.stateMu.Unlock()
-	// Sampled after the unlock: kittyClientForList takes stateMu itself, so
-	// scoping the already-captured client here is what keeps the sample off the
-	// lock without re-entering it. These are operational counters for the same
-	// effective socket rather than facts about the publication above, so they
-	// are not required to be coherent with it.
-	status, hasStatus := kittyListStatus(listClient, listSocket)
 	return protocol.Response{
-		OK:            true,
-		Activity:      snapshot,
-		Watchdog:      watchdog,
-		States:        states,
-		RuntimeSlots:  runtimeSlots,
-		KittySlots:    kittySlots,
-		KittySnapshot: kittySnapshotBlock(view, status, hasStatus, time.Now(), true),
+		OK: true, Activity: snapshot, Watchdog: watchdog,
+		States: states, RuntimeSlots: runtimeSlots,
 	}
 }
 
@@ -150,7 +129,6 @@ func statusEvidence(st *state.WindowState) *protocol.StatusEvidence {
 // handleSessionDetail returns the per-window event ring buffer for req.WindowID.
 // An unknown window yields a non-nil empty slice rather than nil so the TUI
 // can distinguish "no daemon error" from "no events yet" without a nil check.
-// A socketless ambiguous Kitty number reports a target conflict instead.
 func (h *Handler) handleSessionDetail(req protocol.Request) protocol.Response {
 	h.stateMu.Lock()
 	if req.RuntimeSessionID != "" {
@@ -160,21 +138,6 @@ func (h *Handler) handleSessionDetail(req protocol.Request) protocol.Response {
 			return protocol.Response{OK: true, Events: []protocol.SessionEvent{}}
 		}
 		req.WindowID = slot
-	} else if req.KittyListenOn != "" {
-		// Kitty numbers are local to a socket. A stamped request whose pair
-		// the daemon has never seen cannot read another instance's bare slot.
-		slot := h.runtimeRoutes.kittyByKey[kittySlotKey{socket: req.KittyListenOn, windowID: req.WindowID}]
-		if slot <= 0 {
-			h.stateMu.Unlock()
-			return protocol.Response{OK: true, Events: []protocol.SessionEvent{}}
-		}
-		req.WindowID = slot
-	} else if h.ambiguousKittyWindowIDsLocked()[req.WindowID] {
-		// A legacy caller supplied only Kitty's local window number. Once two
-		// instances claim it, reading the bare slot could disclose the other
-		// instance's events.
-		h.stateMu.Unlock()
-		return protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
 	}
 	st, _ := h.windowStateLocked(req.WindowID)
 	detail := eventlog.Detail(st, h.notificationEnricherLocked(req.WindowID))
@@ -199,7 +162,7 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 	h.stateMu.Lock()
 	if req.RuntimeSessionID != "" {
 		// Selection by runtime session: the daemon names the slot, as it
-		// does for a session detail, so a session with no Kitty window can
+		// does for a session detail, so a session with no terminal window can
 		// ask for its own history. An unknown session is an error rather
 		// than an export of everything.
 		slot, ok := h.runtimeRoutes.byRuntime[req.RuntimeSessionID]
@@ -208,16 +171,6 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 			return protocol.Response{OK: false, Error: protocol.OriginReasonRuntimeSessionUnknown}
 		}
 		req.WindowID = slot
-	} else if req.KittyListenOn != "" && req.WindowID > 0 {
-		slot := h.runtimeRoutes.kittyByKey[kittySlotKey{socket: req.KittyListenOn, windowID: req.WindowID}]
-		if slot <= 0 {
-			h.stateMu.Unlock()
-			return protocol.Response{OK: false, Error: "Kitty window is not known on the requested socket"}
-		}
-		req.WindowID = slot
-	} else if req.WindowID > 0 && h.ambiguousKittyWindowIDsLocked()[req.WindowID] {
-		h.stateMu.Unlock()
-		return protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
 	}
 	out := make(map[int][]protocol.SessionEvent)
 	meta := make(map[int]protocol.WindowDebugMetadata)
@@ -242,24 +195,15 @@ func (h *Handler) handleEventsExport(req protocol.Request) protocol.Response {
 		}
 	}
 	slots := h.runtimeSlotsLocked()
-	kittySlots := make(map[int]protocol.KittySlot, len(h.runtimeRoutes.kittyBySlot))
-	for slot, key := range h.runtimeRoutes.kittyBySlot {
-		kittySlots[slot] = protocol.KittySlot{Socket: key.socket, WindowID: key.windowID}
-	}
 	if req.WindowID != 0 {
 		bound, ok := slots[req.WindowID]
 		slots = nil
 		if ok {
 			slots = map[int]protocol.RuntimeSlot{req.WindowID: bound}
 		}
-		if key, ok := kittySlots[req.WindowID]; ok {
-			kittySlots = map[int]protocol.KittySlot{req.WindowID: key}
-		} else {
-			kittySlots = nil
-		}
 	}
 	h.stateMu.Unlock()
-	return protocol.Response{OK: true, EventsByWindow: out, WindowMetadata: meta, RuntimeSlots: slots, KittySlots: kittySlots}
+	return protocol.Response{OK: true, EventsByWindow: out, WindowMetadata: meta, RuntimeSlots: slots}
 }
 
 // exportEnrichLocked stamps live-only state onto an export snapshot: the

@@ -234,7 +234,7 @@ func TestFooterDisablesFocusDuringRequestAndRestoresAfterFailure(t *testing.T) {
 	assertFooterKey(t, overviewInput(m), "enter", false)
 	assertFooterKey(t, overviewInput(m), "1–0", false)
 	assertFooterKey(t, overviewInput(m), "q", true)
-	m = only(t, m, commands.FocusDoneMsg{Err: errors.New("focus unavailable")})
+	m = only(t, m, commands.AttachDoneMsg{Err: errors.New("focus unavailable")})
 	assertFooterKey(t, overviewInput(m), "enter", true)
 	assertFooterKey(t, overviewInput(m), "1–0", true)
 }

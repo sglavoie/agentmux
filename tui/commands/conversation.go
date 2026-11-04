@@ -59,7 +59,7 @@ func ConversationHandoff(deps actions.Dependencies, meta transcript.SessionMeta,
 // RecoverClosed reuses the continuity service's source validation and live-owner
 // checks. A known conversation never silently falls back to a fresh launch.
 func RecoverClosed(ctx context.Context, deps actions.Dependencies, project config.Session, identity conversation.Identity, backend runtimesession.BackendKind) error {
-	deps.Backend = backend // A recorded empty backend still means Kitty.
+	deps.Backend = backend
 	id, request := actions.Launch, actions.Request{Project: &project}
 	if identity.Valid() {
 		if deps.Readers == nil {

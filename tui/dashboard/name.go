@@ -21,7 +21,7 @@
 //   - A qualifier is DISPLAY, never a key. Nothing here is stored on a session,
 //     compared against a filter, or captured into a cursor identity: the filter
 //     still matches the raw title, and CursorIdentity still travels on Base,
-//     Key, and the Kitty IDs. See TestQualifiersAreDisplayOnly.
+//     Key, and the session IDs. See TestQualifiersAreDisplayOnly.
 
 package dashboard
 
@@ -71,7 +71,7 @@ const (
 	// the directory leaf otherwise, because by this level a readable qualifier is
 	// worth more than a homogeneous vocabulary.
 	qualifierCheckoutProfile
-	// qualifierWindow is the stable session identifier — the Kitty window ID,
+	// qualifierWindow is the stable session identifier — the session window ID,
 	// which is exact and unique but means nothing on sight. It is last for that
 	// reason: it always works and never explains.
 	qualifierWindow
@@ -211,7 +211,7 @@ func qualifierText(s session.RunningSession, level qualifierLevel) string {
 		}
 		return checkout + qualifierSeparator + profile
 	case qualifierWindow:
-		// A session outside Kitty has no window number an operator could
+		// A tmux session has no window number an operator could
 		// recognize; its pane in its own backend is the fact that tells two
 		// such rows apart.
 		if !s.Pane.IsZero() && s.Backend != "" {

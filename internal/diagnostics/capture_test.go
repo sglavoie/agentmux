@@ -236,7 +236,7 @@ func TestCaptureQuarantinesUnsafeDescriptorOnRestart(t *testing.T) {
 }
 
 // A capture scoped to a runtime session takes that session's payloads and no
-// other's: a hook from another session, or a Kitty hook that carries none, is
+// other's: a hook from another session, or a hook that carries no runtime session ID, is
 // outside it. A scope cannot name a window and a runtime session at once.
 func TestCaptureScopedToARuntimeSession(t *testing.T) {
 	t.Parallel()
@@ -263,8 +263,8 @@ func TestCaptureScopedToARuntimeSession(t *testing.T) {
 		t.Fatalf("inside = %+v, err = %v", inside, err)
 	}
 	for name, request := range map[string]CapturePayloadRequest{
-		"another session": {RuntimeSessionID: other, Harness: "claude", RequestID: "request-2", Payload: []byte("no")},
-		"a Kitty window":  {WindowID: 42, Harness: "claude", RequestID: "request-3", Payload: []byte("no")},
+		"another session":    {RuntimeSessionID: other, Harness: "claude", RequestID: "request-2", Payload: []byte("no")},
+		"a window-only hook": {WindowID: 42, Harness: "claude", RequestID: "request-3", Payload: []byte("no")},
 	} {
 		outside, err := store.Record(t.Context(), request)
 		if err != nil || outside.Captured || outside.Reason != "scope_mismatch" {

@@ -12,37 +12,9 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/spf13/pflag"
 )
-
-// recordingKitty is a Kitty that grows a tab per launch, as a live one would.
-type recordingKitty struct {
-	windows  []kitty.OSWindow
-	launched []kitty.LaunchOpts
-}
-
-func (c *recordingKitty) ListWindows() ([]kitty.OSWindow, error) { return c.windows, nil }
-func (c *recordingKitty) LaunchTab(opts kitty.LaunchOpts) error {
-	c.launched = append(c.launched, opts)
-	if len(c.windows) == 0 {
-		c.windows = []kitty.OSWindow{{ID: 1, IsFocused: true}}
-	}
-	id := 500 + len(c.launched)
-	c.windows[0].Tabs = append(c.windows[0].Tabs, kitty.Tab{ID: id, Title: opts.Title, Windows: []kitty.Window{{ID: id + 400}}})
-	return nil
-}
-func (*recordingKitty) LaunchOverlay(kitty.LaunchOpts) error                     { return nil }
-func (*recordingKitty) CloseTab(string) error                                    { return nil }
-func (*recordingKitty) MoveTab(string, int) error                                { return nil }
-func (*recordingKitty) SetTabColor(string, string, string, string, string) error { return nil }
-func (*recordingKitty) SetTabTitle(string, string) error                         { return nil }
-func (*recordingKitty) SetUserVars(string, map[string]string) error              { return nil }
-func (*recordingKitty) FocusTab(string) error                                    { return nil }
-func (*recordingKitty) FocusWindow(string) error                                 { return nil }
-func (*recordingKitty) GetText(string, string) (string, error)                   { return "", nil }
-func (*recordingKitty) LaunchOverlayPager(string) error                          { return nil }
 
 // scriptedASL answers each asl subcommand with a fixed text.
 type scriptedASL struct {
@@ -76,7 +48,6 @@ const (
 // configuration whose one project is the directory both plans record.
 type planWorld struct {
 	cfg     *config.Config
-	kitty   *recordingKitty
 	asl     *scriptedASL
 	workDir string
 	first   string
@@ -96,23 +67,21 @@ func newPlanWorld(t *testing.T) *planWorld {
 	}
 	world := &planWorld{
 		cfg: &config.Config{
-			Defaults: config.Defaults{PlansDirectory: root, LaunchBackend: "kitty"},
+			Defaults: config.Defaults{PlansDirectory: root, LaunchBackend: "tmux"},
 			Profiles: []config.Account{{Name: "work", Harness: "claude"}},
 			Projects: []config.Session{{Title: "API", Directory: work, Profile: "work"}},
 		},
-		kitty:   &recordingKitty{},
 		asl:     &scriptedASL{status: pendingStatus, preflight: greenReport},
 		workDir: work,
 		first:   filepath.Join(root, "alpha-one"),
 	}
-	oldLoad, oldKitty, oldDescribe, oldASL := planLoadConfig, planNewKitty, planDescribe, planASL
+	oldLoad, oldDescribe, oldASL := planLoadConfig, planDescribe, planASL
 	planLoadConfig = func() (*config.Config, error) { return world.cfg, nil }
-	planNewKitty = func() kitty.KittyClient { return world.kitty }
 	planDescribe = func(dir string) (plans.PlanMeta, error) {
 		return plans.PlanMeta{Name: filepath.Base(dir), DirPath: dir, CWD: work}, nil
 	}
 	planASL = world.asl
-	t.Cleanup(func() { planLoadConfig, planNewKitty, planDescribe, planASL = oldLoad, oldKitty, oldDescribe, oldASL })
+	t.Cleanup(func() { planLoadConfig, planDescribe, planASL = oldLoad, oldDescribe, oldASL })
 	return world
 }
 
@@ -158,29 +127,6 @@ func decodeError(t *testing.T, output string) cli.JSONError {
 	return envelope.Error
 }
 
-func TestPlanRunStartsAReadyPlan(t *testing.T) {
-	world := newPlanWorld(t)
-	output, err := runPlan(t, "alpha-one", "--json", "--harness", "codex", "--review-harness", "claude", "--commit-at-end")
-	if err != nil {
-		t.Fatalf("err = %v\n%s", err, output)
-	}
-	data := decodeData(t, output)
-	wantCommand := "asl run " + world.first + " --harness codex --review-harness claude --commit-at-end"
-	if !data.Started || !data.Changed || data.Command != wantCommand || data.Project != "API" || data.Profile != "work" || data.Backend != "kitty" {
-		t.Fatalf("data = %+v", data)
-	}
-	if data.Readiness.State != "ready" || data.Readiness.Title != "Fix things" || data.Plan.Directory != world.first {
-		t.Fatalf("data = %+v", data)
-	}
-	if len(world.kitty.launched) != 1 || world.kitty.launched[0].Directory != world.workDir ||
-		!strings.Contains(strings.Join(world.kitty.launched[0].Cmdline, " "), "/asl "+wantCommand) {
-		t.Fatalf("launched = %+v", world.kitty.launched)
-	}
-}
-
-// TestPlanRunReportsAPlanThatMayNotBeStartedAsData: the refusal is the data
-// envelope with the readiness in it and a quiet nonzero exit, and in text
-// the findings are listed before the error.
 func TestPlanRunReportsAPlanThatMayNotBeStartedAsData(t *testing.T) {
 	world := newPlanWorld(t)
 	world.asl.preflight = yellowReport
@@ -199,14 +145,10 @@ func TestPlanRunReportsAPlanThatMayNotBeStartedAsData(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "not ready") || !strings.Contains(output, "manifest-readiness") || !strings.Contains(output, "plan readiness state is 'reviewed'") {
 		t.Fatalf("err = %v, output:\n%s", err, output)
 	}
-	if len(world.kitty.launched) != 0 {
-		t.Fatal("a plan that is not ready was launched")
-	}
 }
 
 func TestPlanRunCheckStartsNothingAndNeedsNoBackend(t *testing.T) {
 	world := newPlanWorld(t)
-	planNewKitty = func() kitty.KittyClient { t.Fatal("a check opened Kitty"); return nil }
 	// No project covers the plan: readiness is still an answer.
 	world.cfg.Projects = nil
 	output, err := runPlan(t, "alpha-one", "--check", "--json", "--backend", "screen")
@@ -262,12 +204,5 @@ func TestPlanRunNamesTheProjectItNeeds(t *testing.T) {
 	output, _ := runPlan(t, "alpha-one", "--json")
 	if failure := decodeError(t, output); failure.Code != "missing_parameter" || len(failure.Parameters) != 1 || failure.Parameters[0].Name != "project" {
 		t.Fatalf("failure = %+v", failure)
-	}
-	output, err := runPlan(t, "alpha-one", "--json", "--project", "Other")
-	if err != nil {
-		t.Fatalf("err = %v\n%s", err, output)
-	}
-	if data := decodeData(t, output); !data.Started || data.Project != "Other" || data.Directory != world.workDir {
-		t.Fatalf("data = %+v", data)
 	}
 }

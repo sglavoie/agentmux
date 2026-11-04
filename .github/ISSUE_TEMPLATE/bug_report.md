@@ -21,7 +21,7 @@ Describe the problem and what you expected instead.
 - `amx --version`:
 - Operating system and version:
 - Interface: terminal dashboard / macOS workspace
-- Backend: tmux / Kitty
+- Backend: tmux
 - Agent CLI and version:
 
 ## Relevant output or screenshots

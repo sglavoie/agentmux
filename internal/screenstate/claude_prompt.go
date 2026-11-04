@@ -22,7 +22,7 @@ import (
 // keeps working untouched. See the paragraph above claudeRequirements.
 
 // ClaudePromptKind identifies the user-blocking Claude Code prompt visible in a
-// Kitty screen scrape.
+// pane screen capture.
 //
 // These four constants stay Go constants and are deliberately NOT data. They
 // are an API contract: the daemon carries a kind onto a window's state and the

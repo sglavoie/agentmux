@@ -7,14 +7,14 @@ final class WorkspaceSwitcherTests: XCTestCase {
     private typealias F = WorkspaceFixture
 
     private func entries(_ sessions: [CompanionSession], views: [WorkspaceUtilityView] = WorkspaceViews().all) -> [WorkspaceSwitcher.Entry] {
-        let rows = WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", glyphs: .fallback).flatMap(\.rows)
+        let rows = WorkspaceSidebar.groups(sessions, glyphs: .fallback).flatMap(\.rows)
         return WorkspaceSwitcher.entries(rows: rows, views: views)
     }
 
     private let sessions = [
         F.tmux(1, project: "api", profile: "work"),
         F.tmux(2, project: "api", profile: "personal", harness: "codex"),
-        F.kitty(4, project: "web"),
+        F.tmux(4, project: "web"),
     ]
 
     func testListsTheSessionsInSidebarOrderThenTheViews() {
@@ -22,7 +22,7 @@ final class WorkspaceSwitcherTests: XCTestCase {
         XCTAssertEqual(listed.map(\.title), ["api — personal", "api — work", "web — work", "Dashboard", "Overview"])
         XCTAssertEqual(listed[0].place, .session(.embedded(F.runtimeID(2))))
         XCTAssertEqual(listed[3].place, .view(WorkspaceUtilityView.dashboard.id))
-        XCTAssertTrue(listed[2].detail.hasSuffix("Kitty"), "a Kitty session says where it runs")
+        XCTAssertEqual(listed[2].place, .session(.embedded(F.runtimeID(4))))
     }
 
     func testAnOverlayViewIsNotAPlaceToGoTo() throws {
@@ -50,7 +50,7 @@ final class WorkspaceSwitcherTests: XCTestCase {
         XCTAssertEqual(WorkspaceSwitcher.matches("API", in: listed).map(\.title), ["api — personal", "api — work"])
         XCTAssertEqual(WorkspaceSwitcher.matches("work api", in: listed).map(\.title), ["api — work"], "the words need not be in order")
         XCTAssertEqual(WorkspaceSwitcher.matches("codex", in: listed).map(\.title), ["api — personal"], "a harness is searched too")
-        XCTAssertEqual(WorkspaceSwitcher.matches("kitty", in: listed).map(\.title), ["web — work"])
+        XCTAssertEqual(WorkspaceSwitcher.matches("web work", in: listed).map(\.title), ["web — work"])
         XCTAssertEqual(WorkspaceSwitcher.matches("nothing here", in: listed), [])
     }
 
@@ -65,7 +65,7 @@ final class WorkspaceSwitcherTests: XCTestCase {
 
     /// ⌘P then ↩ goes back to where the pane was before, as ⌘L does.
     func testThePreviousPlaceComesFirst() {
-        let rows = WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", glyphs: .fallback).flatMap(\.rows)
+        let rows = WorkspaceSidebar.groups(sessions, glyphs: .fallback).flatMap(\.rows)
         let views = WorkspaceViews().all
         let back = WorkspaceSwitcher.entries(rows: rows, views: views, previous: .view(WorkspaceUtilityView.overview.id))
         XCTAssertEqual(back.map(\.title), ["Overview", "api — personal", "api — work", "web — work", "Dashboard"])
@@ -98,8 +98,7 @@ final class WorkspaceSwitcherTests: XCTestCase {
         _ = views.openTerminal(beside: F.runtimeID(1))
         _ = views.openTerminal(beside: F.runtimeID(2))
         views.open(WorkspaceUtilityView(kind: .pager, target: F.runtimeID(3), title: "Scrollback"))
-        let rows = WorkspaceSidebar.groups([named, F.tmux(2, project: "web", profile: "personal")],
-                                           snapshotSocket: "", glyphs: .fallback).flatMap(\.rows)
+        let rows = WorkspaceSidebar.groups([named, F.tmux(2, project: "web", profile: "personal")], glyphs: .fallback).flatMap(\.rows)
         // The pager's session is no longer listed: the name it was last listed under.
         let listed = WorkspaceSwitcher.entries(rows: rows, views: views.all, names: [F.runtimeID(3): "old one"])
         let others = Array(listed.suffix(3))
@@ -121,7 +120,7 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work"),
         F.tmux(2, project: "api", profile: "personal"),
-        F.kitty(4, project: "web"),
+        F.tmux(4, project: "web"),
     ]
 
     override func setUp() async throws {
@@ -235,12 +234,12 @@ final class WorkspaceSwitcherWindowTests: XCTestCase {
         XCTAssertTrue(workspace.isSwitching)
     }
 
-    func testAKittySessionComesForwardInKitty() {
+    func testASessionIsShownInTheWorkspace() {
         workspace.toggleSwitcher()
         workspace.switcher.enter("web")
         workspace.switcher.choose()
-        XCTAssertEqual(app.external.map(\.target), [.kitty(socket: "", windowID: 4)])
-        XCTAssertEqual(app.made, [], "a Kitty session has no terminal here")
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(4)))
+        XCTAssertEqual(app.made, [F.runtimeID(4)])
         XCTAssertFalse(typingInTheList, "the hidden field does not keep the keyboard")
     }
 

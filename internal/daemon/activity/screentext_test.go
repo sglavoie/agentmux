@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/backend"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
@@ -47,47 +46,6 @@ func TestScreenTextCacheReadsEachPaneOnce(t *testing.T) {
 	// A new tick is a new cache and a new read.
 	if _, err := NewScreenObservationCache(observer).Observe(a); err != nil || observer.reads[a] != 2 {
 		t.Fatalf("a second tick read %d times (%v)", observer.reads[a], err)
-	}
-}
-
-type recordingTextReader struct {
-	calls [][2]string
-	err   error
-}
-
-func (r *recordingTextReader) GetText(match, extent string) (string, error) {
-	r.calls = append(r.calls, [2]string{match, extent})
-	return "kitty screen", r.err
-}
-
-// The Kitty-backed cache issues the same get-text it always did and reports it
-// as a Kitty observation of that window.
-func TestScreenTextCacheOverKitty(t *testing.T) {
-	reader := &recordingTextReader{}
-	cache := NewScreenTextCache(reader)
-	screen, err := cache.Observe(kitty.PaneRef(42))
-	if err != nil || screen.Text != "kitty screen" || screen.Pane != kitty.PaneRef(42) ||
-		screen.Instance.Kind != runtimesession.BackendKitty || screen.CapturedAt.IsZero() {
-		t.Fatalf("Observe = %+v, %v", screen, err)
-	}
-	if _, err := cache.Observe(kitty.PaneRef(42)); err != nil {
-		t.Fatal(err)
-	}
-	if len(reader.calls) != 1 || reader.calls[0] != [2]string{kitty.MatchWindowByID(42), "screen"} {
-		t.Fatalf("get-text calls = %v", reader.calls)
-	}
-
-	// A reference that is not a Kitty window ID never becomes a match expression.
-	for _, ref := range []backend.Ref{
-		backend.PaneID("%3"), backend.PaneID("0"), backend.PaneID("042"), backend.PaneID("1 or title:x"),
-		kitty.GroupRef(42),
-	} {
-		if _, err := cache.Observe(ref); !errors.Is(err, backend.ErrInvalidRef) {
-			t.Errorf("Observe(%v) err = %v, want ErrInvalidRef", ref, err)
-		}
-	}
-	if len(reader.calls) != 1 {
-		t.Fatalf("an invalid reference reached Kitty: %v", reader.calls)
 	}
 }
 

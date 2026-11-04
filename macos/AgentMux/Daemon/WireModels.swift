@@ -51,7 +51,6 @@ struct DaemonBuild: Decodable, Equatable {
 struct DaemonRequest: Encodable, Equatable {
     let type: String
     var subscribe: SubscribeParams?
-    var focusWindow: FocusWindowParams?
     var focusSession: FocusSessionParams?
     var snooze: SnoozeRequest?
     var disposition: DispositionParams?
@@ -59,7 +58,6 @@ struct DaemonRequest: Encodable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case type, subscribe, snooze, disposition, asl
-        case focusWindow = "focus_window"
         case focusSession = "focus_session"
     }
 
@@ -67,10 +65,6 @@ struct DaemonRequest: Encodable, Equatable {
 
     static func subscribing(_ params: SubscribeParams) -> DaemonRequest {
         DaemonRequest(type: "subscribe", subscribe: params)
-    }
-
-    static func focusing(socket: String, windowID: Int) -> DaemonRequest {
-        DaemonRequest(type: "focus_window", focusWindow: FocusWindowParams(kittySocket: socket, windowID: windowID))
     }
 
     static func focusing(runtimeSessionID: String) -> DaemonRequest {
@@ -115,9 +109,9 @@ struct SubscribeParams: Encodable, Equatable {
     static let protocolVersion = 1
     /// What the app calls itself to health and doctor.
     static let clientName = "Agent Mux.app"
-    /// `protocol.CompanionFeatureRuntimeSessions`: asks for snapshots that
-    /// also list sessions on backends other than Kitty, each with its runtime
-    /// identity. A daemon that does not know the feature keeps sending v1.
+    /// `protocol.CompanionFeatureRuntimeSessions`: advertises support for
+    /// runtime snapshots to older daemons. Current daemons send them to all
+    /// subscribers.
     static let runtimeSessionsFeature = "runtime_sessions"
     /// `protocol.CompanionFeatureWorkspaceViews`: this client hosts workspace
     /// views, so the daemon forwards it the `workspace_view` requests of the
@@ -232,17 +226,6 @@ final class SubscribeRequestSource {
     }
 }
 
-/// `protocol.FocusWindowRequest`.
-struct FocusWindowParams: Encodable, Equatable {
-    let kittySocket: String
-    let windowID: Int
-
-    enum CodingKeys: String, CodingKey {
-        case kittySocket = "kitty_socket"
-        case windowID = "window_id"
-    }
-}
-
 /// `protocol.FocusSessionRequest`.
 struct FocusSessionParams: Encodable, Equatable {
     let runtimeSessionID: String
@@ -272,22 +255,19 @@ struct DaemonResponse: Decodable, Equatable {
     let ok: Bool
     let error: String?
     let subscription: SubscriptionAck?
-    let focused: FocusWindowResult?
     let snooze: SnoozeState?
     let aslResult: ASLResult?
 
-    init(ok: Bool, error: String? = nil, subscription: SubscriptionAck? = nil, focused: FocusWindowResult? = nil,
-         snooze: SnoozeState? = nil, aslResult: ASLResult? = nil) {
+    init(ok: Bool, error: String? = nil, subscription: SubscriptionAck? = nil, snooze: SnoozeState? = nil, aslResult: ASLResult? = nil) {
         self.ok = ok
         self.error = error
         self.subscription = subscription
-        self.focused = focused
         self.snooze = snooze
         self.aslResult = aslResult
     }
 
     enum CodingKeys: String, CodingKey {
-        case ok, error, subscription, focused, snooze
+        case ok, error, subscription, snooze
         case aslResult = "asl_result"
     }
 
@@ -296,7 +276,6 @@ struct DaemonResponse: Decodable, Equatable {
         ok = c.lenient(.ok, false)
         error = c.lenient(.error)
         subscription = c.lenient(.subscription)
-        focused = c.lenient(.focused)
         snooze = c.lenient(.snooze)
         aslResult = c.lenient(.aslResult)
     }
@@ -333,32 +312,6 @@ struct SubscriptionAck: Decodable, Equatable {
         subscriberID = c.lenient(.subscriberID, "")
         heartbeatMS = c.lenient(.heartbeatMS, 0)
         features = c.lenient(.features, [])
-    }
-}
-
-/// `protocol.FocusWindowResult`.
-struct FocusWindowResult: Decodable, Equatable {
-    let windowID: Int
-    let tabID: Int
-    let osWindowID: Int
-
-    init(windowID: Int, tabID: Int = 0, osWindowID: Int = 0) {
-        self.windowID = windowID
-        self.tabID = tabID
-        self.osWindowID = osWindowID
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case windowID = "window_id"
-        case tabID = "tab_id"
-        case osWindowID = "os_window_id"
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        windowID = c.lenient(.windowID, 0)
-        tabID = c.lenient(.tabID, 0)
-        osWindowID = c.lenient(.osWindowID, 0)
     }
 }
 

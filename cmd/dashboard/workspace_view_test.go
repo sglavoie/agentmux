@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
@@ -31,13 +30,10 @@ func runWorkspaceView(t *testing.T, args ...string) error {
 }
 
 // borrowedIdentity puts in this process's environment what an app started
-// from inside a managed Kitty or tmux session would hand its views.
+// from inside a managed tmux session would hand its views.
 func borrowedIdentity(t *testing.T) {
 	t.Helper()
 	t.Setenv(runtimesession.EnvVar, "rs-0123456789abcdef0123456789abcdef")
-	t.Setenv("KITTY_WINDOW_ID", "42")
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty-operator")
-	t.Setenv("KITTY_PID", "4242")
 	t.Setenv("TMUX", "/tmp/tmux-501/default,1,0")
 	t.Setenv("TMUX_PANE", "%9")
 	t.Setenv("CLAUDECODE", "1")
@@ -65,25 +61,21 @@ func restoreWorkspaceViewSeams(t *testing.T) {
 	t.Cleanup(func() { workspaceViewHistory = history })
 	request, dash, over, execFn, edit, cfg, registry, page := workspaceViewRequest, workspaceViewDashboard, workspaceViewOverview,
 		workspaceViewExec, workspaceViewEdit, workspaceViewConfig, workspaceViewRegistry, workspaceViewPage
-	hosted, open, present, portable, desktop, overviewWas := insideKitty, openTmux, tmuxServerPresent, commands.Portable, desktopViews, overviewBackend
+	open, portable, desktop, overviewWas := openTmux, commands.Portable, desktopViews, overviewBackend
 	t.Cleanup(func() {
 		workspaceViewRequest, workspaceViewDashboard, workspaceViewOverview = request, dash, over
 		workspaceViewExec, workspaceViewEdit, workspaceViewConfig, workspaceViewRegistry, workspaceViewPage = execFn, edit, cfg, registry, page
-		insideKitty, openTmux, tmuxServerPresent, commands.Portable, desktopViews, overviewBackend = hosted, open, present, portable, desktop, overviewWas
+		openTmux, commands.Portable, desktopViews, overviewBackend = open, portable, desktop, overviewWas
 	})
 }
 
 // The Dashboard and Overview views run as surfaces hosted by the workspace:
-// on tmux, with no Kitty client even when the app inherited a Kitty
-// environment, and with the workspace as where their sessions are shown.
-func TestWorkspaceSurfacesRunOnTmuxWithoutKittyAndRouteToTheWorkspace(t *testing.T) {
+// on tmux, with the workspace as where their sessions are shown.
+func TestWorkspaceSurfacesRunOnTmuxAndRouteToTheWorkspace(t *testing.T) {
 	for _, kind := range []string{"dashboard", "overview", "history"} {
 		t.Run(kind, func(t *testing.T) {
 			restoreWorkspaceViewSeams(t)
 			borrowedIdentity(t)
-			// The production probe, reading the environment the command left.
-			insideKitty = func() bool { return os.Getenv("KITTY_LISTEN_ON") != "" || os.Getenv("KITTY_WINDOW_ID") != "" }
-			tmuxServerPresent = func() bool { return false }
 			openTmux = func() (backend.TargetLauncher, error) { return stubTmux{}, nil }
 			var asked []protocol.WorkspaceViewRequest
 			workspaceViewRequest = func(view protocol.WorkspaceViewRequest) error {
@@ -94,14 +86,10 @@ func TestWorkspaceSurfacesRunOnTmuxWithoutKittyAndRouteToTheWorkspace(t *testing
 			surface := func() error {
 				ran++
 				requireNoBorrowedIdentity(t, os.Environ())
-				client, err := selectTerminalsWith(string(runtimesession.BackendTmux), func() kitty.KittyClient {
-					t.Error("a workspace surface built a Kitty client")
-					return stubKitty{}
-				})
-				if err != nil || client != nil {
-					t.Fatalf("selectTerminals = %v, %v; want no Kitty client and no error", client, err)
+				if err := selectTerminalsWith(string(runtimesession.BackendTmux)); err != nil {
+					t.Fatalf("selectTerminals: %v", err)
 				}
-				if commands.Portable.Tmux == nil || commands.Portable.Launch != runtimesession.BackendTmux || commands.LaunchesInKitty() {
+				if commands.Portable.Tmux == nil || commands.Portable.Launch != runtimesession.BackendTmux {
 					t.Fatalf("surface terminals = %+v; want launches on tmux", commands.Portable)
 				}
 				if commands.Portable.Desktop == nil {
@@ -150,8 +138,6 @@ func TestWorkspaceHistoryRefusesAMalformedConversation(t *testing.T) {
 // conversation, the workspace's ⌘Y: hosted like any surface, selecting nothing.
 func TestWorkspaceHistoryWithNoConversationOpensAllPastSessions(t *testing.T) {
 	restoreWorkspaceViewSeams(t)
-	insideKitty = func() bool { return false }
-	tmuxServerPresent = func() bool { return false }
 	openTmux = func() (backend.TargetLauncher, error) { return stubTmux{}, nil }
 	ran := 0
 	workspaceViewHistory = func(wanted conversation.Identity) error {
@@ -177,9 +163,8 @@ func TestWorkspaceHistoryWithNoConversationOpensAllPastSessions(t *testing.T) {
 func TestOrdinarySurfacesAreNotHosted(t *testing.T) {
 	restoreWorkspaceViewSeams(t)
 	desktopViews = nil
-	insideKitty = func() bool { return false }
 	openTmux = func() (backend.TargetLauncher, error) { return stubTmux{}, nil }
-	if _, err := selectTerminalsWith("", func() kitty.KittyClient { return stubKitty{} }); err != nil {
+	if err := selectTerminalsWith(""); err != nil {
 		t.Fatal(err)
 	}
 	if commands.Portable.Desktop != nil {
@@ -188,7 +173,7 @@ func TestOrdinarySurfacesAreNotHosted(t *testing.T) {
 }
 
 // The shell view is the operator's login shell in the directory, with no
-// managed-session or Kitty identity in its environment.
+// managed-session identity in its environment.
 func TestWorkspaceShellIsALoginShellWithNoBorrowedIdentity(t *testing.T) {
 	restoreWorkspaceViewSeams(t)
 	borrowedIdentity(t)
@@ -378,7 +363,7 @@ func TestWorkspacePickersEditOnlyTheNamedSession(t *testing.T) {
 	}
 }
 
-// F1 in the workspace shows the workspace's own keys, not Kitty's.
+// F1 in the workspace shows the workspace's own keys.
 func TestWorkspaceKeybindingsViewListsTheWorkspaceKeys(t *testing.T) {
 	previous := workspaceViewKeys
 	t.Cleanup(func() { workspaceViewKeys = previous })

@@ -32,7 +32,7 @@ func sessionEndedSeparator(width int) string {
 // Header renders the two-line pane header: badge + state icon + title +
 // location on line 1, and a dim metadata line on line 2 carrying the current
 // state in the dashboard row's words, threshold age (when known), and event
-// count. The location is a Kitty window, or a tmux runtime session, never the
+// count. The location is a tmux runtime session, never the
 // process-local ID a portable session is listed under.
 func (in DetailInput) Header() string {
 	s, ok := in.detailSession()

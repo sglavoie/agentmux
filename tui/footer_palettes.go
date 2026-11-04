@@ -351,7 +351,7 @@ var planRunFooterPalette = []footerEntry{
 }
 
 // aslFocusAvailable mirrors what f actually does: it is offered only when the
-// selected run resolves to at least one live session, Kitty or tmux.
+// selected run resolves to at least one live tmux session.
 func aslFocusAvailable(m Model) bool {
 	row, ok := m.selectedASLRow()
 	if !ok {

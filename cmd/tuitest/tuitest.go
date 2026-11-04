@@ -16,7 +16,7 @@ import (
 
 // This file exposes the in-process TUI test harness through a hidden Cobra
 // command so automation and agents can drive layout-regression scenarios
-// without a live Kitty instance. The command stays thin: it parses flags and
+// without a live terminal. The command stays thin: it parses flags and
 // scenario files, delegates every run to the package-level runner in tui/, and
 // translates outcomes into stable JSON plus harness-specific process exit codes
 // (see exit_error.go). It is hidden from root help and never touches the
@@ -39,7 +39,7 @@ var tuiTestCmd = &cobra.Command{
 	Short: "Developer harness for detecting TUI layout regressions",
 	Long: "tui-test drives the dashboard model in-process against built-in " +
 		"fixtures or isolated configs to detect layout regressions. It is a " +
-		"hidden developer/automation tool and never talks to a live Kitty " +
+		"hidden developer/automation tool and never talks to a live terminal " +
 		"instance or the operator's real data.",
 	Hidden: true,
 	// The harness prints structured results (often JSON) itself and maps

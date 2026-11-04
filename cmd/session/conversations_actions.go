@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
@@ -296,9 +295,6 @@ func executeSessionAction(cmd *cobra.Command, jsonOutput bool, cfg *config.Confi
 	if !handoffWithoutLaunch {
 		if err := cli.SelectBackend(cmd, &deps); err != nil {
 			return sessionActionCommandError(cmd, jsonOutput, actions.Result{Action: actionID}, err)
-		}
-		if deps.Backend != runtimesession.BackendTmux {
-			deps.Kitty = sessionCommandsNewKitty()
 		}
 	}
 	result, err := actions.DefaultRegistry().Execute(cli.CommandContext(cmd), deps, actionID, request)

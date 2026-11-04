@@ -51,7 +51,7 @@ func (t Target) Context() commands.Context {
 	return commands.Context{Target: t.Session, HasTarget: true}
 }
 
-// TabID is the captured Kitty tab the action addresses, or 0 when nothing was
+// TabID is the captured session tab ID the action addresses, or 0 when nothing was
 // captured. It is read from the captured row rather than stored beside it, so
 // there is no second copy to fall out of agreement with the session.
 func (t Target) TabID() int {
@@ -61,7 +61,7 @@ func (t Target) TabID() int {
 	return t.Session.TabID
 }
 
-// WindowID is the captured Kitty window the action addresses, or 0 when
+// WindowID is the captured session window ID the action addresses, or 0 when
 // nothing was captured.
 func (t Target) WindowID() int {
 	if !t.HasSession {

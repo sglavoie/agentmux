@@ -54,30 +54,22 @@ struct ActionGate: Equatable {
 
 /// `amx mute-toggle --json`'s data.
 struct MuteToggleResult: Decodable, Equatable {
-    var windowID = 0
     var muted = false
     var changed = false
 
-    init(windowID: Int = 0, muted: Bool = false, changed: Bool = false) {
-        self.windowID = windowID
+    init(muted: Bool = false, changed: Bool = false) {
         self.muted = muted
         self.changed = changed
     }
 
     enum CodingKeys: String, CodingKey {
         case muted, changed
-        case windowID = "window_id"
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        windowID = c.lenient(.windowID, 0)
         muted = c.lenient(.muted, false)
         changed = c.lenient(.changed, false)
-    }
-
-    static func arguments(windowID: Int) -> [String] {
-        ["mute-toggle", "--window-id", String(windowID)]
     }
 
     /// A session the workspace embeds has no window; its runtime session
@@ -130,43 +122,10 @@ struct PinSessionResult: Decodable, Equatable {
         changed = c.lenient(.changed, false)
     }
 
-    /// A Kitty session is named by its window, in the Kitty amx is pointed at.
-    static func arguments(windowID: Int, pinned: Bool) -> [String] {
-        ["pin-session", "--window-id", String(windowID)] + (pinned ? [] : ["--unpin"])
-    }
-
     /// A session the workspace embeds has no window; its runtime session
     /// names it.
     static func arguments(runtimeSessionID: String, pinned: Bool) -> [String] {
         ["pin-session", "--runtime-session", runtimeSessionID] + (pinned ? [] : ["--unpin"])
-    }
-}
-
-/// An amx command that dials Kitty itself, run against each candidate socket
-/// in turn. Only `kitty_unavailable` — a socket nobody answers on, such as one
-/// a crashed Kitty left behind — moves on to the next: any other answer,
-/// success or not, means amx reached a Kitty and acted, or refused to.
-enum KittyTargetedCommand {
-    enum Outcome<T> {
-        case done(AMXCommandResult<T>, socket: String)
-        case noSocket
-        case unreachable(String)
-    }
-
-    static let unavailableCode = "kitty_unavailable"
-
-    static func run<T>(candidates: [String], _ run: (_ socket: String) -> AMXCommandResult<T>) -> Outcome<T> {
-        guard !candidates.isEmpty else { return .noSocket }
-        var last = ""
-        for socket in candidates {
-            let result = run(socket)
-            if case let .failure(.command(error, _)) = result, error.code == unavailableCode {
-                last = error.message.isEmpty ? error.code : error.message
-                continue
-            }
-            return .done(result, socket: socket)
-        }
-        return .unreachable(last)
     }
 }
 

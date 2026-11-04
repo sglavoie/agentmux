@@ -16,15 +16,15 @@ extension AppDelegate {
         if let reason = gate.unavailableReason(.sessions) { return refuse(reason) }
         if let panel = handoffPanel, panel.panel.isVisible { panel.panel.makeKeyAndOrderFront(nil); return }
         guard window.attachedSheet == nil else { return }
-        let sourceRow = store.feed == .live ? store.sessions.first(where: { $0.conversation == source }) : nil
-        let parent = parent ?? sourceRow.map { AttentionCycler.key($0, snapshotSocket: store.snapshot?.kitty.socket ?? "") }
+        let sourceRow = store.feed == .live ? store.managedSessions.first(where: { $0.conversation == source }) : nil
+        let parent = parent ?? sourceRow.map { AttentionCycler.key($0) }
         let model = WorkspaceHandoffModel(source: source, preferredProfile: profile, command: { [weak self] in self?.command })
         let panel = WorkspaceHandoffPanel(model: model)
         handoffPanel = panel
         model.onSource = { [weak self] in self?.openHistory(conversation: source) }
         model.onLaunched = { [weak self, weak panel] id, path in
             guard let self else { return }
-            self.handoffOrigins.observe(self.store.sessions)
+            self.handoffOrigins.observe(self.store.managedSessions)
             panel?.close(); self.handoffPanel = nil
             let workspace = self.workspaceController()
             workspace.show()

@@ -9,7 +9,7 @@ import (
 )
 
 // IconCellWidth is the fixed cell width reserved for a leading pictographic
-// grapheme in titles and icon columns. Two cells matches Kitty's rendering of
+// grapheme in titles and icon columns. Two cells matches terminal rendering of
 // emoji icons in our terminal layout, regardless of whether the glyph carries
 // a VS-16 (FE0F) variation selector.
 const IconCellWidth = 2
@@ -402,7 +402,7 @@ func graphemeWidth(cluster string) int {
 		// bare text-presentation glyph (⚠) at its natural one-cell width.
 		return IconCellWidth
 	case "\U0001f5e3", "\U0001f5e3\ufe0f":
-		// Kitty renders speaking-head project icons as a full emoji cell pair,
+		// Terminals render speaking-head project icons as a full emoji cell pair,
 		// while go-runewidth reports this grapheme as one cell.
 		return IconCellWidth
 	default:

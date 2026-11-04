@@ -8,7 +8,7 @@ final class ProjectCatalogTests: XCTestCase {
     private func command(_ reply: @escaping ([String]) -> ProcessOutput?) -> (AMXCommand, () -> [(args: [String], env: [String: String])]) {
         var calls: [(args: [String], env: [String: String])] = []
         var amx = AMXCommand(binary: URL(fileURLWithPath: "/opt/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
-        amx.inheritedEnvironment = ["KITTY_WINDOW_ID": "3", "LANG": "C"]
+        amx.inheritedEnvironment = ["TERM_PROGRAM": "Ghostty", "LANG": "C"]
         amx.runner = { _, args, env, _ in
             calls.append((args, env))
             return reply(args).map(ProcessRun.finished) ?? .timedOut
@@ -135,7 +135,7 @@ final class ProjectCatalogTests: XCTestCase {
             ProjectEntry(profile: "home", title: "Blog", harness: "codex", directory: "/p/blog"),
         ])
         XCTAssertEqual(calls().first?.args, ["project", "list", "--json"])
-        XCTAssertNil(calls().first?.env["KITTY_WINDOW_ID"], "inherited Kitty variables never reach amx")
+        XCTAssertEqual(calls().first?.env["TERM_PROGRAM"], "Ghostty")
     }
 
     func testAnOlderAmxWithoutProjectFailsUndecodable() {
@@ -148,31 +148,27 @@ final class ProjectCatalogTests: XCTestCase {
         XCTAssertTrue(detail.contains("unknown command"))
     }
 
-    func testLaunchNamesTitleAndProfileAndTheKittySocket() {
+    func testLaunchNamesTitleProfileAndBackend() {
         let project = ProjectEntry(profile: "work", title: "API")
         XCTAssertEqual(ProjectCatalog.launchArguments(for: project), ["project", "launch", "--title", "API", "--profile", "work"])
         XCTAssertEqual(ProjectCatalog.launchArguments(for: ProjectEntry(profile: "", title: "X")), ["project", "launch", "--title", "X"])
         XCTAssertEqual(ProjectCatalog.launchArguments(for: project, directory: "/src/hotfix"),
                        ["project", "launch", "--title", "API", "--profile", "work", "--directory", "/src/hotfix"])
-        XCTAssertEqual(ProjectCatalog.kittyLaunchArguments(for: project, directory: "/src/hotfix").suffix(4),
-                       ["--directory", "/src/hotfix", "--backend", "kitty"])
         XCTAssertEqual(ProjectCatalog.workspaceLaunchArguments(for: project, directory: "/src/hotfix").suffix(4),
                        ["--directory", "/src/hotfix", "--backend", "tmux"])
 
         let (amx, calls) = command { _ in
-            self.output(#"{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched","project":{"profile":"work","title":"API","harness":"claude","directory":"/p","groups":[]},"tab_id":4,"window_id":9}}"#)
+            self.output(#"{"schema_version":1,"data":{"action":"session.launch","changed":true,"message":"launched","project":{"profile":"work","title":"API","harness":"claude","directory":"/p","groups":[]},"runtime_session_id":"rs-1"}}"#)
         }
-        let result = amx.json(ProjectLaunchResult.self, ProjectCatalog.launchArguments(for: project), kittyListenOn: "unix:/tmp/kitty-42")
-        XCTAssertEqual(result.value?.windowID, 9)
-        XCTAssertEqual(result.value?.tabID, 4)
+        let result = amx.json(ProjectLaunchResult.self, ProjectCatalog.launchArguments(for: project))
+        XCTAssertEqual(result.value?.runtimeSessionID, "rs-1")
         XCTAssertEqual(result.value?.project?.title, "API")
-        XCTAssertEqual(calls().first?.env["KITTY_LISTEN_ON"], "unix:/tmp/kitty-42")
         XCTAssertEqual(calls().first?.args.last, "--json")
     }
 
-    func testLaunchWithoutATabIdentityDecodes() {
+    func testLaunchWithoutRuntimeIdentityDecodes() {
         let result = AMXEnvelope.decode(ProjectLaunchResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.launch","changed":true,"project":{"profile":"w","title":"T"}}}"#.utf8), status: 0)
-        XCTAssertEqual(result.value?.windowID, 0)
+        XCTAssertEqual(result.value?.runtimeSessionID, "")
         XCTAssertEqual(result.value?.changed, true)
     }
 
@@ -185,52 +181,4 @@ final class ProjectCatalogTests: XCTestCase {
         XCTAssertEqual(error.candidates.map(\.id), ["work/API"])
     }
 
-    // MARK: Kitty targeting
-
-    func testTargetedCommandMovesOnOnlyFromAnUnreachableKitty() {
-        var tried: [String] = []
-        let outcome: KittyTargetedCommand.Outcome<ProjectLaunchResult> = KittyTargetedCommand.run(candidates: ["a", "b", "c"]) { socket in
-            tried.append(socket)
-            if socket == "a" { return .failure(.command(AMXJSONError(code: "kitty_unavailable", message: "dead"), status: 1)) }
-            return .failure(.command(AMXJSONError(code: "launch_failed", message: "no"), status: 1))
-        }
-        XCTAssertEqual(tried, ["a", "b"], "a refusal from a live Kitty is final")
-        guard case let .done(.failure(.command(error, _)), socket) = outcome else { return XCTFail("\(outcome)") }
-        XCTAssertEqual(error.code, "launch_failed")
-        XCTAssertEqual(socket, "b")
-
-        let none: KittyTargetedCommand.Outcome<ProjectLaunchResult> = KittyTargetedCommand.run(candidates: []) { _ in .success(ProjectLaunchResult()) }
-        guard case .noSocket = none else { return XCTFail("\(none)") }
-
-        let dead: KittyTargetedCommand.Outcome<ProjectLaunchResult> = KittyTargetedCommand.run(candidates: ["a"]) { _ in
-            .failure(.command(AMXJSONError(code: "kitty_unavailable", message: "dead"), status: 1))
-        }
-        guard case let .unreachable(message) = dead else { return XCTFail("\(dead)") }
-        XCTAssertEqual(message, "dead")
-    }
-
-    func testNewTabsGoToTheKittyUsedLast() {
-        var snapshot = CompanionSnapshot()
-        snapshot.kitty.socket = "unix:/tmp/kitty-100"
-        snapshot.kitty.sockets = ["unix:/tmp/kitty-100", "unix:/run/k-200"]
-        let exists: (String) -> Bool = { $0 == "/tmp/kitty-100" || $0 == "/tmp/kitty-300" }
-        XCTAssertEqual(
-            KittyEndpoint.actionCandidates(override: "", lastActiveKittyPID: 200, snapshot: snapshot, kittyPIDs: [100, 200], fileExists: exists),
-            ["unix:/run/k-200", "unix:/tmp/kitty-100"],
-            "a known socket naming the front Kitty's pid comes first"
-        )
-        XCTAssertEqual(
-            KittyEndpoint.actionCandidates(override: "", lastActiveKittyPID: 300, snapshot: snapshot, kittyPIDs: [100, 300], fileExists: exists),
-            ["unix:/tmp/kitty-300", "unix:/tmp/kitty-100"]
-        )
-        XCTAssertEqual(
-            KittyEndpoint.actionCandidates(override: "", lastActiveKittyPID: 999, snapshot: snapshot, kittyPIDs: [100], fileExists: exists),
-            ["unix:/tmp/kitty-100"],
-            "a Kitty that has quit is ignored"
-        )
-        XCTAssertEqual(
-            KittyEndpoint.actionCandidates(override: "unix:/x", lastActiveKittyPID: 100, snapshot: snapshot, kittyPIDs: [100], fileExists: exists).first,
-            "unix:/x"
-        )
-    }
 }

@@ -11,8 +11,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -114,7 +112,7 @@ func TestTriageIntegrationFixtureRendersPriorityAndScopeOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("triage_integration fixture: %v", err)
 	}
-	d, _ := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 20})
+	d := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 20})
 	cleanupUITestDriver(t, d)
 	m := d.Model()
 
@@ -170,22 +168,20 @@ func TestUITestFixtureByNameUnknownReturnsStructuredError(t *testing.T) {
 	}
 }
 
-func TestUITestFixtureDriverLoadsSessionsWithoutLiveKitty(t *testing.T) {
+func TestUITestFixtureDriverLoadsSessionsOffline(t *testing.T) {
 	t.Parallel()
 
 	fx, err := uitestFixtureByName("basic")
 	if err != nil {
 		t.Fatalf("basic fixture: %v", err)
 	}
-	d, client := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 	if got := len(d.Model().sessions); got != 3 {
 		t.Fatalf("expected 3 loaded sessions, got %d", got)
 	}
-	// Construction enumerates sessions through ListWindows (a read) only; it
-	// must not have attempted any mutating/focus Kitty calls.
-	if len(client.Calls) != 0 {
-		t.Fatalf("expected no trapped Kitty calls after construction, got %+v", client.Calls)
+	if d.model.client != nil {
+		t.Fatal("fixture driver installed a live terminal client")
 	}
 	obs := d.Observe()
 	if obs.Mode != "list" {
@@ -215,7 +211,7 @@ func TestUITestFixtureDriverPartialSizeUsesFixtureDefaults(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			d, _ := newUITestFixtureDriver(fx, tc.in)
+			d := newUITestFixtureDriver(fx, tc.in)
 			cleanupUITestDriver(t, d)
 			if got := d.Observe().Size; got != tc.want {
 				t.Fatalf("partial %+v resolved to %+v, want %+v", tc.in, got, tc.want)
@@ -231,7 +227,7 @@ func TestUITestFixtureActionsOverlayOpens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("actions fixture: %v", err)
 	}
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 	if err := d.Key("a"); err != nil {
 		t.Fatalf("press a: %v", err)
@@ -253,7 +249,7 @@ func TestUITestFixtureConfigPickerOpens(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wide_profiles fixture: %v", err)
 	}
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 	// `C` is an actions-overlay mnemonic now, not a dashboard key, so the
 	// picker is two presses away: `a` to open the overlay against the cursor
@@ -274,61 +270,13 @@ func TestUITestFixtureConfigPickerOpens(t *testing.T) {
 	}
 }
 
-func TestUITestKittyClientReturnsFixtureWindowsAndRecordsCalls(t *testing.T) {
-	t.Parallel()
-
-	windows := []kitty.OSWindow{uitestOSWindow(
-		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
-	)}
-	client := kittytest.NewClient(windows)
-
-	got, err := client.ListWindows()
-	if err != nil {
-		t.Fatalf("ListWindows: %v", err)
-	}
-	if len(got) != 1 || got[0].Tabs[0].Title != "🦊api" {
-		t.Fatalf("expected fixture windows echoed back, got %+v", got)
-	}
-
-	if err := client.FocusTab("id:1"); err != nil {
-		t.Fatalf("FocusTab: %v", err)
-	}
-	if err := client.CloseTab("id:1"); err != nil {
-		t.Fatalf("CloseTab: %v", err)
-	}
-	if err := client.LaunchTab(kitty.LaunchOpts{Title: "new"}); err != nil {
-		t.Fatalf("LaunchTab: %v", err)
-	}
-	if err := client.SetUserVars("id:11", map[string]string{"amx_profile": "work"}); err != nil {
-		t.Fatalf("SetUserVars: %v", err)
-	}
-
-	if len(client.Calls) != 4 {
-		t.Fatalf("expected 4 recorded calls, got %d: %+v", len(client.Calls), client.Calls)
-	}
-	if focus := client.CallsFor("FocusTab"); len(focus) != 1 || focus[0].Match != "id:1" {
-		t.Fatalf("expected recorded FocusTab id:1, got %+v", focus)
-	}
-	if launch := client.CallsFor("LaunchTab"); len(launch) != 1 || launch[0].Opts == nil || launch[0].Opts.Title != "new" {
-		t.Fatalf("expected recorded LaunchTab with opts, got %+v", launch)
-	}
-	if vars := client.CallsFor("SetUserVars"); len(vars) != 1 || vars[0].Vars["amx_profile"] != "work" {
-		t.Fatalf("expected recorded SetUserVars, got %+v", vars)
-	}
-
-	// GetText is a read and returns canned data without recording.
-	if text, err := client.GetText("id:11", "screen"); err != nil || text != "" {
-		t.Fatalf("expected empty canned GetText, got %q err=%v", text, err)
-	}
-}
-
 func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 	// Ensure the lowercase config override cannot leak a real path through
 	// DefaultConfigPath's precedence.
 	t.Setenv("amx_CONFIG", "")
 
 	root := t.TempDir()
-	d, client, env, err := newUITestConfigDriver(
+	d, env, err := newUITestConfigDriver(
 		root,
 		uitestTestdataDir("basic_config.toml"),
 		nil,
@@ -339,8 +287,8 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 		t.Fatalf("newUITestConfigDriver: %v", err)
 	}
 	cleanupUITestDriver(t, d)
-	if client == nil || d == nil {
-		t.Fatal("expected non-nil driver and client")
+	if d == nil {
+		t.Fatal("expected non-nil driver")
 	}
 
 	if !strings.HasPrefix(env.Home, root) {
@@ -370,14 +318,11 @@ func TestUITestConfigDriverIsolatesUserPaths(t *testing.T) {
 	if got := len(d.Model().cfg.Accounts); got != 2 {
 		t.Fatalf("expected 2 profiles from staged config, got %d", got)
 	}
-	if len(client.Calls) != 0 {
-		t.Fatalf("expected no trapped Kitty calls, got %+v", client.Calls)
-	}
 }
 
 func TestUITestConfigDriverUnknownConfigErrors(t *testing.T) {
 	root := t.TempDir()
-	_, _, _, err := newUITestConfigDriver(
+	_, _, err := newUITestConfigDriver(
 		root,
 		uitestTestdataDir("does_not_exist.toml"),
 		nil,

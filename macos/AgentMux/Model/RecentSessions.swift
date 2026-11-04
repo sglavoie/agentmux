@@ -92,40 +92,28 @@ struct SessionContinueResult: Decodable, Equatable {
     var changed = false
     var message = ""
     var continuation = ""
-    var tabID = 0
-    var windowID = 0
-    /// The runtime session a resume on the tmux backend registered; empty
-    /// for a Kitty resume or a focus.
+    /// The runtime session registered by the resume or attached to on continue.
     var runtimeSessionID = ""
 
-    init(changed: Bool = true, message: String = "", continuation: String = "", tabID: Int = 0, windowID: Int = 0,
-         runtimeSessionID: String = "") {
+    init(changed: Bool = true, message: String = "", continuation: String = "", runtimeSessionID: String = "") {
         self.changed = changed
         self.message = message
         self.continuation = continuation
-        self.tabID = tabID
-        self.windowID = windowID
         self.runtimeSessionID = runtimeSessionID
     }
 
     private struct Details: Decodable {
         var continuation: String?
-        var tabID: Int?
-        var windowID: Int?
         var runtimeSessionID: String?
 
         enum CodingKeys: String, CodingKey {
             case continuation
-            case tabID = "tab_id"
-            case windowID = "window_id"
             case runtimeSessionID = "runtime_session_id"
         }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             continuation = c.lenient(.continuation)
-            tabID = c.lenient(.tabID)
-            windowID = c.lenient(.windowID)
             runtimeSessionID = c.lenient(.runtimeSessionID)
         }
     }
@@ -138,8 +126,6 @@ struct SessionContinueResult: Decodable, Equatable {
         message = c.lenient(.message, "")
         let details: Details? = c.lenient(.data)
         continuation = details?.continuation ?? ""
-        tabID = details?.tabID ?? 0
-        windowID = details?.windowID ?? 0
         runtimeSessionID = details?.runtimeSessionID ?? ""
     }
 }

@@ -12,35 +12,33 @@ const (
 	closePollDelay = 100 * time.Millisecond
 )
 
-// ErrCloseTimeout is returned when the tab did not disappear within the poll
-// window. The close command was still sent; the tab likely closed shortly after.
-var ErrCloseTimeout = errors.New("tab close timed out; proceeding anyway")
+// ErrCloseTimeout is returned when the group did not disappear within the
+// poll window. The close command was still sent.
+var ErrCloseTimeout = errors.New("session close timed out; proceeding anyway")
 
 var closeDebug = newFileLogger("/tmp/amx-debug.log", "[close] ")
 
 // CloseObservation is what the poll SAW, which is a different question from
-// whether the close request was accepted. Kitty accepts a close-tab and returns;
-// the tab going away is a second event, observed by listing the window tree
-// again. Two of the three ways that poll can end — a listing that failed, and a
-// tab still present when the polls run out — report no error to the caller, so
-// an error value alone cannot tell "the tab is gone" from "we never managed to
-// look".
+// whether the close request was accepted. The group going away is a second
+// event, observed by listing the backend again. A failed listing reports no
+// error to the caller, so an error value alone cannot tell "the group is gone"
+// from "we never managed to look".
 //
-// Callers that only need the tab closed can keep ignoring this; callers that
+// Callers that only need the group closed can keep ignoring this; callers that
 // offer the operator something on the strength of the close having happened —
 // close recovery, a "closed X" sentence — must not treat an unconfirmed close as
 // a confirmed one.
 type CloseObservation string
 
 const (
-	// CloseObservedGone means a successful listing no longer contained the tab.
+	// CloseObservedGone means a successful listing no longer contained the group.
 	CloseObservedGone CloseObservation = "gone"
-	// CloseUnobserved means the tab was never seen to disappear: either the
+	// CloseUnobserved means the group was never seen to disappear: either the
 	// listing failed, or it was still present when the polls ran out.
 	CloseUnobserved CloseObservation = "unobserved"
 )
 
-// Confirmed reports whether the tab was seen to disappear.
+// Confirmed reports whether the group was seen to disappear.
 func (o CloseObservation) Confirmed() bool { return o == CloseObservedGone }
 
 // CloseBackend is what closing a session needs from a terminal backend: the
@@ -50,7 +48,7 @@ type CloseBackend interface {
 	backend.Discoverer
 }
 
-// Close closes the group (a Kitty tab) and polls until it disappears.
+// Close closes a backend group and polls until it disappears.
 // Returns ErrCloseTimeout (non-fatal) if the group is still present after
 // closePollMax polls; callers may ignore this error.
 func Close(term CloseBackend, group backend.Ref) error {
@@ -83,14 +81,14 @@ func PollClosed(term backend.Discoverer, group backend.Ref) error {
 //
 // The first poll runs immediately so callers do not pay closePollDelay of
 // wall-time when the tab has already disappeared by the time we ask. Subsequent
-// polls sleep first so Kitty has a chance to actually process the close-tab.
+// polls sleep first so the backend can process the close request.
 //
 // A failed listing returns nil — "assume it closed". That branch has no recorded
 // rationale: `git log -S` and `git blame` both place its origin in df9908f, the
 // original Go port that replaced the Bash/Python toolchain, and neither the
 // commit nor any comment says why. It is preserved rather than corrected because
 // callers depend on it: Restart closes after it has already launched the
-// replacement, and turning a transient `kitten @ ls` failure into a close error
+// replacement, and turning a transient discovery failure into a close error
 // there would report a restart that did happen as one that did not. What changes
 // here is only what such a poll is allowed to CLAIM — it reports CloseUnobserved,
 // so a caller that needs the tab to actually be gone can tell that case apart

@@ -247,17 +247,17 @@ func TestSearch_MultiWordPreviewPrefersALineHoldingEveryWord(t *testing.T) {
 		harness: harness.Claude,
 		byPath: map[string][]Message{
 			"/tmp/hit.jsonl": {
-				{Role: "user", Text: "Kitty tabs are colored\nthe socket is closed"},
-				{Role: "assistant", Text: "first\nthe Kitty socket listens on /tmp"},
+				{Role: "user", Text: "tmux tabs are colored\nthe socket is closed"},
+				{Role: "assistant", Text: "first\nthe tmux socket listens on /tmp"},
 			},
 		},
 	}}
 
-	results, err := Search(idx, readers, Query{Text: "kitty socket"})
+	results, err := Search(idx, readers, Query{Text: "tmux socket"})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(results) != 1 || results[0].Preview != "the Kitty socket listens on /tmp" {
+	if len(results) != 1 || results[0].Preview != "the tmux socket listens on /tmp" {
 		t.Fatalf("results = %+v, want the line holding both words", results)
 	}
 }
@@ -303,13 +303,13 @@ func TestSearch_PreviewPrefersWrittenLinesToToolOutput(t *testing.T) {
 		},
 		{
 			name:  "a printed line holding every word beats a written one holding one",
-			query: "kitty socket",
+			query: "tmux socket",
 			msgs: []Message{
-				written("user", "Kitty tabs are colored"),
-				printed("kitty sockets: unix:/tmp/kitty-690"),
+				written("user", "tmux tabs are colored"),
+				printed("tmux sockets: unix:/tmp/tmux-690"),
 				written("assistant", "the socket is closed"),
 			},
-			want: "kitty sockets: unix:/tmp/kitty-690",
+			want: "tmux sockets: unix:/tmp/tmux-690",
 		},
 	}
 	for _, tc := range cases {

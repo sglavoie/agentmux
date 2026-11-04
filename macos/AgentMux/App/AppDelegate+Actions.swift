@@ -5,38 +5,13 @@ import AppKit
 extension AppDelegate {
     // MARK: Focus
 
-    /// Focuses a session where it is: an embedded one in the workspace, a
-    /// Kitty one in Kitty, which is then brought forward.
+    /// Focuses a tmux session in the workspace.
     func focus(_ row: MenuSessionRow) {
-        if !row.runtimeSessionID.isEmpty {
-            focusSession(row.runtimeSessionID)
-            return
-        }
-        let candidates = KittyEndpoint.candidates(
-            override: preferencesModel.preferences.kittySocketOverride,
-            rowSocket: row.kittySocket,
-            snapshotSocket: store.snapshot?.kitty.socket ?? "",
-            kittyPIDs: KittyEndpoint.runningKittyPIDs()
-        )
-        guard !candidates.isEmpty else {
-            return report(KittyEndpoint.listenOnMissing)
-        }
-        focusRunner.run({ () -> (FocusOutcome, String) in
-            let client = DaemonClient()
-            var outcome = FocusOutcome.unknownSocket
-            var used = ""
-            for socket in candidates {
-                outcome = client.focusWindow(socket: socket, windowID: row.windowID)
-                used = socket
-                if outcome != .unknownSocket { break }
-            }
-            return (outcome, used)
-        }, onMain: { [weak self] answer in
-            self?.finishFocus(row, outcome: answer.0, socket: answer.1)
-        })
+        guard !row.runtimeSessionID.isEmpty else { return report("This session is no longer available.") }
+        focusSession(row.runtimeSessionID)
     }
 
-    /// Shows a session that has no Kitty window. The daemon is asked
+    /// Shows a runtime session. The daemon is asked
     /// (`focus_session`) and answers this workspace with a view frame; when it
     /// cannot be asked, or shows nothing, the workspace shows the session
     /// itself, as it did before the daemon knew the request.
@@ -46,28 +21,6 @@ extension AppDelegate {
             Self.logger.notice("focus_session \(runtimeSessionID, privacy: .public): \(String(describing: outcome), privacy: .public); showing it here")
             self.showWorkspace(focusing: runtimeSessionID)
         })
-    }
-
-    func finishFocus(_ row: MenuSessionRow, outcome: FocusOutcome, socket: String) {
-        switch outcome {
-        case .focused:
-            if !KittyActivator.activate(socket: socket) {
-                report("Kitty is not running.")
-            }
-        case .staleTarget:
-            store.markStale(socket: row.kittySocket, windowID: row.windowID)
-            statusItem?.rebuildMenu()
-        case .unknownSocket:
-            report("The daemon does not know this session's Kitty socket.")
-        case .unsupported:
-            report("Daemon too old to focus sessions — \(MenuBuilder.restartHint)")
-        case .notRunning:
-            store.apply(health: .notRunning)
-            if workspaceIsKey { report(DaemonPhrase.notConnected + ".") }
-        case let .failed(message):
-            Self.logger.error("focus_window \(row.windowID): \(message, privacy: .public)")
-            report("Could not focus the session: \(message)")
-        }
     }
 
     // MARK: Menu actions
@@ -131,21 +84,6 @@ extension AppDelegate {
 
     // MARK: Actions
 
-    /// Remembers the Kitty that comes to the front, which is where Launch
-    /// Project and Recent open their tabs.
-    func trackActiveKitty() {
-        if let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier == KittyEndpoint.bundleIdentifier {
-            lastActiveKittyPID = front.processIdentifier
-        }
-        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { [weak self] notification in
-            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
-            guard app?.bundleIdentifier == KittyEndpoint.bundleIdentifier, let pid = app?.processIdentifier else { return }
-            MainActor.assumeIsolated { self?.lastActiveKittyPID = pid }
-        }
-    }
-
     var gate: ActionGate {
         ActionGate(
             capabilities: preferences.capabilities,
@@ -166,7 +104,6 @@ extension AppDelegate {
         let prefs = preferencesModel.preferences
         return MenuBuilder.ActionsInput(
             gate: gate,
-            dashboardPlace: prefs.dashboardPlace,
             launchBackend: prefs.launchBackend,
             cliLaunchBackend: preferences.backend.cliLaunchBackend,
             cliLaunchBackendSource: preferences.backend.cliLaunchBackendSource,
@@ -175,13 +112,13 @@ extension AppDelegate {
             dashboardHotKey: dashboardHotKey?.registration.registeredCombo,
             nextAttentionHotKey: attentionHotKey?.registration.registeredCombo,
             feedLive: live,
-            waiting: live ? AttentionCycler.ordered(store.sessions).count : 0,
+            waiting: live ? AttentionCycler.ordered(store.managedSessions).count : 0,
             projects: projects.state,
             missingProjectDirectories: projects.missingDirectories,
             recent: recent.state,
             recentDays: prefs.recentDays,
             recentLimit: prefs.recentLimit,
-            liveConversations: store.sessions.compactMap(\.conversation).filter { !$0.sessionID.isEmpty },
+            liveConversations: store.managedSessions.compactMap(\.conversation).filter { !$0.sessionID.isEmpty },
             notification: live ? store.snapshot?.notification : nil,
             snoozeSupported: snoozes.supported,
             daemonBusy: daemonBusy,
@@ -279,17 +216,6 @@ extension AppDelegate {
         })
     }
 
-    /// The sockets a command that opens a new tab tries, the Kitty used last
-    /// first.
-    func newTabCandidates() -> [String] {
-        KittyEndpoint.actionCandidates(
-            override: preferencesModel.preferences.kittySocketOverride,
-            lastActiveKittyPID: lastActiveKittyPID,
-            snapshot: store.snapshot,
-            kittyPIDs: KittyEndpoint.runningKittyPIDs()
-        )
-    }
-
     /// Read the same resolved default as the CLI at the moment of the action.
     /// A failed read never guesses a destination or starts an agent.
     func resolveLaunchDestination(_ command: AMXCommand, completion: @escaping @MainActor (LaunchBackendPreference) -> Void) {
@@ -303,7 +229,7 @@ extension AppDelegate {
                 self.publishPreferences()
                 self.statusItem?.refreshSubmenus()
                 guard let choice = LaunchBackendPreference.followCLI.resolved(cliBackend: status.launchBackend) else {
-                    return self.reportFailure(title: Self.launchFailedTitle, "amx did not report a launch destination. Check amx backend status or choose Workspace or Kitty in Settings.")
+                    return self.reportFailure(title: Self.launchFailedTitle, "amx did not report a launch destination. Check amx backend status or choose Workspace in Settings.")
                 }
                 completion(choice)
             case let .failure(error):
@@ -312,10 +238,8 @@ extension AppDelegate {
         })
     }
 
-    /// Launch Project: the project launches on tmux and the workspace shows
-    /// it. Only when Preferences names Kitty is it `amx project launch` in
-    /// the Kitty used last, which is then brought forward on the new tab. A
-    /// `directory` replaces the project's configured one for this launch.
+    /// Launch Project starts the project on tmux and shows it in the workspace.
+    /// A directory replaces the project's configured one for this launch.
     func launch(_ project: ProjectEntry, directory: String? = nil, destination: LaunchBackendPreference? = nil) {
         guard let command else {
             return reportFailure(title: Self.launchFailedTitle, AMXWording.unavailable(notFound: preferences.binaryMenuProblem))
@@ -328,23 +252,7 @@ extension AppDelegate {
             }
             return
         }
-        if choice == .workspace {
-            return launchInWorkspace(project, directory: directory, command: command)
-        }
-        let candidates = newTabCandidates()
-        let arguments = ProjectCatalog.kittyLaunchArguments(for: project, directory: directory)
-        let progress = Self.launchingNotice(project.title)
-        store.show(notice: progress)
-        let change = beginChange(Self.launchingChange(project.title))
-        launchRunner.run({
-            KittyTargetedCommand.run(candidates: candidates) { socket in
-                command.json(ProjectLaunchResult.self, arguments, kittyListenOn: socket,
-                             timeout: AMXCommand.launchTimeout, mutates: true)
-            }
-        }, onMain: { [weak self] outcome in
-            self?.endChange(change)
-            self?.finishOpening(outcome, label: "launch \(project.profile)/\(project.title)", progress: progress) { $0.windowID }
-        })
+        launchInWorkspace(project, directory: directory, command: command)
     }
 
     /// Launch Project's ⌥ alternate: asks for the folder to launch in,
@@ -411,15 +319,9 @@ extension AppDelegate {
         ))
     }
 
-    /// Recent: a conversation a live session runs is focused where it runs,
-    /// in the workspace or whichever Kitty that is; any other goes to
-    /// `amx session continue`, which resumes it on tmux for the workspace,
-    /// or, when Preferences names Kitty, in the Kitty used last. amx sees only
-    /// the Kitty it is pointed at, so asking it to continue a conversation
-    /// live in another instance would resume a second copy instead of
-    /// focusing the first.
+    /// Recent focuses a live conversation or resumes it on tmux in the workspace.
     func continueConversation(_ conversation: RecentConversation, destination: LaunchBackendPreference? = nil) {
-        if let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
+        if let live = store.managedSessions.first(where: { $0.conversation == conversation.identity }) {
             focus(.focusing(live, title: conversation.displayName))
             return
         }
@@ -439,106 +341,29 @@ extension AppDelegate {
         let progress = Self.launchingNotice(conversation.displayName)
         store.show(notice: progress)
         let change = beginChange(Self.launchingChange(conversation.displayName))
-        if choice == .workspace {
-            let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
-            launchRunner.run({
-                command.json(SessionContinueResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
-            }, onMain: { [weak self] result in
-                self?.endChange(change)
-                self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label, progress: progress)
-            })
-            return
-        }
-        let candidates = newTabCandidates()
-        let arguments = RecentSessions.continueArguments(for: conversation) + ["--backend", "kitty"]
+        let arguments = RecentSessions.workspaceContinueArguments(for: conversation)
         launchRunner.run({
-            KittyTargetedCommand.run(candidates: candidates) { socket in
-                command.json(SessionContinueResult.self, arguments, kittyListenOn: socket,
-                             timeout: AMXCommand.launchTimeout, mutates: true)
-            }
-        }, onMain: { [weak self] outcome in
+            command.json(SessionContinueResult.self, arguments, timeout: AMXCommand.launchTimeout, mutates: true)
+        }, onMain: { [weak self] result in
             self?.endChange(change)
-            self?.finishOpening(outcome, label: label, progress: progress) { $0.windowID }
+            self?.finishOpeningInWorkspace(result.map(\.runtimeSessionID), label: label, progress: progress)
         })
     }
 
-    /// Brings Kitty forward after a launch or continue, on the reported window
-    /// when amx named one and the daemon knows that Kitty.
-    func finishOpening<T>(_ outcome: KittyTargetedCommand.Outcome<T>, label: String, progress: String,
-                          windowID: @escaping (T) -> Int) {
-        store.replace(notice: progress, with: nil)
-        switch outcome {
-        case .noSocket:
-            reportFailure(title: "Could not \(label)", KittyEndpoint.listenOnMissing)
-        case let .unreachable(message):
-            reportFailure(title: "Could not \(label)", "Could not reach Kitty: \(message)")
-        case let .done(result, socket):
-            switch result {
-            case let .failure(error):
-                Self.logger.error("\(label, privacy: .public): \(error.message, privacy: .public)")
-                reportFailure(title: "Could not \(label)", error.message)
-            case let .success(value):
-                Self.logger.notice("\(label, privacy: .public) via \(socket, privacy: .public)")
-                bringForward(socket: socket, windowID: windowID(value))
-            case let .partial(value, status):
-                Self.logger.notice("\(label, privacy: .public) via \(socket, privacy: .public) exited \(status)")
-                report("\(label) finished, but a later step failed.")
-                bringForward(socket: socket, windowID: windowID(value))
-            }
-        }
-    }
-
-    func bringForward(socket: String, windowID: Int) {
-        focusRunner.run({
-            if windowID > 0 { _ = DaemonClient().focusWindow(socket: socket, windowID: windowID) }
-        }, onMain: { [weak self] in
-            if !KittyActivator.activate(socket: socket) { self?.report("Kitty is not running.") }
-        })
-    }
-
-    /// ⌥ on a session row: `amx mute-toggle` on the row's runtime session
-    /// when the workspace embeds it, else against that row's own Kitty.
-    /// Window IDs mean something only inside the instance that issued them,
-    /// so no other socket is tried.
+    /// ⌥ on a session row toggles mute on its runtime session.
     func toggleMute(_ row: MenuSessionRow) { toggleMute(row, banner: false) }
 
     /// `banner`: a notification's Mute, whose failures are reported where
     /// the operator sees them now rather than only on the menu line.
     func toggleMute(_ row: MenuSessionRow, banner: Bool) {
-        guard let command else {
+        guard command != nil else {
             return actionFailed(Self.muteFailedTitle, AMXWording.unavailable(notFound: preferences.binaryMenuProblem), banner: banner)
         }
         if let reason = gate.unavailableReason(.muteToggle) { return actionFailed(Self.muteFailedTitle, reason, banner: banner) }
-        guard row.runtimeSessionID.isEmpty else { return toggleMute(runtimeSessionID: row.runtimeSessionID, banner: banner) }
-        let socket = row.kittySocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : row.kittySocket
-        guard !socket.isEmpty else { return actionFailed(Self.muteFailedTitle, KittyEndpoint.listenOnMissing, banner: banner) }
-        // Shown at once, so a menu reopened before the daemon publishes the
-        // change does not offer the toggle the click already made.
-        store.expectMute(socket: socket, windowID: row.windowID, muted: !row.muted)
-        amxRunner.run({
-            command.json(MuteToggleResult.self, MuteToggleResult.arguments(windowID: row.windowID), kittyListenOn: socket)
-        }, onMain: { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case let .success(value):
-                Self.logger.notice("mute-toggle window \(row.windowID): muted=\(value.muted)")
-                self.settleExpectedMute(value, socket: socket, windowID: row.windowID)
-            case let .partial(value, _):
-                self.settleExpectedMute(value, socket: socket, windowID: row.windowID)
-                self.report(value.muted ? "Muted, but the tab title was not updated." : "Unmuted, but the tab title was not updated.")
-            case let .failure(error):
-                Self.logger.error("mute-toggle window \(row.windowID): \(error.message, privacy: .public)")
-                self.store.dropExpectedMute(socket: socket, windowID: row.windowID)
-                self.actionFailed(Self.muteFailedTitle, error.message, banner: banner)
-            }
-        })
-    }
-
-    /// Replaces the guess `toggleMute` showed with what `amx` reports it did;
-    /// a toggle that changed nothing (the window was gone) shows nothing.
-    func settleExpectedMute(_ value: MuteToggleResult, socket: String, windowID: Int) {
-        let socket = socket.isEmpty ? store.snapshot?.kitty.socket ?? "" : socket
-        settleExpectedMute(value, key: AttentionCycler.Key(socket: socket, windowID: windowID))
+        guard !row.runtimeSessionID.isEmpty else {
+            return actionFailed(Self.muteFailedTitle, "This session is no longer available.", banner: banner)
+        }
+        toggleMute(runtimeSessionID: row.runtimeSessionID, banner: banner)
     }
 
     func settleExpectedMute(_ value: MuteToggleResult, key: AttentionCycler.Key) {

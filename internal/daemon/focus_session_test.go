@@ -29,10 +29,10 @@ func TestFocusSessionAsksAWorkspaceBeforeAnyTerminal(t *testing.T) {
 	h.SetStopConfirm(0, 0, false)
 	directory := newFakeRuntimeDirectory()
 	h.SetRuntimeSessionDirectory(directory)
-	live, stopped, inKitty := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
+	live, stopped, unsupported := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(live, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
 	directory.put(stopped, runtimesession.StateStale, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%5")
-	directory.put(inKitty, runtimesession.StateLive, runtimesession.BackendKitty, "unix:/tmp/kitty-a", "kitty-1", "7")
+	directory.put(unsupported, runtimesession.StateLive, runtimesession.BackendKind("unsupported"), "unsupported", "gen-1", "7")
 
 	if resp := h.Handle(focusSession(string(live))); resp.OK || resp.Error != protocol.FocusSessionErrorNoViewer {
 		t.Fatalf("with no workspace and no switcher: %+v; want %s", resp, protocol.FocusSessionErrorNoViewer)
@@ -48,11 +48,11 @@ func TestFocusSessionAsksAWorkspaceBeforeAnyTerminal(t *testing.T) {
 		request protocol.Request
 		want    string
 	}{
-		"no block":        {protocol.Request{Type: protocol.TypeFocusSession}, protocol.FocusSessionErrorInvalid},
-		"not an ID":       {focusSession("7"), protocol.FocusSessionErrorInvalid},
-		"unregistered":    {focusSession(string(newRuntimeID(t))), protocol.FocusSessionErrorUnknown},
-		"a Kitty session": {focusSession(string(inKitty)), protocol.FocusSessionErrorUnknown},
-		"a stopped agent": {focusSession(string(stopped)), protocol.FocusErrorStaleTarget},
+		"no block":                       {protocol.Request{Type: protocol.TypeFocusSession}, protocol.FocusSessionErrorInvalid},
+		"not an ID":                      {focusSession("7"), protocol.FocusSessionErrorInvalid},
+		"unregistered":                   {focusSession(string(newRuntimeID(t))), protocol.FocusSessionErrorUnknown},
+		"an unsupported backend session": {focusSession(string(unsupported)), protocol.FocusSessionErrorUnknown},
+		"a stopped agent":                {focusSession(string(stopped)), protocol.FocusErrorStaleTarget},
 	} {
 		if resp := h.Handle(tc.request); resp.OK || resp.Error != tc.want {
 			t.Errorf("%s: %+v; want %s", name, resp, tc.want)
@@ -122,7 +122,7 @@ func TestFocusSessionAsksAWorkspaceBeforeAnyTerminal(t *testing.T) {
 	// the runtime session and never by the slot.
 	slot := h.runtimeSessionSlot(string(live))
 	target := h.notificationTarget(slot, "work")
-	if !target.Navigable || target.RuntimeSessionID != string(live) || target.Backend != "tmux" || target.KittyListenOn != "" {
+	if !target.Navigable || target.RuntimeSessionID != string(live) || target.Backend != "tmux" {
 		t.Fatalf("notification target = %+v; want the runtime session as its focus target", target)
 	}
 	if err := h.focusSessionForClick(target.RuntimeSessionID); err != nil {
@@ -137,7 +137,7 @@ func TestFocusSessionAsksAWorkspaceBeforeAnyTerminal(t *testing.T) {
 }
 
 // TestFocusSessionSwitchesTheTerminalUsedLast runs the terminal half against
-// a real private tmux server with no Kitty and no workspace: the request moves
+// a real private tmux server with no workspace: the request moves
 // the attached terminal to the named session, the registry follows it, and
 // with nothing attached the request is refused and nothing is started.
 func TestFocusSessionSwitchesTheTerminalUsedLast(t *testing.T) {

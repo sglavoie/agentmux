@@ -131,7 +131,7 @@ func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 	}
 
 	// The no_layout_issues assertion should fail because of the modal issue.
-	fail := evaluateUITestAssertion(UITestAssertion{Type: UITestAssertNoLayoutIssues}, obs, narrow, nil)
+	fail := evaluateUITestAssertion(UITestAssertion{Type: UITestAssertNoLayoutIssues}, obs, narrow)
 	if fail == nil {
 		t.Error("no_layout_issues should fail when the modal overflows")
 	}
@@ -149,7 +149,7 @@ func TestUITestLayoutIssuesIncludeModalFit(t *testing.T) {
 			hasIssueType(wobs.Screen.Issues, UITestIssueModalHeightOverflow) {
 			t.Errorf("actions overlay at %dx%d should not report modal issues, got %v", size.Width, size.Height, wobs.Screen.Issues)
 		}
-		if fail := evaluateUITestAssertion(UITestAssertion{Type: UITestAssertNoLayoutIssues}, wobs, wide, nil); fail != nil {
+		if fail := evaluateUITestAssertion(UITestAssertion{Type: UITestAssertNoLayoutIssues}, wobs, wide); fail != nil {
 			t.Errorf("no_layout_issues should pass for a fitting overlay at %dx%d, got %+v", size.Width, size.Height, fail)
 		}
 	}
@@ -162,7 +162,7 @@ func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
 	fx := wideProfilesFixture()
 
 	// Narrow: responsive rows and wrapped details fit.
-	narrow, _ := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 40})
+	narrow := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 40})
 	cleanupUITestDriver(t, narrow)
 	if err := narrow.Key(keyA); err != nil {
 		t.Fatalf("Key(a) error: %v", err)
@@ -179,7 +179,7 @@ func TestUITestConfigPickerModalFitPinsWidthFix(t *testing.T) {
 	}
 
 	// Wide: the same identity and detail remain visible.
-	wide, _ := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 40})
+	wide := newUITestFixtureDriver(fx, UITestSize{Width: 140, Height: 40})
 	cleanupUITestDriver(t, wide)
 	if err := wide.Key(keyA); err != nil {
 		t.Fatalf("Key(a) error: %v", err)

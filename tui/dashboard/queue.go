@@ -7,7 +7,7 @@
 // Everything here is a pure function of facts the daemon already stamped onto
 // the session — state, prompt kind, unseen, BusySince, PresentationChangedAt,
 // branch, directory, profile — plus a clock the caller passes in. Nothing reads
-// the wall clock, probes Git, calls Kitty, or consults config, so the same rows
+// the wall clock, probes Git, calls the terminal, or consults config, so the same rows
 // and the same `now` always produce the same queue.
 //
 // Two boundaries are deliberate. Turning a wire-level prompt kind into a
@@ -250,7 +250,7 @@ type QueueRow struct {
 	Row int
 	// Name is the session's display title, unqualified and drawn neutral. It is
 	// the raw title, not a lookup key composed for this queue: the filter still
-	// matches this, and the cursor identity still travels on Base and the Kitty
+	// matches this, and the cursor identity still travels on Base and the session
 	// IDs.
 	Name string
 	// Locked marks a session protected against destructive dashboard actions.

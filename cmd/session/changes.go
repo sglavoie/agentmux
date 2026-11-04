@@ -17,8 +17,7 @@ func newChangesCommand() *cobra.Command {
 		Long: `Shows what changed in a Git checkout compared with --base (HEAD unless
 given): staged and unstaged changes to tracked files, and untracked paths.
 Name the checkout with exactly one of --directory, or --runtime-session for
-the directory a live tmux session's agent is working in (a Kitty session is
-reviewed by --directory). Nothing is written, and no Git hook, external diff
+the directory a live tmux session's agent is working in. Nothing is written, and no Git hook, external diff
 driver, or textconv runs.
 
 Each changed file is listed as +added -deleted and its path; --file adds that
@@ -95,7 +94,7 @@ func changesSessionDirectory(raw string) (string, error) {
 		return "", notLiveError(record)
 	}
 	if record.Target.Instance.Kind != runtimesession.BackendTmux {
-		return "", errors.New("review this checkout by directory for a Kitty session")
+		return "", errors.New("review this checkout by directory for a non-tmux session")
 	}
 	opened, err := attachNewTmux()
 	if err != nil {

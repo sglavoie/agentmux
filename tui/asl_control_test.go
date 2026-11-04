@@ -17,7 +17,7 @@ import (
 func TestASLActionsFollowProjectedCapabilities(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	m := d.Model()
 	row, _ := m.selectedASLRow()
@@ -55,7 +55,7 @@ func TestASLStopAndAbortConfirmBeforeSubmitting(t *testing.T) {
 		{keyASLAbort, asl.ConfirmAbort, aslbridge.MethodRunAbort, "120 seconds"},
 	} {
 		t.Run(tc.action, func(t *testing.T) {
-			d, _ := enterASLRunsDriver(t)
+			d := enterASLRunsDriver(t)
 			selectASLRun(t, d, "row-reply")
 			if err := d.Key(tc.key); err != nil {
 				t.Fatalf("pressing %q: %v", tc.key, err)
@@ -94,7 +94,7 @@ func TestASLStopAndAbortConfirmBeforeSubmitting(t *testing.T) {
 func TestASLControlCancellationSubmitsNothingAndDropsTheCapture(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	if err := d.Key(keyASLStop); err != nil {
 		t.Fatalf("pressing %q: %v", keyASLStop, err)
@@ -117,7 +117,7 @@ func TestASLControlCancellationSubmitsNothingAndDropsTheCapture(t *testing.T) {
 func TestASLConfirmationKeepsItsCaptureWhenTheListRefreshes(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	if err := d.Key(keyASLStop); err != nil {
 		t.Fatalf("pressing %q: %v", keyASLStop, err)

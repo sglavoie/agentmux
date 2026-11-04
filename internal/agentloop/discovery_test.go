@@ -4,8 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/sglavoie/agentmux/internal/aslcontract"
 )
 
 func TestDiscoverProjectsEveryContractField(t *testing.T) {
@@ -20,7 +18,6 @@ func TestDiscoverProjectsEveryContractField(t *testing.T) {
 		Phase:          PhaseTurn,
 		WorkspaceRoot:  workspace,
 		Harness:        "codex",
-		KittyWindowID:  51,
 		SessionID:      "33.3",
 		TurnIndex:      7,
 		QuestionID:     "q-1",
@@ -58,9 +55,6 @@ func TestDiscoverProjectsEveryContractField(t *testing.T) {
 	}
 	if candidate.Harness != "codex" {
 		t.Errorf("Harness = %q, want codex", candidate.Harness)
-	}
-	if candidate.WindowID != 51 {
-		t.Errorf("WindowID = %d, want 51", candidate.WindowID)
 	}
 	if candidate.PID != 123 || candidate.StartToken != testStartToken {
 		t.Errorf("process = %d/%q, want 123/%q", candidate.PID, candidate.StartToken, testStartToken)
@@ -323,14 +317,14 @@ func TestDiscoverKeepsOnlyKnownHarnesses(t *testing.T) {
 	}
 }
 
-// A plan with no workspace publishes a null workspace root. Routing then falls
-// back to window identity rather than inheriting another plan's directory.
+// A plan with no workspace publishes a null workspace root and remains
+// discoverable without inheriting another plan's directory.
 func TestDiscoverAllowsPlanWithoutAWorkspace(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	planDir := filepath.Join(t.TempDir(), "plan")
-	seedProjection(t, root, planDir, projectionSeed{KittyWindowID: 7})
+	seedProjection(t, root, planDir, projectionSeed{})
 
 	got, err := Discover(DiscoverOptions{
 		StateRoot:    root,
@@ -343,8 +337,8 @@ func TestDiscoverAllowsPlanWithoutAWorkspace(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("len(candidates) = %d, want 1", len(got))
 	}
-	if got[0].CWD != "" || got[0].WindowID != 7 || got[0].TurnIndex != -1 {
-		t.Fatalf("candidate = %+v, want empty CWD, window 7, turn index -1", got[0])
+	if got[0].CWD != "" || got[0].TurnIndex != -1 {
+		t.Fatalf("candidate = %+v, want empty CWD and turn index -1", got[0])
 	}
 }
 
@@ -422,31 +416,5 @@ func TestLookupPlanStateRejectsMismatchedEmbeddedPlan(t *testing.T) {
 
 	if _, found, err := LookupPlanState(planDir, root); err == nil || found {
 		t.Fatalf("LookupPlanState mismatch = found %v err %v", found, err)
-	}
-}
-
-func TestDiscoverReviewedLoopContractStillRequiresLiveProcess(t *testing.T) {
-	t.Parallel()
-
-	root, planDir := t.TempDir(), t.TempDir()
-	seedProjection(t, root, planDir, projectionSeed{
-		RunID: "current-run", Phase: PhaseTurn, PID: 123, KittyWindowID: 3,
-		ContractSetID: aslcontract.LoopCompatibleContractSetID,
-	})
-	for _, alive := range []bool{true, false} {
-		result, err := DiscoverPlans(DiscoverOptions{
-			StateRoot: root, PIDRunning: func(int) bool { return alive }, ProcessBirth: matchingBirth(),
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		candidates := result.Candidates(false)
-		if alive {
-			if len(candidates) != 1 || candidates[0].RunID != "current-run" || candidates[0].WindowID != 3 {
-				t.Fatalf("live reviewed-contract loop was not discovered: %+v", result)
-			}
-		} else if len(candidates) != 0 || result.Observations[0].Presence != PresenceConfirmedAbsent {
-			t.Fatalf("exited reviewed-contract loop still appears active: %+v", result)
-		}
 	}
 }

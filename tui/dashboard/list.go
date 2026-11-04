@@ -373,7 +373,7 @@ func (in ListInput) noticeFor(it Item) noticeKind {
 // Nothing here reads or writes seenness beyond projecting it. A render that
 // acknowledged what it drew would clear the news by showing it, and the cursor
 // passing over a row is not the operator having read it — clearing the bit stays
-// with the daemon and its Kitty focus observation.
+// with the daemon and its terminal focus observation.
 func noticePrefix(in ListInput, it Item) string {
 	switch in.noticeFor(it) {
 	case noticePulse:

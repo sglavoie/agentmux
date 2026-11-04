@@ -3,7 +3,6 @@ package errors
 import (
 	"fmt"
 	"os"
-	"strings"
 )
 
 const (
@@ -25,41 +24,6 @@ func (e *ConfigError) Error() string {
 		return fmt.Sprintf("%s\n  → %s", e.Message, e.Hint)
 	}
 	return e.Message
-}
-
-// KittyError is a failure from a kitten @ command.
-type KittyError struct {
-	Command []string
-	Output  string
-	Err     error
-}
-
-func (e *KittyError) Error() string {
-	if e == nil {
-		return "kitty command failed: <nil>"
-	}
-	cmd := strings.Join(e.Command, " ")
-	if cmd == "" {
-		cmd = "<unknown command>"
-	}
-	trimmed := strings.TrimSpace(e.Output)
-	if trimmed != "" {
-		if e.Err != nil {
-			return fmt.Sprintf("kitty command failed: %s\n  output: %s\n  error: %s", cmd, trimmed, e.Err)
-		}
-		return fmt.Sprintf("kitty command failed: %s\n  output: %s", cmd, trimmed)
-	}
-	if e.Err != nil {
-		return fmt.Sprintf("kitty command failed: %s\n  error: %s", cmd, e.Err)
-	}
-	return fmt.Sprintf("kitty command failed: %s", cmd)
-}
-
-func (e *KittyError) Unwrap() error {
-	if e == nil {
-		return nil
-	}
-	return e.Err
 }
 
 // Print prints an error to stderr without exiting.

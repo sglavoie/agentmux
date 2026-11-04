@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/sglavoie/agentmux/cmd/debug"
@@ -16,7 +15,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/eventlog"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/spf13/cobra"
@@ -33,7 +31,6 @@ var (
 	// newDaemonExportClient is also how `daemon status` reads health: the
 	// export client is this family's one daemon-query seam.
 	newDaemonExportClient = cli.NewDaemonExportClient
-	newDaemonExportKitty  = func() cli.KittyWindowLister { return cli.NewKittyClient() }
 	// newDaemonExportRuntime lists what runs on the private tmux server now,
 	// for the live half of the slots runtime sessions hold. It starts no
 	// server: none running lists nothing.
@@ -51,8 +48,11 @@ var (
 	daemonExportNow = time.Now
 )
 
-func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, osWindows []kitty.OSWindow, running []session.RunningSession, requestedWindowID int, last int, exportedAt time.Time, listedSocket ...string) protocol.ExportEventsPayload {
-	liveByID := debug.ExportLiveMetadata(osWindows, snapshot, requestedWindowID, listedSocket...)
+func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health, running []session.RunningSession, requestedWindowID int, last int, exportedAt time.Time) protocol.ExportEventsPayload {
+	liveByID := make(map[int]protocol.WindowLiveMetadata)
+	for _, id := range debug.ExportWindowIDs(snapshot, requestedWindowID) {
+		liveByID[id] = protocol.WindowLiveMetadata{}
+	}
 	debug.ExportRuntimeLiveMetadata(liveByID, running, snapshot)
 	ids := debug.ExportWindowIDs(snapshot, requestedWindowID)
 	windows := make([]protocol.ExportWindow, 0, len(ids))
@@ -95,12 +95,10 @@ func buildDaemonExportPayload(snapshot protocol.EventsExport, health ipc.Health,
 	}
 }
 
-// daemonExportTarget is what one export is restricted to: a Kitty window, a
-// runtime session, or neither (everything).
+// daemonExportTarget restricts an export to a daemon slot or runtime session.
 type daemonExportTarget struct {
 	windowID int
 	runtime  string
-	socket   string
 }
 
 // runtimeSessionExporter is the part of the daemon client that exports by
@@ -119,27 +117,12 @@ func daemonExportRuntimeSession(raw, source string) (daemonExportTarget, error) 
 }
 
 // daemonExportCurrentTarget names the session this command was typed in. A
-// managed session says so itself (AMX_RUNTIME_SESSION_ID) and that wins: a
-// tmux pane inherits whatever KITTY_WINDOW_ID the launching terminal had, so
-// the Kitty variable is only believed when no runtime session is named. This
-// is the rule the hook client follows.
+// managed session names itself with AMX_RUNTIME_SESSION_ID.
 func daemonExportCurrentTarget() (daemonExportTarget, error) {
 	if raw := os.Getenv(runtimesession.EnvVar); raw != "" {
 		return daemonExportRuntimeSession(raw, "--current-window with "+runtimesession.EnvVar)
 	}
-	s := os.Getenv(cli.WindowIDEnv)
-	if s == "" {
-		return daemonExportTarget{}, fmt.Errorf("--current-window requires %s or KITTY_WINDOW_ID to be set", runtimesession.EnvVar)
-	}
-	id, err := strconv.Atoi(s)
-	if err != nil || id <= 0 {
-		return daemonExportTarget{}, fmt.Errorf("--current-window requires a valid KITTY_WINDOW_ID, got %q", s)
-	}
-	socket := kitty.NormalizedListenAddressFromEnv()
-	if socket == "" {
-		return daemonExportTarget{}, fmt.Errorf("--current-window requires a reusable KITTY_LISTEN_ON to identify its Kitty instance")
-	}
-	return daemonExportTarget{windowID: id, socket: socket}, nil
+	return daemonExportTarget{}, fmt.Errorf("--current-window requires %s to be set", runtimesession.EnvVar)
 }
 
 func resolveDaemonExportTarget(cmd *cobra.Command) (daemonExportTarget, error) {
@@ -164,28 +147,9 @@ func resolveDaemonExportTarget(cmd *cobra.Command) (daemonExportTarget, error) {
 }
 
 // exportDaemonEvents asks the daemon for the target's snapshot and returns
-// the slot the export is filed under: the Kitty window asked for, or the slot
-// the daemon holds for the runtime session.
+// the slot the daemon holds for the target.
 func exportDaemonEvents(c cli.DaemonExportClient, target daemonExportTarget) (protocol.EventsExport, int, error) {
 	if target.runtime == "" {
-		if target.socket != "" {
-			exporter, ok := c.(interface {
-				ExportKittyWindowEvents(windowID int, socket string) (protocol.EventsExport, error)
-			})
-			if !ok {
-				return protocol.EventsExport{}, 0, fmt.Errorf("this daemon client cannot export by Kitty socket")
-			}
-			snapshot, err := exporter.ExportKittyWindowEvents(target.windowID, target.socket)
-			if err != nil {
-				return protocol.EventsExport{}, 0, err
-			}
-			for slot, key := range snapshot.KittySlots {
-				if key.Socket == target.socket && key.WindowID == target.windowID {
-					return snapshot, slot, nil
-				}
-			}
-			return protocol.EventsExport{}, 0, fmt.Errorf("daemon did not identify Kitty window %d on %s", target.windowID, target.socket)
-		}
 		snapshot, err := c.ExportEvents(target.windowID)
 		return snapshot, target.windowID, err
 	}
@@ -210,15 +174,13 @@ var daemonExportEventsCmd = &cobra.Command{
 	Short: "Dump hook event history as JSON for investigation",
 	Long: `Export the daemon's schema-v13 investigation snapshot as JSON.
 
-The payload is organized as a per-window array so each entry carries its own
-event list, durable daemon metadata, and best-effort live Kitty/session
-metadata without paired map lookups. An entry held by a runtime session names
-it (runtime_session_id, backend); for a tmux session window_id is the daemon's
-own slot for it, not a Kitty window.
+The payload is organized as a per-slot array so each entry carries its own
+event list, durable daemon metadata, and live tmux session metadata when
+available. An entry held by a runtime session names it
+(runtime_session_id, backend); window_id is the daemon's slot for it.
 
---current-window selects the session the command is typed in: the runtime
-session named by AMX_RUNTIME_SESSION_ID when there is one, else the Kitty
-window named by KITTY_WINDOW_ID and its reusable KITTY_LISTEN_ON socket.
+--current-window selects the managed session named by
+AMX_RUNTIME_SESSION_ID in the current terminal.
 --window selects a daemon slot shown by an unrestricted export; --runtime-session
 selects one by ID. Use --schema 12 for the pre-screen-decline
 shape, --schema 11 for the pre-busy-anchor shape, --schema 10 for the pre-stop-hold shape, --schema 9 for the previous
@@ -260,33 +222,16 @@ refused.`,
 			return fmt.Errorf("export events: %w", err)
 		}
 
-		// The live half of an entry comes from where its session runs: a
-		// Kitty window from Kitty, a runtime session on another backend from
-		// that backend. Neither is asked when no exported entry is its own,
-		// so an export of tmux sessions runs with no Kitty at all. Both are
-		// best effort: an entry whose terminal cannot be read is not-found.
-		var osWindows []kitty.OSWindow
+		// Live metadata comes from the private tmux backend. If its pane is
+		// unavailable, the entry remains not-found.
 		var running []session.RunningSession
-		inKitty, offKitty := false, false
-		for _, id := range debug.ExportWindowIDs(snapshot, requestedWindowID) {
-			if slot, ok := snapshot.RuntimeSlots[id]; ok && debug.RuntimeSlotOffKitty(slot) {
-				offKitty = true
-			} else {
-				inKitty = true
-			}
-		}
-		if inKitty {
-			if liveWindows, liveErr := newDaemonExportKitty().ListWindows(); liveErr == nil {
-				osWindows = liveWindows
-			}
-		}
-		if offKitty {
+		if len(snapshot.RuntimeSlots) > 0 {
 			if listed, liveErr := newDaemonExportRuntime(); liveErr == nil {
 				running = listed
 			}
 		}
 
-		payload := buildDaemonExportPayload(snapshot, c.Health(), osWindows, running, requestedWindowID, daemonExportEventsLast, daemonExportNow(), target.socket)
+		payload := buildDaemonExportPayload(snapshot, c.Health(), running, requestedWindowID, daemonExportEventsLast, daemonExportNow())
 		projected, err := protocol.ProjectExportEventsPayload(payload, daemonExportEventsSchema)
 		if err != nil {
 			return err

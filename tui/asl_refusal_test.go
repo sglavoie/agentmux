@@ -22,7 +22,7 @@ func TestASLResponseStaleTargetInvalidatesTheFormAndRefreshes(t *testing.T) {
 	fx.ASLActionOutcomes = map[string]uitestASLOutcome{
 		aslbridge.MethodQuestionReply: {ErrorCode: "stale-action-token"},
 	}
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
 	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
@@ -55,7 +55,7 @@ func TestASLResponseBridgeRefusalNeverEchoesBridgeText(t *testing.T) {
 	fx.ASLActionOutcomes = map[string]uitestASLOutcome{
 		aslbridge.MethodQuestionReply: {ErrorCode: "mutation-failed"},
 	}
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
 	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
@@ -85,7 +85,7 @@ func TestASLResponseVanishedQuestionIsRefusedOnFetch(t *testing.T) {
 
 	fx := aslRunsFixture()
 	delete(fx.ASLQuestionBodies, "q-api-1")
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
 	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
@@ -108,7 +108,7 @@ func TestASLResponseDisconnectedBridgeOffersNoActions(t *testing.T) {
 
 	fx := aslRunsFixture()
 	fx.ASLStatus.MutationsEnabled = false
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
 	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
@@ -133,7 +133,7 @@ func TestASLResponseDisconnectedBridgeOffersNoActions(t *testing.T) {
 func TestASLResponseCachedRowsAreReadOnly(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
 	m.aslMeta.Stale = true

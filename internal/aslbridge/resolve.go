@@ -4,7 +4,7 @@ package aslbridge
 //
 // The daemon is not started from the operator's shell. It is spawned detached,
 // by a login agent or by an `amx` invocation that may itself have been started
-// by Kitty, and it inherits whatever PATH that ancestor had — which on a stock
+// by a terminal, and it inherits whatever PATH that ancestor had — which on a stock
 // macOS login agent does not include `~/.local/bin`. `exec.LookPath` alone
 // therefore fails to find an `asl` that the operator can run by name in every
 // terminal they own, and the resulting `executable file not found in $PATH` is

@@ -226,20 +226,7 @@ final class WorkspaceViewsModelTests: XCTestCase {
         XCTAssertEqual(views.terminals(beside: b).map(\.id), [b1])
     }
 
-    func testTheShortcutSentToKittyGoesToTheWorkspaceOnlyWhenThereIsNoKittyToAsk() {
-        let opened = OpenDashboardResult(windowID: 4, tabID: 2, opened: true)
-        XCTAssertEqual(DashboardOpener.destination(for: .opened(opened, socket: "unix:/tmp/k")), .kitty(opened, socket: "unix:/tmp/k"))
-        XCTAssertEqual(DashboardOpener.destination(for: .noSocket), .workspace)
-        XCTAssertEqual(DashboardOpener.destination(for: .failed("bad config")), .failed("bad config"),
-                       "a Kitty that answered with a failure is reported, not papered over")
-        let unreachable = DashboardOpener.open(candidates: ["a"]) { _ in
-            .failure(.command(AMXJSONError(code: "kitty_unavailable", message: "no kitty at that socket"), status: 1))
-        }
-        XCTAssertEqual(DashboardOpener.destination(for: unreachable), .failed("no kitty at that socket"))
-        XCTAssertEqual(DashboardOpener.destination(for: DashboardOpener.open(candidates: []) { _ in .success(opened) }), .workspace)
-    }
-
-    func testALaunchWithNoKittyGoesToTmuxAndReportsItsRuntimeSession() {
+    func testALaunchGoesToTmuxAndReportsItsRuntimeSession() {
         let project = ProjectEntry(profile: "work", title: "API")
         XCTAssertEqual(ProjectCatalog.workspaceLaunchArguments(for: project),
                        ["project", "launch", "--title", "API", "--profile", "work", "--backend", "tmux"])
@@ -248,7 +235,6 @@ final class WorkspaceViewsModelTests: XCTestCase {
             return XCTFail("the tmux launch payload did not decode")
         }
         XCTAssertEqual(result.runtimeSessionID, F.runtimeID(7))
-        XCTAssertEqual(result.windowID, 0, "a tmux launch names no Kitty window")
     }
 }
 
@@ -265,7 +251,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     private let sessions = [
         F.tmux(1, project: "api", profile: "work", icon: "stop"),
         F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
-        F.kitty(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
+        F.tmux(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
     ]
 
     override func setUp() async throws {
@@ -301,7 +287,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
                 return false
             })
         }
-        // api, personal, its two terminals, work, web, the Kitty session.
+        // api, personal, its two terminals, work, web, the tmux session.
         let top = try sessionIndex(personal)
         XCTAssertEqual(try sessionIndex(work), top + 3)
         XCTAssertEqual(workspace.dropSlots(forItemAt: top), [top, top + 3, top + 4])
@@ -319,7 +305,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertTrue(app.orders.isEmpty)
 
         XCTAssertTrue(workspace.moveItem(at: top, to: top + 4))
-        XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, nil])
+        XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, F.runtimeID(4)])
         XCTAssertEqual(try sessionIndex(work), top)
         XCTAssertEqual(try index(ofView: first), top + 2, "a session takes its terminals with it")
         XCTAssertEqual(try index(ofView: second), top + 3)
@@ -329,7 +315,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
 
         // The order holds over snapshots, and a new session follows it.
         app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "alpha", icon: "stop")]))
-        XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, F.runtimeID(3), nil])
+        XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, F.runtimeID(3), F.runtimeID(4)])
 
         XCTAssertFalse(workspace.moveItem(at: top + 3, to: top + 5), "a terminal does not leave its session")
         XCTAssertTrue(workspace.moveItem(at: top + 3, to: top + 2))
@@ -485,14 +471,10 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     func testAPickerOpensForTheShownSessionAndGoesBackWhenItEnds() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
 
-        // Nothing to pick for: a view that is about no session, then a Kitty
-        // session, whose pickers are Kitty's.
+        // Nothing to pick for: a view that is about no session.
         workspace.showView("dashboard")
         XCTAssertNil(workspace.shownSessionRow)
         XCTAssertFalse(workspace.openPicker(.iconPicker))
-        workspace.select(AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
-        XCTAssertNotNil(workspace.shownSessionRow)
-        XCTAssertFalse(workspace.openPicker(.colorPicker))
         XCTAssertEqual(app.madeViews, ["dashboard"])
 
         workspace.select(.embedded(F.runtimeID(2)), focus: true)
@@ -559,7 +541,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         }
         workspace.selectNeighbor(-1, sessionsOnly: true)
         XCTAssertEqual(workspace.state.selection, rows[2].key, "before the first one is the last")
-        XCTAssertTrue(app.external.isEmpty, "a Kitty session is selected here, not raised in Kitty")
+        XCTAssertTrue(app.external.isEmpty, "a tmux session is selected here")
 
         // The terminals under a session are passed over.
         let embedded = try XCTUnwrap(rows.first { $0.embeddedRuntimeSessionID == F.runtimeID(1) })
@@ -693,10 +675,8 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         app.store.apply(snapshot: F.snapshot(sessions))
         let rowsBefore = workspace.state.rows
 
-        // Nothing to open one beside: a view, then a Kitty session.
+        // Nothing to open one beside while the Dashboard is selected.
         workspace.showView("dashboard")
-        workspace.openTerminalBesideSession()
-        workspace.select(rowsBefore[2].key)
         workspace.openTerminalBesideSession()
         XCTAssertEqual(app.madeViews, ["dashboard"])
 
@@ -912,7 +892,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         // Five utility programs later the session list is what the daemon said.
         XCTAssertEqual(workspace.state.rows, rowsBefore)
         XCTAssertEqual(workspace.state.groups.map(\.attention), waitingBefore)
-        XCTAssertEqual(workspace.state.embeddedRuntimeSessionIDs, [F.runtimeID(1), F.runtimeID(2)])
+        XCTAssertEqual(workspace.state.embeddedRuntimeSessionIDs, [F.runtimeID(1), F.runtimeID(4), F.runtimeID(2)])
         XCTAssertEqual(workspace.attachedRuntimeSessionIDs, [], "no view attached to a session, not even the pager of one")
         XCTAssertEqual(app.store.sessions.count, 3)
 
@@ -920,7 +900,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         var cycler = AttentionCycler()
         var visited: [String] = []
         for _ in 0..<4 {
-            guard let next = cycler.advance(in: app.store.sessions, snapshotSocket: "unix:/tmp/kitty-1") else { break }
+            guard let next = cycler.advance(in: app.store.sessions) else { break }
             visited.append(next.project)
         }
         XCTAssertEqual(Set(visited), ["api", "web"])

@@ -302,7 +302,7 @@ func TestSnapshotFixtureDecodesIntoTypedRows(t *testing.T) {
 		t.Error("snapshot digest is empty")
 	}
 
-	var sawQuestion, sawWindow bool
+	var sawQuestion bool
 	for _, row := range snapshot.Rows {
 		if row.RowID == "" || row.PlanDir == "" || row.RunID == "" || row.ActionToken == "" {
 			t.Errorf("row %q is missing an identity field", row.RowID)
@@ -317,9 +317,6 @@ func TestSnapshotFixtureDecodesIntoTypedRows(t *testing.T) {
 				t.Errorf("row %s disables %q outside the method list", row.RowID, method)
 			}
 		}
-		if row.Window != nil {
-			sawWindow = true
-		}
 		if row.Question != nil {
 			sawQuestion = true
 			if row.Question.QuestionID == "" || row.Question.ContextKind == "" {
@@ -329,9 +326,6 @@ func TestSnapshotFixtureDecodesIntoTypedRows(t *testing.T) {
 	}
 	if !sawQuestion {
 		t.Error("no fixture row exercises the question projection")
-	}
-	if !sawWindow {
-		t.Error("no fixture row exercises the Kitty window binding")
 	}
 }
 

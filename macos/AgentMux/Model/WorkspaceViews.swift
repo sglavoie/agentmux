@@ -57,8 +57,7 @@ struct WorkspaceViewRequest: Decodable, Equatable {
 /// reads and is still not that session, and so does a terminal opened beside
 /// one: it is a shell where that session's agent works, listed under it.
 ///
-/// The keybinding reference and the icon and color pickers are what Kitty
-/// shows as overlays. Here each is a view that takes the pane until its
+/// The keybinding reference and the icon and color pickers are views that take the pane until their
 /// program ends, and then the pane goes back to where it was.
 struct WorkspaceUtilityView: Equatable, Codable {
     enum Kind: String, Equatable, Codable {
@@ -108,7 +107,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
         }
     }
 
-    /// A view that stands in for a Kitty overlay: it is passed through, not
+    /// A temporary view: it is passed through, not
     /// somewhere the operator was, so going back never lands on one.
     var isOverlay: Bool { kind == .keybindings || kind == .iconPicker || kind == .colorPicker }
 

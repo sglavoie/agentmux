@@ -20,7 +20,7 @@ import (
 // pane's fingerprint flickers, and a stabilization gate keyed on it would
 // suppress every stop rather than only the false ones.
 //
-// Trailing blank lines are dropped because Kitty's get-text pads its output to
+// Trailing blank lines are dropped because a pane capture may pad output to
 // the pane's row count, so a resize or a one-row scroll changes only that
 // padding. Leading whitespace and interior blank lines are structural — they
 // carry the composer's frame and the gaps between transcript blocks — and are
@@ -69,8 +69,8 @@ func Fingerprint(screen string) int64 {
 
 // StripANSI removes terminal escape sequences from a capture, leaving the text
 // a plain capture of the same screen would hold. Adapters match text only, so
-// a capture taken with styling (`tmux capture-pane -e`, `kitten @ get-text
-// --ansi`) must pass through here before it is classified or fingerprinted;
+// a capture taken with styling (`tmux capture-pane -e`) must pass through
+// here before it is classified or fingerprinted;
 // a plain capture is returned unchanged.
 //
 // It drops CSI sequences (SGR colour, cursor movement), OSC strings (titles,

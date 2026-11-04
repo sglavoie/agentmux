@@ -7,15 +7,13 @@ For lifecycle behavior and confirmation preferences, see
 - **Icons, hooks, or cached transcript data look wrong**: run `amx debug status`
   first, then `amx debug explain` with the trace/request/source-event ID from
   `amx debug tail`. `amx doctor` adds live checks for daemon reachability and
-  binary freshness, `kitten @ ls`, hooks for every configured
-  profile, renderer drift, known Kitty sockets, recent suppressions, and the
+  binary freshness, tmux backend health, hooks for every configured
+  profile, renderer drift, recent suppressions, and the
   reducer/renderer health surface. Its text report totals the suppressions and
   folds closed-window notes into one line, and says in one line each that the
   hooks of several healthy profiles are in sync, that every screen pattern set
-  is embedded, and that a Kitty list coordinator with no failure is ok;
-  `amx doctor --verbose` lists each suppression reason, closed window, and
-  healthy profile, and every coordinator counter (`amx debug status` always
-  prints them). Use `amx transcripts status` to
+  is embedded; `amx doctor --verbose` lists each suppression reason, closed
+  session, and healthy profile. Use `amx transcripts status` to
   inspect the filesystem transcript cache and `amx transcripts rebuild --all`
   to reconstruct it from source transcripts.
   Every failure and warning carries a remediation: the text report prints it
@@ -87,8 +85,8 @@ For lifecycle behavior and confirmation preferences, see
   `just install-restart-smoke` (install, restart the daemon, wait for
   `ready: true`, then gate on `amx doctor --strict`, which verifies the CLI
   and daemon are the same artifact by build hash). Durable per-window state is
-  restored from `amx_state` Kitty user vars across the restart; restore
-  republishes each window's reduced state, so a terminal icon whose
+  restored from the runtime checkpoint across the restart; restore
+  republishes each session's reduced state, so a terminal icon whose
   unacknowledged fact aged past the one-hour tombstone retention while the
   daemon was down clears on restart instead of pinning stale state.
 - **No projects appear**: run `amx config validate` and confirm the config is
@@ -159,29 +157,24 @@ For lifecycle behavior and confirmation preferences, see
   `amx daemon export-events --window <id>`. Claude/Copilot should show the
   documented hook reset payloads; Codex may show `ScreenClearProbe` when idle
   `/clear` happens without an immediate hook. If neither appears, confirm the
-  tab is managed by Agent Mux and Kitty `get-text` remote control works.
+  session is managed by Agent Mux and `amx backend status` reports a usable tmux server.
 - **The loop marker stays after a run is finished**: inspect
   `amx daemon export-events --current-window --last 50` for
   `AgentSessionLoopFinished`, then inspect the loop `state.json` for
   `run_finished_at`. If the marker remains, confirm no other active loop state
   still matches the same workspace and harness. Legacy loop state without a
-  recognized harness still matches by CWD, and if no same-harness managed Kitty
-  tab is open, Agent Mux falls back to the same workspace rather than updating an
-  unrelated caller tab. Press F8 to dismiss a stranded loop marker that has no
-  live daemon lease. Paused runs have no ongoing loop and do not restore the
-  marker, even if Kitty reuses their former window ID after a reboot.
-- **F8 does nothing from a tab or split pane**: F8 clears a recognized state
-  icon or stale loop marker regardless of whether the tab is managed. For a managed tab, inspect
-  `amx daemon export-events --window <owner-id>` (the managed title owner); for
-  an ownerless subprocess tab, inspect the pane that fired F8. Confirm a
-  non-suppressed `user_clear` event. An `owner_mismatch` for `user_clear`
-  indicates that the daemon predates this routing behavior — run
-  `amx daemon restart` after `just install`.
+  recognized harness still matches by CWD. Press F8 to dismiss a stranded loop
+  marker that has no live daemon lease. Paused runs have no ongoing loop and do
+  not restore the marker.
+- **F8 does nothing in a managed session**: inspect
+  `amx daemon export-events --current-window` from that session. Confirm a
+  non-suppressed `user_clear` event, then check `amx backend status` and
+  restart the daemon if its runtime session binding is stale.
 - **F11 does nothing**: on macOS the system claims F11 for Show Desktop unless
   "Use F1, F2, etc. keys as standard function keys" is enabled; press `fn`+`F11`
-  or change that setting, then reload Kitty's config. If the key reaches Kitty,
-  diagnose it exactly like F8 and look for a non-suppressed `user_active` event
-  on the owner window. A `⚡` that vanished early was retired by a real hook
+  or change that setting. If the key reaches the tmux session, diagnose it
+  exactly like F8 and look for a non-suppressed `user_active` event. A `⚡`
+  that vanished early was retired by a real hook
   event, which is by design.
 - **A loop running in a split pane doesn't drive the tab**: an
   `agent-session-loop` started in an *unmanaged* sibling pane only routes to the
@@ -192,11 +185,6 @@ For lifecycle behavior and confirmation preferences, see
   states stay put, confirm the loop's `state.json` has no `run_finished_at`, the
   PID is still live, and the source pane's window ID matches the discovered
   candidate.
-- **Daemon can't reach Kitty after an F8-triggered auto-start**: check that the
-  window's renderer metadata records a `unix:`/`tcp:` socket, never `fd:`.
-  `amx doctor` reports known Kitty sockets and renderer drift; a `fd:` value or
-  render failures indicate a stale binary — `just install` then
-  `amx daemon restart`.
 - **The Runs view (`:` → Show Runs) says `agent-session-loop is unavailable`**: read
   the `asl:` line from `amx doctor` or `amx daemon status`. It names the mode, the resolved
   executable, the negotiated version and protocol, snapshot age, restart count,
@@ -285,8 +273,6 @@ For lifecycle behavior and confirmation preferences, see
   the same way can be compared directly.
 - **Copilot profile is unauthenticated**: run `copilot login` with the matching
   `COPILOT_HOME`.
-- **Kitty control fails**: confirm `allow_remote_control yes` and the `listen_on`
-  socket setting are present, then restart Kitty.
 
 ## The tmux backend
 
@@ -298,9 +284,7 @@ amx backend status          # launch backend, the tmux in use and where it came 
 amx backend status --check  # the same, and exit 1 when launching on tmux would not work
 ```
 
-`--check` judges tmux whatever `launch_backend` says: a machine that launches
-in Kitty still exits 1 when it has no usable tmux (a server that does not
-answer fails it only where launches go to tmux). `amx doctor` raises the same
+`--check` exits 1 when there is no usable tmux server. `amx doctor` raises the same
 problems under `backend_` plus the code `backend status` gives them, with that
 report's hint as the remediation, so the two never advise different things.
 [When tmux cannot be used](usage.md#when-tmux-cannot-be-used-and-what-doctor-reports)
@@ -373,8 +357,8 @@ names.
   bundle, restart the daemon, and report it.
 - **`render_generation_drift`** (failure): a window stayed dirty for more than
   two render intervals (four seconds), so the render pipeline is not keeping
-  up or a write is stuck. Confirm the backend answers (`kitten @ ls` for
-  Kitty, `amx backend status` for tmux), then save a bundle and restart the
+  up or a write is stuck. Confirm `amx backend status` reports a healthy server,
+  then save a bundle and restart the
   daemon.
 - **`shadow_current_mismatch`** (failure): the reducer's effective icon or
   looping state disagrees with what the renderer intends, meaning some path

@@ -8,7 +8,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/plans"
-	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func noopPlanCommands(m *Model) {
@@ -70,23 +69,6 @@ func TestPlanScanToastSettlesWhenSuperseded(t *testing.T) {
 	m = updated.(Model)
 	if got := toastByID(m, planScanToastID); got != "" {
 		t.Fatalf("superseded scan kept its notice: %q", got)
-	}
-}
-
-func TestResortOutcomeReplacesProgress(t *testing.T) {
-	now := time.Unix(1_700_000_000, 0)
-	m := testModel()
-	m.now = func() time.Time { return now }
-	m.replaceToastByID(resortToastID, Toast{Severity: toastInfo, Text: "Resorting tabs…", Pending: true, Expires: now.Add(progressToastTTL)})
-	updated, _ := m.Update(commands.ResortDoneMsg{})
-	m = updated.(Model)
-	if got := toastByID(m, resortToastID); got != "Tabs resorted" {
-		t.Fatalf("resort channel = %q", got)
-	}
-	now = now.Add(time.Hour)
-	m.sweepToasts()
-	if len(m.toasts) != 0 {
-		t.Fatalf("progress reappeared after the outcome expired: %+v", m.toasts)
 	}
 }
 

@@ -18,7 +18,6 @@ struct AppPreferences: Equatable {
         static let recentLimit = "amxRecentLimit"
         static let useAppNotifications = "amxUseAppNotifications"
         static let snoozeUntil = "amxSnoozeUntil"
-        static let kittySocketOverride = "amxKittySocketOverride"
         static let environment = "amxEnvironment"
         static let launchBackend = "amxLaunchBackend"
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
@@ -31,7 +30,7 @@ struct AppPreferences: Equatable {
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
-            recentDays, recentLimit, useAppNotifications, snoozeUntil, kittySocketOverride, environment,
+            recentDays, recentLimit, useAppNotifications, snoozeUntil, environment,
             launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, dashboardPlace, terminalTheme, workspaceShortcuts,
             confirmBeforeClosing, confirmationPolicy,
         ]
@@ -64,8 +63,6 @@ struct AppPreferences: Equatable {
     /// When the snooze the app last asked for runs out; nil when it asked for
     /// none. The daemon owns the snooze; this only remembers the request.
     var snoozeUntil: Date?
-    /// A Kitty socket tried before any the snapshot names; empty is none.
-    var kittySocketOverride = ""
     /// Values amx runs with in place of the login shell's.
     var environment: [String: String] = [:]
     /// `amxLaunchBackend`: where Launch Project starts an agent.
@@ -87,7 +84,6 @@ struct AppPreferences: Equatable {
     /// inspector draw, in percent; ⌥+ and ⌥− change it, ⌥0 resets it to 100.
     var sidebarZoomPercent = 100
     /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
-    var dashboardPlace: DashboardPlacePreference = .workspace
     /// `amxTerminalTheme`: the Ghostty theme every terminal uses; nil uses
     /// the Ghostty config's.
     var terminalTheme: TerminalTheme?
@@ -107,7 +103,6 @@ struct AppPreferences: Equatable {
         preferences.recentLimit = int(defaults, Key.recentLimit, in: recentLimitRange) ?? 15
         preferences.useAppNotifications = bool(defaults, Key.useAppNotifications) ?? true
         preferences.snoozeUntil = defaults.object(forKey: Key.snoozeUntil) as? Date
-        preferences.kittySocketOverride = trimmed(defaults.string(forKey: Key.kittySocketOverride))
         preferences.environment = EnvironmentOverrides.load(from: defaults)
         preferences.launchBackend = LaunchBackendPreference.stored(defaults.string(forKey: Key.launchBackend))
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
@@ -118,8 +113,6 @@ struct AppPreferences: Equatable {
         }
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         preferences.sidebarZoomPercent = int(defaults, Key.sidebarZoomPercent, in: sidebarZoomRange) ?? 100
-        preferences.dashboardPlace = defaults.string(forKey: Key.dashboardPlace)
-            .flatMap(DashboardPlacePreference.init(rawValue:)) ?? .workspace
         // Only a stored string: `defaults.string` would read a stray true as "1".
         preferences.terminalTheme = (defaults.object(forKey: Key.terminalTheme) as? String)
             .flatMap(TerminalTheme.init(configValue:))
@@ -144,7 +137,6 @@ struct AppPreferences: Equatable {
         } else {
             defaults.removeObject(forKey: Key.snoozeUntil)
         }
-        Self.setString(kittySocketOverride, Key.kittySocketOverride, defaults)
         EnvironmentOverrides.save(environment, to: defaults)
         defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
@@ -152,7 +144,7 @@ struct AppPreferences: Equatable {
         defaults.removeObject(forKey: Key.confirmBeforeClosing)
         DefaultFontSize.save(defaultFontSize, to: defaults)
         defaults.set(Self.clamp(sidebarZoomPercent, Self.sidebarZoomRange), forKey: Key.sidebarZoomPercent)
-        defaults.set(dashboardPlace.rawValue, forKey: Key.dashboardPlace)
+        defaults.removeObject(forKey: Key.dashboardPlace)
         if let terminalTheme {
             defaults.set(terminalTheme.configValue, forKey: Key.terminalTheme)
         } else {

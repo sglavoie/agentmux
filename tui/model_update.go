@@ -13,7 +13,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/theme"
@@ -25,20 +24,20 @@ import (
 // logic. The state those handlers read lives in model.go.
 
 // NewModel creates a dashboard model.
-func NewModel(cfg *config.Config, client kitty.KittyClient) Model {
+func NewModel(cfg *config.Config, client any) Model {
 	return newModel(cfg, client, 0, ModeList)
 }
 
 // NewModelFromWindow creates a dashboard model that initially selects the
-// running session in the Kitty tab containing sourceWindowID. A zero or
+// running session in the session containing sourceWindowID. A zero or
 // unmapped ID leaves the dashboard's normal initial selection unchanged.
-func NewModelFromWindow(cfg *config.Config, client kitty.KittyClient, sourceWindowID int) Model {
+func NewModelFromWindow(cfg *config.Config, client any, sourceWindowID int) Model {
 	return newModel(cfg, client, sourceWindowID, ModeList)
 }
 
 // NewHistoryModel creates a model that starts in Past Sessions, across all
 // projects, and selects the conversation wanted when the results list it.
-func NewHistoryModel(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity) Model {
+func NewHistoryModel(cfg *config.Config, client any, wanted conversation.Identity) Model {
 	m := newModel(cfg, client, 0, ModeSessionSearch)
 	m.historyOnly = true
 	// The zero identity is Past Sessions with nothing to select.
@@ -53,14 +52,14 @@ func NewHistoryModel(cfg *config.Config, client kitty.KittyClient, wanted conver
 }
 
 // NewHistoryModelWithQuery is the native browser's exact-conversation bridge.
-func NewHistoryModelWithQuery(cfg *config.Config, client kitty.KittyClient, wanted conversation.Identity, query string) Model {
+func NewHistoryModelWithQuery(cfg *config.Config, client any, wanted conversation.Identity, query string) Model {
 	m := NewHistoryModel(cfg, client, wanted)
 	m.sessionQuery = query
 	m.historyConversation = m.sessionWantedKey
 	return m
 }
 
-func newModel(cfg *config.Config, client kitty.KittyClient, sourceWindowID int, initialMode Mode) Model {
+func newModel(cfg *config.Config, client any, sourceWindowID int, initialMode Mode) Model {
 	interval := time.Duration(cfg.Defaults.RefreshInterval) * time.Second
 	if interval <= 0 {
 		interval = 2 * time.Second
@@ -120,7 +119,6 @@ func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{
 		tea.RequestBackgroundColor,
 		m.runTopologyRefreshCmd(m.topologyRefreshActiveSeq, m.initialSourceWindowID),
-		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		commands.Tick(m.interval),
 		m.runHealthCmd(true, true),
 		startupSessionWarmupCmd(m.sessionSearchSeq),
@@ -177,9 +175,6 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commands.SessionsMsg:
 		return m.handleSessionsMsg(msg)
 
-	case commands.ActiveLoopsMsg:
-		return m.handleActiveLoopsMsg(msg)
-
 	case commands.ErrMsg:
 		return m.handleRefreshErr(msg)
 
@@ -188,9 +183,6 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commands.CopyDoneMsg:
 		return m.handleCopyDone(msg)
-
-	case commands.ResortDoneMsg:
-		return m.handleResortDone(msg)
 
 	case launchProgressMsg:
 		return m.handleLaunchProgress(msg)
@@ -213,9 +205,6 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commands.PickerOpenDoneMsg:
 		return m.handlePickerOpenDone(msg)
-
-	case commands.FocusDoneMsg:
-		return m.handleFocusDone(msg)
 
 	case commands.PeekDoneMsg:
 		return m.handlePeekDone(msg)
@@ -388,16 +377,14 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleTick processes a commands.TickMsg: sweeps stale transition pulses, schedules
-// the next session/active-loop fetches and tick, and conditionally fires a health check.
+// handleTick processes a commands.TickMsg: sweeps stale transition pulses,
+// schedules the next session refresh and tick, and conditionally checks health.
 func (m Model) handleTick(msg commands.TickMsg) (tea.Model, tea.Cmd) {
 	_ = msg
 	m.sweepRecentTransitions()
-	m.activeLoopRefreshSeq++
 	cmds := []tea.Cmd{
 		m.requestTopologyRefresh(),
 		m.refreshConfig(),
-		m.runActiveLoopRefreshCmd(m.activeLoopRefreshSeq),
 		commands.Tick(m.interval),
 	}
 	now := time.Now()

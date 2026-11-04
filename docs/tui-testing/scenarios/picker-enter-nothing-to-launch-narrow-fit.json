@@ -37,11 +37,6 @@
       "text": "Nothing to launch: no project matches"
     },
     {
-      "type": "kitty_calls",
-      "op": "LaunchTab",
-      "count": 0
-    },
-    {
       "type": "no_layout_issues"
     }
   ]

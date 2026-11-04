@@ -4,7 +4,7 @@ import GhosttyKit
 
 // Keyboard, IME, mouse, and the Edit menu, kept as close to upstream's
 // SurfaceView_AppKit as an embedded view allows: agents bind keys only the
-// kitty keyboard protocol can tell apart (shift+enter, ctrl+enter, ctrl+j), so
+// extended keyboard protocol can tell apart (shift+enter, ctrl+enter, ctrl+j), so
 // every key reaches `ghostty_surface_key` with the mods, consumed mods, and
 // unshifted codepoint Ghostty.app would send.
 extension Ghostty.SurfaceView {

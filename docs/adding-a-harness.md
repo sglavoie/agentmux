@@ -13,28 +13,22 @@ The checklist for adding a harness to Agent Mux. `CLAUDE.md` points here.
    Copilot the screen is the only evidence such a pane exists at all.
 
    Take the captures *before* writing a single pattern, with
-   `kitten @ get-text --extent=screen` against a live pane of the harness, and
-   commit them byte-for-byte under `internal/screenstate/testdata/`. They are
-   never hand-edited and never adapted from another harness's file. Cover at
-   minimum a working screen, a finished turn, a bare composer, a blocking
-   prompt, an interrupted turn, and a composer holding unsent input, plus a
-   `_t0`/`_t1` pair each for working and idle so the Layer B fingerprint claim
-   is tested rather than assumed. Record the harness build in the test file's
-   header comment: the version identifies which capture must be re-taken when a
-   release moves the copy.
-
-   Take the same screens on tmux as well, with
    `internal/screenstate/testdata/tmux/capture.sh` against a live pane on a
    private server running the production configuration. It writes the plain
    capture the tmux backend returns, the styled (`-e`) capture, and the pane
    geometry and screen mode tmux reported, under
-   `internal/screenstate/testdata/tmux/`. Include one capture after a live
+   `internal/screenstate/testdata/tmux/`. Commit them byte-for-byte; never
+   hand-edit them or adapt them from another harness's file. Cover at minimum
+   a working screen, a finished turn, a bare composer, a blocking prompt, an
+   interrupted turn, and a composer holding unsent input, plus a `_t0`/`_t1`
+   pair each for working and idle so the Layer B fingerprint claim is tested
+   rather than assumed. Record the harness build in the test file's header
+   comment: the version identifies which capture must be re-taken when a
+   release moves the copy. Include one capture after a live
    resize to a narrow pane. A probe that reads more than the screen needs that
    captured too: `capture.sh title` writes the pane title the harness set, and
    `capture.sh all` the screen with its history, each beside the capture it
-   belongs to. Register each in `tmux_fixture_test.go` and add a
-   row per behaviour to its Kitty/tmux parity table: the two sets must read
-   alike, and a difference is a finding about the adapter, not about tmux.
+   belongs to. Register each in `tmux_fixture_test.go`.
 
    Do not borrow patterns from an existing set. All three provisional Copilot
    clauses, written by analogy to Claude and Codex, were wrong in kind rather

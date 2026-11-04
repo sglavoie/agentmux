@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -51,20 +50,19 @@ func foldToggle(m Model) Model { return pressKey(m, keyEnter) }
 // merely picked the most urgent row cannot be mistaken for one that picked the
 // first; and "etl" belongs to no family, so a top-level leaf is present at a
 // list position the collapse keys must decline to act on.
-func listViewModel(view dashboard.ViewMode) (Model, *kitty.MockRunner) {
+func listViewModel(view dashboard.ViewMode) Model {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
 		HarnessEmojis: map[string]string{"claude": "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue"}},
 	}
-	runner := kitty.NewMockRunner(nil)
-	m := NewModel(cfg, kitty.NewClientWithSocket(runner, ""))
+	m := NewModel(cfg, nil)
 	m.width, m.height = 160, 50
 	m.cfg.Defaults.Preview = config.PreviewConfig{
 		Direction: "horizontal", Ratio: 0.5, RefreshMs: 500, MinCols: 100, MinRows: 30,
 	}
 	m.listView = view
-	return loadSessions(m, listViewRows()), runner
+	return loadSessions(m, listViewRows())
 }
 
 func listViewRows() []session.RunningSession {
@@ -144,7 +142,7 @@ var (
 func TestListStartsInUrgencyWithEveryFamilyExpanded(t *testing.T) {
 	t.Parallel()
 
-	fresh := NewModel(&config.Config{}, kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""))
+	fresh := NewModel(&config.Config{}, nil)
 	if fresh.listView != dashboard.ViewUrgency {
 		t.Errorf("a fresh model opened in view %v, want Urgency", fresh.listView)
 	}
@@ -152,7 +150,7 @@ func TestListStartsInUrgencyWithEveryFamilyExpanded(t *testing.T) {
 		t.Errorf("a fresh model already holds folds: %v", fresh.collapsedFamilies)
 	}
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	wantLines(t, m, urgencyLines)
 
 	// And the first thing the operator can do about it — switch views — finds
@@ -168,7 +166,7 @@ func TestListStartsInUrgencyWithEveryFamilyExpanded(t *testing.T) {
 func TestToggleListViewIsReachableOnlyThroughThePalette(t *testing.T) {
 	t.Parallel()
 
-	byKey, _ := listViewModel(dashboard.ViewUrgency)
+	byKey := listViewModel(dashboard.ViewUrgency)
 	byKey = selectLine(t, byKey, "session:lib")
 	before := itemLines(byKey)
 	after := pressKey(byKey, "v")
@@ -182,7 +180,7 @@ func TestToggleListViewIsReachableOnlyThroughThePalette(t *testing.T) {
 
 	// The palette entry is the whole switch: the field, the projection, and the
 	// summary/session cursor mapping that a bare field write would skip.
-	byPalette, _ := listViewModel(dashboard.ViewUrgency)
+	byPalette := listViewModel(dashboard.ViewUrgency)
 	byPalette = selectLine(t, byPalette, "session:lib")
 	cmd := commandByID(t, commands.ToggleListView)
 	ctx := captureCommandContext(byPalette)
@@ -211,7 +209,7 @@ func TestToggleListViewIsReachableOnlyThroughThePalette(t *testing.T) {
 func TestViewSwitchKeepsAVisibleSelection(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:lib")
 
 	m = toggleView(t, m)
@@ -232,7 +230,7 @@ func TestViewSwitchKeepsAVisibleSelection(t *testing.T) {
 func TestSummarySelectionMapsToItsLeadOnReturnToUrgency(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 
 	m = selectLine(t, m, "summary:monorepo(open)")
 	m = toggleView(t, m)
@@ -256,7 +254,7 @@ func TestSummarySelectionMapsToItsLeadOnReturnToUrgency(t *testing.T) {
 func TestChildHiddenByAFoldMapsToItsSummary(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
 	m = foldToggle(m)
 
@@ -278,14 +276,13 @@ func TestChildHiddenByAFoldMapsToItsSummary(t *testing.T) {
 // that it is one key. The interesting part used to be the asymmetry between Left
 // on a summary and Left on a child; with a toggle there is no asymmetry to have,
 // so the claims that matter are that the key toggles, that it does so without
-// touching Kitty, and that on every line which is not a summary it is
+// targeting a terminal, and that on every line which is not a summary it is
 // FocusSession and nothing else.
 func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 	t.Parallel()
 
-	t.Run("enter toggles the selected family without touching kitty", func(t *testing.T) {
-		m, runner := listViewModel(dashboard.ViewProjects)
-		calls := len(runner.Calls)
+	t.Run("enter toggles the selected family without targeting a session", func(t *testing.T) {
+		m := listViewModel(dashboard.ViewProjects)
 		m = selectLine(t, m, "summary:monorepo(open)")
 
 		m = foldToggle(m)
@@ -302,13 +299,10 @@ func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 		if got := selectedLine(m); got != "summary:monorepo(open)" {
 			t.Errorf("unfolding moved the cursor to %q", got)
 		}
-		if n := len(runner.Calls); n != calls {
-			t.Errorf("folding made %d Kitty call(s) on a summary: %+v", n-calls, runner.Calls[calls:])
-		}
 	})
 
 	t.Run("enter on a child is a focus, not a fold of its family", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewProjects)
+		m := listViewModel(dashboard.ViewProjects)
 		m = selectLine(t, m, "session:web")
 
 		after := foldToggle(m)
@@ -326,7 +320,7 @@ func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 		// than rebound, so on a summary — the one line they used to act on — they
 		// must now change neither the list nor the cursor.
 		for _, view := range []dashboard.ViewMode{dashboard.ViewProjects, dashboard.ViewUrgency} {
-			m, _ := listViewModel(view)
+			m := listViewModel(view)
 			line := "summary:monorepo(open)"
 			if view == dashboard.ViewUrgency {
 				line = "session:api"
@@ -348,7 +342,7 @@ func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 	})
 
 	t.Run("a top-level leaf has no family to fold", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewProjects)
+		m := listViewModel(dashboard.ViewProjects)
 		m = selectLine(t, m, "session:etl")
 		before, cursor := itemLines(m), m.cursor
 
@@ -363,7 +357,7 @@ func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 	})
 
 	t.Run("the urgency view has nothing to fold", func(t *testing.T) {
-		m, _ := listViewModel(dashboard.ViewUrgency)
+		m := listViewModel(dashboard.ViewUrgency)
 		m = selectLine(t, m, "session:api")
 		after := foldToggle(m)
 		wantLines(t, after, urgencyLines)
@@ -380,7 +374,7 @@ func TestEnterFoldsOnlyOnASummary(t *testing.T) {
 func TestFoldsSurviveRefreshFilterAndViewSwitch(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
 	m = foldToggle(m)
 	folded := []string{
@@ -424,7 +418,7 @@ func TestFoldsSurviveRefreshFilterAndViewSwitch(t *testing.T) {
 func TestFoldingCopiesTheCollapseMap(t *testing.T) {
 	t.Parallel()
 
-	before, _ := listViewModel(dashboard.ViewProjects)
+	before := listViewModel(dashboard.ViewProjects)
 	before = selectLine(t, before, "summary:monorepo(open)")
 
 	after := foldToggle(before)
@@ -479,7 +473,7 @@ func TestProjectsNavigationAtListBoundaries(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m, _ := listViewModel(dashboard.ViewProjects)
+			m := listViewModel(dashboard.ViewProjects)
 			for _, line := range tc.folds {
 				m = selectLine(t, m, line)
 				m = foldToggle(m)
@@ -537,7 +531,7 @@ func TestProjectsNavigationAtListBoundaries(t *testing.T) {
 func TestProjectsNavigationUnderAFilter(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 
 	m.applyFilterChange(dashboard.Parse("api"))
 	wantLines(t, m, []string{"session:api"})
@@ -561,14 +555,14 @@ func TestProjectsNavigationUnderAFilter(t *testing.T) {
 	wantLines(t, m, projectLines)
 }
 
-// TestSummaryPreviewPaintsACardAndCallsNoKitty is the pane's half of the
+// TestSummaryPreviewPaintsACard is the pane's half of the
 // fail-closed rule. A summary owns no window, so there is nothing to read; the
 // card answers the question the selection actually asked instead, out of facts
 // already on the rows.
-func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
+func TestSummaryPreviewPaintsACard(t *testing.T) {
 	t.Parallel()
 
-	m, runner := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
 	if cmd := m.refreshPreviewForCursor(); cmd != nil {
 		if msg, ok := cmd().(previewContentMsg); !ok || msg.windowID != 0 {
@@ -578,12 +572,7 @@ func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 	if m.previewWindowID != 0 {
 		t.Errorf("the preview still tracks window %d on a summary", m.previewWindowID)
 	}
-
-	calls := len(runner.Calls)
 	card := stripAnsi(renderPreviewPane(m, 60, 12))
-	if n := len(runner.Calls); n != calls {
-		t.Fatalf("painting a project card made %d Kitty call(s): %+v", n-calls, runner.Calls[calls:])
-	}
 
 	if !strings.Contains(card, "monorepo") {
 		t.Errorf("the card never named the family:\n%s", card)
@@ -614,12 +603,8 @@ func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 	}
 
 	// The whole split renders the card in place of scrollback, still without
-	// asking Kitty anything.
-	calls = len(runner.Calls)
+	// issuing a session action.
 	split := stripAnsi(renderSplitFrame(m).text)
-	if n := len(runner.Calls); n != calls {
-		t.Errorf("rendering the split over a summary made %d Kitty call(s): %+v", n-calls, runner.Calls[calls:])
-	}
 	if !strings.Contains(split, "monorepo") {
 		t.Errorf("the split did not paint the project card:\n%s", split)
 	}
@@ -633,7 +618,7 @@ func TestSummaryPreviewPaintsACardAndCallsNoKitty(t *testing.T) {
 func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
 	if m.previewWindowID != 11 {
@@ -683,7 +668,7 @@ func TestRefreshRetargetsThePreviewAtTheSelectionItEndedOn(t *testing.T) {
 func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "session:api")
 	m.refreshPreviewForCursor()
 
@@ -737,7 +722,7 @@ func TestPreviewRejectsAResponseForAnOlderTarget(t *testing.T) {
 func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m.mode = ModeHelp
 	m.height = 0
 	out := stripAnsi(renderHelp(m))
@@ -775,9 +760,8 @@ func TestKeyboardHelpDocumentsTheProjectsView(t *testing.T) {
 // covers what it does instead.
 func TestBuiltSummaryOffersOnlyViewActions(t *testing.T) {
 	forbidDaemonMutations(t)
-	m, runner := listViewModel(dashboard.ViewProjects)
+	m := listViewModel(dashboard.ViewProjects)
 	m = selectLine(t, m, "summary:monorepo(open)")
-	calls := len(runner.Calls)
 
 	for _, key := range summaryRowActionKeys {
 		if key == keyEnter {
@@ -790,9 +774,6 @@ func TestBuiltSummaryOffersOnlyViewActions(t *testing.T) {
 		if got := after.(Model); got.mode != ModeList || got.targetSession.TabID != 0 {
 			t.Errorf("key %q left mode %d targeting tab %d", key, got.mode, got.targetSession.TabID)
 		}
-	}
-	if n := len(runner.Calls); n != calls {
-		t.Fatalf("the row actions made %d Kitty call(s) on a summary: %+v", n-calls, runner.Calls[calls:])
 	}
 
 	ctx := captureCommandContext(m)

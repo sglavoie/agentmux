@@ -130,7 +130,7 @@ func (m *Model) setFamilyCollapsed(key string, collapsed bool) tea.Cmd {
 // is already on it.
 //
 // toggleSelectedFamily is what Enter does when the selection is a summary. Enter
-// focuses a session's Kitty tab on every other line; a summary has no tab to
+// focuses a session on every other line; a summary has no tab to
 // focus, so it folds and unfolds instead of refusing.
 func (m *Model) toggleSelectedFamily() tea.Cmd {
 	it, ok := m.selectedItem()

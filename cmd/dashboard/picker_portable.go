@@ -15,19 +15,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Outside Kitty the two pickers are portable views: they open in the terminal
-// they are typed in and edit a tmux session instead of a Kitty tab. The icon
+// The two pickers open in the terminal where they are typed and edit a tmux
+// session. The icon
 // is part of the session's title, which every surface that lists the session
 // shows. The color is kept in the session's metadata (session.ColorVar): the
 // dashboard draws the session's rows in it, and the daemon publishes it to
-// companions, where the desktop workspace draws the session's line on it. Inside Kitty nothing changes:
-// the pickers stay Kitty overlays over the tab they were opened on.
+// companions, where the desktop workspace draws the session's line on it.
 
 // pickerRuntimeSessionFlag names the tmux session a picker edits.
 const pickerRuntimeSessionFlag = "runtime-session"
 
 func addPickerSessionFlag(cmd *cobra.Command) {
-	cmd.Flags().String(pickerRuntimeSessionFlag, "", "outside Kitty: the runtime session whose tmux session to edit (default: $"+runtimesession.EnvVar+", or the only one running)")
+	cmd.Flags().String(pickerRuntimeSessionFlag, "", "the runtime session whose tmux session to edit (default: $"+runtimesession.EnvVar+", or the only one running)")
 }
 
 // pickerTarget is the tmux session a portable picker edits.
@@ -35,14 +34,6 @@ type pickerTarget struct {
 	terminal backend.Backend
 	pane     backend.Pane
 	running  session.RunningSession
-}
-
-// portablePickerRequested reports whether a picker should edit a tmux session
-// instead of a Kitty tab: always outside Kitty, and inside Kitty only when a
-// session was named.
-func portablePickerRequested(cmd *cobra.Command) bool {
-	named, _ := cmd.Flags().GetString(pickerRuntimeSessionFlag)
-	return strings.TrimSpace(named) != "" || !insideKitty()
 }
 
 // resolvePickerTarget finds the session a portable picker edits: the one
@@ -70,7 +61,7 @@ func resolveNamedPickerTarget(command, named, source string, cfg *config.Config)
 	}
 	terminal, err := openTmux()
 	if err != nil {
-		return pickerTarget{}, fmt.Errorf("%s edits a tmux session outside Kitty, and tmux is unavailable: %w", command, err)
+		return pickerTarget{}, fmt.Errorf("%s edits a tmux session, and tmux is unavailable: %w", command, err)
 	}
 	panes, err := terminal.Discover()
 	if err != nil {

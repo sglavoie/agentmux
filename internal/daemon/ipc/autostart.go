@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/process"
@@ -196,37 +195,12 @@ func (c *Client) ExportEvents(windowID int) (protocol.EventsExport, error) {
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
 		RuntimeSlots:   resp.RuntimeSlots,
-		KittySlots:     resp.KittySlots,
-	}, nil
-}
-
-// ExportKittyWindowEvents resolves a Kitty window by its socket and raw number
-// before exporting. A bare number can refer to a different Kitty instance.
-func (c *Client) ExportKittyWindowEvents(windowID int, socket string) (protocol.EventsExport, error) {
-	if windowID <= 0 || strings.TrimSpace(socket) == "" {
-		return protocol.EventsExport{}, fmt.Errorf("kitty export requires a window ID and socket")
-	}
-	resp, err := c.sendWithDeadline(protocol.Request{
-		Type: protocol.TypeEventsExport, WindowID: windowID, KittyListenOn: socket,
-	}, exportDeadline)
-	if err != nil {
-		return protocol.EventsExport{}, err
-	}
-	if !resp.OK {
-		return protocol.EventsExport{}, fmt.Errorf("daemon error: %s", resp.Error)
-	}
-	return protocol.EventsExport{
-		EventsByWindow: resp.EventsByWindow,
-		WindowMetadata: resp.WindowMetadata,
-		RuntimeSlots:   resp.RuntimeSlots,
-		KittySlots:     resp.KittySlots,
 	}, nil
 }
 
 // ExportRuntimeSessionEvents is ExportEvents for the one slot a runtime
-// session holds. The daemon resolves the slot, so this works for a session
-// with no Kitty window; the answer's RuntimeSlots names the slot it used. A
-// session the daemon holds no slot for is an error.
+// session holds. The daemon resolves the slot, and RuntimeSlots names the
+// slot it used. A session the daemon holds no slot for is an error.
 func (c *Client) ExportRuntimeSessionEvents(runtimeSessionID string) (protocol.EventsExport, error) {
 	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeEventsExport, RuntimeSessionID: runtimeSessionID}, exportDeadline)
 	if err != nil {
@@ -239,25 +213,12 @@ func (c *Client) ExportRuntimeSessionEvents(runtimeSessionID string) (protocol.E
 		EventsByWindow: resp.EventsByWindow,
 		WindowMetadata: resp.WindowMetadata,
 		RuntimeSlots:   resp.RuntimeSlots,
-		KittySlots:     resp.KittySlots,
 	}, nil
 }
 
-// StateQuery asks the daemon for its per-window states and its cached Kitty
-// topology in one round trip, under the dedicated one-second budget rather
-// than the 250ms hook-acknowledgement budget Send enforces.
-//
-// It is the dashboard refresh path: the response's KittySnapshot carries the
-// window tree the daemon already listed, so a refresh does not run a
-// `kitten @ ls` of its own. Only a ready snapshot supplies that tree, and a
-// ready one does so even when the daemon has marked it stale; every other shape
-// sends the caller to direct Kitty I/O as a fallback. A nil KittySnapshot means
-// the daemon predates the block. A non-nil block with Ready false means a cold
-// snapshot — a daemon that has not completed a listing yet — and the refresh
-// falls back to direct Kitty I/O for that tick rather than waiting for the
-// daemon to warm up. The per-window state from the same response is still used
-// in both cases: a reachable daemon is authoritative about state even when its
-// topology is unusable.
+// StateQuery asks the daemon for its per-slot states and runtime bindings in
+// one round trip, under the dedicated one-second budget rather than the 250ms
+// hook-acknowledgement budget Send enforces.
 //
 // The raw Response is returned rather than a projection because the state query
 // has always been consumed field by field by its callers; adding a projection

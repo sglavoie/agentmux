@@ -10,7 +10,7 @@ final class WorkspaceSidebarTests: XCTestCase {
     /// The groups of the pinned, the waiting, and the projects, without the
     /// state sections' headings, which `testStateSectionsListTheProjectsOfTheirSessionsByName` covers.
     private func groups(_ sessions: [CompanionSession]) -> [WorkspaceGroup] {
-        projects(WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback))
+        projects(WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback))
     }
 
     private func projects(_ groups: [WorkspaceGroup]) -> [WorkspaceGroup] {
@@ -29,28 +29,27 @@ final class WorkspaceSidebarTests: XCTestCase {
 
     func testV2SnapshotDecodesRuntimeIdentity() throws {
         let json = #"""
-        {"v":2,"kitty":{"socket":"unix:/tmp/kitty-100"},
+        {"v":2,
          "asl":{"waiting":[{"run_id":"run-2","runtime_session_id":"rs-fedcba9876543210fedcba9876543210","unanswered":1}]},
          "sessions":[
-          {"window_id":101,"kitty_socket":"unix:/tmp/kitty-100","project":"API","profile":"work","harness":"claude",
-           "runtime":{"session_id":"rs-0123456789abcdef0123456789abcdef","backend":"kitty","instance":"unix:/tmp/kitty-100","generation":"kitty-gen-1","pane":"101"}},
+          {"project":"API","profile":"work","harness":"claude",
+           "runtime":{"session_id":"rs-0123456789abcdef0123456789abcdef","backend":"tmux","instance":"/tmp/amx-tmux.sock","generation":"tmux-gen-1","pane":"%6"}},
           {"harness":"codex","profile":"work","project":"API","asl_run_id":"run-2","icon_state":"stop","attention":true,
            "runtime":{"session_id":"rs-fedcba9876543210fedcba9876543210","backend":"tmux","instance":"/tmp/amx-tmux.sock","generation":"tmux-gen-1","pane":"%7"}},
-          {"window_id":9,"project":"legacy"}]}
+          {"project":"legacy"}]}
         """#
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.v, 2)
-        let (kitty, tmux, legacy) = (snapshot.sessions[0], snapshot.sessions[1], snapshot.sessions[2])
-        XCTAssertEqual(kitty.runtime?.backend, "kitty")
-        XCTAssertNil(kitty.embeddedRuntimeSessionID, "a Kitty session is focused in Kitty even when a runtime session claims it")
-        XCTAssertEqual(tmux.windowID, 0)
+        let (first, tmux, legacy) = (snapshot.sessions[0], snapshot.sessions[1], snapshot.sessions[2])
+        XCTAssertEqual(first.runtime?.backend, "tmux")
+        XCTAssertEqual(first.embeddedRuntimeSessionID, "rs-0123456789abcdef0123456789abcdef")
         XCTAssertEqual(tmux.runtime?.pane, "%7")
         XCTAssertEqual(tmux.embeddedRuntimeSessionID, "rs-fedcba9876543210fedcba9876543210")
         XCTAssertNil(legacy.runtime)
         XCTAssertEqual(snapshot.asl.waiting[0].runtimeSessionID, "rs-fedcba9876543210fedcba9876543210")
 
-        XCTAssertEqual(AttentionCycler.key(kitty, snapshotSocket: ""), AttentionCycler.Key(socket: "unix:/tmp/kitty-100", windowID: 101))
-        XCTAssertEqual(AttentionCycler.key(tmux, snapshotSocket: "unix:/tmp/kitty-100"), .embedded("rs-fedcba9876543210fedcba9876543210"))
+        XCTAssertEqual(AttentionCycler.key(first), .embedded("rs-0123456789abcdef0123456789abcdef"))
+        XCTAssertEqual(AttentionCycler.key(tmux), .embedded("rs-fedcba9876543210fedcba9876543210"))
     }
 
     func testASessionIsListedOnTheColorTheDaemonPublishes() throws {
@@ -62,7 +61,7 @@ final class WorkspaceSidebarTests: XCTestCase {
            "runtime":{"session_id":"rs-00000000000000000000000000000002","backend":"tmux","pane":"%2"}},
           {"project":"api","profile":"odd","tab_color":"blue",
            "runtime":{"session_id":"rs-00000000000000000000000000000003","backend":"tmux","pane":"%3"}},
-          {"window_id":4,"project":"api","profile":"kitty","tab_color":"#551a1a"}]}
+          {"window_id":4,"project":"api","profile":"unsupported","tab_color":"#551a1a"}]}
         """#
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.sessions.map(\.tabColor), ["#1a3655", "", "blue", "#551a1a"])
@@ -72,7 +71,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual([color.red, color.green, color.blue], [0x1a / 255.0, 0x36 / 255.0, 0x55 / 255.0])
         XCTAssertNil(rows["plain"]?.tabColor, "a session with no color is drawn on the list's own")
         XCTAssertNil(rows["odd"]?.tabColor, "anything but #rrggbb is no color")
-        XCTAssertNil(rows["kitty"]?.tabColor, "a Kitty session's color is on its tab, in Kitty")
+        XCTAssertNil(rows["unsupported"]?.tabColor, "a session without a runtime ID has no tab color")
         XCTAssertNil(WorkspaceTabColor(hex: "#1a365"))
         XCTAssertNil(WorkspaceTabColor(hex: "#1a36zz"))
     }
@@ -84,7 +83,7 @@ final class WorkspaceSidebarTests: XCTestCase {
            "runtime":{"session_id":"rs-00000000000000000000000000000001","backend":"tmux","pane":"%1"}},
           {"project":"api","profile":"plain",
            "runtime":{"session_id":"rs-00000000000000000000000000000002","backend":"tmux","pane":"%2"}},
-          {"window_id":4,"project":"api","profile":"kitty","name":"stray"}]}
+          {"window_id":4,"project":"api","profile":"unsupported","name":"stray"}]}
         """#
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.sessions.map(\.name), ["billing fix", "", "stray"])
@@ -92,7 +91,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions).flatMap(\.rows).map { ($0.label, $0) })
         XCTAssertEqual(rows["work"]?.name, "billing fix")
         XCTAssertEqual(rows["plain"]?.name, "", "a session nobody named has none")
-        XCTAssertEqual(rows["kitty"]?.name, "", "a Kitty session is named by its tab, in Kitty")
+        XCTAssertNil(rows["unsupported"], "a session without a runtime ID is not listed")
         XCTAssertEqual(rows["work"]?.label, "work", "the name does not replace the profile, or move the row")
     }
 
@@ -103,7 +102,7 @@ final class WorkspaceSidebarTests: XCTestCase {
            "runtime":{"session_id":"rs-00000000000000000000000000000001","backend":"tmux","pane":"%1"}},
           {"project":"api","profile":"plain",
            "runtime":{"session_id":"rs-00000000000000000000000000000002","backend":"tmux","pane":"%2"}},
-          {"window_id":4,"project":"api","profile":"kitty","harness_icon":"📟"}]}
+          {"window_id":4,"project":"api","profile":"unsupported","harness_icon":"📟"}]}
         """#
         let snapshot = try JSONDecoder().decode(CompanionSnapshot.self, from: Data(json.utf8))
         XCTAssertEqual(snapshot.sessions.map(\.harnessIcon), ["🦊", "", "📟"])
@@ -111,7 +110,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let rows = Dictionary(uniqueKeysWithValues: groups(snapshot.sessions).flatMap(\.rows).map { ($0.label, $0) })
         XCTAssertEqual(rows["work"]?.harnessIcon, "🦊")
         XCTAssertEqual(rows["plain"]?.harnessIcon, "", "a session whose icon was cleared has none")
-        XCTAssertEqual(rows["kitty"]?.harnessIcon, "", "a Kitty session's icon is on its tab, in Kitty")
+        XCTAssertNil(rows["unsupported"], "a session without a runtime ID is not listed")
         XCTAssertEqual(rows["work"]?.label, "work", "the icon does not replace the profile, or move the row")
     }
 
@@ -145,7 +144,7 @@ final class WorkspaceSidebarTests: XCTestCase {
             F.tmux(1, project: "api", profile: "a", icon: "bolt"),
             F.tmux(2, project: "web", profile: "b", icon: "stop", attention: true),
             F.tmux(3, project: "web", profile: "c", icon: "bolt"),
-            F.kitty(4, project: "Needs attention", icon: "question", attention: true),
+            F.tmux(4, project: "Needs attention", icon: "question", attention: true),
         ]
         sessions[1].unseen = true
         sessions[0].pinned = true
@@ -153,11 +152,11 @@ final class WorkspaceSidebarTests: XCTestCase {
         order.set([.embedded(F.runtimeID(3)), .embedded(F.runtimeID(2))], for: "web")
         order.setCollapsed(project: "web", pinned: false, true)
         func built() -> [WorkspaceGroup] {
-            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", order: order)
+            WorkspaceSidebar.groups(sessions, order: order)
         }
         var state = WorkspaceState()
         state.apply(built())
-        let key = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        let key: AttentionCycler.Key = .embedded(F.runtimeID(4))
         XCTAssertEqual(state.groups.map(\.project), ["Pinned", "Needs attention", "Working", "web"])
         XCTAssertTrue(state.groups[1].needsAttention, "pinned sessions stay above Needs attention")
         XCTAssertEqual(state.groups[1].rows.map(\.key), [key, .embedded(F.runtimeID(2))])
@@ -196,7 +195,7 @@ final class WorkspaceSidebarTests: XCTestCase {
     func testGroupsByProjectAndLabelsByProfile() {
         let sessions = [
             F.tmux(1, project: "web", profile: "work", harness: "codex", icon: "bolt"),
-            F.kitty(4, project: "api", profile: "work", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 240)),
+            F.tmux(4, project: "api", profile: "work", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 240)),
             F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: ms(secondsAgo: 30)),
             F.tmux(3, project: "API tools", profile: "", harness: "copilot"),
         ]
@@ -221,11 +220,11 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(personal.toolTip, "tmux %2")
 
         let work = built[0].rows[0]
-        XCTAssertEqual(work.target, .kitty(socket: "", windowID: 4))
-        XCTAssertEqual(work.key, AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4))
-        XCTAssertEqual(work.detail, "Needs permission · claude · 4m · Kitty", "a Kitty row says where it opens")
+        XCTAssertEqual(work.target, .embedded(runtimeSessionID: F.runtimeID(4)))
+        XCTAssertEqual(work.key, .embedded(F.runtimeID(4)))
+        XCTAssertEqual(work.detail, "Needs permission · claude · 4m")
         XCTAssertTrue(work.muted)
-        XCTAssertEqual(work.toolTip, "window 4")
+        XCTAssertEqual(work.toolTip, "tmux %4")
 
         let web = built[2].rows[0]
         XCTAssertEqual(web.detail, "working · codex · main*")
@@ -248,7 +247,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         }
         var order = WorkspaceOrder()
         func built() -> [WorkspaceGroup] {
-            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
+            WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order)
         }
         XCTAssertEqual(lines(built()), ["Waiting (1)", "api", "Done (1)", "api", "Working (3)", "api", "API tools", "web",
                                         "Idle (1)", "docs"],
@@ -288,19 +287,19 @@ final class WorkspaceSidebarTests: XCTestCase {
     }
 
     func testADraggedOrderHoldsAndNewSessionsFollowIt() throws {
-        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api"), F.kitty(4, project: "api"), F.tmux(3, project: "web")]
-        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api"), F.tmux(4, project: "api"), F.tmux(3, project: "web")]
+        let fourth: AttentionCycler.Key = .embedded(F.runtimeID(4))
         var order = WorkspaceOrder()
-        order.set([kitty, .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))], for: "api")
+        order.set([fourth, .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))], for: "api")
         func keys(_ sessions: [CompanionSession], _ project: String = "api") -> [AttentionCycler.Key] {
-            WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order)
+            WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order)
                 .first { $0.project == project }?.rows.map(\.key) ?? []
         }
-        XCTAssertEqual(keys(sessions), [kitty, .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))])
+        XCTAssertEqual(keys(sessions), [fourth, .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))])
         XCTAssertEqual(keys(sessions, "web"), [.embedded(F.runtimeID(3))], "a project nobody dragged in sorts as it did")
         XCTAssertEqual(keys(sessions + [F.tmux(5, project: "api", profile: "alpha")]).last, .embedded(F.runtimeID(5)),
                        "a session launched since follows the dragged ones")
-        XCTAssertEqual(keys([sessions[0], sessions[2]]), [kitty, .embedded(F.runtimeID(1))], "one that ended leaves no gap")
+        XCTAssertEqual(keys([sessions[0], sessions[2]]), [fourth, .embedded(F.runtimeID(1))], "one that ended leaves no gap")
 
         var state = WorkspaceState()
         state.apply(groups(sessions))
@@ -317,12 +316,12 @@ final class WorkspaceSidebarTests: XCTestCase {
     }
 
     func testPinnedSessionsLeaveTheirProjectsForAGroupListedFirst() throws {
-        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
+        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.tmux(4, project: "web"),
                         F.tmux(3, project: "Pinned")]
-        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        let fourth: AttentionCycler.Key = .embedded(F.runtimeID(4))
         var order = WorkspaceOrder()
         func built(_ sessions: [CompanionSession]) -> [WorkspaceGroup] {
-            projects(WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order))
+            projects(WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order))
         }
         XCTAssertEqual(built(sessions).map(\.pinned), [false, false, false], "nothing is pinned until asked")
         order.setPinned(.embedded(F.runtimeID(2)), true)
@@ -332,16 +331,16 @@ final class WorkspaceSidebarTests: XCTestCase {
         // it was pinned or dragged to here.
         sessions[2].pinned = true
         sessions[0].pinned = true
-        order.setPinned(kitty, true)
+        order.setPinned(fourth, true)
         order.setPinned(.embedded(F.runtimeID(1)), true)
         var groups = built(sessions)
         XCTAssertEqual(groups.map(\.project), ["Pinned", "api", "Pinned"], "a project of that name is still a project")
         XCTAssertEqual(groups.map(\.pinned), [true, false, false])
-        XCTAssertEqual(groups[0].rows.map(\.key), [kitty, .embedded(F.runtimeID(1))], "in the order they were pinned")
+        XCTAssertEqual(groups[0].rows.map(\.key), [fourth, .embedded(F.runtimeID(1))], "in the order they were pinned")
         XCTAssertEqual(groups[0].rows.map(\.project), ["web", "api"], "a pinned row keeps its project")
         XCTAssertEqual(groups[0].rows.map(\.pinned), [true, true])
         XCTAssertEqual(groups[1].rows.map(\.key), [.embedded(F.runtimeID(2))])
-        XCTAssertEqual(WorkspaceSidebar.ordered(sessions, snapshotSocket: "unix:/tmp/kitty-1", order: order).first?.windowID, 4,
+        XCTAssertEqual(WorkspaceSidebar.ordered(sessions, order: order).first?.testID, 4,
                        "what follows sidebar order starts with the pinned")
 
         // Pinned in the dashboard, and unpinned there: the pins follow the
@@ -351,22 +350,22 @@ final class WorkspaceSidebarTests: XCTestCase {
         elsewhere[3].pinned = true
         XCTAssertEqual(built(elsewhere)[0].rows.map(\.key), [.embedded(F.runtimeID(1)), .embedded(F.runtimeID(3))])
 
-        order.setPinned([.embedded(F.runtimeID(1)), kitty])
-        XCTAssertEqual(built(sessions)[0].rows.map(\.key), [.embedded(F.runtimeID(1)), kitty])
-        XCTAssertEqual(built([sessions[1], sessions[2]])[0].rows.map(\.key), [kitty], "one that ended leaves no gap")
+        order.setPinned([.embedded(F.runtimeID(1)), fourth])
+        XCTAssertEqual(built(sessions)[0].rows.map(\.key), [.embedded(F.runtimeID(1)), fourth])
+        XCTAssertEqual(built([sessions[1], sessions[2]])[0].rows.map(\.key), [fourth], "one that ended leaves no gap")
         XCTAssertFalse(built([sessions[1]])[0].pinned, "and no heading when none is listed")
 
         // Held rows are arranged again without a snapshot, and keep their pins.
         var state = WorkspaceState()
         state.apply(built(sessions))
-        order.setPinned([kitty, .embedded(F.runtimeID(1))])
+        order.setPinned([fourth, .embedded(F.runtimeID(1))])
         state.arrange(order)
         XCTAssertEqual(projects(state.groups), built(sessions))
         groups = state.groups
-        XCTAssertEqual(groups[0].rows.map(\.key), [kitty, .embedded(F.runtimeID(1))])
+        XCTAssertEqual(groups[0].rows.map(\.key), [fourth, .embedded(F.runtimeID(1))])
 
-        order.forgetPins(notAmong: [kitty])
-        XCTAssertEqual(order.pinned, [WorkspaceOrder.token(kitty)], "the place of a session that ended is forgotten")
+        order.forgetPins(notAmong: [fourth])
+        XCTAssertEqual(order.pinned, [WorkspaceOrder.token(fourth)], "the place of a session that ended is forgotten")
 
         let suite = "amx.tests.pins.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -379,16 +378,16 @@ final class WorkspaceSidebarTests: XCTestCase {
     /// are pinned once after upgrading: the ones listed and not yet pinned,
     /// in the order they were pinned.
     func testPinsKeptBeforeSharingAreTheOnesToPin() {
-        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web")]
+        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.tmux(4, project: "web")]
         sessions[0].pinned = true
-        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        let fourth: AttentionCycler.Key = .embedded(F.runtimeID(4))
         var order = WorkspaceOrder()
-        order.setPinned(kitty, true)
+        order.setPinned(fourth, true)
         order.setPinned(.embedded(F.runtimeID(9)), true)
         order.setPinned(.embedded(F.runtimeID(1)), true)
         order.setPinned(.embedded(F.runtimeID(2)), true)
-        let rows = WorkspaceSidebar.rows(sessions, snapshotSocket: "unix:/tmp/kitty-1")
-        XCTAssertEqual(order.unsharedPins(rows).map(\.key), [kitty, .embedded(F.runtimeID(2))],
+        let rows = WorkspaceSidebar.rows(sessions)
+        XCTAssertEqual(order.unsharedPins(rows).map(\.key), [fourth, .embedded(F.runtimeID(2))],
                        "neither the session that ended nor the one already pinned")
         XCTAssertTrue(WorkspaceOrder().unsharedPins(rows).isEmpty)
     }
@@ -428,18 +427,18 @@ final class WorkspaceSidebarTests: XCTestCase {
     }
 
     func testForgettingSessionsThatEndedPrunesTheDraggedOrders() {
-        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.kitty(4, project: "web"),
+        let sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", profile: "personal"), F.tmux(4, project: "web"),
                         F.tmux(3, project: "docs")]
-        let kitty = AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 4)
+        let fourth: AttentionCycler.Key = .embedded(F.runtimeID(4))
         var order = WorkspaceOrder()
         order.set([.embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))], for: "api")
-        order.set([kitty], for: "web")
+        order.set([fourth], for: "web")
         order.set([.embedded(F.runtimeID(3))], for: "docs")
         order.set([.embedded(F.runtimeID(9))], for: "gone")
         order.setPinned(.embedded(F.runtimeID(3)), true)
         func rows(_ sessions: [CompanionSession]) -> [WorkspaceRow] {
             var state = WorkspaceState()
-            state.apply(WorkspaceSidebar.groups(sessions, snapshotSocket: "unix:/tmp/kitty-1", now: now, glyphs: .fallback, order: order))
+            state.apply(WorkspaceSidebar.groups(sessions, now: now, glyphs: .fallback, order: order))
             return state.rows
         }
 
@@ -450,7 +449,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(pruned.pinned, order.pinned)
 
         pruned.forget(notAmong: rows([sessions[1], sessions[2]]))
-        XCTAssertEqual(pruned.projects, ["api": [WorkspaceOrder.token(.embedded(F.runtimeID(2)))], "web": [WorkspaceOrder.token(kitty)]],
+        XCTAssertEqual(pruned.projects, ["api": [WorkspaceOrder.token(.embedded(F.runtimeID(2)))], "web": [WorkspaceOrder.token(fourth)]],
                        "an ended session leaves its project's order, and a project with none left is forgotten")
         XCTAssertEqual(pruned.pinned, [])
 
@@ -514,7 +513,7 @@ final class WorkspaceSidebarTests: XCTestCase {
 
     func testStateHoldsRowsAndSelectionWhileTheFeedIsDown() {
         var state = WorkspaceState()
-        let listed = groups([F.tmux(1, project: "api"), F.kitty(4, project: "web")])
+        let listed = groups([F.tmux(1, project: "api"), F.tmux(4, project: "web")])
         XCTAssertFalse(state.apply(listed))
         XCTAssertTrue(state.current)
         XCTAssertTrue(state.select(.embedded(F.runtimeID(1))))
@@ -525,19 +524,19 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertFalse(state.current)
         XCTAssertEqual(state.groups, listed)
         XCTAssertEqual(state.selection, .embedded(F.runtimeID(1)))
-        XCTAssertEqual(state.embeddedRuntimeSessionIDs, [F.runtimeID(1)])
+        XCTAssertEqual(state.embeddedRuntimeSessionIDs, [F.runtimeID(1), F.runtimeID(4)])
 
         XCTAssertFalse(state.apply(listed), "the same sessions after the reconnect keep the selection")
         XCTAssertTrue(state.current)
         XCTAssertEqual(state.selection, .embedded(F.runtimeID(1)))
 
-        XCTAssertTrue(state.apply(groups([F.kitty(4, project: "web")])), "a live snapshot without it drops the selection")
+        XCTAssertTrue(state.apply(groups([F.tmux(4, project: "web")])), "a live snapshot without it drops the selection")
         XCTAssertNil(state.selection)
     }
 
     func testNeighborWrapsInSidebarOrder() {
         var state = WorkspaceState()
-        state.apply(groups([F.tmux(1, project: "b"), F.kitty(4, project: "a"), F.tmux(2, project: "c")]))
+        state.apply(groups([F.tmux(1, project: "b"), F.tmux(4, project: "a"), F.tmux(2, project: "c")]))
         XCTAssertEqual(state.neighbor(1)?.project, "a")
         XCTAssertEqual(state.neighbor(-1)?.project, "c")
         state.select(state.rows[2].key)
@@ -551,41 +550,41 @@ final class WorkspaceSidebarTests: XCTestCase {
     func testNextAttentionCyclesAcrossBackendsInSidebarOrder() {
         var sessions = [
             F.tmux(1, project: "a", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 100)),
-            F.kitty(4, project: "b", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 300)),
+            F.tmux(4, project: "b", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 300)),
             F.tmux(2, project: "c", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 200)),
             F.tmux(3, project: "d", icon: "bolt"),
-            F.kitty(4, project: "e", socket: "unix:/tmp/kitty-2", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 50)),
+            F.tmux(5, project: "e", icon: "key", attention: true, changedAtMS: ms(secondsAgo: 50)),
         ]
         sessions[0].unseen = true
         var cycler = AttentionCycler()
         var visited: [String] = []
         for _ in 0..<5 {
-            let session = cycler.advance(in: sessions, snapshotSocket: "unix:/tmp/kitty-1")
+            let session = cycler.advance(in: sessions)
             visited.append(session?.project ?? "")
         }
         XCTAssertEqual(visited, ["a", "b", "c", "e", "a"], "however long each has waited")
 
         // The row each press focuses names where the session is.
-        let rows = AttentionCycler.ordered(sessions, snapshotSocket: "unix:/tmp/kitty-1").map { MenuSessionRow.focusing($0) }
-        XCTAssertEqual(rows.map(\.runtimeSessionID), [F.runtimeID(1), "", F.runtimeID(2), ""])
-        XCTAssertEqual(rows.map(\.windowID), [0, 4, 0, 4])
+        let rows = AttentionCycler.ordered(sessions).map { MenuSessionRow.focusing($0) }
+        XCTAssertEqual(rows.map(\.runtimeSessionID), [F.runtimeID(1), F.runtimeID(4), F.runtimeID(2), F.runtimeID(5)])
+        XCTAssertEqual(rows.map(\.testID), [1, 4, 2, 5])
 
         // The session focused last settles and leaves; the cycle goes on from
         // where it stood instead of starting over.
         var after = sessions
         cycler = AttentionCycler()
-        _ = cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")
-        XCTAssertEqual(cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")?.project, "b")
+        _ = cycler.advance(in: after)
+        XCTAssertEqual(cycler.advance(in: after)?.project, "b")
         after[1].attention = false
-        XCTAssertEqual(cycler.advance(in: after, snapshotSocket: "unix:/tmp/kitty-1")?.project, "c")
+        XCTAssertEqual(cycler.advance(in: after)?.project, "c")
     }
 
     func testMenuListsTmuxSessionsWithTheirAnswerItems() throws {
         var tmuxA = F.tmux(1, project: "api", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 60))
         tmuxA.aslRunID = "run-a"
         let tmuxB = F.tmux(2, project: "web", icon: "question", attention: true, changedAtMS: ms(secondsAgo: 30))
-        let kitty = F.kitty(4, project: "ops", icon: "bolt")
-        var snapshot = F.snapshot([tmuxA, tmuxB, kitty])
+        let fourth = F.tmux(4, project: "ops", icon: "bolt")
+        var snapshot = F.snapshot([tmuxA, tmuxB, fourth])
         var runA = CompanionASLWaiting()
         runA.runID = "run-a"
         runA.planDir = "/plans/a"
@@ -602,11 +601,11 @@ final class WorkspaceSidebarTests: XCTestCase {
             if case let .session(row) = entry { return row }
             return nil
         }
-        XCTAssertEqual(rows.map(\.runtimeSessionID), [F.runtimeID(1), F.runtimeID(2), ""])
+        XCTAssertEqual(rows.map(\.runtimeSessionID), [F.runtimeID(1), F.runtimeID(2), F.runtimeID(4)])
         XCTAssertEqual(rows[0].title, "❓ api · claude · 1m")
         XCTAssertEqual(rows[0].toolTip, "tmux %1 · profile work")
         XCTAssertEqual(rows[0].muteUnavailable, ActionGate().unavailableReason(.muteToggle), "an embedded row follows the gate too")
-        XCTAssertEqual(rows[2].muteUnavailable, ActionGate().unavailableReason(.muteToggle), "a Kitty row follows the gate")
+        XCTAssertEqual(rows[2].muteUnavailable, ActionGate().unavailableReason(.muteToggle))
         let full = ActionGate(capabilities: AMXCapabilities(project: true, openDashboard: true, notificationsSnooze: true, muteToggleJSON: true))
         let muteable = MenuBuilder.row(snapshot.sessions[0], showReason: false, input: MenuBuilder.Input(
             feed: .live, daemonStatus: .ready(nil), sessions: snapshot.sessions, snapshot: snapshot,
@@ -620,16 +619,9 @@ final class WorkspaceSidebarTests: XCTestCase {
         }
         XCTAssertEqual(answers, ["run-a:Answer…", "run-b:Answer… (2 questions)"])
         let index = try XCTUnwrap(entries.firstIndex(of: .session(rows[1])))
-        XCTAssertEqual(entries[index + 1], .answer(ASLAnswerTarget(runID: "run-b", planDir: "", windowID: 0), "Answer… (2 questions)", indented: true))
+		XCTAssertEqual(entries[index + 1], .answer(ASLAnswerTarget(runID: "run-b", planDir: ""), "Answer… (2 questions)", indented: true))
 
         XCTAssertEqual(MenuBuilder.actionEntries(MenuBuilder.ActionsInput())[1], .action(.openWorkspace, "Open Workspace"))
-    }
-
-    func testOnlyKittySessionsNeedAKittySocket() {
-        XCTAssertFalse(StatusItemController.needsKittySocket([F.tmux(1, project: "api")], snapshotSocket: ""))
-        XCTAssertTrue(StatusItemController.needsKittySocket([F.tmux(1, project: "api"), F.kitty(4, project: "web")], snapshotSocket: ""))
-        XCTAssertFalse(StatusItemController.needsKittySocket([F.kitty(4, project: "web", socket: "unix:/tmp/k")], snapshotSocket: ""))
-        XCTAssertFalse(StatusItemController.needsKittySocket([F.kitty(4, project: "web")], snapshotSocket: "unix:/tmp/k"))
     }
 
     func testANoticeForATmuxSessionOpensItInTheWorkspace() throws {
@@ -639,7 +631,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let info = NotificationPresenter.request(for: notice).content.userInfo
         XCTAssertEqual(info[NotificationPresenter.UserInfoKey.embeddedRuntimeSessionID] as? String, F.runtimeID(1))
 
-        let kitty = #"{"notification_id":"n-2","window_id":4,"navigable":true,"runtime_session_id":"rs-00000000000000000000000000000002","backend":"kitty"}"#
-        XCTAssertEqual(try JSONDecoder().decode(AppNotice.self, from: Data(kitty.utf8)).embeddedRuntimeSessionID, "")
+        let unsupported = #"{"notification_id":"n-2","window_id":4,"navigable":true,"runtime_session_id":"rs-00000000000000000000000000000002","backend":"unsupported"}"#
+        XCTAssertEqual(try JSONDecoder().decode(AppNotice.self, from: Data(unsupported.utf8)).embeddedRuntimeSessionID, "")
     }
 }

@@ -127,13 +127,13 @@ func TestJSONFlagsShareOneDescription(t *testing.T) {
 }
 
 // The dashboard's own flags still work on the bare command but are not listed
-// in `amx --help`, and either spelling of the Kitty window flag works.
+// in `amx --help`.
 func TestRootHelpLeavesOutTheDashboardFlags(t *testing.T) {
 	stdout, _, err := runRootArgs(t, "--help")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"--backend", "--window-id", "--select", "--client", "--popup"} {
+	for _, name := range []string{"--backend", "--select", "--client", "--popup"} {
 		if strings.Contains(stdout, name+" ") {
 			t.Errorf("root help lists %s:\n%s", name, stdout)
 		}
@@ -141,24 +141,8 @@ func TestRootHelpLeavesOutTheDashboardFlags(t *testing.T) {
 			t.Errorf("root no longer accepts %s", name)
 		}
 	}
-	for _, path := range [][]string{{"mute-toggle"}, {"open-dashboard"}, {"debug", "tail"}, {"daemon", "export-events"}} {
-		command, _, _ := rootCmd.Find(path)
-		for _, name := range []string{"window", "window-id"} {
-			if command.Flags().Lookup(name) == nil {
-				t.Errorf("%s does not accept --%s", command.CommandPath(), name)
-			}
-		}
-	}
-	var hidden []string
-	visibleCommands(func(command *cobra.Command) {
-		command.LocalFlags().VisitAll(func(flag *pflag.Flag) {
-			if flag.Name == "window" && flag.Hidden {
-				hidden = append(hidden, command.CommandPath())
-			}
-		})
-	})
-	if len(hidden) == 0 {
-		t.Error("no command carries the hidden --window alias")
+	if rootCmd.Flags().Lookup("window-id") != nil {
+		t.Error("retired dashboard window flag remains registered")
 	}
 }
 

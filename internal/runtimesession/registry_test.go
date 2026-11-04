@@ -61,7 +61,7 @@ func TestIDsAreOpaqueAndStrictlyParsed(t *testing.T) {
 	}
 	for _, bad := range []string{
 		"",
-		"12",                                   // a Kitty window ID is not a runtime ID
+		"12",                                   // a numeric window ID is not a runtime ID
 		"%3",                                   // nor is a tmux pane ID
 		"rs-" + strings.Repeat("A", 32),        // not canonical lowercase
 		"rs-" + strings.Repeat("a", 31),        // short
@@ -310,7 +310,7 @@ func TestValidateOutcomes(t *testing.T) {
 		{name: "target gone", observation: Observation{Instance: target.Instance}, wantErr: ErrStaleTarget, wantState: StateStale, wantReason: "target is gone"},
 		{name: "no process", observation: Observation{Instance: target.Instance, Present: true}, wantErr: ErrStaleTarget, wantState: StateStale, wantReason: "no process at target"},
 		{name: "other server", observation: Observation{Instance: BackendInstance{Kind: BackendTmux, Address: "/tmp/other.sock", Generation: "gen-1"}, Present: true, Process: &process}, wantErr: ErrWrongInstance, wantState: StateLive},
-		{name: "other backend", observation: Observation{Instance: BackendInstance{Kind: BackendKitty, Address: target.Instance.Address, Generation: "gen-1"}, Present: true, Process: &process}, wantErr: ErrWrongInstance, wantState: StateLive},
+		{name: "other backend", observation: Observation{Instance: BackendInstance{Kind: BackendKind("unsupported"), Address: target.Instance.Address, Generation: "gen-1"}, Present: true, Process: &process}, wantErr: ErrWrongInstance, wantState: StateLive},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			registry := NewRegistry()
@@ -414,5 +414,18 @@ func TestUpdatedAtNeverMovesBackwards(t *testing.T) {
 	}
 	if record.UpdatedAt.Before(live.UpdatedAt) {
 		t.Fatalf("UpdatedAt moved from %s back to %s", live.UpdatedAt, record.UpdatedAt)
+	}
+}
+
+func TestRegistryRejectsUnsupportedRuntimeTarget(t *testing.T) {
+	registry := NewRegistry()
+	pending, err := registry.Begin(BeginRequest{LaunchID: "launch-1", Project: "api", Relation: RelationFresh}, testEpoch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := testTarget("gen-1", "%1")
+	target.Instance.Kind = BackendKind("unsupported")
+	if _, err := registry.Commit(pending.ID, target, testProcess(100, "a"), testEpoch); err == nil {
+		t.Fatal("registry accepted an unsupported runtime target")
 	}
 }

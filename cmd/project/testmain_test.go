@@ -1,7 +1,6 @@
 package project
 
 import (
-	"errors"
 	"os"
 	"testing"
 
@@ -15,9 +14,7 @@ func TestMain(m *testing.M) {
 	testenv.ClearSessionEnv()
 	// Default launches must never reach the operator's private server.
 	// Tests exercising tmux install their own isolated backend.
-	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) {
-		return nil, errors.New("test must install a tmux backend seam")
-	}
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return noLaunchTmux{}, nil }
 	stateRoot, err := os.MkdirTemp("", "agentmux-project-test-state-")
 	if err != nil {
 		panic(err)
@@ -39,3 +36,5 @@ func TestMain(m *testing.M) {
 	_ = os.RemoveAll(stateRoot)
 	os.Exit(code)
 }
+
+type noLaunchTmux struct{ backend.TargetLauncher }

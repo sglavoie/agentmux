@@ -9,7 +9,7 @@ func TestEditDistance(t *testing.T) {
 	for _, tc := range []struct {
 		a, b string
 		want int
-	}{{"", "", 0}, {"amx", "amx", 0}, {"amxx", "amx", 1}, {"brainote", "brainnotes", 2}, {"kitten", "sitting", 3}, {"", "abc", 3}, {"é", "e", 1}} {
+	}{{"", "", 0}, {"amx", "amx", 0}, {"amxx", "amx", 1}, {"brainote", "brainnotes", 2}, {"abc", "def", 3}, {"", "abc", 3}, {"é", "e", 1}} {
 		if got := editDistance(tc.a, tc.b); got != tc.want {
 			t.Errorf("editDistance(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
 		}

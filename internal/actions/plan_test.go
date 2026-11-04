@@ -65,11 +65,11 @@ func planError(t *testing.T, err error, code string) *Error {
 }
 
 func TestPlanRunStartsASupervisingSessionInThePlansDirectory(t *testing.T) {
-	t.Parallel()
 
 	cfg, plan := planFixture(t)
-	kitty, asl := &continuityKitty{}, readyASL()
-	deps := Dependencies{Config: cfg, Kitty: kitty, ASL: asl}
+	f := tmuxtest.New(t)
+	deps := tmuxDeps(f, cfg)
+	deps.ASL = readyASL()
 	result, err := DefaultRegistry().Execute(context.Background(), deps, PlanRun, Request{Plan: &plan, Parameters: map[string]string{
 		"harness": "codex", "review_harness": "claude", "commit_mode": "per-session",
 	}})
@@ -83,15 +83,8 @@ func TestPlanRunStartsASupervisingSessionInThePlansDirectory(t *testing.T) {
 	if result.Data[DataPlanCommand] != command {
 		t.Fatalf("command = %v, want %q", result.Data[DataPlanCommand], command)
 	}
-	if len(kitty.launched) != 1 {
-		t.Fatalf("launched %d tabs, want 1", len(kitty.launched))
-	}
-	launched := kitty.launched[0]
-	if launched.Directory != plan.CWD {
-		t.Fatalf("launch cwd = %q, want the plan's %q", launched.Directory, plan.CWD)
-	}
-	if !strings.Contains(strings.Join(launched.Cmdline, " "), "'/asl "+command+"'") {
-		t.Fatalf("launch command %q does not carry the supervision prompt", launched.Cmdline)
+	if running := tmuxSessions(t, f, cfg); len(running) != 1 || running[0].Directory != plan.CWD {
+		t.Fatalf("running = %+v, want one session in %q", running, plan.CWD)
 	}
 }
 
@@ -133,11 +126,11 @@ func TestPlanRunStartsNothingForAPlanThatMayNotBeStarted(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			cfg, plan := planFixture(t)
-			kitty, asl := &continuityKitty{}, readyASL()
+			asl := readyASL()
 			test.edit(asl)
-			result, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, Kitty: kitty, ASL: asl}, PlanRun, Request{Plan: &plan})
+			result, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, ASL: asl}, PlanRun, Request{Plan: &plan})
 			_ = planError(t, err, test.code)
-			if len(kitty.launched) != 0 || asl.asked("supervisor-guide") {
+			if asl.asked("supervisor-guide") {
 				t.Fatalf("a refused plan went on to launch: %+v", asl.calls)
 			}
 			if test.code == "asl_unavailable" {
@@ -156,7 +149,7 @@ func TestPlanRunCheckReportsReadinessAndStartsNothing(t *testing.T) {
 
 	cfg, plan := planFixture(t)
 	asl := readyASL()
-	// No Kitty and no tmux: a check needs neither.
+	// A readiness check needs no terminal backend.
 	result, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, ASL: asl}, PlanRun, Request{Plan: &plan, Parameters: map[string]string{"check": "true"}})
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +163,6 @@ func TestPlanRunCheckReportsReadinessAndStartsNothing(t *testing.T) {
 }
 
 func TestPlanRunNeverGuessesTheProject(t *testing.T) {
-	t.Parallel()
 
 	cfg, plan := planFixture(t)
 	cfg.Accounts = append(cfg.Accounts, config.Account{Name: "home", Harness: harness.Codex, HomeDir: "/tmp/agentmux-home"})
@@ -178,46 +170,56 @@ func TestPlanRunNeverGuessesTheProject(t *testing.T) {
 		config.Session{Title: "api", Directory: cfg.Projects[0].Directory, Profile: "home"},
 		config.Session{Title: "elsewhere", Directory: t.TempDir(), Profile: "work"},
 	)
-	run := func(plan plans.PlanMeta, parameters map[string]string) (*continuityKitty, Result, error) {
-		kitty := &continuityKitty{}
-		result, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, Kitty: kitty, ASL: readyASL()}, PlanRun, Request{Plan: &plan, Parameters: parameters})
-		return kitty, result, err
+	f := tmuxtest.New(t)
+	run := func(plan plans.PlanMeta, parameters map[string]string) (Result, error) {
+		deps := tmuxDeps(f, cfg)
+		deps.ASL = readyASL()
+		return DefaultRegistry().Execute(context.Background(), deps, PlanRun, Request{Plan: &plan, Parameters: parameters})
 	}
 
 	// Two projects cover the plan's directory.
-	kitty, _, err := run(plan, nil)
+	_, err := run(plan, nil)
 	if ambiguous := planError(t, err, "ambiguous_project"); len(ambiguous.Candidates) != 2 || ambiguous.Candidates[0].ID != "home/api" || ambiguous.Candidates[1].ID != "work/api" {
 		t.Fatalf("candidates = %+v", ambiguous.Candidates)
 	}
-	if len(kitty.launched) != 0 {
+	if len(tmuxSessions(t, f, cfg)) != 0 {
 		t.Fatal("an ambiguous plan launched")
 	}
 
 	// A profile narrows them to one, and that profile's harness supervises.
-	_, result, err := run(plan, map[string]string{"profile": "home"})
+	result, err := run(plan, map[string]string{"profile": "home"})
 	if err != nil || result.Data[DataPlanProfile] != "home" {
 		t.Fatalf("result = %+v, err = %v", result, err)
 	}
 
 	// A plan no project covers needs one named, and runs where the plan says.
 	orphan := plans.PlanMeta{DirPath: "/plans/orphan", CWD: t.TempDir()}
-	_, _, err = run(orphan, nil)
+	_, err = run(orphan, nil)
 	if missing := planError(t, err, "missing_parameter"); len(missing.MissingParameters) != 1 || missing.MissingParameters[0].Name != "project" {
 		t.Fatalf("missing = %+v", missing.MissingParameters)
 	}
-	kitty, result, err = run(orphan, map[string]string{"project": "elsewhere"})
-	if err != nil || result.Data[DataPlanProject] != "elsewhere" || kitty.launched[0].Directory != orphan.CWD {
+	result, err = run(orphan, map[string]string{"project": "elsewhere"})
+	if err != nil || result.Data[DataPlanProject] != "elsewhere" {
 		t.Fatalf("result = %+v, err = %v", result, err)
+	}
+	matched := false
+	for _, running := range tmuxSessions(t, f, cfg) {
+		if string(running.RuntimeSessionID) == result.Data["runtime_session_id"] && running.Directory == orphan.CWD {
+			matched = true
+		}
+	}
+	if !matched {
+		t.Fatalf("orphan launch did not run in %q", orphan.CWD)
 	}
 
 	// A candidate's identifier names exactly its project, whatever profile
 	// the session is then launched under.
-	_, result, err = run(plan, map[string]string{"project": "work/api", "profile": "home"})
+	result, err = run(plan, map[string]string{"project": "work/api", "profile": "home"})
 	if err != nil || result.Data[DataPlanProject] != "api" || result.Data[DataPlanProfile] != "home" {
 		t.Fatalf("result = %+v, err = %v", result, err)
 	}
 
-	_, _, err = run(plan, map[string]string{"project": "nowhere"})
+	_, err = run(plan, map[string]string{"project": "nowhere"})
 	_ = planError(t, err, "not_found")
 }
 
@@ -226,7 +228,7 @@ func TestPlanRunRefusesOptionsBeforeAskingASL(t *testing.T) {
 
 	cfg, plan := planFixture(t)
 	asl := readyASL()
-	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, Kitty: &continuityKitty{}, ASL: asl}, PlanRun, Request{Plan: &plan, Parameters: map[string]string{"harness": "codex", "review_harness": "codex"}})
+	_, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, ASL: asl}, PlanRun, Request{Plan: &plan, Parameters: map[string]string{"harness": "codex", "review_harness": "codex"}})
 	_ = planError(t, err, "invalid_arguments")
 	if len(asl.calls) != 0 {
 		t.Fatalf("asl was asked: %+v", asl.calls)

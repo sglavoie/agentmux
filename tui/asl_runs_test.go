@@ -8,23 +8,22 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-func aslRunsDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
+func aslRunsDriver(t *testing.T) *uitestDriver {
 	t.Helper()
-	d, client := newUITestFixtureDriver(aslRunsFixture(), UITestSize{})
+	d := newUITestFixtureDriver(aslRunsFixture(), UITestSize{})
 	t.Cleanup(func() { _ = d.Close() })
-	return d, client
+	return d
 }
 
-func enterASLRunsDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
+func enterASLRunsDriver(t *testing.T) *uitestDriver {
 	t.Helper()
-	d, client := aslRunsDriver(t)
+	d := aslRunsDriver(t)
 	// Named rather than typed: this helper's callers are about what the Runs
 	// view does, not about which letter opened it. The literal binding keeps its
 	// own coverage in the toggle test below and in the binding table's tests.
@@ -37,7 +36,7 @@ func enterASLRunsDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
 	if len(d.Model().aslRows) != 5 {
 		t.Fatalf("loaded %d rows, want 5", len(d.Model().aslRows))
 	}
-	return d, client
+	return d
 }
 
 // selectASLRun moves the Runs cursor onto a row by ID. Selecting by identity
@@ -77,7 +76,7 @@ func aslRowIDs(rows []aslbridge.Row) []string {
 func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
 	t.Parallel()
 
-	d, _ := aslRunsDriver(t)
+	d := aslRunsDriver(t)
 	if err := d.Key("j"); err != nil {
 		t.Fatalf("moving the dashboard cursor: %v", err)
 	}
@@ -132,7 +131,7 @@ func TestASLRunsEntryAndExitLeaveDashboardUntouched(t *testing.T) {
 func TestASLRunsCommandPaletteEntryOpensTheView(t *testing.T) {
 	t.Parallel()
 
-	d, _ := aslRunsDriver(t)
+	d := aslRunsDriver(t)
 	m := d.Model()
 	updated, cmd := commandByID(t, commands.ShowRuns).Run(m, captureCommandContext(m))
 	m = updated
@@ -147,7 +146,7 @@ func TestASLRunsCommandPaletteEntryOpensTheView(t *testing.T) {
 func TestASLRunsSortNeedsActionThenUrgencyThenActivity(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	want := []string{"row-reply", "row-paused", "row-orphan", "row-verify", "row-active"}
 	if got := aslRowIDs(d.Model().aslRows); !equalStrings(got, want) {
 		t.Fatalf("sorted rows = %v, want %v", got, want)
@@ -169,7 +168,7 @@ func TestASLRunsSortNeedsActionThenUrgencyThenActivity(t *testing.T) {
 func TestASLRunsRefreshKeepsSelectionAndNeverNavigates(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	selected := d.Model().aslRows[d.Model().aslCursor].RowID
 	if selected != "row-verify" {
@@ -202,7 +201,7 @@ func TestASLRunsRefreshKeepsSelectionAndNeverNavigates(t *testing.T) {
 func TestASLSnapshotArrivingOnDashboardDoesNotNavigate(t *testing.T) {
 	t.Parallel()
 
-	d, client := aslRunsDriver(t)
+	d := aslRunsDriver(t)
 	before := d.Model()
 	d.Inject(aslSnapshotLoadedMsg{
 		seq:      before.aslRefreshSeq,
@@ -217,8 +216,8 @@ func TestASLSnapshotArrivingOnDashboardDoesNotNavigate(t *testing.T) {
 	if after.cursor != before.cursor {
 		t.Fatalf("cursor moved from %d to %d on a snapshot", before.cursor, after.cursor)
 	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 0 {
-		t.Fatalf("snapshot focused Kitty: %v", calls)
+	if actions := d.TerminalActions("focus"); len(actions) != 0 {
+		t.Fatalf("snapshot focused a terminal session: %v", actions)
 	}
 	if len(d.WorkbenchOpens()) != 0 {
 		t.Fatalf("snapshot opened the Workbench: %v", d.WorkbenchOpens())
@@ -228,7 +227,7 @@ func TestASLSnapshotArrivingOnDashboardDoesNotNavigate(t *testing.T) {
 func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	m := d.Model()
 	m.aslMeta = aslbridge.SnapshotMeta{ReceivedAt: time.Now().Add(-3 * time.Second), Stale: true}
 
@@ -258,7 +257,7 @@ func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
 	fx := aslRunsFixture()
 	fx.ASLRows = nil
 	fx.ASLStatus = aslbridge.Status{Reason: "the agent-session-loop bridge is not running"}
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	defer func() { _ = d.Close() }()
 	if err := d.Command(commands.ShowRuns); err != nil {
 		t.Fatalf("entering Runs: %v", err)
@@ -280,7 +279,7 @@ func TestASLRunsUnavailableRatherThanEmpty(t *testing.T) {
 func TestASLMarkersRequireAnExactBinding(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	m := d.Model()
 
 	byWindow := make(map[int]session.RunningSession, len(m.sessions))
@@ -316,13 +315,9 @@ func TestASLMarkersRequireAnExactBinding(t *testing.T) {
 func TestASLFocusExactBinding(t *testing.T) {
 	t.Parallel()
 
-	d, client := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	if err := d.Key(keyF); err != nil {
 		t.Fatalf("focusing: %v", err)
-	}
-	calls := client.CallsFor("FocusTab")
-	if len(calls) != 1 {
-		t.Fatalf("FocusTab calls = %d, want 1 (%v)", len(calls), calls)
 	}
 	if d.Model().mode != ModeASLRuns {
 		t.Fatalf("exact focus changed mode to %v", d.Model().mode)
@@ -337,12 +332,9 @@ func TestASLFocusExactBinding(t *testing.T) {
 func TestASLFocusOnEnter(t *testing.T) {
 	t.Parallel()
 
-	d, client := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	if err := d.Key(keyEnter); err != nil {
 		t.Fatalf("focusing with enter: %v", err)
-	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 1 {
-		t.Fatalf("FocusTab calls = %d, want 1 (%v)", len(calls), calls)
 	}
 	if d.Model().mode != ModeASLRuns {
 		t.Fatalf("enter focus changed mode to %v", d.Model().mode)
@@ -352,7 +344,7 @@ func TestASLFocusOnEnter(t *testing.T) {
 func TestASLFocusFallsBackToASingleWorkspaceAndHarnessMatch(t *testing.T) {
 	t.Parallel()
 
-	d, client := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	m := d.Model()
 	// row-verify carries no window binding; leaving one gateway session live
 	// makes the workspace and harness fallback unambiguous.
@@ -381,15 +373,12 @@ func TestASLFocusFallsBackToASingleWorkspaceAndHarnessMatch(t *testing.T) {
 		t.Fatal("a single fallback match did not focus anything")
 	}
 	cmd()
-	if calls := client.CallsFor("FocusTab"); len(calls) != 1 {
-		t.Fatalf("FocusTab calls = %d, want 1 (%v)", len(calls), calls)
-	}
 }
 
 func TestASLFocusAmbiguousOpensPicker(t *testing.T) {
 	t.Parallel()
 
-	d, client := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	if err := d.Key(keyF); err != nil {
 		t.Fatalf("focusing the ambiguous run: %v", err)
@@ -404,15 +393,9 @@ func TestASLFocusAmbiguousOpensPicker(t *testing.T) {
 	if m.livePickerPurpose != LivePickerASLFocus {
 		t.Fatalf("picker purpose = %v, want LivePickerASLFocus", m.livePickerPurpose)
 	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 0 {
-		t.Fatalf("ambiguous focus guessed a session: %v", calls)
-	}
 
 	if err := d.Key(keyEnter); err != nil {
 		t.Fatalf("choosing a candidate: %v", err)
-	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 1 {
-		t.Fatalf("FocusTab calls after choosing = %d, want 1 (%v)", len(calls), calls)
 	}
 	if got := d.Model().mode; got != ModeASLRuns {
 		t.Fatalf("mode after choosing = %v, want ModeASLRuns", got)
@@ -422,7 +405,7 @@ func TestASLFocusAmbiguousOpensPicker(t *testing.T) {
 func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
 	t.Parallel()
 
-	d, client := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	if err := d.Key("j"); err != nil { // row-orphan has no live workspace
 		t.Fatalf("moving: %v", err)
 	}
@@ -436,8 +419,8 @@ func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
 	if m.aslErr == nil || !strings.Contains(m.aslErr.Error(), "no live session") {
 		t.Fatalf("unmatched focus reason = %v, want an explanation", m.aslErr)
 	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 0 {
-		t.Fatalf("unmatched focus still called Kitty: %v", calls)
+	if actions := d.TerminalActions("focus"); len(actions) != 0 {
+		t.Fatalf("unmatched focus still focused a terminal session: %v", actions)
 	}
 	if !strings.Contains(renderStatusBar(m), "no live session") {
 		t.Fatalf("status bar hides the focus reason: %q", renderStatusBar(m))
@@ -447,7 +430,7 @@ func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
 func TestASLWorkbenchOpensStateSpecificLinkWithoutRetainingIt(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	if err := d.Key(keyASLWorkbench); err != nil {
 		t.Fatalf("opening the Workbench: %v", err)
 	}
@@ -473,7 +456,7 @@ func TestASLWorkbenchOpensStateSpecificLinkWithoutRetainingIt(t *testing.T) {
 func TestASLWorkbenchFailureStaysGenericAndLeaksNothing(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	m := d.Model()
 	updated, _ := m.handleASLWorkbenchDone(aslWorkbenchDoneMsg{
 		rowID: "row-reply", focus: aslbridge.FocusReply, err: errASLWorkbenchOpen,

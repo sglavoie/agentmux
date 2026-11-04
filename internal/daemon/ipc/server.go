@@ -116,7 +116,7 @@ func NewServer(socketPath string, handler RequestHandler) (*Server, error) {
 	disableListenerAutoUnlink(ln)
 	// net.Listen applies umask to the socket file (typically yielding 0755),
 	// which lets any local user connect and inject state updates for arbitrary
-	// Kitty windows. Restrict to owner-only so only the daemon's user can talk
+	// sessions. Restrict to owner-only so only the daemon's user can talk
 	// to it.
 	if err := os.Chmod(socketPath, 0o600); err != nil {
 		_ = ln.Close()

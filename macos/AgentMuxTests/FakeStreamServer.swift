@@ -94,7 +94,7 @@ enum WireFixture {
     }
 
     static func snapshot(seq: Int, key: Int = 1) -> String {
-        #"{"v":1,"seq":\#(seq),"type":"snapshot","data":{"v":1,"daemon":{"pid":7,"ready":true},"kitty":{"ready":true,"socket":"unix:/tmp/kitty-1"},"notification":{},"dashboard":{"open":false},"attention":{"total":\#(key),"key":\#(key)},"asl":{},"sessions":[{"window_id":3,"icon_state":"key","attention":true,"project":"api","harness":"claude","reason":"permission"}]}}"#
+        #"{"v":1,"seq":\#(seq),"type":"snapshot","data":{"v":2,"daemon":{"pid":7,"ready":true},"notification":{},"dashboard":{"open":false},"attention":{"total":\#(key),"key":\#(key)},"asl":{},"sessions":[{"runtime":{"session_id":"rs-00000000000000000000000000000003","backend":"tmux","pane":"%3"},"icon_state":"key","attention":true,"project":"api","harness":"claude","reason":"permission"}]}}"#
     }
 
     static func heartbeat(seq: Int) -> String { #"{"v":1,"seq":\#(seq),"type":"heartbeat"}"# }

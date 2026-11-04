@@ -62,11 +62,11 @@ func validateDefaults(d *Defaults) []string {
 		errs = append(errs, "defaults.session_archive.scan_max_age_days must be >= -1")
 	}
 	switch strings.ToLower(strings.TrimSpace(d.LaunchBackend)) {
-	case "", LaunchBackendKitty, LaunchBackendTmux:
+	case "", LaunchBackendTmux:
 	default:
 		errs = append(errs, fmt.Sprintf(
-			"defaults.launch_backend %q: must be %q or %q",
-			d.LaunchBackend, LaunchBackendKitty, LaunchBackendTmux,
+			"defaults.launch_backend %q: only %q is supported; remove this setting or use %q",
+			d.LaunchBackend, LaunchBackendTmux, LaunchBackendTmux,
 		))
 	}
 	if path := strings.TrimSpace(d.Tmux.Path); path != "" && !filepath.IsAbs(ExpandTilde(path)) {

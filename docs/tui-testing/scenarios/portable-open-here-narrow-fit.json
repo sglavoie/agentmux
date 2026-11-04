@@ -15,7 +15,6 @@
     { "type": "excludes_text", "text": "requires" },
     { "type": "excludes_text", "text": "Action error" },
     { "type": "excludes_text", "text": "failed" },
-    { "type": "excludes_text", "text": "Kitty" },
     { "type": "no_layout_issues" }
   ]
 }

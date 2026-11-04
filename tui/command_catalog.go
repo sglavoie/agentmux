@@ -285,31 +285,6 @@ func navigateCommandDeclarations() []commands.Command[Model] {
 func applicationCommandDeclarations() []commands.Command[Model] {
 	return []commands.Command[Model]{
 		{
-			ID: commands.ResortTabs, Group: commands.GroupApplication,
-			Title:       commands.StaticTitle[Model]("Resort Tabs"),
-			Description: "Reorder managed Kitty tabs to match the dashboard sort order.",
-			Aliases:     []string{"reorder", "tabs"},
-			// The sort order is computed, not held by a terminal: only
-			// Kitty's tabs can be out of it. Without Kitty the command has
-			// nothing to move and says the sessions are in order.
-			Execute: func(m Model, _ commands.Context) (Model, tea.Cmd) {
-				m.actionErr = nil
-				cmds := []tea.Cmd{commands.Resort(m.client, m.sortMode)}
-				if m.client == nil {
-					return m, cmds[0]
-				}
-				if cmd := m.replaceToastByID(resortToastID, Toast{
-					Severity: toastInfo,
-					Text:     "Resorting tabs…",
-					Pending:  true,
-					Expires:  modelNow(m).Add(progressToastTTL),
-				}); cmd != nil {
-					cmds = append(cmds, cmd)
-				}
-				return m, tea.Batch(cmds...)
-			},
-		},
-		{
 			ID: commands.UndoClose, Group: commands.GroupApplication,
 			// One action, one name: the footer's `u` hint, the help, and this
 			// title all call it "recover ended session". The suffix says which

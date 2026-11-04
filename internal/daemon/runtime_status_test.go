@@ -44,17 +44,15 @@ func brightBg(t *testing.T, name string) string {
 }
 
 // TestSettledTmuxStateIsRenderedOnceIntoItsSessionsStatus: the daemon writes
-// what a Kitty tab would show (state icon, title, color) for a tmux session
+// state icon, title, and color for a tmux session
 // once the checkpoint holds its state, in one write for the whole pass, and
 // writes nothing while nothing a terminal shows has changed. A change of
-// state, title, or color is written by the next pass; a Kitty session's tab
-// is still Kitty's.
+// state, title, or color is written by the next pass.
 func TestSettledTmuxStateIsRenderedOnceIntoItsSessionsStatus(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	onKitty, api, web := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	api, web := newRuntimeID(t), newRuntimeID(t)
 	directory.put(api, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
 	directory.put(web, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%5")
 	h.SetProfileColors(map[string]string{"work": "blue"})
@@ -63,7 +61,7 @@ func TestSettledTmuxStateIsRenderedOnceIntoItsSessionsStatus(t *testing.T) {
 	})
 	writes := &statusWrites{}
 	h.SetRuntimeStatusWriter(writes.write)
-	for _, runtime := range []runtimesession.ID{onKitty, api, web} {
+	for _, runtime := range []runtimesession.ID{api, web} {
 		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
 	}
 	rendered := func(runtime runtimesession.ID, base string) string {
@@ -87,7 +85,7 @@ func TestSettledTmuxStateIsRenderedOnceIntoItsSessionsStatus(t *testing.T) {
 	h.maintainRuntimeSessions(now)
 	batches := writes.take()
 	if len(batches) != 1 || len(batches[0]) != 2 {
-		t.Fatalf("first pass wrote %+v, want both tmux sessions in one write and nothing for the Kitty one", batches)
+		t.Fatalf("first pass wrote %+v, want both tmux sessions in one write", batches)
 	}
 	got := byPane(batches[0])
 	for pane, runtime := range map[string]runtimesession.ID{"%4": api, "%5": web} {
@@ -210,7 +208,7 @@ func TestFailedStatusWriteIsRepeatedLaterNotEveryPass(t *testing.T) {
 }
 
 // TestRenderedStatusReachesARealTmuxPaneInOneClientPerPass: against a real
-// private tmux server and the production writer, with no Kitty, a pass that
+// private tmux server and the production writer, with no other terminal backend, a pass that
 // has statuses to write is the reconciliation client and one more however
 // many sessions changed, a quiet pass is the reconciliation client alone, and
 // the options on each agent's pane hold what the daemon rendered.

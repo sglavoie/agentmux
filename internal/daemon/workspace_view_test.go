@@ -137,12 +137,12 @@ func TestWorkspaceViewValidation(t *testing.T) {
 	directory := newFakeRuntimeDirectory()
 	h.SetRuntimeSessionDirectory(directory)
 
-	listed, quiet, ended, pending, onKitty, unknown := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
+	listed, quiet, ended, pending, unsupported, unknown := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(listed, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%1")
 	directory.put(quiet, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%2")
 	directory.put(ended, runtimesession.StateEnded, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%3")
 	directory.put(pending, runtimesession.StatePending, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%5")
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	directory.put(unsupported, runtimesession.StateLive, runtimesession.BackendKind("unsupported"), tmuxT, "other-1", "%7")
 	requireAccepted(t, h.Handle(runtimeHook(t, listed, "PermissionRequest", hookevent.HookPayload{SessionID: "conv"})))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -167,7 +167,7 @@ func TestWorkspaceViewValidation(t *testing.T) {
 		{"unregistered session", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(unknown)}, protocol.WorkspaceViewErrorSessionUnknown},
 		{"ended session", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(ended), Await: true}, protocol.WorkspaceViewErrorSessionUnknown},
 		{"pending session", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(pending), Await: true}, protocol.WorkspaceViewErrorSessionUnknown},
-		{"Kitty session", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(onKitty)}, protocol.WorkspaceViewErrorSessionUnknown},
+		{"unsupported backend session", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(unsupported)}, protocol.WorkspaceViewErrorSessionUnknown},
 		{"session the daemon has not heard from", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewSession, RuntimeSessionID: string(quiet)}, protocol.WorkspaceViewErrorSessionNotListed},
 		{"pager of an ended session", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewPager, RuntimeSessionID: string(ended)}, protocol.WorkspaceViewErrorSessionUnknown},
 		{"shell without a directory", &protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewShell}, protocol.WorkspaceViewErrorInvalid},
@@ -229,7 +229,7 @@ func TestWorkspaceViewValidation(t *testing.T) {
 	if h.runtimeSessionListed(string(quiet)) {
 		t.Fatalf("a view request made the daemon hold state for a session it never heard from")
 	}
-	snapshot := h.buildCompanionSnapshots(time.Now())[protocol.CompanionSnapshotVersionRuntime]
+	snapshot := h.buildCompanionSnapshot(time.Now())
 	if len(snapshot.Sessions) != 1 || snapshot.Attention.Total != 1 {
 		t.Fatalf("snapshot after view requests = %d session(s), %d waiting; want the one hooked session only",
 			len(snapshot.Sessions), snapshot.Attention.Total)

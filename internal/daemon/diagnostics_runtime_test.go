@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/process"
-	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
@@ -211,105 +210,6 @@ func TestActiveDaemonPromotesSpoolAtStartup(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("daemon did not shut down")
-	}
-}
-
-func TestRunShutdownPersistsQueuedStageRows(t *testing.T) {
-	home, err := os.MkdirTemp("/tmp", "amx-diag-render-shutdown-*")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(home) })
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
-
-	cfg := &config.Config{Defaults: config.Defaults{
-		GuardDuration: 1,
-		Diagnostics: config.DiagnosticsConfig{
-			JournalEnabled:  boolPointer(true),
-			JournalKeepDays: 14,
-			JournalMaxMiB:   32,
-		},
-	}}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	workerPersisted := make(chan struct{})
-	releaseWorker := make(chan struct{})
-	var releaseOnce sync.Once
-	release := func() { releaseOnce.Do(func() { close(releaseWorker) }) }
-	t.Cleanup(release)
-
-	const traceID = "trace-run-render-shutdown"
-	var publicationErr error
-	runErr := make(chan error, 1)
-	go func() {
-		runErr <- run(ctx, cfg, runDependencies{
-			startupProbeBudget: testLivenessGrace,
-			afterStartupPublication: func() {
-				resp, sendErr := ipc.NewClientWithSocket(ipc.SocketPath()).Send(protocol.Request{
-					Type: protocol.TypeStateUpdate, WindowID: 42, Action: "active", Event: "UserPromptSubmit",
-					TraceID: traceID, RequestID: "request-run-render-shutdown",
-				})
-				if sendErr != nil {
-					publicationErr = sendErr
-				} else if !resp.OK {
-					publicationErr = fmt.Errorf("state update response: %+v", resp)
-				}
-				cancel()
-			},
-			afterRenderWorkerShutdown: func() {
-				close(workerPersisted)
-				<-releaseWorker
-			},
-		})
-	}()
-
-	select {
-	case <-workerPersisted:
-		select {
-		case err := <-runErr:
-			t.Fatalf("Run returned before render-worker shutdown completed: %v", err)
-		default:
-		}
-	case err := <-runErr:
-		t.Fatalf("Run returned before render-worker persistence: %v", err)
-	case <-time.After(3 * time.Second):
-		t.Fatal("render worker did not complete shutdown persistence")
-	}
-
-	release()
-	select {
-	case err := <-runErr:
-		if err != nil {
-			t.Fatalf("Run returned error: %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("Run did not return after render worker completed")
-	}
-	if publicationErr != nil {
-		t.Fatal(publicationErr)
-	}
-
-	paths, err := diagnostics.DefaultPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	journal, err := diagnostics.NewJournal(paths, diagnostics.JournalOptions{LockTimeout: 2 * time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
-	records, err := journal.Read(context.Background(), diagnostics.Selector{
-		TraceID: traceID, Stages: []string{"daemon.renderer.queued"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(records) != 1 {
-		t.Fatalf("queued-stage records after Run shutdown = %+v, want exactly one", records)
-	}
-	if records[0].Outcome != "pending" || records[0].Reason != "latest_generation" {
-		t.Fatalf("queued-stage record after Run shutdown = %+v", records[0])
 	}
 }
 

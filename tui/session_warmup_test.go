@@ -11,7 +11,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -131,17 +130,15 @@ func TestInitSessionWarmupLoadsCacheAndProducesResults(t *testing.T) {
 		},
 	})
 
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
-	m := NewModel(sessionWarmupTestConfig(), client)
+	m := NewModel(sessionWarmupTestConfig(), nil)
 
 	initMsg := m.Init()()
 	batch, ok := initMsg.(tea.BatchMsg)
 	if !ok {
 		t.Fatalf("Init produced %T, want tea.BatchMsg", initMsg)
 	}
-	if len(batch) != 6 {
-		t.Fatalf("Init batch length = %d, want 6 startup commands", len(batch))
+	if len(batch) != 5 {
+		t.Fatalf("Init batch length = %d, want 5 startup commands", len(batch))
 	}
 
 	msgs := flattenMsg(t, batch[len(batch)-1]())

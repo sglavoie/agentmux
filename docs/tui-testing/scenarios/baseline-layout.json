@@ -1,19 +1,53 @@
 {
   "name": "baseline-layout",
   "fixture": "basic",
-  "size": { "width": 120, "height": 40 },
+  "size": {
+    "width": 120,
+    "height": 40
+  },
   "assertions": [
-    { "type": "mode_equals", "mode": "list" },
-    { "type": "no_layout_issues" },
-    { "type": "contains_text", "text": "Running (3)" },
-    { "type": "contains_text", "text": "dotfiles  Subagent      —" },
-    { "type": "contains_text", "text": "api       Active        —" },
-    { "type": "contains_text", "text": "backend   Active        —" },
-    { "type": "contains_text", "text": "codex · personal" },
-    { "type": "contains_text", "text": "Dir     ~/dotfiles" },
-    { "type": "excludes_text", "text": "1:" },
-    { "type": "excludes_text", "text": "[P]" },
-    { "type": "excludes_text", "text": "[W]" },
-    { "type": "kitty_calls", "op": "LaunchTab", "count": 0 }
+    {
+      "type": "mode_equals",
+      "mode": "list"
+    },
+    {
+      "type": "no_layout_issues"
+    },
+    {
+      "type": "contains_text",
+      "text": "Running (3)"
+    },
+    {
+      "type": "contains_text",
+      "text": "dotfiles  Subagent      —"
+    },
+    {
+      "type": "contains_text",
+      "text": "api       Active        —"
+    },
+    {
+      "type": "contains_text",
+      "text": "backend   Active        —"
+    },
+    {
+      "type": "contains_text",
+      "text": "codex · personal"
+    },
+    {
+      "type": "contains_text",
+      "text": "Dir     ~/dotfiles"
+    },
+    {
+      "type": "excludes_text",
+      "text": "1:"
+    },
+    {
+      "type": "excludes_text",
+      "text": "[P]"
+    },
+    {
+      "type": "excludes_text",
+      "text": "[W]"
+    }
   ]
 }

@@ -137,7 +137,7 @@ func fallbackStatusMessage(m Model) statusMessage {
 //
 // A refresh failure is only fatal while the dashboard is cold — no successful
 // refresh has ever landed, so there is nothing to keep showing and the red
-// `Kitty error` is the whole truth. Once a tree has been rendered, an outage is
+// `session refresh failed` is the whole truth. Once a tree has been rendered, an outage is
 // a degradation rather than a failure: the rows stay, and the only question is
 // how old they have become. Below the threshold nothing is said at all, because
 // a dashboard that shouts about a two-second gap between refreshes teaches the
@@ -150,7 +150,7 @@ func topologyStatus(m Model, now time.Time) (statusMessage, bool) {
 		}
 		return statusMessage{}, false
 	}
-	if age < protocol.KittySnapshotStaleAfter {
+	if age < protocol.TopologyStaleAfter {
 		return statusMessage{}, false
 	}
 	return statusMessage{
@@ -164,11 +164,11 @@ func topologyStatus(m Model, now time.Time) (statusMessage, bool) {
 // the elapsed term is what lets the warning appear during an outage, when no
 // message is arriving to recompute anything.
 //
-// The threshold is protocol.KittySnapshotStaleAfter, the daemon's own — but the
+// The threshold is protocol.TopologyStaleAfter, the daemon's own — but the
 // verdict is not. A daemon Stale flag describes one snapshot at the moment it
 // answered and says nothing about a refresh that never reached a daemon at all,
 // so the age the operator is warned about has to be derived here. The flag
-// remains the sole authority over whether topology may drive Kitty writes.
+// remains the sole authority over whether topology may drive terminal updates.
 //
 // A backwards clock is clamped to zero. The false return is the cold state.
 func topologyAge(m Model, now time.Time) (time.Duration, bool) {

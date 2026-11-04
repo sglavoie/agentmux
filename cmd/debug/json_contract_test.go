@@ -99,12 +99,6 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 	// `companion_build_mismatch` (warning) are new identifiers carried with
 	// the additive `daemon.companion` block. Neither changes --strict.
 	//
-	// v4 is the Kitty-snapshot bump: `kitty_snapshot_stale` is a new WARNING
-	// identifier carried alongside the additive `daemon.kitty_snapshot` block.
-	// It is the first bump not driven by a failure identifier — a consumer that
-	// has never seen it cannot tell a fresh snapshot from a daemon too old to
-	// report one, which is exactly the distinction the block exists to make.
-	//
 	// v3 is the screen-classifier bump: `screenstate_persistent_decline` is a
 	// new failure identifier. `screenstate_override_invalid` shipped in the
 	// same work at warning severity and required no bump of its own.
@@ -127,7 +121,7 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 		checkUnknownProducerFact, checkAcknowledgedPressure,
 		checkMalformedProcessIdentity, checkStopHoldStuck,
 		checkScreenPersistentDecline, checkScreenPatternOverrideInvalid,
-		checkKittySnapshotStale, checkCompanionApp, checkCompanionBuildMismatch,
+		checkCompanionApp, checkCompanionBuildMismatch,
 		checkRuntimeReconcileStale, checkRuntimeReconcileFailing,
 		checkScreenCaptureFailing, checkTmuxClientTimeouts,
 		checkBackendPrefix + "tmux_unavailable", checkBackendPrefix + "server_unreadable",

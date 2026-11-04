@@ -40,7 +40,7 @@ func baseDeliveryAcknowledgement(req protocol.Request, status, reason string) *p
 		ack.RuntimeSessionID = req.Origin.RuntimeSessionID
 	}
 	if isRuntimeSyntheticSlot(req.WindowID) {
-		// A non-Kitty slot is a daemon-internal key, not a window anyone can
+		// A runtime slot is a daemon-internal key, not a window anyone can
 		// address; the runtime session ID is the routing identity on the wire.
 		ack.SourceWindowID, ack.TargetWindowID = 0, 0
 	}
@@ -103,72 +103,18 @@ func (h *Handler) attachHookDeliveryAcknowledgement(req protocol.Request, resp p
 		ack.ProducerHarness = ctx.req.Harness
 	}
 	ack.TargetHarness = ctx.req.TargetHarness
-	ack.WindowFound = ctx.win != nil
-	_, _, ack.SnapshotReady = h.cachedSnapshot()
-	if shouldResolveUnmanagedHookRoute(req.Event, ctx) && ctx.owner != nil {
-		ack.TargetWindowID = ctx.owner.ID
-		ack.TargetHarness = ctx.owner.UserVars.EffectiveHarness()
-		ack.Profile = ctx.owner.UserVars.EffectiveProfile()
-		ack.RouteDecision = events.RouteDecisionOwner
-	} else if ctx.lookupFailed {
-		ack.RouteDecision = events.RouteDecisionSourceFallback
-	}
-	ack.SourceWindowID = h.deliveryKittyWindowID(ack.SourceWindowID)
-	ack.TargetWindowID = h.deliveryKittyWindowID(ack.TargetWindowID)
 	resp.Delivery = ack
 	return resp
 }
 
-func (h *Handler) deliveryKittyWindowID(slot int) int {
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	if key, mapped := h.runtimeRoutes.kittyWindow(slot); mapped {
-		return key.windowID
-	}
-	return slot
-}
-
-// handleDiagnosticProbe exercises the same cached Kitty routing discovery as
-// hook ingress but never enters the reducer queue and never mutates handler
-// state. It is the stable IPC primitive used by debugger probes.
+// handleDiagnosticProbe inspects a registered runtime session without
+// changing its reducer state.
 func (h *Handler) handleDiagnosticProbe(req protocol.Request) protocol.Response {
 	if strings.TrimSpace(req.RuntimeSessionID) != "" {
 		return h.probeRuntimeSession(req)
 	}
-	if req.WindowID <= 0 {
-		return protocol.Response{
-			OK:       false,
-			Error:    "diagnostic probe requires a positive window ID",
-			Delivery: baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementRejected, "invalid_window"),
-		}
-	}
-	if isReusableKittySocket(req.KittyListenOn) {
-		h.stateMu.Lock()
-		req.WindowID = h.runtimeRoutes.kittySlotOf(req.KittyListenOn, req.WindowID)
-		h.stateMu.Unlock()
-	}
-
-	ctx := h.resolveHookEventContextReadOnly(req)
-	ack := baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementAccepted, "routing_discovered")
-	ack.Profile = ctx.req.Account
-	if ctx.req.Harness != "" {
-		ack.ProducerHarness = ctx.req.Harness
-	}
-	ack.TargetHarness = ctx.req.TargetHarness
-	ack.WindowFound = ctx.win != nil
-	_, _, ack.SnapshotReady = h.cachedSnapshot()
-	if ctx.win != nil && ctx.owner != nil && ctx.owner.ID != ctx.win.ID &&
-		ctx.win.UserVars.EffectiveProfile() == "" && ctx.win.UserVars.EffectiveHarness() == "" {
-		ack.TargetWindowID = ctx.owner.ID
-		ack.TargetHarness = ctx.owner.UserVars.EffectiveHarness()
-		ack.Profile = ctx.owner.UserVars.EffectiveProfile()
-		ack.RouteDecision = events.RouteDecisionOwner
-	} else if ctx.lookupFailed {
-		ack.RouteDecision = events.RouteDecisionSourceFallback
-	}
-	ack.SourceWindowID = h.deliveryKittyWindowID(ack.SourceWindowID)
-	ack.TargetWindowID = h.deliveryKittyWindowID(ack.TargetWindowID)
-	return protocol.Response{OK: true, Delivery: ack}
+	return protocol.Response{OK: false, Error: protocol.OriginReasonInvalidRuntimeSession,
+		Delivery: baseDeliveryAcknowledgement(req, protocol.DeliveryAcknowledgementRejected, protocol.OriginReasonInvalidRuntimeSession)}
 }
 
 // probeRuntimeSession answers a diagnostic probe that names a runtime session:
@@ -231,10 +177,5 @@ func (h *Handler) probeRuntimeSession(req protocol.Request) protocol.Response {
 	ack.Profile = label.profile
 	ack.TargetHarness = label.harness
 	ack.WindowFound = bound && held
-	if target.backend == string(runtimesession.BackendKitty) {
-		ack.SourceWindowID, _ = kittyWindowSlot(target.pane)
-		ack.TargetWindowID = ack.SourceWindowID
-		_, _, ack.SnapshotReady = h.cachedSnapshot()
-	}
 	return protocol.Response{OK: true, Delivery: ack}
 }

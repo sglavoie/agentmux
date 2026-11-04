@@ -25,10 +25,6 @@ func TestMain(m *testing.M) {
 	if err := os.Setenv("XDG_STATE_HOME", stateRoot); err != nil {
 		panic(err)
 	}
-	// No test reads a real tmux server unless it supplies its own.
-	worktreeCommandsObservedTmux = func() (backend.TargetLauncher, error) {
-		return nil, errors.New("no tmux server in worktree tests")
-	}
 	code := m.Run()
 	if hadPrevious {
 		_ = os.Setenv("XDG_STATE_HOME", previous)

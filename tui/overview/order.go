@@ -38,7 +38,7 @@ const (
 // The comparison is a total order on (lowercased label, label, identity, tab,
 // window, key), so the result is the same on every call for the same input and
 // contiguous per group falls out of the sort rather than needing a second pass.
-// The last three components are the within-group order: the stable Kitty tab ID
+// The last three components are the within-group order: the stable session ID
 // first, with the window ID and the logical key behind it so two rows that
 // somehow share a tab still come out in one fixed order.
 func Order(sessions []session.RunningSession) []session.RunningSession {

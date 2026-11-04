@@ -111,7 +111,7 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 	}{
 		{name: "search", m: Model{mode: ModeSearch, width: 80, filterText: "api"}, want: "Filter sessions: /api"},
 		{name: "confirm", m: Model{mode: ModeConfirm, width: 80, confirmAction: "close session"}, want: "Confirm close session"},
-		{name: "picker selection count", m: picker, want: "Launch Sessions: 2 selected · in Kitty · 2/3 visible"},
+		{name: "picker selection count", m: picker, want: "Launch Sessions: 2 selected · in tmux · 2/3 visible"},
 		{name: "config picker", m: Model{mode: ModeConfigPicker, width: 80, configPickerReturnMode: ModePicker}, want: "Choose launch profile"},
 		{name: "help", m: Model{mode: ModeHelp, width: 80}, want: "Help"},
 		{name: "detail", m: Model{mode: ModeDetail, width: 80, detailWindowID: 17}, want: "Session details: window 17"},
@@ -194,13 +194,13 @@ func TestDashboardFeedbackSlotCarriesActionErrors(t *testing.T) {
 
 	m := loadSessions(testModel(), makeSessions())
 	m.width, m.height = 120, 32
-	m.actionErr = errors.New("kitty refused the focus")
+	m.actionErr = errors.New("tmux refused the attach")
 
-	if got := stripAnsi(renderStatusBar(m)); !strings.Contains(got, "kitty refused the focus") {
+	if got := stripAnsi(renderStatusBar(m)); !strings.Contains(got, "tmux refused the attach") {
 		t.Fatalf("feedback slot = %q, want the action error", got)
 	}
 	// And it is on screen, not clipped out of the composed frame.
-	if got := stripAnsi(m.View().Content); !strings.Contains(got, "kitty refused the focus") {
+	if got := stripAnsi(m.View().Content); !strings.Contains(got, "tmux refused the attach") {
 		t.Fatalf("composed dashboard does not show the action error:\n%s", got)
 	}
 }

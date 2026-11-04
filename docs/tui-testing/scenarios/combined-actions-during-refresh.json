@@ -34,17 +34,7 @@
     },
     {
       "type": "contains_text",
-      "text": "\u2716 daemon down"
-    },
-    {
-      "type": "kitty_calls",
-      "op": "FocusTab",
-      "count": 0
-    },
-    {
-      "type": "kitty_calls",
-      "op": "CloseTab",
-      "count": 0
+      "text": "✖ daemon down"
     },
     {
       "type": "no_layout_issues"

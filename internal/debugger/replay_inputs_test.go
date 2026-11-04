@@ -133,7 +133,7 @@ func TestReplayRejectsLiveAndUnsupportedInputsWithoutMutation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(source), "internal/kitty") || strings.Contains(string(source), "NewClient(") {
+	if strings.Contains(string(source), "NewClient(") {
 		t.Fatal("offline replay source imports or constructs a live client")
 	}
 }

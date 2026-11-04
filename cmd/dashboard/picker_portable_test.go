@@ -9,8 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
@@ -19,8 +18,7 @@ import (
 	tuidashboard "github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-// These run the pickers and the dashboard as a surface outside Kitty, over a
-// real private tmux server. Every Kitty seam fails the test if it is reached.
+// These run the pickers and the dashboard against a real private tmux server.
 
 type portableWorld struct {
 	t      *testing.T
@@ -55,19 +53,9 @@ func newPortableWorld(t *testing.T, titles ...string) *portableWorld {
 		}
 	})
 	swap := func(undo func()) { restore = append(restore, undo) }
-	oldInside, oldOpen := insideKitty, openTmux
-	insideKitty = func() bool { return false }
+	oldOpen := openTmux
 	openTmux = func() (backend.TargetLauncher, error) { return w.tmux.Backend, nil }
-	swap(func() { insideKitty, openTmux = oldInside, oldOpen })
-	oldKitty, oldColorClient, oldIconClient := newKittyClient, newColorPickerClient, newIconPickerClient
-	noKitty := func() kitty.KittyClient {
-		t.Error("a surface outside Kitty asked for a Kitty client")
-		return nil
-	}
-	newKittyClient, newColorPickerClient, newIconPickerClient = noKitty, noKitty, noKitty
-	swap(func() {
-		newKittyClient, newColorPickerClient, newIconPickerClient = oldKitty, oldColorClient, oldIconClient
-	})
+	swap(func() { openTmux = oldOpen })
 	oldPickerConfig, oldIconConfig := loadPickerConfig, loadIconPickerConfig
 	loadPickerConfig = func() (*config.Config, error) { return w.cfg, nil }
 	loadIconPickerConfig = loadPickerConfig
@@ -109,7 +97,7 @@ func (w *portableWorld) sessions() map[string]session.RunningSession {
 	return byTitle
 }
 
-// Outside Kitty the color picker opens for a tmux session and its pick lands
+// The color picker opens for a tmux session and its pick lands
 // in that session's metadata, where the dashboard reads the row's color from.
 func TestColorPickerOpensAsAPortableViewForATmuxSession(t *testing.T) {
 	w := newPortableWorld(t, "api", "web")
@@ -120,8 +108,8 @@ func TestColorPickerOpensAsAPortableViewForATmuxSession(t *testing.T) {
 		t.Fatalf("%d color pickers opened; want 1", len(w.colors))
 	}
 	view := w.colors[0]
-	if view.Client != nil || view.Apply == nil || view.DefaultColor != "blue" || view.Subject != "api" {
-		t.Fatalf("picker = client %v apply %v default %q subject %q; want a Kitty-free picker for api defaulting to the profile color", view.Client, view.Apply != nil, view.DefaultColor, view.Subject)
+	if view.Apply == nil || view.DefaultColor != "blue" || view.Subject != "api" {
+		t.Fatalf("picker = apply %v default %q subject %q; want a picker for api defaulting to the profile color", view.Apply != nil, view.DefaultColor, view.Subject)
 	}
 
 	if err := view.Apply("purple"); err != nil {
@@ -149,7 +137,7 @@ func TestColorPickerOpensAsAPortableViewForATmuxSession(t *testing.T) {
 	}
 }
 
-// Outside Kitty the icon picker opens for a tmux session and writes the
+// Without a desktop workspace the icon picker opens for a tmux session and writes the
 // choice into that session's title, and no other's.
 func TestIconPickerOpensAsAPortableViewForATmuxSession(t *testing.T) {
 	w := newPortableWorld(t, "api", "web")
@@ -161,8 +149,8 @@ func TestIconPickerOpensAsAPortableViewForATmuxSession(t *testing.T) {
 		t.Fatalf("%d icon pickers opened; want 1", len(w.icons))
 	}
 	view := w.icons[0]
-	if view.Client != nil || view.SetTitle == nil || view.CurrentTitle != before["web"].Title || view.HarnessEmojis[harness.Codex] != "🤖" {
-		t.Fatalf("picker = %+v; want a Kitty-free picker over web's title %q", view, before["web"].Title)
+	if view.SetTitle == nil || view.CurrentTitle != before["web"].Title || view.HarnessEmojis[harness.Codex] != "🤖" {
+		t.Fatalf("picker = %+v; want a picker over web's title %q", view, before["web"].Title)
 	}
 	if err := view.SetTitle("🤖web"); err != nil {
 		t.Fatalf("set title: %v", err)
@@ -224,98 +212,51 @@ func TestPortablePickersChooseTheirSessionWithoutGuessing(t *testing.T) {
 	}
 }
 
-// pickerKitty is a Kitty with one tab holding the overlay's own window.
-type pickerKitty struct {
-	kitty.KittyClient
-	lists int
-}
-
-func (k *pickerKitty) ListWindows() ([]kitty.OSWindow, error) {
-	k.lists++
-	return []kitty.OSWindow{{ID: 1, IsFocused: true, Tabs: []kitty.Tab{{ID: 7, Title: "🦊api", IsActive: true, Windows: []kitty.Window{{ID: 70, IsActive: true}}}}}}, nil
-}
-
-// Inside Kitty the pickers stay Kitty overlays over the tab they were opened
-// on: they ask Kitty for the tab and edit it through Kitty.
-func TestPickersInsideKittyRemainKittyOverlays(t *testing.T) {
-	w := newPortableWorld(t, "api")
-	insideKitty = func() bool { return true }
-	t.Setenv("KITTY_WINDOW_ID", "70")
-	client := &pickerKitty{}
-	newColorPickerClient = func() kitty.KittyClient { return client }
-	newIconPickerClient = newColorPickerClient
-	openTmux = func() (backend.TargetLauncher, error) {
-		t.Error("a Kitty overlay opened the tmux backend")
-		return nil, nil
-	}
-
-	if err := w.run(ColorPickerCommand(), ""); err != nil {
-		t.Fatalf("color-picker: %v", err)
-	}
-	if err := w.run(IconPickerCommand(), ""); err != nil {
-		t.Fatalf("icon-picker: %v", err)
-	}
-	if len(w.colors) != 1 || w.colors[0].Client == nil || w.colors[0].Apply != nil || w.colors[0].TabID != 7 {
-		t.Fatalf("color picker = %+v; want the Kitty overlay for tab 7", w.colors)
-	}
-	if len(w.icons) != 1 || w.icons[0].Client == nil || w.icons[0].SetTitle != nil || w.icons[0].TabID != 7 || w.icons[0].CurrentTitle != "🦊api" {
-		t.Fatalf("icon picker = %+v; want the Kitty overlay for tab 7", w.icons)
-	}
-	if client.lists == 0 {
-		t.Fatal("the overlays never asked Kitty for the tab")
-	}
-}
-
-// Outside Kitty the dashboard opens in this terminal on the tmux backend. It
-// looks for no other dashboard, because the rule that there is one dashboard
-// is a rule about Kitty tabs, and it asks Kitty nothing at all.
-func TestDashboardOutsideKittyOpensInThisTerminalAndAsksKittyNothing(t *testing.T) {
+// The dashboard opens in this terminal on the tmux backend. Each invocation
+// creates a view without looking for another dashboard.
+func TestDashboardOpensInThisTerminalOnTmux(t *testing.T) {
 	w := newPortableWorld(t, "api")
 	oldLoad, oldRun := loadRunnableConfig, runDashboard
 	t.Cleanup(func() { loadRunnableConfig, runDashboard = oldLoad, oldRun })
 	loadRunnableConfig = func() (*config.Config, error) { return w.cfg, nil }
-	type started struct {
-		client kitty.KittyClient
-		source int
-	}
-	var runs []started
-	runDashboard = func(_ *config.Config, client kitty.KittyClient, source int) error {
-		runs = append(runs, started{client, source})
+	var runs []int
+	runDashboard = func(_ *config.Config, source int) error {
+		runs = append(runs, source)
 		return nil
 	}
 
 	// Twice: a second invocation is a second view, not a search for the first.
 	for range 2 {
-		if err := Run(0, "", View{}); err != nil {
+		if err := Run("", View{}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	}
 	if len(runs) != 2 {
 		t.Fatalf("%d dashboards started; want one per invocation", len(runs))
 	}
-	for _, run := range runs {
-		if run.client != nil || run.source != 0 {
-			t.Fatalf("dashboard started with client %v source %d; want no Kitty client and no source window", run.client, run.source)
+	for _, source := range runs {
+		if source != 0 {
+			t.Fatalf("dashboard started with selection %d; want zero", source)
 		}
 	}
 }
 
-// The keybinding reference outside Kitty opens in this terminal without
+// The keybinding reference opens in this terminal without
 // looking for another, and lists the keys the tmux configuration binds.
-func TestKeybindingsOutsideKittyOpenInThisTerminal(t *testing.T) {
+func TestKeybindingsOpenInThisTerminalOnTmux(t *testing.T) {
 	newPortableWorld(t)
 	old := runKeybindingsReference
 	t.Cleanup(func() { runKeybindingsReference = old })
-	var shown [][]kittykeys.Action
-	runKeybindingsReference = func(actions []kittykeys.Action) error {
+	var shown [][]keybindings.Action
+	runKeybindingsReference = func(actions []keybindings.Action) error {
 		shown = append(shown, actions)
 		return nil
 	}
 	if err := KeybindingsCommand().RunE(KeybindingsCommand(), nil); err != nil || len(shown) != 1 {
 		t.Fatalf("keybindings: %v, opened %d times", err, len(shown))
 	}
-	if len(shown[0]) != len(kittykeys.Tmux) || shown[0][0] != kittykeys.Tmux[0] {
-		t.Fatalf("the reference outside Kitty lists %d keys; want the tmux table", len(shown[0]))
+	if len(shown[0]) != len(keybindings.Tmux) || shown[0][0] != keybindings.Tmux[0] {
+		t.Fatalf("the reference lists %d keys; want the tmux table", len(shown[0]))
 	}
 }
 
@@ -324,21 +265,21 @@ func TestDashboardLaunchDestinationAndSourceFollowConfigurationAndFlag(t *testin
 	oldLoad, oldRun := loadRunnableConfig, runDashboard
 	t.Cleanup(func() { loadRunnableConfig, runDashboard = oldLoad, oldRun })
 	loadRunnableConfig = func() (*config.Config, error) { return w.cfg, nil }
-	runDashboard = func(_ *config.Config, client kitty.KittyClient, _ int) error {
-		if client != nil || commands.Portable.Launch != runtimesession.BackendTmux {
+	runDashboard = func(_ *config.Config, _ int) error {
+		if commands.Portable.Launch != runtimesession.BackendTmux {
 			t.Fatal("wrong launch destination")
 		}
 		return nil
 	}
 	w.cfg.Defaults.LaunchBackend = "tmux"
-	if err := Run(0, "", View{}); err != nil {
+	if err := Run("", View{}); err != nil {
 		t.Fatal(err)
 	}
 	if commands.Portable.LaunchSource != "config.toml" {
 		t.Fatal(commands.Portable.LaunchSource)
 	}
-	w.cfg.Defaults.LaunchBackend = "kitty"
-	if err := Run(0, "tmux", View{}); err != nil {
+	w.cfg.Defaults.LaunchBackend = "unsupported"
+	if err := Run("tmux", View{}); err != nil {
 		t.Fatal(err)
 	}
 	if commands.Portable.LaunchSource != "--backend" {

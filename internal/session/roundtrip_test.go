@@ -14,7 +14,7 @@ import (
 // to the same base title via palette.ParseTitle. This pins the contract that
 // session.FormatTitle and palette.BuildTitle/ParseTitle remain interoperable
 // even when session metadata includes profile/account combinations and unicode
-// values that no longer appear in the visible Kitty tab base title.
+// values that no longer appear in the visible session base title.
 func TestTitleRoundTrip_FormatPalettePalette(t *testing.T) {
 	t.Parallel()
 
@@ -159,7 +159,7 @@ func TestTitleRoundTrip_WithHarnessEmoji(t *testing.T) {
 	}
 }
 
-// TestFormatTitle_IgnoresProfileAndAccount verifies that managed Kitty tab
+// TestFormatTitle_IgnoresProfileAndAccount verifies that managed session
 // base titles come entirely from the project title (when no harness emoji
 // is configured).
 func TestFormatTitle_IgnoresProfileAndAccount(t *testing.T) {
@@ -318,7 +318,7 @@ func TestSessionFromRunning_LegacyNoExplicitFlagsPin(t *testing.T) {
 }
 
 // TestRunningSessionEffectiveProject_UsesProjectOnlyBase verifies that when
-// Project is empty in user vars, EffectiveProject treats the stripped Kitty
+// Project is empty in user vars, EffectiveProject treats the stripped session
 // base title as the project title under the new project-only contract.
 func TestRunningSessionEffectiveProject_UsesProjectOnlyBase(t *testing.T) {
 	t.Parallel()

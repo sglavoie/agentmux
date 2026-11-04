@@ -6,19 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/launch"
 )
 
-func lifecycleDriver(t *testing.T) (*uitestDriver, *kittytest.Client) {
+func lifecycleDriver(t *testing.T) *uitestDriver {
 	t.Helper()
-	driver, client := newUITestFixtureDriver(worktreeLifecycleFixture(), UITestSize{})
+	driver := newUITestFixtureDriver(worktreeLifecycleFixture(), UITestSize{})
 	cleanupUITestDriver(t, driver)
 	if err := driver.Command(commands.ManageWorktrees); err != nil {
 		t.Fatalf("enter Worktrees: %v", err)
 	}
-	return driver, client
+	return driver
 }
 
 func filterLifecycleWorktree(t *testing.T, driver *uitestDriver, id string) {
@@ -45,12 +44,12 @@ func TestWorktreeReopenFocusedResumeAndFreshOutcomes(t *testing.T) {
 		message string
 		call    string
 	}{
-		{"wt-live", "focused live worktree session", "FocusTab"},
-		{"wt-resume", "resumed newest worktree conversation", "LaunchTab"},
-		{"wt-fresh", "launched fresh worktree session", "LaunchTab"},
+		{"wt-live", "focused live worktree session", "focus"},
+		{"wt-resume", "resumed newest worktree conversation", "launch"},
+		{"wt-fresh", "launched fresh worktree session", "launch"},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			driver, client := lifecycleDriver(t)
+			driver := lifecycleDriver(t)
 			filterLifecycleWorktree(t, driver, tc.id)
 			seq := driver.Model().worktreeRefreshSeq
 			if err := driver.Key("enter"); err != nil {
@@ -71,8 +70,8 @@ func TestWorktreeReopenFocusedResumeAndFreshOutcomes(t *testing.T) {
 			if status := currentStatusMessage(model, model.toasts[0].Expires.Add(-1)); !strings.Contains(status.Text, tc.message) {
 				t.Fatalf("status %q does not contain %q", status.Text, tc.message)
 			}
-			if len(client.CallsFor(tc.call)) != 1 {
-				t.Fatalf("%s calls = %+v", tc.call, client.Calls)
+			if actions := driver.TerminalActions(tc.call); len(actions) != 1 {
+				t.Fatalf("%s actions = %+v", tc.call, actions)
 			}
 		})
 	}
@@ -81,7 +80,7 @@ func TestWorktreeReopenFocusedResumeAndFreshOutcomes(t *testing.T) {
 func TestWorktreeAmbiguousLiveSessionPickerFocusAndCancel(t *testing.T) {
 	t.Parallel()
 
-	driver, client := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-multi")
 	selected := driver.Model().worktreeSelectedID
 	if err := driver.Key("enter"); err != nil {
@@ -100,8 +99,8 @@ func TestWorktreeAmbiguousLiveSessionPickerFocusAndCancel(t *testing.T) {
 	if err := driver.Key("esc"); err != nil {
 		t.Fatalf("cancel picker: %v", err)
 	}
-	if driver.Model().mode != ModeWorktrees || driver.Model().worktreeSelectedID != selected || len(client.CallsFor("FocusTab")) != 0 {
-		t.Fatalf("cancel changed selection or focused: model=%+v calls=%+v", driver.Model(), client.Calls)
+	if driver.Model().mode != ModeWorktrees || driver.Model().worktreeSelectedID != selected || len(driver.TerminalActions("focus")) != 0 {
+		t.Fatalf("cancel changed selection or focused: model=%+v actions=%+v", driver.Model(), driver.TerminalActions("focus"))
 	}
 	if err := driver.Key("enter"); err != nil {
 		t.Fatalf("reopen picker: %v", err)
@@ -112,15 +111,15 @@ func TestWorktreeAmbiguousLiveSessionPickerFocusAndCancel(t *testing.T) {
 	if err := driver.Key("enter"); err != nil {
 		t.Fatalf("focus picker choice: %v", err)
 	}
-	if calls := client.CallsFor("FocusTab"); len(calls) != 1 || calls[0].Match != "id:82" {
-		t.Fatalf("focus calls = %+v", calls)
+	if actions := driver.TerminalActions("focus"); len(actions) != 1 || actions[0].Target != "82" {
+		t.Fatalf("focus actions = %+v", actions)
 	}
 }
 
 func TestWorktreeReplacementProfilePurposeReturnsToWorktrees(t *testing.T) {
 	t.Parallel()
 
-	driver, client := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-profile")
 	if err := driver.Key("enter"); err != nil {
 		t.Fatalf("request reopen: %v", err)
@@ -132,8 +131,8 @@ func TestWorktreeReplacementProfilePurposeReturnsToWorktrees(t *testing.T) {
 	if err := driver.Key("enter"); err != nil {
 		t.Fatalf("select replacement profile: %v", err)
 	}
-	if driver.Model().mode != ModeWorktrees || driver.Model().worktreeActionTarget != nil || len(client.CallsFor("LaunchTab")) != 1 {
-		t.Fatalf("replacement did not return cleanly: mode=%v target=%+v calls=%+v", driver.Model().mode, driver.Model().worktreeActionTarget, client.Calls)
+	if driver.Model().mode != ModeWorktrees || driver.Model().worktreeActionTarget != nil || len(driver.TerminalActions("launch")) != 1 {
+		t.Fatalf("replacement did not return cleanly: mode=%v target=%+v actions=%+v", driver.Model().mode, driver.Model().worktreeActionTarget, driver.TerminalActions("launch"))
 	}
 }
 
@@ -148,7 +147,7 @@ func TestWorktreeCleanupSnapshotRefusalsAndConfirmationText(t *testing.T) {
 		{"wt-unmerged", "D", "not merged"},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			driver, _ := lifecycleDriver(t)
+			driver := lifecycleDriver(t)
 			filterLifecycleWorktree(t, driver, tc.id)
 			if err := driver.Key(tc.key); err != nil {
 				t.Fatalf("cleanup key: %v", err)
@@ -160,7 +159,7 @@ func TestWorktreeCleanupSnapshotRefusalsAndConfirmationText(t *testing.T) {
 		})
 	}
 
-	driver, _ := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-delete")
 	if err := driver.Key("D"); err != nil {
 		t.Fatalf("open delete confirmation: %v", err)
@@ -185,7 +184,7 @@ func TestWorktreeRemoveForgetAndPartialRecoveryRefreshSelection(t *testing.T) {
 		{"wt-invalid", "F"},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
-			driver, _ := lifecycleDriver(t)
+			driver := lifecycleDriver(t)
 			filterLifecycleWorktree(t, driver, tc.id)
 			if err := driver.Key(tc.key); err != nil {
 				t.Fatalf("open confirmation: %v", err)
@@ -203,7 +202,7 @@ func TestWorktreeRemoveForgetAndPartialRecoveryRefreshSelection(t *testing.T) {
 		})
 	}
 
-	driver, _ := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-partial")
 	if err := driver.Key("d"); err != nil {
 		t.Fatalf("partial confirm: %v", err)
@@ -223,7 +222,7 @@ func TestWorktreeRemoveForgetAndPartialRecoveryRefreshSelection(t *testing.T) {
 func TestWorktreeSessionPickerResponsiveLayouts(t *testing.T) {
 	t.Parallel()
 
-	driver, _ := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-multi")
 	if err := driver.Key("enter"); err != nil {
 		t.Fatalf("open picker: %v", err)
@@ -241,7 +240,7 @@ func TestWorktreeSessionPickerResponsiveLayouts(t *testing.T) {
 func TestWorktreeReviewPagesTheReviewAndReturnsWithoutAToast(t *testing.T) {
 	t.Parallel()
 
-	driver, _ := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	// A live worktree is reviewable: the review reads and never writes.
 	filterLifecycleWorktree(t, driver, "wt-live")
 	if err := driver.Key("v"); err != nil {
@@ -275,7 +274,7 @@ func TestWorktreeLandOffersOnlyWhatTheSnapshotAllowsAndKeepsTheRow(t *testing.T)
 		"wt-missing":  "worktree checkout is missing",
 	} {
 		t.Run(id, func(t *testing.T) {
-			driver, _ := lifecycleDriver(t)
+			driver := lifecycleDriver(t)
 			filterLifecycleWorktree(t, driver, id)
 			if err := driver.Key("L"); err != nil {
 				t.Fatalf("land: %v", err)
@@ -290,7 +289,7 @@ func TestWorktreeLandOffersOnlyWhatTheSnapshotAllowsAndKeepsTheRow(t *testing.T)
 		})
 	}
 
-	driver, _ := lifecycleDriver(t)
+	driver := lifecycleDriver(t)
 	filterLifecycleWorktree(t, driver, "wt-unmerged")
 	if err := driver.Key("L"); err != nil {
 		t.Fatalf("land: %v", err)

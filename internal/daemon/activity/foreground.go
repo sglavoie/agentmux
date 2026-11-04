@@ -5,10 +5,9 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
-// Foreground classification: which harness, if any, a Kitty pane is actually
+// Foreground classification: which harness, if any, a pane is actually
 // RUNNING right now. This is the daemon's only source of activity evidence that
 // does not depend on the harness cooperating — a pane with no hooks installed,
 // no user vars, and no transcript still names its own process — which is why it
@@ -18,12 +17,12 @@ import (
 // the pane's own command line over its foreground processes. The second result
 // reports whether the invocation is a non-interactive pipe-mode run, which the
 // probes must never settle as if it were an interactive session.
-func ForegroundHarness(win *kitty.Window) (string, bool) {
-	if name, pipeMode, ok := harnessInvocationFromCmdline(win.Cmdline); ok {
+func ForegroundHarness(cmdline []string, foreground [][]string) (string, bool) {
+	if name, pipeMode, ok := harnessInvocationFromCmdline(cmdline); ok {
 		return name, pipeMode
 	}
-	for i := range win.ForegroundProcesses {
-		if name, pipeMode, ok := harnessInvocationFromCmdline(win.ForegroundProcesses[i].Cmdline); ok {
+	for _, process := range foreground {
+		if name, pipeMode, ok := harnessInvocationFromCmdline(process); ok {
 			return name, pipeMode
 		}
 	}

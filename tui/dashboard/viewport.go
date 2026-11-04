@@ -14,7 +14,7 @@
 // given. The viewport reads no clock, holds no reference to a model, and never
 // asks for a snapshot — the caller supplies the newest one on every call, which
 // is what lets the whole hold/resume contract be asserted without a terminal, a
-// Kitty client, or a running dashboard.
+// terminal client, or a running dashboard.
 
 package dashboard
 

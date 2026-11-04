@@ -4,9 +4,9 @@
 // A grid is a different problem from a pane. The inspector reads ONE window and
 // can afford to be simple about it — one read out, one catch-up behind it. An
 // overview has up to nine visible windows, each of which wants a fresh picture
-// several times a second, and reading all of them on every tick would put nine
-// concurrent `kitten @ get-text` subprocesses against one Kitty for as long as the
-// surface is open. So the capture is SCHEDULED rather than issued, and the
+// several times a second, and reading all of them on every tick would start nine
+// concurrent tmux captures for as long as the surface is open. So capture is
+// SCHEDULED rather than issued, and the
 // schedule has three properties worth naming separately.
 //
 // BOUNDED. At most four reads exist at any moment, globally, and at most one per
@@ -57,7 +57,7 @@ const (
 	// refreshes in one round and a 3x3 in three, and few enough that the surface
 	// never has more subprocesses outstanding than a busy dashboard would. The
 	// number is global — it spans pages, generations and anchor changes — because
-	// what it bounds is the load on Kitty, which does not care which tile an
+	// what it bounds is the load on tmux, which does not care which tile an
 	// outstanding read was issued for.
 	maxCapturesInFlight = 4
 
@@ -75,7 +75,7 @@ const (
 // It is deliberately NOT the topology interval. The window tree changes when a
 // session is launched or closed and is read in seconds; a terminal's last nine
 // lines change continuously and are read in milliseconds. Tying them together
-// would either poll Kitty's window list ten times a second or leave every preview
+// would either poll the session list ten times a second or leave every preview
 // two seconds behind the pane beside it.
 func captureIntervalFor(cfg *config.Config) time.Duration {
 	d := time.Duration(cfg.Defaults.Preview.RefreshMs) * time.Millisecond
@@ -268,7 +268,6 @@ func (c *captureController) dispatch() []commands.CaptureRequest {
 		c.byPane[pane] = c.nextRequestID
 		out = append(out, commands.CaptureRequest{
 			Target:     pane,
-			WindowID:   pane.KittyWindowID(),
 			Generation: target.generation,
 			RequestID:  c.nextRequestID,
 			Width:      target.width,
@@ -421,7 +420,7 @@ func (m *model) pumpCaptures() tea.Cmd {
 // ones already queued or already in flight are declined here, so a tick costs a
 // request only for the tiles that have neither. That is what "repeated ticks
 // coalesce rather than accumulate" means in practice — the queue is a set, and a
-// hundred ticks behind a slow Kitty leave it exactly as long as one.
+// hundred ticks behind a slow capture leave it exactly as long as one.
 //
 // A dismissed surface re-arms nothing. The ticker is the only thing keeping the
 // capture alive, so declining to schedule the next one is how the scheduling

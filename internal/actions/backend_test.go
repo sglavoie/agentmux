@@ -40,17 +40,14 @@ func TestLaunchActionRefusesAnUnusableBackend(t *testing.T) {
 		deps Dependencies
 		code string
 	}{
-		{name: "tmux without a server", deps: Dependencies{Config: cfg, Backend: runtimesession.BackendTmux, Kitty: &continuityKitty{}}, code: "missing_dependency"},
-		{name: "unknown backend", deps: Dependencies{Config: cfg, Backend: "screen", Kitty: &continuityKitty{}}, code: "invalid_backend"},
+		{name: "tmux without a server", deps: Dependencies{Config: cfg, Backend: runtimesession.BackendTmux}, code: "missing_dependency"},
+		{name: "unknown backend", deps: Dependencies{Config: cfg, Backend: "screen"}, code: "invalid_backend"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := DefaultRegistry().Execute(context.Background(), test.deps, Launch, Request{Project: &project})
 			var actionErr *Error
 			if !errors.As(err, &actionErr) || actionErr.Code != test.code {
 				t.Fatalf("err = %v, want %s", err, test.code)
-			}
-			if kitty := test.deps.Kitty.(*continuityKitty); len(kitty.launched) != 0 {
-				t.Fatal("refused launch fell back to Kitty")
 			}
 		})
 	}
@@ -130,8 +127,7 @@ func TestLaunchAndRestartAnnounceTheRuntimeSession(t *testing.T) {
 }
 
 // TestSessionActionsFollowTheRecordedBackend restarts and then closes a
-// tmux-hosted session through dependencies whose launch backend is Kitty:
-// both act on tmux because that is where the session runs.
+// tmux-hosted session through tmux dependencies.
 func TestSessionActionsFollowTheRecordedBackend(t *testing.T) {
 	f := tmuxtest.New(t)
 	cfg := continuityConfig(harness.Claude)
@@ -140,18 +136,16 @@ func TestSessionActionsFollowTheRecordedBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 	original := tmuxSessions(t, f, cfg)[0]
-	kitty := &continuityKitty{}
-
-	if _, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg, Kitty: kitty}, Restart, Request{Session: &original, Confirmed: true}); err == nil {
+	if _, err := DefaultRegistry().Execute(context.Background(), Dependencies{Config: cfg}, Restart, Request{Session: &original, Confirmed: true}); err == nil {
 		t.Fatal("restart without the tmux server succeeded")
 	}
-	deps := Dependencies{Config: cfg, Kitty: kitty, Tmux: f.Backend, Runtimes: f.Registry}
+	deps := Dependencies{Config: cfg, Tmux: f.Backend, Runtimes: f.Registry}
 	result, err := DefaultRegistry().Execute(context.Background(), deps, Restart, Request{Session: &original, Confirmed: true})
 	if err != nil {
 		t.Fatalf("restart: %v", err)
 	}
-	if result.Data["backend"] != "tmux" || len(kitty.launched) != 0 {
-		t.Fatalf("restart data = %+v kitty launches = %d, want a tmux-only restart", result.Data, len(kitty.launched))
+	if result.Data["backend"] != "tmux" {
+		t.Fatalf("restart data = %+v, want a tmux restart", result.Data)
 	}
 	running := tmuxSessions(t, f, cfg)
 	if len(running) != 1 || running[0].RuntimeSessionID == original.RuntimeSessionID {

@@ -3,7 +3,6 @@ package debugger
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,19 +15,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 type testHealthClient struct{ health ipc.Health }
 
 func (c testHealthClient) Health() ipc.Health { return c.health }
-
-type testKittyClient struct {
-	windows []kitty.OSWindow
-	err     error
-}
-
-func (c testKittyClient) ListWindows() ([]kitty.OSWindow, error) { return c.windows, c.err }
 
 type testProbeClient struct {
 	request protocol.Request
@@ -117,7 +108,7 @@ func TestTailWorksOfflineReadsSpoolAndToleratesCorruptRecords(t *testing.T) {
 	}
 }
 
-func TestCollectStatusRemainsUsefulWithDaemonAndKittyUnavailable(t *testing.T) {
+func TestCollectStatusRemainsUsefulWithDaemonUnavailable(t *testing.T) {
 	t.Parallel()
 
 	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
@@ -139,7 +130,7 @@ func TestCollectStatusRemainsUsefulWithDaemonAndKittyUnavailable(t *testing.T) {
 	}}}
 	report, err := CollectStatus(context.Background(), StatusOptions{
 		Config: cfg, Paths: paths, Journal: journal,
-		Daemon: testHealthClient{}, Kitty: testKittyClient{err: errors.New("Kitty offline")},
+		Daemon: testHealthClient{},
 		AMXBin: "/tmp/amx", CLIBuild: buildinfo.Info{Version: "test"},
 		Now: time.Date(2026, 7, 15, 12, 0, 0, 0, time.UTC), Selector: Selector{RequestID: "offline-evidence"},
 	})
@@ -349,34 +340,15 @@ func TestCollectStatusReportsHookDeliveryFailuresInTrailingHour(t *testing.T) {
 	}
 }
 
-func TestInspectNativeFindsManagedAndUnmanagedSessions(t *testing.T) {
-	t.Parallel()
-
-	paths := diagnostics.PathsForRoot(filepath.Join(t.TempDir(), "state"))
-	if err := paths.Ensure(); err != nil {
-		t.Fatal(err)
-	}
-	enabled := true
-	policy := config.DiagnosticsConfig{NativeLogging: &enabled, NativeMaxMiB: 1, NativeSessionMaxMiB: 1}
-	windows := []kitty.OSWindow{{Tabs: []kitty.Tab{
-		{Windows: []kitty.Window{{ID: 1, UserVars: kitty.UserVars{Profile: "work", Harness: harness.Claude, LaunchID: "11111111-1111-4111-8111-111111111111", NativeCoverage: "managed"}}}},
-		{Windows: []kitty.Window{{ID: 2, ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: []string{"/usr/bin/codex"}}}}}},
-	}}}
-	report := InspectNative(paths, policy, windows, true, Selector{}, time.Now())
-	if report.Coverage.Managed != 1 || report.Coverage.Unmanaged != 1 || len(report.Sessions) != 2 || report.Verdict != VerdictWarning {
-		t.Fatalf("native report = %+v", report)
-	}
-}
-
 func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
 	t.Parallel()
 
 	client := &testProbeClient{}
-	report := Probe(client, ProbeOptions{WindowID: 43, KittyListenOn: "unix:/kitty-a", Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
+	report := Probe(client, ProbeOptions{RuntimeSessionID: "rs-live", Harness: "Claude", RequestID: "request-1", TraceID: "trace-1", AMXBin: "/tmp/amx"})
 	if !report.Success || len(report.Stages) != 2 || report.Stages[0].Stage != ipc.DeliveryStageIPCAttempt || report.Stages[1].Stage != "daemon_acknowledgement" {
 		t.Fatalf("probe report = %+v", report)
 	}
-	if client.request.Type != protocol.TypeDiagnosticProbe || client.request.WindowID != 43 || client.request.KittyListenOn != "unix:/kitty-a" || client.request.RequestID != "request-1" {
+	if client.request.Type != protocol.TypeDiagnosticProbe || client.request.RuntimeSessionID != "rs-live" || client.request.WindowID != 0 || client.request.RequestID != "request-1" {
 		t.Fatalf("probe request = %+v", client.request)
 	}
 	if !strings.Contains(report.Scope, "does not prove") || !strings.Contains(report.Scope, "without changing reducer") {
@@ -384,12 +356,12 @@ func TestProbeReportsEveryObservedTransportStageAndScope(t *testing.T) {
 	}
 }
 
-func TestProbeRefusesKittyWindowWithoutSocket(t *testing.T) {
+func TestProbeRequiresRuntimeSession(t *testing.T) {
 	t.Parallel()
 
 	client := &testProbeClient{}
-	report := Probe(client, ProbeOptions{WindowID: 43})
-	if report.Success || !strings.Contains(report.Error, "Kitty socket") || client.request.Type != "" {
-		t.Fatalf("unidentified Kitty probe = %+v, request = %+v", report, client.request)
+	report := Probe(client, ProbeOptions{})
+	if report.Success || !strings.Contains(report.Error, "runtime session ID") || client.request.Type != "" {
+		t.Fatalf("unidentified probe = %+v, request = %+v", report, client.request)
 	}
 }

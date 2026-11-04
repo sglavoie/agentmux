@@ -121,11 +121,9 @@ var exportDeadline = 5 * time.Second
 // stateQueryDeadline bounds one dashboard state query. It sits deliberately
 // between the two existing budgets. The 250ms acknowledgement budget is sized
 // for a hook that must not delay its harness and is too tight here: a state
-// query marshals every tracked window plus the cached Kitty tree. The 5s export
-// budget is far too loose: the whole point of serving the query from the cache
-// is that it never waits on Kitty, so a second is already generous and anything
-// longer would let a wedged daemon stall a dashboard refresh instead of letting
-// it fall back.
+// query marshals every tracked slot and its runtime binding. The 5s export
+// budget is far too loose: the query reads in-memory state, so a second is
+// generous and a longer wait would stall a dashboard refresh.
 var stateQueryDeadline = 1 * time.Second
 
 // Send sends req to the daemon and returns the response.
@@ -249,18 +247,6 @@ type Health struct {
 	// source per pattern set plus every load warning. Nil against a daemon that
 	// predates the block.
 	ScreenPatterns *protocol.ScreenPatternsSnapshot
-	// KittySnapshot is the status-only view of the daemon's cached Kitty
-	// topology: readiness, staleness, generation, capture time, age, and the
-	// list-coordinator counters. Its Windows field is always empty here —
-	// health is a probe, and the tree belongs to StateQuery. Nil against a
-	// daemon that predates the block, which a consumer must report as unknown
-	// rather than as a cold cache.
-	//
-	// Staleness here is deliberately independent of Ready and DegradedReason
-	// above: a wedged `kitten @ ls` is a different fault from a daemon that
-	// failed its bounded restore, and folding one into the other would hide
-	// whichever came second.
-	KittySnapshot *protocol.KittySnapshot
 	// Companion lists the connected companion subscribers. Nil against a
 	// daemon that predates the companion protocol.
 	Companion *protocol.CompanionHealth
@@ -297,7 +283,6 @@ func (c *Client) healthBefore(deadline time.Time) Health {
 		ASLReconcile:    resp.ASLReconcile,
 		ASLHookDelivery: resp.ASLHookDelivery,
 		ScreenPatterns:  resp.ScreenPatterns,
-		KittySnapshot:   resp.KittySnapshot,
 		Companion:       resp.Companion,
 		Runtime:         resp.Runtime,
 	}
@@ -439,7 +424,7 @@ func (c *Client) restartDetachedBefore(amxBin string, daemonAlive bool, deadline
 // auto-starts the daemon: a snooze lives in a running daemon's memory, so
 // starting one just to snooze it — or to report that nothing is snoozed —
 // would answer a question nobody asked. It uses the state-query budget, since
-// the daemon answers from memory without touching Kitty.
+// the daemon answers from memory without terminal I/O.
 func (c *Client) NotificationSnooze(req protocol.SnoozeRequest) (protocol.SnoozeState, error) {
 	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeNotificationSnooze, Snooze: &req}, stateQueryDeadline)
 	if err != nil {

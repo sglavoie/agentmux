@@ -69,9 +69,7 @@ struct NotificationRetractFrame: Decodable, Equatable {
 struct CompanionSnapshot: Decodable, Equatable {
     var v: Int = 1
     var daemon = CompanionDaemon()
-    var kitty = CompanionKitty()
     var notification = CompanionNotification()
-    var dashboard = CompanionDashboard()
     var attention = CompanionAttention()
     var asl = CompanionASL()
     var sessions: [CompanionSession] = []
@@ -80,16 +78,14 @@ struct CompanionSnapshot: Decodable, Equatable {
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case v, daemon, kitty, notification, dashboard, attention, asl, sessions, truncated
+        case v, daemon, notification, attention, asl, sessions, truncated
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         v = c.lenient(.v, 0)
         daemon = c.lenient(.daemon, CompanionDaemon())
-        kitty = c.lenient(.kitty, CompanionKitty())
         notification = c.lenient(.notification, CompanionNotification())
-        dashboard = c.lenient(.dashboard, CompanionDashboard())
         attention = c.lenient(.attention, CompanionAttention())
         asl = c.lenient(.asl, CompanionASL())
         sessions = c.lenient(.sessions, [])
@@ -127,25 +123,6 @@ struct CompanionDaemon: Decodable, Equatable {
     }
 }
 
-struct CompanionKitty: Decodable, Equatable {
-    var ready = false
-    var stale = false
-    var socket = ""
-    var sockets: [String] = []
-
-    init() {}
-
-    enum CodingKeys: String, CodingKey { case ready, stale, socket, sockets }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        ready = c.lenient(.ready, false)
-        stale = c.lenient(.stale, false)
-        socket = c.lenient(.socket, "")
-        sockets = c.lenient(.sockets, [])
-    }
-}
-
 struct CompanionNotification: Decodable, Equatable {
     var backend = ""
     var appConnected = false
@@ -172,33 +149,6 @@ struct CompanionNotification: Decodable, Equatable {
         indefinite = c.lenient(.indefinite, false)
         quietHours = c.lenient(.quietHours, "")
         quietNow = c.lenient(.quietNow, false)
-    }
-}
-
-struct CompanionDashboard: Decodable, Equatable {
-    var open = false
-    var kittySocket = ""
-    var osWindowID = 0
-    var tabID = 0
-    var windowID = 0
-
-    init() {}
-
-    enum CodingKeys: String, CodingKey {
-        case open
-        case kittySocket = "kitty_socket"
-        case osWindowID = "os_window_id"
-        case tabID = "tab_id"
-        case windowID = "window_id"
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        open = c.lenient(.open, false)
-        kittySocket = c.lenient(.kittySocket, "")
-        osWindowID = c.lenient(.osWindowID, 0)
-        tabID = c.lenient(.tabID, 0)
-        windowID = c.lenient(.windowID, 0)
     }
 }
 
@@ -253,9 +203,7 @@ struct CompanionASLWaiting: Decodable, Equatable {
 
     var runID = ""
     var planDir = ""
-    var windowID = 0
-    /// The runtime session the run belongs to, when the daemon knows one; a
-    /// tmux session has no window ID to name it by.
+	/// The runtime session the run belongs to.
     var runtimeSessionID = ""
     var unanswered = 0
     var latestQuestionID = ""
@@ -265,7 +213,6 @@ struct CompanionASLWaiting: Decodable, Equatable {
         case unanswered
         case runID = "run_id"
         case planDir = "plan_dir"
-        case windowID = "window_id"
         case runtimeSessionID = "runtime_session_id"
         case latestQuestionID = "latest_question_id"
         case latestQuestionCreatedAt = "latest_question_created_at"
@@ -275,7 +222,6 @@ struct CompanionASLWaiting: Decodable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         runID = c.lenient(.runID, "")
         planDir = c.lenient(.planDir, "")
-        windowID = c.lenient(.windowID, 0)
         runtimeSessionID = c.lenient(.runtimeSessionID, "")
         unanswered = c.lenient(.unanswered, 0)
         latestQuestionID = c.lenient(.latestQuestionID, "")
@@ -325,11 +271,9 @@ struct ConversationIdentity: Decodable, Equatable {
 }
 
 /// `protocol.CompanionRuntime`: the runtime session a listed session is, and
-/// the backend target it runs on. Only a snapshot negotiated with the
-/// `runtime_sessions` feature carries it.
+/// the tmux target it runs on.
 struct CompanionRuntime: Decodable, Equatable {
-    /// The backend whose sessions are windows of another app.
-    static let kittyBackend = "kitty"
+    static let tmuxBackend = "tmux"
 
     var sessionID = ""
     var backend = ""
@@ -366,14 +310,9 @@ struct CompanionStatusEvidence: Decodable, Equatable {
 
 struct CompanionSession: Decodable, Equatable {
     var statusEvidence: CompanionStatusEvidence?
-    var windowID = 0
-    var tabID = 0
-    var osWindowID = 0
-    var kittySocket = ""
     var harness = ""
     var profile = ""
     var project = ""
-    var baseTitle = ""
     var conversation: ConversationIdentity?
     var aslRunID = ""
     var iconState = ""
@@ -383,7 +322,7 @@ struct CompanionSession: Decodable, Equatable {
     var muted = false
     var locked = false
     var looping = false
-    /// The ★ in front of the session's tab or group title (`amx pin-session`):
+    /// The ★ in front of the session's group title (`amx pin-session`):
     /// listed above every other session, here and in the dashboard.
     var pinned = false
     var busySinceAt: Int64 = 0
@@ -391,19 +330,18 @@ struct CompanionSession: Decodable, Equatable {
     var presentationChangedAtMS: Int64 = 0
     var branch = ""
     var dirty = false
-    /// The background a session with no Kitty tab is listed on, "#rrggbb":
+    /// The session's background, "#rrggbb":
     /// the color picked for it, else its profile's, bright enough for
     /// black text. Empty for none.
     var tabColor = ""
-    /// The name the operator gave a session with no Kitty tab
+    /// The name the operator gave a session
     /// (`amx name-session`). Empty for none.
     var name = ""
-    /// The harness badge a session with no Kitty tab is listed with: its
+    /// The session's harness badge: its
     /// harness's configured emoji, or the one the icon picker (F5) put in
     /// its title. Empty for none.
     var harnessIcon = ""
-    /// The session's runtime identity; nil for a Kitty session no runtime
-    /// session claims, and on a v1 snapshot.
+    /// The session's runtime identity.
     var runtime: CompanionRuntime?
 
     /// Matches Overview's attention tier. A completed turn leaves it when
@@ -416,19 +354,12 @@ struct CompanionSession: Decodable, Equatable {
         }
     }
 
-    init(windowID: Int = 0) {
-        self.windowID = windowID
-    }
+    init() {}
 
     enum CodingKeys: String, CodingKey {
         case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, pinned, branch, dirty, name
         case statusEvidence = "status_evidence"
         case runtime
-        case windowID = "window_id"
-        case tabID = "tab_id"
-        case osWindowID = "os_window_id"
-        case kittySocket = "kitty_socket"
-        case baseTitle = "base_title"
         case aslRunID = "asl_run_id"
         case iconState = "icon_state"
         case busySinceAt = "busy_since_at"
@@ -440,14 +371,9 @@ struct CompanionSession: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        windowID = c.lenient(.windowID, 0)
-        tabID = c.lenient(.tabID, 0)
-        osWindowID = c.lenient(.osWindowID, 0)
-        kittySocket = c.lenient(.kittySocket, "")
         harness = c.lenient(.harness, "")
         profile = c.lenient(.profile, "")
         project = c.lenient(.project, "")
-        baseTitle = c.lenient(.baseTitle, "")
         conversation = c.lenient(.conversation)
         aslRunID = c.lenient(.aslRunID, "")
         iconState = c.lenient(.iconState, "")
@@ -470,12 +396,10 @@ struct CompanionSession: Decodable, Equatable {
         runtime = c.lenient(.runtime)
     }
 
-    /// The runtime session whose terminal the workspace embeds: one on a
-    /// backend other than Kitty. A Kitty session, with or without a runtime
-    /// session, is a window of Kitty's and is focused there.
+    /// The runtime session whose terminal the workspace embeds.
     var embeddedRuntimeSessionID: String? {
-        guard let runtime, !runtime.sessionID.isEmpty, !runtime.backend.isEmpty,
-              runtime.backend != CompanionRuntime.kittyBackend else { return nil }
+        guard let runtime, !runtime.sessionID.isEmpty,
+              runtime.backend == CompanionRuntime.tmuxBackend else { return nil }
         return runtime.sessionID
     }
 

@@ -10,7 +10,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -102,8 +101,8 @@ func (m Model) selectedItem() (dashboard.Item, bool) {
 // false when the list is empty, when the cursor is out of range, and when the
 // selected item is not a session leaf. Every row-targeted action, availability
 // check, command-context capture, and preview refresh resolves its target
-// through here, so a synthetic row cannot become the subject of a Kitty or
-// daemon mutation.
+// through here, so a synthetic row cannot become the subject of a daemon
+// mutation.
 func (m Model) selectedSession() (session.RunningSession, bool) {
 	return m.items.SessionAt(m.cursor)
 }
@@ -251,18 +250,17 @@ func previewTickCmd(d time.Duration, pollSeq int) tea.Cmd {
 // windowID == 0 (no running window) short-circuits with an empty text and
 // no error so callers can render a "(session not running)" placeholder.
 // A family summary owns no window, so it tracks window 0 and takes the
-// short-circuit: previewing one costs no Kitty call at all.
+// short-circuit: previewing one costs no pane capture.
 //
 // It is called from startPreviewRead alone. Every read the pane performs is
 // therefore one the controller has accounted for, and the reply always comes
-// back — the short circuit answers immediately and a real read is bounded by the
-// Kitty runner's own subprocess deadline (internal/kitty/exec.go) — which is
-// what lets the controller treat a stamped reply as the release of its slot.
+// back — the short circuit answers immediately and a real read runs inside a
+// command — which lets the controller treat a stamped reply as the release of
+// its slot.
 //
-// The read goes through commands.ReadScrollback, which reaches a Kitty window
-// through Kitty and a portable session through its own backend.
-func fetchPreviewCmd(client kitty.KittyClient, windowID, targetSeq, requestSeq int) tea.Cmd {
-	return fetchPreviewWith(func(id int) (string, error) { return commands.ReadScrollback(client, id) }, windowID, targetSeq, requestSeq)
+// The read goes through commands.ReadScrollback to the tmux pane.
+func fetchPreviewCmd(windowID, targetSeq, requestSeq int) tea.Cmd {
+	return fetchPreviewWith(func(id int) (string, error) { return commands.ReadScrollback(id) }, windowID, targetSeq, requestSeq)
 }
 
 // fetchPreviewWith is fetchPreviewCmd over an explicit reader, which is the

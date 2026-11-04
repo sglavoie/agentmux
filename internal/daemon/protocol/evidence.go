@@ -91,7 +91,7 @@ type EffectiveStateEvidence struct {
 	SourceKey  string `json:"source_key,omitempty"`
 }
 
-// RoutingWindowEvidence describes one Kitty pane considered by routing. Only
+// RoutingWindowEvidence describes one terminal pane considered by routing. Only
 // stable identity and management metadata are retained; titles, directories,
 // commands, prompts, and tool arguments are intentionally excluded.
 type RoutingWindowEvidence struct {
@@ -113,7 +113,7 @@ type RejectedRouteEvidence struct {
 
 // RoutingEvidence is the complete sanitized route decision attached to a
 // SessionEvent. The candidate list is bounded so one event cannot make the
-// in-memory ring or journal record grow with an unbounded Kitty snapshot.
+// in-memory ring or journal record grow with an unbounded terminal snapshot.
 type RoutingEvidence struct {
 	SnapshotReady         bool                    `json:"snapshot_ready"`
 	LookupOutcome         string                  `json:"lookup_outcome"`

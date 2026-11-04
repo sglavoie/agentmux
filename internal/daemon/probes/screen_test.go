@@ -70,7 +70,7 @@ func TestCheckScreen(t *testing.T) {
 			return nil
 		}, ScreenWrongInstance},
 		{"another backend", func(s *backend.Screen, _ *ScreenExpectation) error {
-			s.Instance.Kind = runtimesession.BackendKitty
+			s.Instance.Kind = runtimesession.BackendKind("unsupported")
 			return nil
 		}, ScreenWrongInstance},
 		{"exited program", func(s *backend.Screen, _ *ScreenExpectation) error {
@@ -131,23 +131,17 @@ func TestCheckScreen(t *testing.T) {
 	}
 }
 
-// A Kitty binding names no address or generation: its epochs already tie it to
-// one window tree, and Kitty's get-text reports neither.
 func TestBindingScreenExpectation(t *testing.T) {
-	binding := Binding{SourceWindowID: 42, TargetWindowID: 7}
+	binding := Binding{SourceWindowID: 42, TargetWindowID: 42, RuntimeInstance: tmuxInstance, RuntimePane: backend.PaneID("%3")}
 	want := binding.ScreenExpectation()
-	if binding.SourcePane() != backend.PaneID("42") || want.Pane != binding.SourcePane() ||
-		want.Instance != (runtimesession.BackendInstance{Kind: runtimesession.BackendKitty}) {
+	if binding.SourcePane() != RuntimeSlotPane(42) || want.Pane != backend.PaneID("%3") || want.Instance != tmuxInstance {
 		t.Fatalf("expectation = %+v", want)
 	}
-	screen := backend.Screen{
-		Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendKitty},
-		Pane:     backend.PaneID("42"), Text: "x", CapturedAt: screenNow,
-	}
+	screen := freshTmuxScreen("x")
 	if got := CheckScreen(screen, nil, want, screenNow); got != ScreenFresh {
-		t.Fatalf("a Kitty read of the source pane is %s", got)
+		t.Fatalf("a read of the registered pane is %s", got)
 	}
-	screen.Pane = backend.PaneID("7")
+	screen.Pane = backend.PaneID("%7")
 	if got := CheckScreen(screen, nil, want, screenNow); got != ScreenWrongPane {
 		t.Fatalf("a read of the target pane is %s, want wrong_pane", got)
 	}
@@ -169,7 +163,7 @@ func TestReadScreenNeverSettlesAWithheldCapture(t *testing.T) {
 		"another pane":    func(s *backend.Screen) error { s.Pane = backend.PaneID("%9"); return nil },
 		"restarted":       func(s *backend.Screen) error { s.Instance.Generation = "9-9"; return nil },
 		"exited":          func(s *backend.Screen) error { s.Exited = true; return nil },
-		"another backend": func(s *backend.Screen) error { s.Instance.Kind = runtimesession.BackendKitty; return nil },
+		"another backend": func(s *backend.Screen) error { s.Instance.Kind = runtimesession.BackendKind("unsupported"); return nil },
 	}
 	for harnessName, fixture := range fixtures {
 		data, err := os.ReadFile(filepath.Join("..", "..", "screenstate", "testdata", "tmux", fixture))

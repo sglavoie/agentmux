@@ -8,13 +8,12 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// The last-resort qualifier tells two otherwise identical rows apart. A Kitty
-// row has a window number an operator can recognize; a tmux row's number is
-// internal to this process, so its pane in tmux is shown instead.
+// The last-resort qualifier tells two otherwise identical rows apart. A row without a backend may carry a numeric window ID; a tmux row uses
+// its pane ID because its process-local window number is not useful to an operator.
 func TestWindowQualifierNamesTheBackendPaneForPortableRows(t *testing.T) {
-	kittyRow := session.RunningSession{WindowID: 42}
-	if got := qualifierText(kittyRow, qualifierWindow); got != "#42" {
-		t.Fatalf("Kitty qualifier = %q, want #42", got)
+	unknownRow := session.RunningSession{WindowID: 42}
+	if got := qualifierText(unknownRow, qualifierWindow); got != "#42" {
+		t.Fatalf("unknown-backend qualifier = %q, want #42", got)
 	}
 	tmuxRow := session.RunningSession{WindowID: 1 << 41, Backend: runtimesession.BackendTmux, Pane: backend.PaneID("%3")}
 	if got := qualifierText(tmuxRow, qualifierWindow); got != "tmux %3" {

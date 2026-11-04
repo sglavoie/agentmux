@@ -13,8 +13,6 @@ func TestSharedCodexHooksRouteToConversationOwner(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv(runtimesession.EnvVar, testRuntimeSession)
-	t.Setenv("KITTY_WINDOW_ID", "7")
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/wrong-kitty")
 	const brainRuntime = "rs-abcdef0123456789abcdef0123456789"
 	previousRead, previousDiscover := readCodexHookRuntimes, discoverHarnessProcessForDelivery
 	t.Cleanup(func() {
@@ -39,7 +37,7 @@ func TestSharedCodexHooksRouteToConversationOwner(t *testing.T) {
 				t.Fatalf("delivery = %+v, calls %d", result, client.calls)
 			}
 			req := client.reqs[0]
-			if req.RuntimeSessionID != brainRuntime || req.WindowID != 0 || req.KittyListenOn != "" {
+			if req.RuntimeSessionID != brainRuntime || req.WindowID != 0 {
 				t.Fatalf("hook used another client's inherited identity: %+v", req)
 			}
 			if req.HarnessProcess == nil || req.HarnessProcess.PID != 8166 {

@@ -11,9 +11,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -29,19 +27,6 @@ func defaultDefinitions() []Definition {
 	worktreeRequirement := []EntityRequirement{{Kind: EntityWorktree, Description: "managed worktree"}}
 	planRequirement := []EntityRequirement{{Kind: EntityPlan, Description: "split plan directory"}}
 	return []Definition{
-		{
-			ID: Focus, Label: "focus tab", Description: "focus the session's Kitty tab", Requires: sessionRequirement,
-			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				term := deps.sessionTerminal(*request.Session)
-				if term == nil {
-					return Result{}, missingTerminal(Focus, *request.Session)
-				}
-				if err := term.Focus(request.Session.GroupRef()); err != nil {
-					return Result{}, err
-				}
-				return Result{Changed: true, Message: "focused session tab"}, nil
-			},
-		},
 		{
 			ID: Launch, Label: "launch new", Description: "launch a new session from a configured project", Requires: projectRequirement,
 			Parameters: []ParameterSchema{
@@ -66,8 +51,7 @@ func defaultDefinitions() []Definition {
 				if !ok {
 					return Result{}, &Error{Code: "not_found", Action: Launch, Message: fmt.Sprintf("no matching profile %q", project.EffectiveProfile())}
 				}
-				// Kitty does not refuse a missing --cwd; it opens the tab
-				// somewhere else and the harness starts in the wrong project.
+				// Refuse unusable project directories before launching the harness.
 				if problem := ProjectDirectoryProblem(project.Directory); problem != "" {
 					issue := config.ProjectDirectoryIssue{Project: project.EffectiveProfile() + "/" + project.Title, Directory: project.Directory, Problem: problem}
 					return Result{}, &Error{Code: "directory_unusable", Action: Launch, Message: issue.String()}
@@ -109,36 +93,13 @@ func defaultDefinitions() []Definition {
 		{
 			ID: OpenDirectory, Label: "open directory", Description: "open the project directory in a shell", Requires: projectRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				// With no Kitty there is no tab to open: the directory is
-				// shown where the surface's host shows a shell, or left to
-				// the caller's own terminal.
-				if deps.Kitty == nil {
-					return deps.openUtility(OpenDirectory, false, request.Project.Directory)
-				}
-				account, err := requireProjectAccount(OpenDirectory, deps, *request.Project)
-				if err != nil {
-					return Result{}, err
-				}
-				if err := session.OpenDirectory(deps.Kitty, *request.Project, account, deps.Config); err != nil {
-					return Result{}, err
-				}
-				return Result{Changed: true, Message: "opened project directory"}, nil
+				return deps.openUtility(OpenDirectory, false, request.Project.Directory)
 			},
 		},
 		{
 			ID: OpenEditor, Label: "open in editor", Description: "open the project directory in an editor", Requires: projectRequirement,
 			execute: func(_ context.Context, deps Dependencies, request Request) (Result, error) {
-				if deps.Kitty == nil {
-					return deps.openUtility(OpenEditor, true, request.Project.Directory)
-				}
-				account, err := requireProjectAccount(OpenEditor, deps, *request.Project)
-				if err != nil {
-					return Result{}, err
-				}
-				if err := session.OpenInEditor(deps.Kitty, *request.Project, account, deps.Config); err != nil {
-					return Result{}, err
-				}
-				return Result{Changed: true, Message: "opened project in editor"}, nil
+				return deps.openUtility(OpenEditor, true, request.Project.Directory)
 			},
 		},
 		{
@@ -283,8 +244,8 @@ func defaultDefinitions() []Definition {
 				if err != nil && !errors.Is(err, session.ErrCloseTimeout) {
 					return Result{}, err
 				}
-				// A timed-out poll is not a failed close: Kitty accepted the
-				// request and the tab usually goes shortly after. It is reported
+				// A timed-out poll is not a failed close: tmux accepted the
+				// request and the session usually exits shortly after. It is reported
 				// as an accepted-but-unconfirmed close rather than as an error,
 				// which is what lets a caller offer close recovery only for the
 				// closes it can show happened.
@@ -462,22 +423,12 @@ func dependencyError(id ID, dependency string) error {
 	return &Error{Code: "missing_dependency", Action: id, Message: fmt.Sprintf("action %q requires %s", id, dependency)}
 }
 
-// operatorStateUpdate addresses an operator's icon action to a session. A
-// Kitty session is named by its window; any other by its runtime session,
-// because only the daemon knows that session's state slot.
+// operatorStateUpdate addresses an operator's icon action by runtime session.
 func operatorStateUpdate(action string, running session.RunningSession) (protocol.Request, error) {
 	req := protocol.Request{Type: protocol.TypeStateUpdate, Action: action, SessionTitle: running.Base}
-	if running.RuntimeSessionID != "" {
-		req.RuntimeSessionID = string(running.RuntimeSessionID)
-		return req, nil
+	if running.RuntimeSessionID == "" {
+		return protocol.Request{}, fmt.Errorf("runtime session ID unavailable")
 	}
-	if running.BackendKind() != runtimesession.BackendKitty {
-		return protocol.Request{}, fmt.Errorf("runtime session ID unavailable for %s session", running.BackendKind())
-	}
-	req.KittyListenOn = kitty.NormalizedListenAddressFromEnv()
-	if req.KittyListenOn == "" || running.WindowID <= 0 {
-		return protocol.Request{}, fmt.Errorf("kitty socket and window ID are required to update this session's status")
-	}
-	req.WindowID = running.WindowID
+	req.RuntimeSessionID = string(running.RuntimeSessionID)
 	return req, nil
 }

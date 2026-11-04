@@ -4,16 +4,9 @@ import (
 	"sync"
 )
 
-// This file models the daemon's explicit startup readiness. The daemon takes
-// one bounded initial Kitty snapshot and restores durable state BEFORE binding
-// the public socket, so the first client request already sees restored state.
-// If that bounded snapshot times out (a slow or wedged Kitty), the daemon does
-// not block startup: it comes up degraded, serves immediately, and the
-// maintenance loop reconciles on its next successful tick. Readiness makes that
-// distinction observable instead of hiding it behind a log line.
-//
-// A daemon with no Kitty socket at all is a third case and is not degraded:
-// see MarkReadyWithoutKitty.
+// This file models the daemon's explicit startup readiness. Runtime sessions
+// reconcile and restore before the public socket binds, so the first client
+// request can read restored state.
 
 // readinessState records whether the daemon reached a fully ready state and, if
 // not, the reason it started degraded. It is safe for concurrent use.
@@ -48,22 +41,11 @@ func (r *readinessState) snapshot() (ready bool, degraded string) {
 	return r.ready, r.degraded
 }
 
-// MarkReady records that the daemon completed its bounded initial
-// snapshot+restore. Exported for daemon.Run.
+// MarkReady records that the daemon completed startup restore. Exported for
+// daemon.Run.
 func (h *Handler) MarkReady() {
 	h.readiness.markReady()
 	h.companionDirty()
-}
-
-// MarkReadyWithoutKitty records that the daemon started with no Kitty to read:
-// no socket in its environment, so nothing to restore from and nothing that a
-// later tick could find wedged. That is how a daemon restarted from a terminal
-// outside Kitty looks, and it is ready for the sessions it does serve. The
-// durable restore stays owed to the first Kitty snapshot the maintenance loop
-// takes once a hook has brought a socket.
-func (h *Handler) MarkReadyWithoutKitty() {
-	h.kittyRestorePending.Store(true)
-	h.MarkReady()
 }
 
 // MarkDegraded records that the daemon started degraded with the given reason.

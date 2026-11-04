@@ -21,7 +21,7 @@ var debugReplayCmd = &cobra.Command{
 	Long: `Recompute recorded routing, reducer, reset, duplicate, and render-cause
 outcomes from an immutable journal directory, a diagnostic bundle, or an
 ` + "`amx daemon export-events`" + ` file, and compare them with what was recorded.
-Replay never connects to Kitty or the daemon and has no live-apply mode.`,
+Replay never connects to a terminal or the daemon and has no live-apply mode.`,
 	Example: `  amx debug replay agent-mux-debug.tar.gz
   amx debug replay ~/.local/state/agent-mux/journal --trace <trace-id> --json`,
 	Args:         cobra.MaximumNArgs(1),

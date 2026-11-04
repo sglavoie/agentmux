@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -24,10 +23,9 @@ func commandByID(t *testing.T, id commands.ID) commands.Command[Model] {
 	return commands.Command[Model]{}
 }
 
-func commandTestModel(target session.RunningSession) (Model, commands.Context, *kittytest.Client) {
-	client := kittytest.NewClient(nil)
+func commandTestModel(target session.RunningSession) (Model, commands.Context) {
 	m := testModelWithSessions()
-	m.client = client
+	m.client = nil
 	m.width = 160
 	m.height = 50
 	m.cfg.Defaults.Preview = config.PreviewConfig{
@@ -38,7 +36,7 @@ func commandTestModel(target session.RunningSession) (Model, commands.Context, *
 		MinRows:   30,
 	}
 	m = loadSessions(m, []session.RunningSession{target})
-	return m, captureCommandContext(m), client
+	return m, captureCommandContext(m)
 }
 
 func TestCommandCatalogStableInventory(t *testing.T) {
@@ -89,7 +87,6 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, keyProjectSessionSearch},
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
-		{commands.ResortTabs, commands.GroupApplication, "Resort Tabs", []string{"reorder", "tabs"}, ""},
 		{commands.UndoClose, commands.GroupApplication, "Recover Ended Session (relaunch project)", []string{"restore", "reopen", "resume", "relaunch", "undo last close"}, keyUndoClose},
 		{commands.ShowFeedback, commands.GroupApplication, "Show Action Feedback", []string{"errors", "failures", "notices", "waiting"}, ""},
 		{commands.ShowHealth, commands.GroupApplication, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
@@ -98,7 +95,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.Quit, commands.GroupApplication, "Quit", []string{"close app", "exit"}, "q / ctrl+c"},
 	}
 
-	m, ctx, _ := commandTestModel(session.RunningSession{
+	m, ctx := commandTestModel(session.RunningSession{
 		TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work", State: "bolt",
 	})
 	got := commandCatalog()
@@ -196,7 +193,6 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		commands.ShowRuns:           noDashboardKey,
 		commands.ShowFlightLog:      noDashboardKey,
 		commands.ToggleListView:     noDashboardKey,
-		commands.ResortTabs:         noDashboardKey,
 		commands.UndoClose:          keyUndoClose,
 		commands.ShowFeedback:       noDashboardKey,
 		commands.ShowHealth:         noDashboardKey,
@@ -244,7 +240,7 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 func TestCommandCatalogDynamicTitles(t *testing.T) {
 	t.Parallel()
 
-	m, ctx, _ := commandTestModel(session.RunningSession{
+	m, ctx := commandTestModel(session.RunningSession{
 		TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work",
 	})
 	cases := []struct {
@@ -322,7 +318,7 @@ func TestCommandCatalogAvailability(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m, ctx, _ := commandTestModel(tc.target)
+			m, ctx := commandTestModel(tc.target)
 			if tc.setup != nil {
 				tc.setup(&m)
 			}
@@ -338,7 +334,7 @@ func TestCommandCatalogAvailability(t *testing.T) {
 	// geometry in which the palette should draw this row as unavailable, and the
 	// binding is declared GateUnchecked for the same reason.
 	t.Run("the inspector is available at every width", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(base)
+		m, ctx := commandTestModel(base)
 		inspector := commandByID(t, commands.ToggleInspector)
 		for _, width := range []int{20, 80, inspectorMinQueueCols + inspectorDividerCols + inspectorMinCols, 160} {
 			m.width = width
@@ -349,7 +345,7 @@ func TestCommandCatalogAvailability(t *testing.T) {
 	})
 
 	t.Run("undo requires a live deadline", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(base)
+		m, ctx := commandTestModel(base)
 		undo := commandByID(t, commands.UndoClose)
 		expired := undoTestNow.Add(undoWindow + time.Second)
 		m.now = func() time.Time { return expired }
@@ -368,7 +364,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 	t.Parallel()
 
 	target := session.RunningSession{TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work"}
-	m, ctx, _ := commandTestModel(target)
+	m, ctx := commandTestModel(target)
 	clear := commandByID(t, commands.ClearFilters)
 	dismiss := commandByID(t, commands.DismissDeprecation)
 
@@ -392,13 +388,13 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 	}
 
 	visible := 0
-	clean, cleanCtx, _ := commandTestModel(target)
+	clean, cleanCtx := commandTestModel(target)
 	for _, candidate := range commandCatalog() {
 		if candidate.IsVisible(clean, cleanCtx) {
 			visible++
 		}
 	}
-	if visible != 35 {
-		t.Fatalf("clean catalog has %d visible commands, want 35", visible)
+	if visible != 34 {
+		t.Fatalf("clean catalog has %d visible commands, want 34", visible)
 	}
 }

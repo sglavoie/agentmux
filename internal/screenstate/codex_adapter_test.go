@@ -285,8 +285,7 @@ func TestCodexTiersReachableToday(t *testing.T) {
 // TestCodexComposerPlaceholderIsNarrow pins the accepted residual brittleness
 // and, more importantly, the narrowness that pays for it.
 //
-// codexComposerLineRE hardcodes the dim placeholder strings because Kitty's
-// get-text drops the styling that would identify them structurally. A build
+// codexComposerLineRE hardcodes the dim placeholder strings because plain text capture drops the styling that would identify them structurally. A build
 // shipping an unknown placeholder makes the composer unmatchable and withholds
 // settling — a stuck ⚡ and never a false 🛑, which is the direction this package
 // fails in by design.

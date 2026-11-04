@@ -277,7 +277,7 @@ func TestOrderHandlesTheEmptyAndSingleCases(t *testing.T) {
 }
 
 // TestAnUnlabelledRowIsOrderedByTheNameItsTileShows. A session with no
-// configured project and no family still has a Kitty base name, and ordering it
+// configured project and no family still has a session base name, and ordering it
 // by an empty string would pile every such row at the top in discovery order.
 func TestAnUnlabelledRowIsOrderedByTheNameItsTileShows(t *testing.T) {
 	bare := func(tabID int, base string) session.RunningSession {

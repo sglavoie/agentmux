@@ -250,7 +250,7 @@ func TestColdTopologyFailureIsNotDegradedCachedData(t *testing.T) {
 	cold := healthyFacts()
 	cold.TopologyWarm = false
 	cold.TopologyAge = 0
-	cold.TopologyErr = "kitty: connection refused"
+	cold.TopologyErr = "tmux: connection refused"
 
 	issue := healthIssueByID(t, BuildHealthIssues(cold), HealthIssueTopology)
 	if issue.State != HealthFailed {
@@ -265,7 +265,7 @@ func TestColdTopologyFailureIsNotDegradedCachedData(t *testing.T) {
 
 	warm := healthyFacts()
 	warm.TopologyAge = 30 * time.Second
-	warm.TopologyErr = "kitty: connection refused"
+	warm.TopologyErr = "tmux: connection refused"
 
 	issue = healthIssueByID(t, BuildHealthIssues(warm), HealthIssueTopology)
 	if issue.State != HealthWarning {

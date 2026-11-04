@@ -62,10 +62,9 @@ type Candidate struct {
 	StateDir string
 	// CWD is the run's workspace root. It is empty for a plan that has no
 	// workspace, which the projection spells as null rather than as a guess.
-	CWD      string
-	Harness  string
-	WindowID int
-	PID      int
+	CWD     string
+	Harness string
+	PID     int
 	// StartToken is the birth time of PID, which is what distinguishes the loop
 	// process from whatever else the kernel may later hand that PID to.
 	StartToken string
@@ -107,14 +106,6 @@ type PlanState struct {
 	PlanDir  string
 	StateDir string
 	CWD      string
-}
-
-// WorkspaceTarget describes an open workspace session that can receive loop
-// marker state.
-type WorkspaceTarget struct {
-	CWD      string
-	Harness  string
-	WindowID int
 }
 
 // DefaultStateRoot mirrors agent-session-loop's operational state location. It
@@ -222,88 +213,6 @@ func SortCandidates(candidates []Candidate) {
 		}
 		return a.PlanDir < b.PlanDir
 	})
-}
-
-// MatchingCWD returns candidates whose loop cwd matches selectedDir after
-// canonicalization.
-func MatchingCWD(candidates []Candidate, selectedDir string) ([]Candidate, error) {
-	if selectedDir == "" {
-		return nil, nil
-	}
-	selectedCanonical, err := CanonicalizePath(selectedDir)
-	if err != nil {
-		return nil, fmt.Errorf("agentloop: resolving selected directory %s: %w", selectedDir, err)
-	}
-	return matchingCanonicalCWD(candidates, selectedCanonical), nil
-}
-
-// MatchingWorkspace returns loop candidates for target's workspace, preferring
-// candidates with target's harness when present. If a different same-workspace
-// harness has an open target, that harness owns the loop marker; otherwise the
-// function falls back to CWD-only workspace matching.
-//
-// Candidate WindowID is treated as authoritative only when it identifies a
-// managed window in openTargets. A candidate whose WindowID points outside the
-// managed set (for example, an ASL pane nested inside a managed tab) is still
-// eligible for CWD/harness fallback so the loop marker reaches the managed
-// session that owns the workspace. This is Kitty window topology, not ASL
-// contract compatibility: the projection legitimately carries a null window ID,
-// and dropping the fallback would strand split-tab routing.
-func MatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTargets []WorkspaceTarget) ([]Candidate, error) {
-	workspaceCandidates := candidates
-	if target.WindowID > 0 {
-		matches := matchingWindow(candidates, target.WindowID)
-		if len(matches) > 0 {
-			return matches, nil
-		}
-		workspaceCandidates = candidatesEligibleForWindowFallback(candidates, managedWindowIDs(openTargets, target.WindowID))
-	}
-
-	if target.CWD == "" {
-		return nil, nil
-	}
-	selectedCanonical, err := CanonicalizePath(target.CWD)
-	if err != nil {
-		return nil, fmt.Errorf("agentloop: resolving selected directory %s: %w", target.CWD, err)
-	}
-
-	matches := matchingCanonicalCWD(workspaceCandidates, selectedCanonical)
-	if len(matches) == 0 {
-		return nil, nil
-	}
-
-	targetHarness := normalizeKnownHarness(target.Harness)
-	if targetHarness != "" {
-		sameHarness := filterHarness(matches, targetHarness)
-		if len(sameHarness) > 0 {
-			return sameHarness, nil
-		}
-	}
-
-	if workspaceHasOpenCandidateHarness(matches, selectedCanonical, openTargets) {
-		return nil, nil
-	}
-	return matches, nil
-}
-
-// HasMatchingCWD reports whether any candidate's cwd matches selectedDir after
-// canonicalization.
-func HasMatchingCWD(candidates []Candidate, selectedDir string) (bool, error) {
-	matches, err := MatchingCWD(candidates, selectedDir)
-	if err != nil {
-		return false, err
-	}
-	return len(matches) > 0, nil
-}
-
-// HasMatchingWorkspace reports whether target owns a loop marker under
-// MatchingWorkspace's workspace/harness rules.
-func HasMatchingWorkspace(candidates []Candidate, target WorkspaceTarget, openTargets []WorkspaceTarget) (bool, error) {
-	matches, err := MatchingWorkspace(candidates, target, openTargets)
-	if err != nil {
-		return false, err
-	}
-	return len(matches) > 0, nil
 }
 
 // CanonicalizePath mirrors agent-session-loop's realpath(abs(expanduser(path)))

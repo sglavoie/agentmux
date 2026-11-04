@@ -67,8 +67,7 @@ struct WorkspaceInspection: Equatable {
     let title: String
     let glyph: String
     let sections: [Section]
-    /// Whether the workspace embeds the session. A Kitty session is named,
-    /// colored, and given its icon in Kitty.
+    /// Whether the workspace embeds the session.
     let embedded: Bool
     let muted: Bool
 }
@@ -141,16 +140,15 @@ enum WorkspaceInspector {
     static func waiting(
         _ sessions: [CompanionSession],
         asl: [CompanionASLWaiting] = [],
-        snapshotSocket: String = "",
         now: Date = Date(),
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceWaitingRow] {
-        let runs = MenuBuilder.waitingBySession(asl, sessions: sessions, snapshotSocket: snapshotSocket).bySession
-        let rows = WorkspaceSidebar.rows(sessions, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
-        return AttentionCycler.ordered(sessions, snapshotSocket: snapshotSocket, order: order).map { session in
-            let key = AttentionCycler.key(session, snapshotSocket: snapshotSocket)
-            let row = rows.first { $0.key == key } ?? WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
+        let runs = MenuBuilder.waitingBySession(asl, sessions: sessions).bySession
+        let rows = WorkspaceSidebar.rows(sessions, now: now, glyphs: glyphs)
+        return AttentionCycler.ordered(sessions, order: order).map { session in
+            let key = AttentionCycler.key(session)
+            let row = rows.first { $0.key == key } ?? WorkspaceSidebar.row(session, now: now, glyphs: glyphs)
             var answer: WorkspaceWaitingAnswer?
             if let run = runs[row.key] {
                 answer = .asl(MenuBuilder.target(run))
@@ -159,7 +157,6 @@ enum WorkspaceInspector {
             }
             var detail = [session.reason.isEmpty ? word(for: session.iconState) : WorkspaceWording.status(session.reason)]
             if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
-            if row.embeddedRuntimeSessionID == nil { detail.append(WorkspaceSidebar.kittyBadge) }
             return WorkspaceWaitingRow(
                 key: row.key,
                 title: row.name.isEmpty ? row.displayName : "\(row.project) — \(row.namedLabel)",
@@ -178,13 +175,12 @@ enum WorkspaceInspector {
     /// and a section with nothing in it is too.
     static func inspection(
         _ session: CompanionSession,
-        snapshotSocket: String = "",
         now: Date = Date(),
         glyphs: Glyphs = .bundled,
         displayName: String? = nil
     ) -> WorkspaceInspection {
         typealias Field = WorkspaceInspection.Field
-        let row = WorkspaceSidebar.row(session, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs)
+        let row = WorkspaceSidebar.row(session, now: now, glyphs: glyphs)
 
         var status = [Field(label: "State", value: word(for: session.iconState))]
         if !session.reason.isEmpty { status.append(Field(label: "Reason", value: WorkspaceWording.status(session.reason))) }

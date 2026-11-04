@@ -93,7 +93,7 @@ func (n *Notifier) FinishCancellation(c PendingCancellation) {
 
 // HasPending reports whether a debounced permission notification is still
 // scheduled for windowID. It is the read half of the bookkeeping PurgeWindow
-// releases when Kitty stops reporting a window.
+// releases when a session disappears.
 func (n *Notifier) HasPending(windowID int) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()

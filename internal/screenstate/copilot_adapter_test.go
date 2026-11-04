@@ -15,11 +15,8 @@ import (
 // the Copilot adapter was held back for. Every committed copilot_*.txt is named
 // in the table below.
 //
-// The captures were taken with `kitten @ get-text --extent=screen`, the same
-// call and the same extent the daemon reads panes with (internal/kitty:
-// GetText(match, "screen")), against GitHub Copilot CLI 1.0.82 driven live in
-// Kitty. Naming the build is the same precaution codex_adapter_test.go records
-// twice over: when a harness release moves the copy, the fixture that has to be
+// The captures were taken from a live pane running GitHub Copilot CLI 1.0.82.
+// Naming the build is the same precaution codex_adapter_test.go records: when a harness release moves the copy, the fixture that has to be
 // re-taken is identified by the version it came from.
 
 // copilotObservation classifies through the registry rather than the concrete

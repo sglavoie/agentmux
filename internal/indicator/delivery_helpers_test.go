@@ -10,6 +10,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 type handlerDaemonClient struct {
@@ -64,9 +65,9 @@ func hookPayloadFile(t *testing.T, payload string) *os.File {
 	return stdin
 }
 
-func deliverOutsideKitty(t *testing.T) (DeliveryResult, []diagnostics.TraceEnvelope, string) {
+func deliverOnRuntimeSession(t *testing.T) (DeliveryResult, []diagnostics.TraceEnvelope, string) {
 	t.Helper()
-	t.Setenv("KITTY_LISTEN_ON", "")
+	t.Setenv(runtimesession.EnvVar, "")
 
 	const payload = `{"source_event_id":"source-1"}`
 	stdin, err := os.CreateTemp(t.TempDir(), "hook-payload-*.json")
@@ -87,7 +88,7 @@ func deliverOutsideKitty(t *testing.T) (DeliveryResult, []diagnostics.TraceEnvel
 	})
 
 	result := Deliver("Stop", 42, "claude", "/tmp/amx", DeliveryOptions{})
-	if result.Status != DeliveryPermanentFailure || result.Reason != "outside_kitty" ||
+	if result.Status != DeliveryPermanentFailure || result.Reason != "missing_runtime_session" ||
 		len(result.TraceID) != 36 || result.RequestID != result.TraceID {
 		t.Fatalf("result = %+v", result)
 	}

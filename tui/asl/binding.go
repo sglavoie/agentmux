@@ -16,14 +16,10 @@ import (
 )
 
 // ExactBinding reports the live session ASL has positively identified for a
-// row: either the projected Kitty window, or a session carrying the same run ID
-// in its managed user variables. Anything looser is a guess and is left to the
-// fallback path.
+// row: a session carrying the same run ID in its managed state.
+// Anything looser is left to the fallback path.
 func ExactBinding(row aslbridge.Row, sessions []session.RunningSession) (session.RunningSession, bool) {
 	for _, candidate := range sessions {
-		if row.Window != nil && row.Window.KittyWindowID != 0 && candidate.WindowID == row.Window.KittyWindowID {
-			return candidate, true
-		}
 		if row.RunID != "" && candidate.ASLRunID == row.RunID {
 			return candidate, true
 		}
@@ -75,9 +71,6 @@ func (in RunsInput) MarkerFor(s session.RunningSession) (string, bool) {
 		return "", false
 	}
 	for _, row := range in.Rows {
-		if row.Window != nil && row.Window.KittyWindowID != 0 && row.Window.KittyWindowID == s.WindowID {
-			return StateMarker(row.PrimaryState), true
-		}
 		if row.RunID != "" && row.RunID == s.ASLRunID {
 			return StateMarker(row.PrimaryState), true
 		}

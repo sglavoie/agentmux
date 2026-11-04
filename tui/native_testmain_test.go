@@ -7,11 +7,14 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/testenv"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
 func TestMain(m *testing.M) {
 	testenv.ClearSessionEnv()
+	commands.Portable.Launch = runtimesession.BackendTmux
 	stateRoot, err := os.MkdirTemp("", "agentmux-tui-test-state-")
 	if err != nil {
 		panic(err)

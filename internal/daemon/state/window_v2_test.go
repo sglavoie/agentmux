@@ -9,7 +9,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
+func TestStatePayloadV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 3, TurnID: "t1", At: 1710000100, OriginWindowID: 91, HarnessProcess: process})
@@ -27,22 +27,22 @@ func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 		BusySince:    busySince,
 	}
 
-	encoded, err := state.MarshalUserVar()
+	encoded, err := state.MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	if !strings.Contains(encoded, `"v":4`) {
-		t.Fatalf("MarshalUserVar() missing schema discriminator: %s", encoded)
+		t.Fatalf("MarshalStatePayload() missing schema discriminator: %s", encoded)
 	}
 	for _, fragment := range []string{`"pv":1`, `"ph":"claude"`, `"pp":4321`, `"pt":"Mon Jul 13 10:11:12 2026"`, `"bs":1710000100`} {
 		if !strings.Contains(encoded, fragment) {
-			t.Fatalf("MarshalUserVar() missing process field %s: %s", fragment, encoded)
+			t.Fatalf("MarshalStatePayload() missing process field %s: %s", fragment, encoded)
 		}
 	}
 
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if got.Reducer == nil {
 		t.Fatalf("restored state has no reducer")
@@ -64,20 +64,20 @@ func TestUserVarV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 	}
 }
 
-func TestUserVarV4RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
+func TestStatePayloadV4RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	src := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: src, Action: "active", Seq: 1, At: 100, HarnessProcess: process})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceProbe, Key: "user"}, Action: "user_clear", Seq: 2, At: 101})
 
-	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 
 	facts := got.Reducer.Facts()
@@ -96,11 +96,11 @@ func TestUserVarV4RoundTripPreservesAcknowledgementCutoff(t *testing.T) {
 	}
 }
 
-func TestUserVarV4RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
+func TestStatePayloadV4RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
 	raw := `{"v":2,"f":[{"k":"harness","y":"claude:active","a":"active","i":"bolt","q":5,"t":123,"ak":true},{"k":"harness","y":"claude:terminal","a":"stop","i":"stop","q":6,"t":100,"ak":true,"tm":true,"ta":200},{"k":"probe","y":"zero","a":"active","i":"bolt","q":7,"ak":true}],"sq":7}`
 	var st WindowState
-	if err := st.UnmarshalUserVar(raw); err != nil {
-		t.Fatalf("UnmarshalUserVar(v2) error: %v", err)
+	if err := st.UnmarshalStatePayload(raw); err != nil {
+		t.Fatalf("UnmarshalStatePayload(v2) error: %v", err)
 	}
 	if st.Reducer == nil {
 		t.Fatal("v2 restore produced no reducer")
@@ -122,20 +122,20 @@ func TestUserVarV4RestoresV2WithDeterministicAcknowledgementSeed(t *testing.T) {
 	}
 }
 
-func TestUserVarV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
+func TestStatePayloadV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
 	source := protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
 		Source: source, Action: "active", SessionID: "s1", Seq: 1, At: 100,
 		OriginWindowID: 91,
 	})
-	encoded, err := (WindowState{Reducer: r, ShadowSeq: 1}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r, ShadowSeq: 1}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	var restored WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if !restored.Reducer.HasLiveOriginRoute(source, "s1", 91) {
 		t.Fatalf("restored reducer lost routed origin: %+v", restored.Reducer.Facts())
@@ -150,7 +150,7 @@ func TestUserVarV4RestartPreservesRoutedOriginThroughTerminal(t *testing.T) {
 	}
 }
 
-func TestUserVarV4RestartEquivalenceAcrossSources(t *testing.T) {
+func TestStatePayloadV4RestartEquivalenceAcrossSources(t *testing.T) {
 	events := []protocol.ReducerEvent{
 		{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 1, TurnID: "t1", At: 100},
 		{Source: protocol.SourceID{Kind: protocol.SourceSubagent, Key: "agent-1"}, Action: "subagent", Seq: 1, TurnID: "t1", At: 110},
@@ -162,13 +162,13 @@ func TestUserVarV4RestartEquivalenceAcrossSources(t *testing.T) {
 		r.Apply(ev)
 	}
 
-	encoded, err := (WindowState{Reducer: r}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 
 	for _, now := range []int64{131, 1000, 100000} {
@@ -183,13 +183,13 @@ func TestUserVarV4RestartEquivalenceAcrossSources(t *testing.T) {
 	}
 }
 
-func TestUserVarV4MigratesV1IntoSyntheticLegacySource(t *testing.T) {
+func TestStatePayloadV4MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 	// A v1 payload has no "v" discriminator; its scalar action and loop marker
 	// migrate into synthetic legacy/ASL facts.
 	raw := `{"a":"permission","l":true,"acct":"work","h":"codex","t":1710000001}`
 	var st WindowState
-	if err := st.UnmarshalUserVar(raw); err != nil {
-		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	if err := st.UnmarshalStatePayload(raw); err != nil {
+		t.Fatalf("UnmarshalStatePayload(v1) error: %v", err)
 	}
 	if st.LastAction != "permission" || st.DesiredIcon != "key" {
 		t.Fatalf("legacy scalars = %q/%q, want permission/key", st.LastAction, st.DesiredIcon)
@@ -224,10 +224,10 @@ func TestUserVarV4MigratesV1IntoSyntheticLegacySource(t *testing.T) {
 	}
 }
 
-func TestUserVarV4MigratesV1TerminalAction(t *testing.T) {
+func TestStatePayloadV4MigratesV1TerminalAction(t *testing.T) {
 	var st WindowState
-	if err := st.UnmarshalUserVar(`{"a":"stop_failure","t":5}`); err != nil {
-		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	if err := st.UnmarshalStatePayload(`{"a":"stop_failure","t":5}`); err != nil {
+		t.Fatalf("UnmarshalStatePayload(v1) error: %v", err)
 	}
 	facts := st.Reducer.Facts()
 	if len(facts) != 1 {
@@ -238,10 +238,10 @@ func TestUserVarV4MigratesV1TerminalAction(t *testing.T) {
 	}
 }
 
-func TestUserVarV4MigratesEmptyV1WithoutFacts(t *testing.T) {
+func TestStatePayloadV4MigratesEmptyV1WithoutFacts(t *testing.T) {
 	var st WindowState
-	if err := st.UnmarshalUserVar(`{"acct":"work"}`); err != nil {
-		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	if err := st.UnmarshalStatePayload(`{"acct":"work"}`); err != nil {
+		t.Fatalf("UnmarshalStatePayload(v1) error: %v", err)
 	}
 	if st.Reducer != nil {
 		t.Fatalf("empty v1 payload migrated facts: %+v", st.Reducer.Facts())
@@ -251,26 +251,26 @@ func TestUserVarV4MigratesEmptyV1WithoutFacts(t *testing.T) {
 	}
 }
 
-func TestUserVarV4ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
+func TestStatePayloadV4ShadowSeqNeverTrailsRestoredFacts(t *testing.T) {
 	// A payload whose ShadowSeq lags its fact sequences (e.g. written by a
 	// crashed daemon mid-update) must not hand out receipt sequences that the
 	// reducer would discard as reordered.
 	r := NewReducer(ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:s1"}, Action: "active", Seq: 40, At: 100})
-	encoded, err := (WindowState{Reducer: r, ShadowSeq: 2}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r, ShadowSeq: 2}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if got.ShadowSeq != 40 {
 		t.Fatalf("ShadowSeq = %d, want lifted to max fact seq 40", got.ShadowSeq)
 	}
 }
 
-func TestUserVarV4DropsInvalidProcessMetadataWithoutLosingFacts(t *testing.T) {
+func TestStatePayloadV4DropsInvalidProcessMetadataWithoutLosingFacts(t *testing.T) {
 	raw := `{"v":4,"pv":1,"f":[` +
 		`{"k":"harness","y":"claude:valid","a":"active","i":"bolt","ph":"claude","pp":4321,"pt":"Mon Jul 13 10:11:12 2026"},` +
 		`{"k":"harness","y":"claude:partial","a":"active","i":"bolt","ph":"claude","pp":4322},` +
@@ -278,8 +278,8 @@ func TestUserVarV4DropsInvalidProcessMetadataWithoutLosingFacts(t *testing.T) {
 		`{"k":"asl","y":"run-1","p":"between","ll":true,"ph":"claude","pp":4324,"pt":"token"}]}`
 
 	var got WindowState
-	if err := got.UnmarshalUserVar(raw); err != nil {
-		t.Fatalf("UnmarshalUserVar(v4) error: %v", err)
+	if err := got.UnmarshalStatePayload(raw); err != nil {
+		t.Fatalf("UnmarshalStatePayload(v4) error: %v", err)
 	}
 	if got.Reducer == nil {
 		t.Fatal("v4 restore produced no reducer")
@@ -302,15 +302,15 @@ func TestUserVarV4DropsInvalidProcessMetadataWithoutLosingFacts(t *testing.T) {
 	}
 }
 
-func TestUserVarV4DropsPreUTCTokenOwnershipWithoutLosingFacts(t *testing.T) {
+func TestStatePayloadV4DropsPreUTCTokenOwnershipWithoutLosingFacts(t *testing.T) {
 	// Early v4 writers persisted locale-stable but timezone-dependent lstart
 	// values and had no payload-level token marker. Comparing one of those
 	// opaque values with a newly UTC-rendered token could falsely report PID
 	// reuse, so restore the contribution but deliberately leave it untracked.
 	raw := `{"v":4,"f":[{"k":"harness","y":"claude:s1","a":"active","i":"bolt","ph":"claude","pp":4321,"pt":"Mon Jul 13 10:11:12 2026"}]}`
 	var got WindowState
-	if err := got.UnmarshalUserVar(raw); err != nil {
-		t.Fatalf("UnmarshalUserVar(pre-marker v4) error: %v", err)
+	if err := got.UnmarshalStatePayload(raw); err != nil {
+		t.Fatalf("UnmarshalStatePayload(pre-marker v4) error: %v", err)
 	}
 	facts := got.Reducer.Facts()
 	if len(facts) != 1 || facts[0].Icon != "bolt" {
@@ -321,13 +321,13 @@ func TestUserVarV4DropsPreUTCTokenOwnershipWithoutLosingFacts(t *testing.T) {
 	}
 }
 
-func TestUserVarV2AndV3IgnoreInjectedProcessMetadata(t *testing.T) {
+func TestStatePayloadV2AndV3IgnoreInjectedProcessMetadata(t *testing.T) {
 	for _, schema := range []string{"2", "3"} {
 		t.Run("v"+schema, func(t *testing.T) {
 			raw := `{"v":` + schema + `,"f":[{"k":"harness","y":"claude:s1","a":"active","i":"bolt","ph":"claude","pp":4321,"pt":"Mon Jul 13 10:11:12 2026"}]}`
 			var got WindowState
-			if err := got.UnmarshalUserVar(raw); err != nil {
-				t.Fatalf("UnmarshalUserVar(v%s) error: %v", schema, err)
+			if err := got.UnmarshalStatePayload(raw); err != nil {
+				t.Fatalf("UnmarshalStatePayload(v%s) error: %v", schema, err)
 			}
 			facts := got.Reducer.Facts()
 			if len(facts) != 1 || facts[0].HarnessProcessHarness != "" || facts[0].HarnessProcessPID != 0 || facts[0].HarnessProcessStartToken != "" {
@@ -337,20 +337,20 @@ func TestUserVarV2AndV3IgnoreInjectedProcessMetadata(t *testing.T) {
 	}
 }
 
-func TestUserVarV4RestoredProcessCanSettleExit(t *testing.T) {
+func TestStatePayloadV4RestoredProcessCanSettleExit(t *testing.T) {
 	process := protocol.HarnessProcessIdentity{Harness: "claude", PID: 4321, StartToken: "Mon Jul 13 10:11:12 2026"}
 	r := NewReducer(ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{
 		Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "claude:pipe"}, Action: "active",
 		Seq: 1, At: 100, PipeMode: true, HarnessProcess: process,
 	})
-	encoded, err := (WindowState{Reducer: r, Effective: r.Reduce(100), ShadowSeq: 1}).MarshalUserVar()
+	encoded, err := (WindowState{Reducer: r, Effective: r.Reduce(100), ShadowSeq: 1}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	var restored WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 
 	result := restored.Reducer.SettleHarnessProcessExit(process, 101, HarnessProcessExitOptions{PipeMode: true})

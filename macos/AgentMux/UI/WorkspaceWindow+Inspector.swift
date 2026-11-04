@@ -47,18 +47,17 @@ extension WorkspaceWindowController {
     /// is. The session it describes is the one the session keys act on.
     func reloadInspector() {
         guard let store = delegate?.store else { return }
-        let socket = store.snapshot?.kitty.socket ?? ""
         // Only what is listed can be gone to, so only that is shown.
-        let sessions = store.sessions.filter { state.row(AttentionCycler.key($0, snapshotSocket: socket)) != nil }
+        let sessions = store.sessions.filter { state.row(AttentionCycler.key($0)) != nil }
         let shown = shownSessionRow.flatMap { row in
-            sessions.first { AttentionCycler.key($0, snapshotSocket: socket) == row.key }
+            sessions.first { AttentionCycler.key($0) == row.key }
         }
         inspector.show(WorkspaceInspectorView.Model(
             tab: inspectorTab,
             waiting: WorkspaceInspector.waiting(
-                sessions, asl: store.snapshot?.asl.waiting ?? [], snapshotSocket: socket, now: now(), glyphs: glyphs, order: order
+                sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order
             ),
-            inspection: shown.map { WorkspaceInspector.inspection($0, snapshotSocket: socket, now: now(), glyphs: glyphs, displayName: shownSessionRow?.displayName) },
+            inspection: shown.map { WorkspaceInspector.inspection($0, now: now(), glyphs: glyphs, displayName: shownSessionRow?.displayName) },
             sourceConversation: shownSessionRow.flatMap { delegate?.workspaceHandoffSource($0) },
             current: state.current,
             feedNotice: WorkspaceSidebar.feedNotice(store.feed)

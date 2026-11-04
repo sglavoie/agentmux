@@ -102,8 +102,6 @@ func classifyFailureRecord(record diagnostics.TraceEnvelope) (string, string, bo
 	switch {
 	case reason == "producer_not_invoked" || reason == "producer_absent" || strings.EqualFold(record.Evidence["producer_invoked"], "false"):
 		return CauseProducerAbsence, "A record explicitly proves that the producer did not invoke the hook.", true
-	case reason == "outside_kitty":
-		return CauseOutsideKitty, "The hook ran outside Kitty, so no Agent Mux window identity was available.", true
 	case strings.HasPrefix(reason, protocol.DecisionReasonInvalidPayload) || normalization == protocol.NormalizationOutcomeQuarantined && strings.Contains(reason, "invalid"):
 		return CauseInvalidPayload, "The recorded payload failed validation and was not admitted as trusted input.", true
 	case saturation != "" || strings.Contains(reason, "saturat") || strings.Contains(stage, "saturat") || evidencePositive(record.Evidence["queue_full"]):
@@ -376,7 +374,7 @@ func suggestedCommands(cause ExplanationCause, records []diagnostics.TraceEnvelo
 		harnessName = firstNonEmptyString(harnessName, record.Harness)
 	}
 	switch cause.Classification {
-	case CauseDeliveryFailure, CauseSaturation, CauseOwnerMismatch, CauseOutsideKitty:
+	case CauseDeliveryFailure, CauseSaturation, CauseOwnerMismatch:
 		if windowID > 0 {
 			command := "amx debug probe --window " + strconv.Itoa(windowID)
 			if safeCommandToken(harnessName) {

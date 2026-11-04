@@ -8,15 +8,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
 // ClearStatus asks the daemon to drop its guard via user_clear. The daemon
-// renderer owns the resulting title update, so this path never writes Kitty
-// titles directly. Transport errors remain nonfatal while the daemon is
+// renderer owns the resulting presentation update. Transport errors remain nonfatal while the daemon is
 // restarting; the next refresh converges the state.
-func ClearStatus(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
+func ClearStatus(s session.RunningSession) tea.Cmd {
 	return ClearStatusWithDaemon(DaemonRequest, s)
 }
 
@@ -30,7 +28,7 @@ func ClearStatusWithDaemon(request func(protocol.Request) (protocol.Response, er
 // MarkActive asks the daemon to show ⚡ via user_active until the session's
 // next real hook/ASL event. Like ClearStatus, the daemon renderer owns the
 // title write and transport errors stay nonfatal.
-func MarkActive(_ kitty.KittyClient, s session.RunningSession) tea.Cmd {
+func MarkActive(s session.RunningSession) tea.Cmd {
 	return MarkActiveWithDaemon(DaemonRequest, s)
 }
 
@@ -41,27 +39,19 @@ func MarkActiveWithDaemon(request func(protocol.Request) (protocol.Response, err
 	}
 }
 
-// Focus focuses a tab by ID and returns FocusDoneMsg.
-//
-// A portable session has no tab to focus: it is shown by attaching this
-// terminal to it, and the attached view reports through AttachDoneMsg when the
-// operator comes back.
-func Focus(client kitty.KittyClient, tabID int) tea.Cmd {
+// Focus attaches to a tmux session by its local row ID.
+func Focus(tabID int) tea.Cmd {
 	if rs, ok := PortableSession(tabID); ok {
 		return Attach(rs)
 	}
-	return func() tea.Msg {
-		target := session.RunningSession{TabID: tabID}
-		_, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Focus, actions.Request{Session: &target})
-		return FocusDoneMsg{Err: err}
-	}
+	return func() tea.Msg { return AttachDoneMsg{Err: ErrNoTerminal} }
 }
 
 // CloseSessionRow closes a session through the backend that hosts it and
 // reports exactly as Close does.
-func CloseSessionRow(client kitty.KittyClient, cfg *config.Config, rs session.RunningSession) tea.Cmd {
+func CloseSessionRow(cfg *config.Config, rs session.RunningSession) tea.Cmd {
 	if !IsPortable(rs) {
-		return Close(client, rs.TabID)
+		return func() tea.Msg { return ActionDoneMsg{Err: ErrNoTerminal} }
 	}
 	if PortableLost(rs) {
 		// Its server is gone: there is no agent to end, only a row to drop.
@@ -71,7 +61,7 @@ func CloseSessionRow(client kitty.KittyClient, cfg *config.Config, rs session.Ru
 		}
 	}
 	return func() tea.Msg {
-		result, err := Registry.Execute(context.Background(), TerminalDependencies(client, cfg), actions.Close, actions.Request{Session: &rs, Confirmed: true})
+		result, err := Registry.Execute(context.Background(), TerminalDependencies(cfg), actions.Close, actions.Request{Session: &rs, Confirmed: true})
 		if err != nil {
 			return ActionDoneMsg{Err: err}
 		}
@@ -79,64 +69,35 @@ func CloseSessionRow(client kitty.KittyClient, cfg *config.Config, rs session.Ru
 	}
 }
 
-// Close closes a tab by ID and returns ActionDoneMsg.
-//
-// The completion reports whether the tab was observed to close, not merely
-// whether Kitty accepted the request. A close that timed out or could not be
-// checked comes back unconfirmed rather than successful, which is what keeps the
-// dashboard from offering to undo a close it cannot show happened.
-func Close(client kitty.KittyClient, tabID int) tea.Cmd {
-	return func() tea.Msg {
-		target := session.RunningSession{TabID: tabID}
-		result, err := Registry.Execute(context.Background(), actions.Dependencies{Kitty: client}, actions.Close, actions.Request{Session: &target, Confirmed: true})
-		if err != nil {
-			return ActionDoneMsg{Err: err}
-		}
-		return ActionDoneMsg{Unconfirmed: !actions.CloseConfirmed(result)}
+// Close closes a tmux session by its local row ID.
+func Close(tabID int) tea.Cmd {
+	if rs, ok := PortableSession(tabID); ok {
+		return CloseSessionRow(nil, rs)
 	}
+	return func() tea.Msg { return ActionDoneMsg{Err: ErrNoTerminal} }
 }
 
 // Restart closes and relaunches a session and returns ActionDoneMsg.
-func Restart(client kitty.KittyClient, running session.RunningSession, cfg *config.Config) tea.Cmd {
+func Restart(running session.RunningSession, cfg *config.Config) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, cfg), actions.Restart, actions.Request{Session: &running, Confirmed: true})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(cfg), actions.Restart, actions.Request{Session: &running, Confirmed: true})
 		return ActionDoneMsg{Err: err}
 	}
 }
 
-// Resort reorders managed Kitty tabs to match SortRunning's expected order and
-// returns ResortDoneMsg. Without Kitty there is no tab to move: every surface
-// lists sessions in the sort order already (session.Order).
-func Resort(client kitty.KittyClient, sortMode string) tea.Cmd {
-	return func() tea.Msg {
-		if client == nil {
-			return ResortDoneMsg{AlwaysSorted: true}
-		}
-		return ResortDoneMsg{Err: session.Resort(client, sortMode)}
-	}
-}
-
-// Peek launches a Kitty overlay pager for the given window's scrollback.
-//
-// A portable session, which Kitty cannot read, is captured through its
-// backend and paged in this terminal instead.
-func Peek(client kitty.KittyClient, windowID int) tea.Cmd {
+// Peek captures a tmux pane and shows its scrollback in this terminal.
+func Peek(windowID int) tea.Cmd {
 	if rs, ok := PortableSession(windowID); ok {
 		return peekPortable(rs)
 	}
-	if client == nil {
-		return func() tea.Msg { return PeekDoneMsg{Err: ErrNoTerminal} }
-	}
-	return func() tea.Msg {
-		return PeekDoneMsg{Err: client.LaunchOverlayPager(kitty.MatchWindowByID(windowID))}
-	}
+	return func() tea.Msg { return PeekDoneMsg{Err: ErrNoTerminal} }
 }
 
 // ToggleLock flips the lock state on the session's anchor window. Locked
 // sessions reject close/restart/override from the dashboard.
-func ToggleLock(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
+func ToggleLock(rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, nil), actions.ToggleLock, actions.Request{Session: &rs})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(nil), actions.ToggleLock, actions.Request{Session: &rs})
 		return ActionDoneMsg{Err: err}
 	}
 }
@@ -144,22 +105,19 @@ func ToggleLock(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
 // TogglePin pins the session above every other, or unpins it. The pin is the
 // ★ in front of the title, which the dashboard, the workspace sidebar, and the
 // session order all read.
-func TogglePin(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
+func TogglePin(rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, nil), actions.TogglePin, actions.Request{Session: &rs})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(nil), actions.TogglePin, actions.Request{Session: &rs})
 		return ActionDoneMsg{Err: err}
 	}
 }
 
 // ToggleMute flips the mute state on the session's anchor window. Muted
 // sessions suppress macOS notifications across every notify path in the daemon.
-// After flipping the user var, the tab title is rebuilt with the new muted flag
-// so the 🔇 glyph appears immediately on the Kitty tab — without this push every
-// downstream title-rewrite path only preserves a 🔇 already present and never
-// seeds it.
-func ToggleMute(client kitty.KittyClient, rs session.RunningSession) tea.Cmd {
+// The daemon projects the new muted flag on the next refresh.
+func ToggleMute(rs session.RunningSession) tea.Cmd {
 	return func() tea.Msg {
-		_, err := Registry.Execute(context.Background(), TerminalDependencies(client, nil), actions.ToggleMute, actions.Request{Session: &rs})
+		_, err := Registry.Execute(context.Background(), TerminalDependencies(nil), actions.ToggleMute, actions.Request{Session: &rs})
 		return ActionDoneMsg{Err: err}
 	}
 }

@@ -8,12 +8,10 @@ import (
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// TestHeaderNamesTheSessionWhereTheOperatorFindsIt pins that a Kitty session
-// is named by its window, a tmux session by its runtime session rather than
-// the process-local ID it is listed under, and the state in the dashboard
-// row's words rather than its icon name.
+// TestHeaderNamesTheSessionWhereTheOperatorFindsIt pins that a tmux session
+// is named by its runtime session rather than the process-local ID it is
+// listed under, and the state in the dashboard row's words.
 func TestHeaderNamesTheSessionWhereTheOperatorFindsIt(t *testing.T) {
-	kittyRow := session.RunningSession{WindowID: 42, Base: "api", State: "key"}
 	tmuxRow := session.RunningSession{
 		WindowID: 1 << 41, Base: "web", State: "bolt",
 		Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-1",
@@ -24,7 +22,6 @@ func TestHeaderNamesTheSessionWhereTheOperatorFindsIt(t *testing.T) {
 		want, wantState string
 		reject          string
 	}{
-		{name: "kitty", row: kittyRow, want: "— window 42", wantState: "Needs permission"},
 		{name: "tmux", row: tmuxRow, want: "— tmux session rs-1", wantState: "Working", reject: "2199023255552"},
 	}
 	for _, tc := range cases {

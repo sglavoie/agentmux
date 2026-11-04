@@ -2,19 +2,16 @@ import XCTest
 @testable import AgentMux
 
 final class AttentionCyclerTests: XCTestCase {
-    /// A Kitty session of `project`; with none given, each window is a
-    /// project of its own, named so that the windows sort by number.
-    private func session(_ windowID: Int, project: String? = nil, changedMS: Int64 = 0, socket: String = "",
+    /// Each session has a project name that sorts by number by default.
+    private func session(_ id: Int, project: String? = nil, changedMS: Int64 = 0,
                          attention: Bool = true) -> CompanionSession {
-        var session = CompanionSession(windowID: windowID)
-        session.project = project ?? "p\(windowID)"
-        session.kittySocket = socket
+        var session = WorkspaceFixture.tmux(id, project: project ?? "p\(id)")
         session.attention = attention
         session.presentationChangedAtMS = changedMS
         return session
     }
 
-    private func ids(_ sessions: [CompanionSession]) -> [Int] { sessions.map(\.windowID) }
+    private func ids(_ sessions: [CompanionSession]) -> [Int] { sessions.map(\.testID) }
 
     func testOrdersByProjectNotByAgeAndSkipsRowsNotWaiting() {
         let sessions = [
@@ -34,30 +31,30 @@ final class AttentionCyclerTests: XCTestCase {
     func testFollowsTheOrderAProjectWasDraggedInto() {
         let sessions = [session(1, project: "api"), session(2, project: "api"), session(3, project: "web")]
         var order = WorkspaceOrder()
-        order.set([2, 1].map { AttentionCycler.Key(socket: "", windowID: $0) }, for: "api")
+        order.set([2, 1].map { .embedded(WorkspaceFixture.runtimeID($0)) }, for: "api")
         XCTAssertEqual(ids(AttentionCycler.ordered(sessions, order: order)), [2, 1, 3])
         var cycler = AttentionCycler()
-        let presses = (0..<4).compactMap { _ in cycler.advance(in: sessions, order: order)?.windowID }
+        let presses = (0..<4).compactMap { _ in cycler.advance(in: sessions, order: order)?.testID }
         XCTAssertEqual(presses, [2, 1, 3, 2])
     }
 
     func testCyclesAndWrapsAround() {
         let sessions = [session(1, changedMS: 3_000), session(2, changedMS: 1_000), session(3, changedMS: 2_000)]
         var cycler = AttentionCycler()
-        let presses = (0..<5).compactMap { _ in cycler.advance(in: sessions)?.windowID }
+        let presses = (0..<5).compactMap { _ in cycler.advance(in: sessions)?.testID }
         XCTAssertEqual(presses, [1, 2, 3, 1, 2])
     }
 
     func testContinuesFromWhereASettledSessionStood() {
         var sessions = [session(1), session(2), session(3)]
         var cycler = AttentionCycler()
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 2)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 1)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 2)
         // Focusing 2 settled it; the next press goes on to 3, not back to 1.
         sessions[1].attention = false
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 3)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 3)
         sessions[2].attention = false
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1, "past the last it wraps")
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 1, "past the last it wraps")
         XCTAssertNil(AttentionCycler().next(in: sessions.map { var s = $0; s.attention = false; return s }))
     }
 
@@ -75,66 +72,41 @@ final class AttentionCyclerTests: XCTestCase {
         var sessions = [a, b, c]
         XCTAssertEqual(ids(WorkspaceSidebar.ordered(sessions)), [1, 2, 3])
         var cycler = AttentionCycler()
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 1)
         // Focusing A marked it seen: it goes back to web, just above C.
         sessions[0].unseen = false
         XCTAssertEqual(ids(WorkspaceSidebar.ordered(sessions)), [2, 1, 3])
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 2, "B stood right after A")
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 3)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 2, "B stood right after A")
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 1)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 3)
     }
 
     func testASessionListedSinceComesAfterThoseThatWere() {
         let sessions = [session(1), session(3)]
         var cycler = AttentionCycler()
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 1)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 1)
         // 2 is listed between them now, but 3 was already waiting after 1.
         let more = [session(1), session(2), session(3)]
-        XCTAssertEqual(cycler.advance(in: more)?.windowID, 3)
-        XCTAssertEqual(cycler.advance(in: more)?.windowID, 1)
-        XCTAssertEqual(cycler.advance(in: more)?.windowID, 2)
+        XCTAssertEqual(cycler.advance(in: more)?.testID, 3)
+        XCTAssertEqual(cycler.advance(in: more)?.testID, 1)
+        XCTAssertEqual(cycler.advance(in: more)?.testID, 2)
     }
 
     func testContinuesFromWhereAClosedSessionStood() {
         let sessions = [session(1), session(2), session(3), session(4)]
         var cycler = AttentionCycler()
         _ = cycler.advance(in: sessions)
-        XCTAssertEqual(cycler.advance(in: sessions)?.windowID, 2)
+        XCTAssertEqual(cycler.advance(in: sessions)?.testID, 2)
         // 2 was closed, and 3 with it: the press goes to what stood after them.
         let left = [sessions[0], sessions[3]]
-        XCTAssertEqual(cycler.advance(in: left)?.windowID, 4)
-        XCTAssertEqual(cycler.advance(in: left)?.windowID, 1)
+        XCTAssertEqual(cycler.advance(in: left)?.testID, 4)
+        XCTAssertEqual(cycler.advance(in: left)?.testID, 1)
     }
 
     func testTheOnlyWaitingSessionIsFocusedAgain() {
         let sessions = [session(1), session(2, attention: false)]
         var cycler = AttentionCycler()
-        XCTAssertEqual((0..<2).compactMap { _ in cycler.advance(in: sessions)?.windowID }, [1, 1])
+        XCTAssertEqual((0..<2).compactMap { _ in cycler.advance(in: sessions)?.testID }, [1, 1])
     }
 
-    func testSpansKittyInstances() {
-        // The same window ID in two Kitty instances is two sessions.
-        let sessions = [
-            session(7, project: "a", socket: "unix:/tmp/kitty-1"),
-            session(7, project: "b", socket: "unix:/tmp/kitty-2"),
-            session(8, project: "c"),
-        ]
-        var cycler = AttentionCycler()
-        let presses = (0..<4).compactMap { _ in cycler.advance(in: sessions, snapshotSocket: "unix:/tmp/kitty-1") }
-        XCTAssertEqual(presses.map(\.kittySocket), ["unix:/tmp/kitty-1", "unix:/tmp/kitty-2", "", "unix:/tmp/kitty-1"])
-        XCTAssertEqual(
-            AttentionCycler.key(sessions[2], snapshotSocket: "unix:/tmp/kitty-1"),
-            AttentionCycler.Key(socket: "unix:/tmp/kitty-1", windowID: 8),
-            "a row with no socket of its own belongs to the snapshot's Kitty"
-        )
-    }
-
-    func testSessionsOfAProjectAndProfileGoBySocketThenWindow() {
-        let sessions = [
-            session(2, project: "api", socket: "b"),
-            session(9, project: "api", socket: "a"),
-            session(1, project: "api", socket: "b"),
-        ]
-        XCTAssertEqual(ids(AttentionCycler.ordered(sessions)), [9, 1, 2])
-    }
 }

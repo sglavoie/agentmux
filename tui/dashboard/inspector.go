@@ -19,7 +19,7 @@
 // empty string, because an empty string is exactly the evidence that cannot
 // separate them.
 //
-// Nothing in this file reads a clock, a config file, Kitty, or the daemon. The
+// Nothing in this file reads a clock, a config file, the terminal, or the daemon. The
 // caller supplies every fact, including `Now`, which is what lets a whole
 // inspector be asserted byte-for-byte against a pinned moment.
 
@@ -123,7 +123,7 @@ func (c InspectorContent) String() string {
 // It is a struct of explicit inputs rather than a model reference for the reason
 // every other renderer in this package takes one: the pane has to be assertable
 // from a test with no dashboard behind it, and a renderer holding a model could
-// reach past its inputs for a fact — a wall clock, a fresh Kitty read — that the
+// reach past its inputs for a fact — a wall clock, a fresh terminal read — that the
 // test then cannot pin.
 type InspectorInput struct {
 	Width, Height int

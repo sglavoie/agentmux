@@ -4,7 +4,7 @@
 //
 // What a toast says is tied to an operation's outcome rather than to its
 // dispatch. A key used to push "closed api" and a recovery entry the moment the
-// close command was handed to Bubble Tea, before Kitty had been asked anything —
+// close command was handed to Bubble Tea, before a terminal command ran —
 // so a close that failed, and a close nobody could confirm, both read as done,
 // and both left an undo that would have launched a second copy of a session that
 // was still running. Every lifecycle action here now says what it is doing while
@@ -237,7 +237,6 @@ const undoCloseToastID = -1
 const (
 	previewNoticeToastID = math.MinInt + iota
 	planScanToastID
-	resortToastID
 )
 
 // undoWindow is how long a close remains undoable. It is the shared vocabulary's
@@ -365,7 +364,7 @@ func sessionLabel(target sessionactions.Target) string {
 // Capturing later is not an option — the row is by then deliberately gone — and
 // offering earlier is what used to advertise an undo for closes that failed.
 func (m *Model) closeWithToast(rs session.RunningSession, request sessionactions.RequestID) tea.Cmd {
-	cmds := []tea.Cmd{commands.CloseSessionRow(m.client, m.cfg, rs)}
+	cmds := []tea.Cmd{commands.CloseSessionRow(m.cfg, rs)}
 	if snapshot, ok := m.recoverySnapshot(rs); ok {
 		m.recovery = m.recovery.Reserve(request, snapshot)
 	}
@@ -549,9 +548,8 @@ func (m *Model) undoLastCmd() tea.Cmd {
 	label := claimed.Snapshot.Label
 	request := claimed.Request
 	cfg := m.cfg
-	client := m.client
 	launch := func() tea.Msg {
-		err := commands.RecoverClosed(context.Background(), commands.TerminalDependencies(client, cfg), claimed.Snapshot.Session, claimed.Snapshot.Conversation, claimed.Snapshot.Backend)
+		err := commands.RecoverClosed(context.Background(), commands.TerminalDependencies(cfg), claimed.Snapshot.Session, claimed.Snapshot.Conversation, claimed.Snapshot.Backend)
 		return recoveryDoneMsg{request: request, label: label, err: err}
 	}
 

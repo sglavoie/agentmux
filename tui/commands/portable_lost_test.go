@@ -27,14 +27,13 @@ func lostFixture(t *testing.T, titles ...string) (*tmuxtest.Fixture, *config.Con
 		}
 	}
 	usePortable(t, PortableTerminals{Tmux: f.Backend, Launch: runtimesession.BackendTmux, Registry: f.Registry})
-	stubLocalKittySocket(t, "")
 	stubStateQuery(t, func() (protocol.Response, error) { return protocol.Response{}, errors.New("no daemon") })
 	return f, cfg
 }
 
 func refreshWith(t *testing.T, cfg *config.Config) SessionsMsg {
 	t.Helper()
-	msg, ok := Refresh(nil, cfg, "alpha", 1, 0)().(SessionsMsg)
+	msg, ok := Refresh(cfg, "alpha", 1, 0)().(SessionsMsg)
 	if !ok {
 		t.Fatalf("refresh did not return sessions")
 	}
@@ -75,13 +74,13 @@ func TestAVanishedTmuxServerLeavesItsSessionsListedAsLost(t *testing.T) {
 		}
 	}
 	// Nothing is running: the probe actions rely on must not count them.
-	live, err := TerminalDependencies(nil, cfg).LiveSessions(cfg)
+	live, err := TerminalDependencies(cfg).LiveSessions(cfg)
 	if err != nil || len(live) != 0 {
 		t.Fatalf("live probe = %d sessions, %v; want none", len(live), err)
 	}
 
 	// Closing a lost row dismisses it and touches no server.
-	done, ok := CloseSessionRow(nil, cfg, lost.Sessions[0])().(ActionDoneMsg)
+	done, ok := CloseSessionRow(cfg, lost.Sessions[0])().(ActionDoneMsg)
 	if !ok || done.Err != nil || done.Unconfirmed {
 		t.Fatalf("closing a lost row = %+v; want it dismissed", done)
 	}
@@ -99,7 +98,7 @@ func TestClosingEverySessionEmptiesTheListWithoutAnOutage(t *testing.T) {
 	if len(before.Sessions) != 1 {
 		t.Fatalf("before = %d sessions; want the agent", len(before.Sessions))
 	}
-	done, ok := CloseSessionRow(nil, cfg, before.Sessions[0])().(ActionDoneMsg)
+	done, ok := CloseSessionRow(cfg, before.Sessions[0])().(ActionDoneMsg)
 	if !ok || done.Err != nil {
 		t.Fatalf("close = %+v", done)
 	}

@@ -11,8 +11,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/sglavoie/agentmux/cmd/session"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kittykeys"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -57,12 +55,12 @@ func TestRootHelp(t *testing.T) {
 		}
 	}
 	// A public command must still be visible so we know help itself rendered.
-	for _, public := range []string{"resort", "overview"} {
+	for _, public := range []string{"overview"} {
 		if !strings.Contains(stdout, public) {
 			t.Errorf("root help should list the public command %q, got:\n%s", public, stdout)
 		}
 	}
-	if !strings.Contains(stdout, "Open or focus the live session overview") {
+	if !strings.Contains(stdout, "Open the live tmux session overview") {
 		t.Errorf("root help does not describe the overview command:\n%s", stdout)
 	}
 	for _, removed := range []string{"index", "plan", "search", "workspace"} {
@@ -92,7 +90,7 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 		"focus-next", "focus-next-managed", "focus-prev-managed",
 		"hook-indicator", "icon-picker", "keybindings", "mute-toggle", "name-session", "pin-session",
 		"notifications", "open-dashboard", "overseer", "overview", "past-sessions", "plans", "project",
-		"desktop-release-gate", "release-gate", "resort",
+		"desktop-release-gate", "release-gate",
 		"session", "transcripts", "tui-test", "workspace-view", "worktree",
 	} {
 		if !registered[name] {
@@ -101,89 +99,14 @@ func TestCommandFamiliesAreRegisteredUnderRoot(t *testing.T) {
 	}
 }
 
-// A Kitty binding is argv the operator never types and the compiler never sees,
-// so a renamed command or a dropped flag turns a keypress into an error message
-// inside a window that closes. Root is where the two halves meet, so this is
-// where the catalog is checked against the commands it actually launches.
-func TestEveryKittyBindingLaunchesARegisteredCommand(t *testing.T) {
-	for _, action := range kittykeys.Actions {
-		if action.LaunchType == "" {
-			continue // A native Kitty action; amx is not involved.
-		}
-		t.Run(action.Key, func(t *testing.T) {
-			args := strings.Fields(action.AmxCommand)
-
-			target := rootCmd
-			if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-				found, remaining, err := rootCmd.Find(args)
-				if err != nil {
-					t.Fatalf("%s launches %q, which root cannot resolve: %v", action.Key, action.AmxCommand, err)
-				}
-				if found == rootCmd {
-					t.Fatalf("%s launches %q, which resolved to the root command", action.Key, action.AmxCommand)
-				}
-				target, args = found, remaining
-			}
-
-			for _, arg := range args {
-				if !strings.HasPrefix(arg, "--") {
-					continue
-				}
-				name := strings.TrimPrefix(strings.SplitN(arg, "=", 2)[0], "--")
-				if target.Flags().Lookup(name) == nil && target.InheritedFlags().Lookup(name) == nil {
-					t.Fatalf("%s passes --%s, which %q does not accept", action.Key, name, target.CommandPath())
-				}
-			}
-		})
-	}
-}
-
-// F2 is the overview's only keyboard entry point, so the binding and the command
-// are asserted together: the catalog's subcommand is the registered one, and the
-// source window it passes is a flag that command really has.
-func TestTheOverviewBindingMatchesTheRegisteredCommand(t *testing.T) {
-	var overview kittykeys.Action
-	for _, action := range kittykeys.Actions {
-		if action.Key == "f2" {
-			overview = action
-		}
-	}
-	if overview.Key == "" {
-		t.Fatal("the shared binding catalog has no f2 overview binding")
-	}
-
-	found, remaining, err := rootCmd.Find(strings.Fields(overview.AmxCommand))
-	if err != nil {
-		t.Fatalf("f2 launches %q, which root cannot resolve: %v", overview.AmxCommand, err)
-	}
-	if found.Name() != "overview" {
-		t.Fatalf("f2 resolves to %q, want the overview command", found.CommandPath())
-	}
-	if len(remaining) != 2 || remaining[0] != "--window-id" || remaining[1] != "@active-kitty-window-id" {
-		t.Fatalf("f2 passes %v, want the active Kitty window ID as --window-id", remaining)
-	}
-	if found.Flags().Lookup("window-id") == nil {
-		t.Fatal("amx overview has no --window-id flag for F2 to pass")
-	}
-}
-
-// The overview is a singleton, so the CLI and the detector have to agree on
-// exactly which argv forms are a running overview. Cobra inherits the root's
-// persistent --debug into every subcommand, which makes `amx overview --debug`
-// as runnable as `amx --debug overview`; a detector that refused the trailing
-// spelling would miss the live instance and let F2 open a second one. This is
-// asserted here rather than in either package alone because only the assembled
-// root knows which flags a subcommand really inherits.
-func TestTheOverviewDetectorAcceptsEveryRunnableOverviewArgv(t *testing.T) {
+// Cobra accepts the inherited debug flag before or after the overview command.
+func TestOverviewAcceptsInheritedDebugFlag(t *testing.T) {
 	runnable := [][]string{
 		{"overview"},
-		{"overview", "--window-id", "101"},
 		{"--debug", "overview"},
 		{"overview", "--debug"},
 		{"overview", "--debug=true"},
 		{"overview", "--debug=false"},
-		{"overview", "--window-id=101", "--debug=true"},
-		{"overview", "--debug", "--window-id", "101"},
 	}
 
 	// Parsing writes into the flag targets the real command shares; restore the
@@ -193,7 +116,7 @@ func TestTheOverviewDetectorAcceptsEveryRunnableOverviewArgv(t *testing.T) {
 		if err != nil {
 			return
 		}
-		_ = found.ParseFlags([]string{"--debug=false", "--window-id=0"})
+		_ = found.ParseFlags([]string{"--debug=false"})
 	})
 
 	for _, args := range runnable {
@@ -212,14 +135,6 @@ func TestTheOverviewDetectorAcceptsEveryRunnableOverviewArgv(t *testing.T) {
 				t.Fatalf("amx %s leaves positional arguments %v, which the command refuses", strings.Join(args, " "), positional)
 			}
 
-			cmdline := append([]string{"/usr/local/bin/amx"}, args...)
-			windows := []kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 88, Windows: []kitty.Window{{
-				ID:                  880,
-				ForegroundProcesses: []kitty.ForegroundProcess{{Cmdline: cmdline}},
-			}}}}}}
-			if _, found := kitty.FindOverviewWindow(windows, 0); !found {
-				t.Fatalf("the runnable argv %v is not detected as an open overview", cmdline)
-			}
 		})
 	}
 }
@@ -255,7 +170,7 @@ func TestFlagDescriptionsStartInLowerCase(t *testing.T) {
 			first, _ := utf8.DecodeRuneInString(flag.Usage)
 			word, _, _ := strings.Cut(flag.Usage, " ")
 			acronym := len(word) > 1 && strings.ToUpper(word) == word
-			if unicode.IsUpper(first) && !acronym && !strings.HasPrefix(flag.Usage, "Kitty ") && !strings.HasPrefix(flag.Usage, "Agent Mux ") {
+			if unicode.IsUpper(first) && !acronym && !strings.HasPrefix(flag.Usage, "Agent Mux ") {
 				t.Errorf("%s --%s: description %q starts in upper case", command.CommandPath(), flag.Name, flag.Usage)
 			}
 		})

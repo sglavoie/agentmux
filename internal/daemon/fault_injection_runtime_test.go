@@ -163,7 +163,7 @@ func (w *runtimeFaultWorld) own(agent faultAgent, owner string, at time.Time) {
 }
 
 func listedInSnapshot(h *Handler, id runtimesession.ID) bool {
-	snap := h.buildCompanionSnapshots(time.Now())[protocol.CompanionSnapshotVersionRuntime]
+	snap := h.buildCompanionSnapshot(time.Now())
 	return slices.ContainsFunc(snap.Sessions, func(s protocol.CompanionSession) bool {
 		return s.Runtime != nil && s.Runtime.SessionID == string(id)
 	})

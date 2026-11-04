@@ -2,16 +2,15 @@
 
 A native macOS menu bar companion for Agent Mux. It is an accessory app (no
 Dock icon) that talks to the always-on amx daemon over its Unix socket and runs
-the `amx` CLI for actions. Kitty stays the terminal for Kitty sessions. For
-tmux sessions the app embeds Ghostty (`AgentMux/Ghostty/`, see
+the `amx` CLI for actions. The app embeds Ghostty (`AgentMux/Ghostty/`, see
 [Embedded terminals](#embedded-terminals)) and shows each session's terminal
 in its [workspace window](#workspace), beside a sidebar of every live session.
 
 The app shows the live managed sessions, with attention counts in the menu bar
 and a badge on its Dock icon whenever the icon is visible. The badge shows the
 total sessions requiring attention and clears when none are waiting or the
-daemon feed is disconnected. A click focuses a session's Kitty tab and brings
-Kitty to the front. Two global shortcuts reach the dashboard and the sessions
+daemon feed is disconnected. A click focuses the session in the workspace.
+Two global shortcuts reach the dashboard and the sessions
 waiting on you from any app. The daemon's notifications arrive as native banners
 while the app runs, and ASL supervisor questions are answered in a native panel.
 
@@ -257,7 +256,6 @@ only to hand the app to someone else.
 | `AgentMux/App/` | `main.swift`, `AppDelegate` (wiring, with one `AppDelegate+….swift` extension per surface: workspace, function keys, actions, feed, amx, notifications, Settings, menu validation), the state it owns as types of their own (`DaemonConnection`: the feed, health polled only while it is not live, daemon start and restart; `AMXLookup`: resolving amx and its bounded retries; `SnoozeController`), and the single-instance check. |
 | `AgentMux/Daemon/` | The socket path, line-framed socket, request client, subscription client, and the wire and companion models. |
 | `AgentMux/CLI/` | Resolving, describing, and running `amx`: binary resolver, version, `--help` capabilities, action gating, login-shell environment, detached spawn, the shared wording for an amx not yet found or not found (`AMXWording`), and `QueueWorkRunner`, which runs blocking work on a queue and hands the result back on the main actor. |
-| `AgentMux/Kitty/` | Choosing a Kitty socket and bringing the owning Kitty forward. |
 | `AgentMux/Ghostty/` | The libghostty embedding: the app object and its runtime callbacks, layered configuration, per-surface configuration, the surface view, and its input handling. |
 | `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, the workspace sidebar and its selection, the Go to… list, project and recent catalogs, snooze, and the ASL response rules. |
 | `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter, and the `config.toml` watcher. |
@@ -268,14 +266,14 @@ only to hand the app to someone else.
 | `GHOSTTY_VERSION`, `patches/ghostty/`, `NOTICE-ghostty` | The GhosttyKit pins, the build patches, and Ghostty's license notice. |
 | `GhosttyHarness/` | The Session 2 feasibility harness: a separate app with the wrapper as first ported, linking the same vendored GhosttyKit. Not part of any recipe. |
 
-The operator's guide (install, permissions, Kitty requirements,
+The operator's guide (install, permissions, runtime setup,
 troubleshooting) is [docs/companion-app.md](../docs/companion-app.md).
 
 ## Embedded terminals
 
 `Ghostty.App` owns the one `ghostty_app_t`. `AppDelegate.terminalRuntime()`
-makes it the first time a terminal is wanted, so a companion used only beside
-Kitty never starts Ghostty, and `applicationWillTerminate` shuts it down.
+makes it the first time a terminal is wanted, and
+`applicationWillTerminate` shuts it down.
 `main.swift` runs `ghostty_init` once at launch; if that fails the companion
 runs without embedded terminals.
 
@@ -390,18 +388,14 @@ Dock icon and a main menu (`UI/WorkspaceMenu.swift`); closing it returns the
 app to the menu bar accessory. The status item, the global shortcuts, and the
 ASL answer panel work the same either way.
 
-- **Which sessions.** The app subscribes with the `runtime_sessions` feature,
-  so the daemon sends v2 snapshots: Kitty sessions as before, plus the
-  sessions on other backends, each with its runtime identity
-  (`CompanionSession.runtime`). A daemon that does not know the feature keeps
-  sending v1 and the sidebar lists Kitty sessions only. A session is
-  identified by its Kitty socket and window, or, when it has no window, by its
-  runtime-session ID (`AttentionCycler.Key`).
+- **Which sessions.** The app subscribes with the `runtime_sessions` feature.
+  The daemon sends v2 snapshots with each tmux session's runtime identity
+  (`CompanionSession.runtime`). The runtime-session ID identifies a session in
+  the sidebar and attention cycle.
 - **Sidebar.** `Model/WorkspaceSidebar.swift` builds it as data: one group per
   project, sorted by name, and under it one row per session labeled with its
-  profile, sorted by profile. A row shows the state glyph the tab title and
-  the menu use, the harness, branch, age, and the reason it waits; a Kitty
-  session is marked `Kitty`. A project's line counts its sessions that wait on
+  profile, sorted by profile. A row shows the state glyph, harness, branch,
+  age, and the reason it waits. A project's line counts its sessions that wait on
   you. Sessions needing attention temporarily move into **Needs attention**,
   below the **Pinned** group and above every project, even when their project
   is collapsed.
@@ -440,16 +434,13 @@ ASL answer panel work the same either way.
   pins were shared are pinned once at the first live snapshot
   (`amxWorkspacePinsShared`). Everything that follows
   sidebar order (⌘1 to ⌘0, the next-attention shortcut, the inspector's
-  waiting list) follows them. Any session can be pinned, a Kitty one too. The
+  waiting list) follows them. Any session can be pinned. The
   place of a session that ended is forgotten the next time a pin changes while
   the feed is live.
 - **Selecting and focusing.** Selecting a row (arrow keys, **Session ›
-  Next/Previous Session or Terminal**) shows what there is to show and never leaves
-  the app: a tmux session's terminal, or a note that the session is a Kitty
-  window. Focusing a row (a click, a status-menu row, the next-attention
-  shortcut, a banner) goes where the session is: the keyboard moves into the
-  embedded terminal, or the daemon focuses the Kitty window and Kitty comes
-  forward, exactly as a status-menu click does.
+  Next/Previous Session or Terminal**) shows its tmux terminal in the app.
+  Focusing a row (a click, status-menu row, next-attention shortcut, or banner)
+  moves the keyboard into that embedded terminal.
 - **Terminals.** Each embedded session has at most one `Ghostty.SurfaceView`,
   running `amx attach <runtime-session-id>`, made the first time the session
   is selected and kept, hidden, while another is shown. A terminal is let go
@@ -483,8 +474,7 @@ ASL answer panel work the same either way.
   its title, with nothing to set up, until F5 picks another or clears it.
   The daemon reads the title on every reconciliation pass and publishes the
   configured emoji it starts with as the session's `harness_icon`, so a pick
-  shows as soon as a color does. A Kitty session's icon stays on its tab in
-  Kitty.
+  shows as soon as a color does.
 - **Closing from the sidebar.** A session row's ×, **End Session…** (⌘⇧W)
   in the Session menu, and the row context menu end its agent through the same
   confirmation policy. They run `amx close <runtime-session-id> --yes` after
@@ -501,7 +491,7 @@ ASL answer panel work the same either way.
   Thus open native and embedded views follow changes without restarting. Failed
   reads confirm conservatively. Existing explicit Boolean choices migrate;
   app quit confirmation remains enabled.
-  Kitty sessions, Dashboard, and Overview have no sidebar ×.
+  Dashboard and Overview have no sidebar ×.
 
 - **Losing the daemon.** `WorkspaceState` replaces its rows only from a live
   snapshot. While the feed is down the last rows stay listed, dimmed, with the
@@ -524,8 +514,8 @@ ASL answer panel work the same either way.
   retry; the terminals are local processes and are not touched.
 - **Coming back.** `WorkspaceRestoration` (`Model/WorkspaceRecovery.swift`)
   keeps two preferences: whether the window was open (`amxWorkspaceWindowOpen`)
-  and where its pane was (`amxWorkspacePlace`: `session:<id>`,
-  `kitty:<window>:<socket>`, or `view:dashboard|overview`). The controller
+  and where its pane was (`amxWorkspacePlace`: `session:<id>` or
+  `view:dashboard|overview`). The controller
   reports every move (`workspacePlaceChanged`); quitting does not count as
   closing the window. At launch the app reopens the window if it was open and
   calls `restore(_:)`: a view is shown at once; a session is shown once a live
@@ -550,8 +540,7 @@ ASL answer panel work the same either way.
   the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘⇧-, ⌘⇧A (next needing attention),
   ⌘] and ⌘[ (next and previous session or terminal under one), ⌘D (Dashboard), ⌘O
   (Overview), ⌘1 to ⌘0 (the first ten sessions in sidebar order,
-  `WorkspaceMenu.sessionKeys`), the same keys with Shift (a Kitty session is
-  raised in Kitty rather than selected here, and ⌘⇧] and ⌘⇧[ pass over terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘J (scroll the sidebar to what the pane is on and flash its line, expanding a collapsed project and showing a hidden sidebar; the keyboard stays put; every key that moves the pane to another session or terminal reveals where it went the same way, `AppDelegate.followingFocus`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘⇧↩ (a fresh session with a harness/profile picker and optional directory, opened automatically), ⌘R (name the session or terminal shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view or an embedded session attachment; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
+  `WorkspaceMenu.sessionKeys`), ⌘⇧] and ⌘⇧[ (next and previous session, skipping terminals), ⌘L (back to the place shown before, `toggleRecentPlace`), ⌘P (the Go to… list, `toggleSwitcher`), ⌘B (hide or show the sidebar), ⌘⇧B (hide or show the inspector on the right, `toggleInspector`), ⌘J (scroll the sidebar to what the pane is on and flash its line, expanding a collapsed project and showing a hidden sidebar; the keyboard stays put; every key that moves the pane to another session or terminal reveals where it went the same way, `AppDelegate.followingFocus`), ⌘T (one more shell in the home folder each time, Shell 2 and on, `openNewShell`), ⌘↩ (a terminal below the session shown), ⌘⇧↩ (a fresh session with a harness/profile picker and optional directory, opened automatically), ⌘R (name the session or terminal shown, `nameShownSession`), ⌘W (close what the pane is on, `closeShown`: a view or an embedded session attachment; the agent keeps running; another window that has the keyboard closes instead), ⌘⇧W (end the shown session, with confirmation enabled by default), ⌘M,
   ⌘, and ⌘Q.
 - **Two panes.** View and the command palette can split with a session shell or
   native checkout review; the palette can also select another agent. Clicking a
@@ -604,8 +593,7 @@ ASL answer panel work the same either way.
   every reconciliation pass and publishes it as the v2 snapshot's `name`, so
   the line changes with the next snapshot and not before. A named row is
   taller by one line (`WorkspaceRowCellView.nameLabel`, bold, with a blue
-  appropriate to the current appearance). A Kitty session is
-  not named here: its item is listed and disabled. A session is called by
+  appropriate to the current appearance). A session is called by
   its name, else "project — profile" (`WorkspaceRow.displayName`), in the
   window title, the inspector, and the end, name, and failure sheets.
 - **Terminal names.** ⌘R and **Name Terminal…** in the sidebar’s right-click
@@ -616,30 +604,26 @@ ASL answer panel work the same either way.
 - **Right-click menu.** A session's line offers **Name Session…**,
   **Color…**, **Icon…**, **Mute**/**Unmute**, and **Pin to Top**/**Unpin**,
   acting on the line under the pointer rather than the session the pane is on.
-  On a Kitty session the naming, color, and icon items are listed but greyed
-  out, since Kitty has those, and the menu ends with **Show in Kitty**, which
-  brings its window forward as a click does. An embedded session instead ends
-  with **New Terminal Below**, **New Session Below…**, **Copy Runtime Session ID**, and **End
+  An embedded session also offers **New Terminal Below**, **New Session Below…**,
+  **Copy Runtime Session ID**, and **End
   Session…** (the same sheet as its ×), preceded by **Reattach** while its
   terminal has ended and is not remade until asked for. An
   opened view, or the Dashboard or Overview while its program runs, offers
   **Close**; shells and terminals also offer **Name Terminal…**. A line with nothing to offer, a heading among them, shows no
   menu (`WorkspaceSidebarView.hasMenu`).
 - **Function keys.** F1 to F11 are the menu's too, with no modifier
-  (`WorkspaceMenu.functionKeys`, listed under **Session › Function Keys**):
-  the keys Kitty binds for its tabs (`internal/kittykeys`), acting on the
+  (`WorkspaceMenu.functionKeys`, listed under **Session › Function Keys**), acting on the
   session the pane is on (`shownSessionRow`). A surface declines an unbound
   function key, so AppKit offers it to the menu. F1, F5, and F6 open overlay
   views (`isOverlay`): `amx workspace-view keybindings`, `icon-picker
   <runtime-session-id>`, and `color-picker <runtime-session-id>`, which go
   back to where the pane was when their program ends and are never one of
   ⌘L's two places. F8 and F11 run `amx hook-indicator user_clear|user_active`
-  and F10 `amx mute-toggle`, naming an embedded session by `--runtime-session`
-  and a Kitty one by window and socket. F3 has no target: it is
+  and F10 `amx mute-toggle`, naming the session by `--runtime-session`.
+  F3 has no target: it is
   `SurfaceView.toggleMarkers`, the eighth history request, disabled where
-  there is no server to ask. F1's list is `kittykeys.Workspace` on the Go
-  side, and `TestWorkspaceFunctionKeysMatchTheApp` fails when the two lists
-  name different keys.
+  there is no server to ask. The Go and app key lists are checked together by
+  `TestWorkspaceFunctionKeysMatchTheApp`.
 
 ### Decision inbox, conversation history, and changes
 
@@ -705,7 +689,7 @@ shell, editor, or pager while one is open. A utility view is a
 `Ghostty.SurfaceView` running `amx workspace-view <kind> [target]`
 (`cmd/dashboard/workspace_view.go`); the app passes a kind and a target and
 never a command line, and amx decides the program and removes every session
-and Kitty variable from its environment before running it.
+  variables from its environment before running it.
 
 - **Not sessions.** A `WorkspaceUtilityView` has no `AttentionCycler.Key` and
   nothing about it comes from a snapshot, so it cannot be counted as waiting,
@@ -738,12 +722,9 @@ and Kitty variable from its environment before running it.
   so the digit shortcuts cannot land on it; `selectNeighbor` walks the
   sidebar's sessions and the terminals under them, so ⌘] and ⌘[ do, and
   with `raising` (⌘⇧] and ⌘⇧[) it walks the sessions alone.
-- **The dashboard shortcut.** It shows the workspace's Dashboard unless
-  `amxDashboardPlace` is `kitty`. Then `DashboardOpener.destination(for:)`
-  sends it to the workspace only when there is no Kitty socket to try; a Kitty
-  that answered with a failure, or sockets nobody answers on, are still
-  reported. **Launch Project** runs `amx project launch --backend tmux` and
-  shows the session in the workspace, unless `amxLaunchBackend` is `kitty`.
+- **The dashboard shortcut.** It shows the workspace's Dashboard.
+  **Launch Project** runs `amx project launch --backend tmux` and shows the
+  session in the workspace.
 
 ## Which amx the app runs
 
@@ -784,9 +765,6 @@ tried.
   inherit your shell's environment. It asks your login shell (`$SHELL -l -i`)
   for `PATH`, every `XDG_*` variable, and every `AMX_*` variable, so
   `AMX_CONFIG` and friends match the terminal's.
-- **Kitty.** amx learns which Kitty to talk to only from `KITTY_LISTEN_ON`.
-  Every invocation strips any inherited `KITTY_*` variables and sets
-  `KITTY_LISTEN_ON` explicitly when a command needs Kitty.
 - **Output.** `--json` output is decoded through the schema-v1 envelope.
   Unknown fields are ignored. A data envelope with a nonzero exit is a partial
   success. The error envelope's `code`, `candidates`, and `parameters` are kept.
@@ -879,34 +857,10 @@ doctor", and the last lines of that file go to the log, not the menu.
 
 ## Focus
 
-A row for a session on tmux opens the [workspace](#workspace) on its terminal;
-it has no Kitty window, and its ⌥ **Mute** runs
+A session row opens the workspace on its embedded tmux terminal. The app can
+request `focus_session` by runtime-session ID when a daemon-directed focus is
+needed; a stopped session receives `stale_target`. The row's ⌥ **Mute** runs
 `amx mute-toggle --runtime-session ID --json`, as F10 does in the workspace.
-Everything below is for a Kitty session.
-
-A click on a session row sends `focus_window` to the daemon. The request names
-a Kitty socket, which the daemon accepts only if it learned that socket itself
-(`Kitty/KittyEndpoint.swift`). The app tries these sockets in order, and moves
-to the next on `unknown_socket`:
-
-1. the Kitty socket set in Preferences, if any;
-2. the session's own socket;
-3. the socket the snapshot's window tree was read through;
-4. `unix:/tmp/kitty-<pid>` for each running `net.kovidgoyal.kitty` process,
-   only when that file exists.
-
-If there is nothing to try, the menu explains that Kitty needs
-`allow_remote_control yes` and `listen_on unix:/tmp/kitty` in `kitty.conf`.
-
-Once the daemon has focused the window, `Kitty/KittyActivator.swift` brings
-the Kitty process that owns the socket to the front. It finds that process from
-the pid in the socket's name, so with two Kitty instances the right one comes
-forward. It calls `NSApp.yieldActivation(to:)` and then asks Kitty to
-activate. When that is the only Kitty running, it also opens Kitty through
-`NSWorkspace.openApplication` with `activates`, which brings a running app
-forward even when Agent Mux was never active, as after a global shortcut. With
-several Kitty instances that call cannot say which one, so it is skipped. A `stale_target` reply means the session has closed. The row is hidden
-until a snapshot no longer lists it, and the menu says so.
 
 ## Menu actions
 
@@ -918,25 +872,17 @@ After the sessions, the menu offers these (`Model/ProjectCatalog.swift`,
 | --- | --- |
 | Open Dashboard | What the ⌃⌥⌘A shortcut does. |
 | Next Waiting Session | What the ⌃⌥⌘N shortcut does, and continues the same cycle. |
-| Launch Project ▸ | Configured projects, one header per profile, from `amx project list --json`. The list is fetched at launch and again whenever `config.toml` changes (the file `AMX_CONFIG` names for the amx in use, else `~/.config/agent-mux/config.toml`, watched with its directory so an editor's atomic save counts), so config edits reach an open workspace automatically. Opening the menu also refreshes a list older than ten seconds. Each project's directory is checked on disk when the list arrives and every time the menu opens; a project whose directory is missing stays listed but greyed out, with the path in its tooltip, and its ⌥ `… in Folder…` alternate still launches it in a folder you choose. Choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
-| Recent ▸ | The newest `amxRecentLimit` conversations from `amx session list --since <amxRecentDays>d --json`. The list runs in the background with a 15s timeout, and the menu shows the previous result until it lands. Choosing one runs `amx session continue harness:id --backend tmux --json` and opens the workspace on the runtime session it reports, or, when Preferences launches into Kitty, the same without `--backend` in the Kitty used last. |
-| ⌥ on a session row | Shows `Mute · …` or `Unmute · …`, which runs `amx mute-toggle --runtime-session ID --json` for a session on tmux, or `amx mute-toggle --window-id N --json` with `KITTY_LISTEN_ON` set to that row's own socket for a Kitty one. |
+| Launch Project ▸ | Lists configured projects by profile from `amx project list --json`; choosing one runs `amx project launch --title T --profile P --backend tmux --json` and opens the returned runtime session in the workspace. |
+| Recent ▸ | Lists recent conversations from `amx session list`; choosing one runs `amx session continue harness:id --backend tmux --json` and opens the returned runtime session. |
+| ⌥ on a session row | Runs `amx mute-toggle --runtime-session ID --json` to mute or unmute that session. |
 | Notifications ▸ | Snooze for 1 hour, until the next 08:00 (today's before 08:00, titled in the locale's time format and "Tomorrow" only when it is), or until resumed, and Resume Now, all through the daemon's `notification_snooze` request. Quiet hours are shown read-only with the config path they come from, because the app never rewrites `config.toml`. |
 
-New tabs open in the Kitty that was frontmost last (the app watches
-application activation), then the Preferences override, the snapshot's Kitty,
-and each `/tmp/kitty-<pid>`. After a launch or a continue, the app asks the
-daemon to focus the window amx reported, when it reported one, and brings that
-Kitty forward. A Recent conversation that a live session already runs is
-focused where it runs, in the workspace or through `focus_window` in
-whichever Kitty runs it, instead of asking amx: `session continue` only sees the Kitty it is pointed at, so for a session
-in another instance it would resume a second copy. Mute never tries another
-socket, because window IDs mean something only inside the Kitty that issued
-them.
+A project launch or conversation continuation opens the returned runtime
+session in the workspace. When a recent conversation is already running, the
+app focuses that session instead of starting another copy.
 
 Items are greyed out when the resolved amx lacks `project` (Launch Project),
-`open-dashboard` (Open Dashboard, only when `amxDashboardPlace` is `kitty`;
-the workspace's own Dashboard needs no amx command), or `mute-toggle --json`
+`open-dashboard` (Open Dashboard), or `mute-toggle --json`
 (the ⌥ Mute alternates).
 
 **Timeouts.** amx runs from the menu are bounded (`CLI/AMXCommand.swift`):
@@ -993,8 +939,7 @@ covers the first permission prompt, so the notification that raised the prompt
 usually ends up on Alerter.
 
 **Banners.** Each banner's identifier is the daemon's `notification_id`, and
-its thread is the session's runtime session ID when the daemon names one,
-else its Kitty socket and window ID, so one session's banners group together.
+its thread is the session's runtime session ID, so one session's banners group together.
 Permission and question (`elicitation`) banners play the default sound, also
 while the app is in the foreground (its menu open); other banners are silent. The
 category depends on the actions the daemon offered, and a banner never shows
@@ -1002,20 +947,18 @@ an action that was not offered:
 
 | Category | Actions | Used for |
 | --- | --- | --- |
-| `amx.session` | Mute Session, Snooze All for 1 Hour | A session notification, of a Kitty window or a tmux session |
+| `amx.session` | Mute Session, Snooze All for 1 Hour | A runtime session notification |
 | `amx.session.snooze` | Snooze All for 1 Hour | One with no session to mute |
 | `amx.asl` / `amx.asl.snooze` | Answer…, then the offered session actions | An ASL question |
 | `amx.prompt` | Answer… | A permission prompt of a tmux session, when the daemon offered `respond` |
 | `amx.plain` | none | Every other permission prompt, and any notification offered none |
 
 **Responses.** A click reports `clicked`, and the daemon focuses the pane
-exactly as it does for an Alerter click. The app then brings that Kitty
-forward. A dismissal reports `dismissed` (every category sets
+exactly as it does for an Alerter click. A dismissal reports `dismissed` (every category sets
 `customDismissAction`). An action reports `action_mute`, `action_snooze`,
 `action_answer`, or `action_respond`, and the app carries it out:
 - Mute runs `amx mute-toggle` on that session, unless the session is already
-  muted: `--runtime-session` for a session the workspace embeds, else only
-  when exactly one listed session has that window ID.
+  muted: `--runtime-session` identifies the target.
 - Snooze sets the same 1-hour snooze of every notification as the
   Notifications menu.
 - Answer opens the [ASL answer panel](#asl-answer-panel) on the notice's run.
@@ -1047,10 +990,9 @@ still open (navigation only: a view never counts toward attention).
 
 An ASL run waiting on its supervisor shows ❓ on its session row, and an
 indented **Answer…** item follows that row (`Answer… (3 questions)` when more
-than one is open). A run binds to the session that names it, else to the one
-listed session with its window ID; a run no listed session claims, or whose
-window ID is ambiguous across Kitty instances, is listed under **Supervisor
-questions** instead. The `amx.asl` banner's Answer… opens the same panel.
+than one is open). A run binds to the runtime session that names it; a run
+no listed session claims is listed under **Supervisor questions** instead.
+The `amx.asl` banner's Answer… opens the same panel.
 
 The panel (`UI/ASLQuestionPanel.swift`) floats above other windows and does not
 activate the app until the reply editor takes focus. It reads the daemon, never
@@ -1137,8 +1079,7 @@ The rules are in `Model/PromptAnswer.swift`:
 
 The daemon offers `respond` only on a `permission` notice whose target is a
 tmux runtime session, and the app shows Answer… only when that was offered
-and the notice names such a session. A Kitty session's permission banner is
-unchanged: it offers nothing but its click. The logs (category `prompt`) name
+and the notice names such a session. The logs (category `prompt`) name
 sessions, key names, and refusal codes, never screen text.
 
 ## Workspace shortcuts
@@ -1165,13 +1106,8 @@ permission:
 
 | Default | Does |
 | --- | --- |
-| ⌃⌥⌘A | Shows the workspace's Dashboard. With `amxDashboardPlace` set to `kitty`, runs `amx open-dashboard --json`, which focuses the running dashboard or opens one, then brings that Kitty forward. |
+| ⌃⌥⌘A | Shows the workspace's Dashboard. |
 | ⌃⌥⌘N | Focuses the next session needing attention (`Model/AttentionCycler.swift`) and reveals a workspace session in the sidebar, as ⌘J does. |
-
-Sent to Kitty, the dashboard shortcut names a socket the same way focus does: the
-Preferences override, the running dashboard's Kitty, the snapshot's, then each
-`/tmp/kitty-<pid>`. amx dials the socket itself, so only `kitty_unavailable`
-moves on to the next one.
 
 The next-attention shortcut visits the attention rows (stop, key, error,
 question) in the order the workspace sidebar lists every session
@@ -1179,10 +1115,8 @@ question) in the order the workspace sidebar lists every session
 and projects in their saved order. How long a session has waited moves
 nothing, and the menu's Needs attention section lists them in the same order.
 Each press focuses the one after the session the last
-press focused, and wraps after the last one. A Kitty session is its Kitty
-socket plus its window ID, and a session the workspace embeds is its runtime
-session ID alone (`AttentionCycler.Key.embedded`), so the cycle spans Kitty
-instances and backends. When the session it
+press focused, and wraps after the last one. A session is identified by its
+runtime session ID (`AttentionCycler.Key.embedded`). When the session it
 last focused no longer waits, or is gone, the cycle carries on from where
 that session stood instead of starting over. With nothing waiting, it beeps.
 
@@ -1230,10 +1164,8 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxRecentLimit` | 15 | How many conversations it lists (1–50). |
 | `amxUseAppNotifications` | true | Offers the app as the daemon's notification backend. |
 | `amxSnoozeUntil` | none | The last snooze the daemon reported, re-applied after a daemon restart (see Menu actions). The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
-| `amxKittySocketOverride` | empty | A Kitty socket tried first by focus and the dashboard shortcut. |
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
-| `amxLaunchBackend` | `workspace` | `workspace` uses tmux; `kitty` explicitly uses Kitty; `follow-cli` reads the CLI configuration before project launches and Recent conversation resumes. A stored legacy `automatic` migrates to `workspace`. Unknown or missing values use `workspace`. |
-| `amxDashboardPlace` | `workspace` | Where the dashboard shortcut and Open Dashboard show the dashboard: `workspace` (the workspace's own view), or `kitty` (a dashboard tab in Kitty when a Kitty is running, else the workspace). |
+| `amxLaunchBackend` | `workspace` | `workspace` uses tmux; `follow-cli` reads the CLI configuration before project launches and Recent conversation resumes. A stored legacy `automatic` migrates to `workspace`. Unknown or missing values use `workspace`. |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
 | `amxConfirmationPolicy` | `follow-cli` | Whether to ask before closing a running utility view (⌘W) or ending a session (⌘⇧W): `follow-cli` asks what `config.toml` says (`[defaults] confirm_destructive`, read through `amx config confirmation --json`) right before the action and asks when that cannot be read; `always` and `never` override it. Changes apply immediately to shortcuts, menus, sidebar close actions, and the embedded dashboards; app quit confirmation is separate. A stored legacy `amxConfirmBeforeClosing` Boolean is read only when this key is absent (true → `always`, false → `never`) and is removed on the next save. |
 | `amxReadingProseSize` | 13 | Prose size in History, Activity and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
@@ -1275,8 +1207,7 @@ failed states, plus search highlights, diff navigation, Waiting, and the command
 palette. Fixtures use injected services and never read real conversations or
 operate a real run. PNGs are attached to the XCTest result and written to
 `/tmp/agentmux-polish-previews`; older macOS versions skip only these capture
-tests. Reviewed reference images and their provenance are recorded in
-[`docs/acceptance/desktop-improvements.md`](../docs/acceptance/desktop-improvements.md).
+tests. The XCTest result contains the reviewed reference images.
 
 ### Native agent handoff
 

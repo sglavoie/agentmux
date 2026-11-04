@@ -315,7 +315,7 @@ func (m Model) handleMouseAction(msg mouseActionMsg) (tea.Model, tea.Cmd) {
 		}
 		if double {
 			if session, ok := m.selectedSession(); ok {
-				cmds = append(cmds, commands.Focus(m.client, session.TabID))
+				cmds = append(cmds, commands.Focus(session.TabID))
 			}
 		}
 		return m, tea.Batch(cmds...)

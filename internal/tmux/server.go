@@ -15,7 +15,7 @@
 // about a session's state.
 //
 // A plain terminal attached to a session gets from the configuration the keys
-// Kitty bound for its tabs (internal/kittykeys.Tmux). Going to another session
+// configured for tmux (internal/keybindings.Tmux). Going to another session
 // is a client switched to it (switch.go), under the rule attaching follows:
 // one owner, and never an agent that is not running. An overlay is a popup
 // over the terminal, which is a view and never a session.
@@ -52,14 +52,14 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/atomicfile"
 	"github.com/sglavoie/agentmux/internal/cachefile"
-	"github.com/sglavoie/agentmux/internal/kittykeys"
+	"github.com/sglavoie/agentmux/internal/keybindings"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // Config is the whole configuration of the private server. The server is
 // started with `-f` this file, so tmux reads neither /etc/tmux.conf nor any
 // personal ~/.tmux.conf or $XDG_CONFIG_HOME/tmux/tmux.conf.
-var Config = configHead + kittykeys.TmuxConfig() + configTail
+var Config = configHead + keybindings.TmuxConfig() + configTail
 
 const configHead = `# Written by AgentMux; changes are overwritten. This private server never
 # reads a personal tmux configuration.
@@ -95,7 +95,7 @@ set -g window-size latest
 # What a session shows about itself is rendered by the AgentMux daemon into
 # @amx_status (state icon and title) and @amx_status_color on the agent's
 # pane; nothing here decides it. The outer terminal's title is that text, so
-# its tab reads as a Kitty tab did. The one-line status shows the same text on
+# its tab shows the session title. The one-line status shows the same text on
 # the session's color; it is off unless the terminal that attaches asks for it
 # (amx attach turns it on for a plain terminal and off for the desktop
 # workspace, which lists every session itself). It is a view of the session,
@@ -160,12 +160,12 @@ bind-key -n User7 if-shell -F '#{pane_in_mode}' { send-keys -X cancel } { if-she
 bind-key -n F3 if-shell -F '#{pane_in_mode}' { send-keys -X cancel } { if-shell -F '#{alternate_on}' { send-keys F3 } { copy-mode -e ; send-keys -X search-backward -- "(error|failed|warning|deprecated)" } }
 bind-key -T copy-mode-vi Escape send-keys -X cancel
 
-# The keys Kitty bound for its tabs, for a plain terminal attached here: the
+# The AgentMux keys for a plain terminal attached here: the
 # dashboard, the overview, the reference, and the pickers open in a popup over
 # the terminal that pressed the key, and the rest run amx in the background.
 # Each runs in the environment of the session the terminal is on. The desktop
 # app's menu takes these keys before they are sent, so there they never
-# arrive. The lines are generated from internal/kittykeys.Tmux.
+# arrive. The lines are generated from internal/keybindings.Tmux.
 #
 # A popup's command is run by default-shell, so that is the shell the lines
 # are written for; no pane uses it, since every agent is started as an argv.
@@ -541,8 +541,8 @@ func escapeArg(a string) string {
 // clientEnv is the environment of every tmux client. The client that starts
 // the server seeds the server's global environment, which every pane
 // inherits, so variables naming the caller's own terminal or session are
-// removed: a pane must never report into a Kitty window, a parent tmux, or a
-// runtime session it does not belong to. A launch's own identity arrives
+// removed: a pane must never report into a parent tmux or a runtime session
+// it does not belong to. A launch's own identity arrives
 // through LaunchSpec.Env instead.
 func clientEnv(environ []string) []string {
 	out := make([]string, 0, len(environ))
@@ -561,7 +561,7 @@ func strippedEnv(key string) bool {
 	case "TMUX", "TMUX_PANE", "WINDOWID", "CLAUDECODE", runtimesession.EnvVar, WorkspaceHostEnv, "AMX_WORKSPACE_CONFIRMATION_FILE":
 		return true
 	}
-	return strings.HasPrefix(key, "KITTY_")
+	return false
 }
 
 func ensurePrivateDir(dir string) error {

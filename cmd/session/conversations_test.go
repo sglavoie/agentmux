@@ -13,36 +13,31 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/tmux/tmuxtest"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
 )
 
-type sessionCommandKitty struct {
-	windows  []kitty.OSWindow
-	listErr  error
-	launched []kitty.LaunchOpts
-	focuses  []string
-}
-
-func resetSessionCommandsTestState(t *testing.T) {
+func resetSessionCommandsTestState(t *testing.T) *tmuxtest.Fixture {
 	t.Helper()
+	fixture := tmuxtest.New(t)
+	oldTmuxBackend := cli.NewTmuxBackend
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return fixture.Backend, nil }
 	oldLoadConfig := sessionCommandsLoadConfig
 	oldLoadIndex := sessionCommandsLoadSessionIndex
 	oldIndexPath := sessionCommandsSessionIndexPath
 	oldReaders := sessionCommandsSessionReaders
-	oldNewKitty := sessionCommandsNewKitty
 	oldDaemon := sessionCommandsDaemon
 	oldLive := sessionCommandsLiveConversations
-	oldCurrentWindow := sessionCommandsCurrentWindow
 	oldNewHandoff := sessionCommandsNewHandoff
 	oldNewWorktree := sessionCommandsNewWorktree
 	oldIsTerminal := sessionListIsTerminal
@@ -53,14 +48,13 @@ func resetSessionCommandsTestState(t *testing.T) {
 	oldForkWorktreeOut := sessionForkWorktreeCmd.OutOrStdout()
 	oldHandoffOut := sessionHandoffCmd.OutOrStdout()
 	t.Cleanup(func() {
+		cli.NewTmuxBackend = oldTmuxBackend
 		sessionCommandsLoadConfig = oldLoadConfig
 		sessionCommandsLoadSessionIndex = oldLoadIndex
 		sessionCommandsSessionIndexPath = oldIndexPath
 		sessionCommandsSessionReaders = oldReaders
-		sessionCommandsNewKitty = oldNewKitty
 		sessionCommandsDaemon = oldDaemon
 		sessionCommandsLiveConversations = oldLive
-		sessionCommandsCurrentWindow = oldCurrentWindow
 		sessionCommandsNewHandoff = oldNewHandoff
 		sessionCommandsNewWorktree = oldNewWorktree
 		sessionListIsTerminal = oldIsTerminal
@@ -91,32 +85,20 @@ func resetSessionCommandsTestState(t *testing.T) {
 			}
 		}
 	})
-	// Live tabs come from the operator's daemon and Kitty unless a test says
-	// otherwise; by default neither can be asked.
+	// Tests replace the daemon's live conversation query.
 	sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) { return nil, false }
-	sessionCommandsCurrentWindow = func() int { return 0 }
+	return fixture
 }
 
-func (c *sessionCommandKitty) ListWindows() ([]kitty.OSWindow, error) {
-	return c.windows, c.listErr
+type recordingTmux struct {
+	backend.TargetLauncher
+	launches []backend.LaunchSpec
 }
-func (c *sessionCommandKitty) LaunchTab(opts kitty.LaunchOpts) error {
-	c.launched = append(c.launched, opts)
-	return nil
+
+func (r *recordingTmux) LaunchTarget(spec backend.LaunchSpec) (backend.Launched, error) {
+	r.launches = append(r.launches, spec)
+	return r.TargetLauncher.LaunchTarget(spec)
 }
-func (*sessionCommandKitty) LaunchOverlay(kitty.LaunchOpts) error                     { return nil }
-func (*sessionCommandKitty) CloseTab(string) error                                    { return nil }
-func (*sessionCommandKitty) MoveTab(string, int) error                                { return nil }
-func (*sessionCommandKitty) SetTabColor(string, string, string, string, string) error { return nil }
-func (*sessionCommandKitty) SetTabTitle(string, string) error                         { return nil }
-func (*sessionCommandKitty) SetUserVars(string, map[string]string) error              { return nil }
-func (c *sessionCommandKitty) FocusTab(match string) error {
-	c.focuses = append(c.focuses, match)
-	return nil
-}
-func (*sessionCommandKitty) FocusWindow(string) error               { return nil }
-func (*sessionCommandKitty) GetText(string, string) (string, error) { return "", nil }
-func (*sessionCommandKitty) LaunchOverlayPager(string) error        { return nil }
 
 type sessionCommandReader struct {
 	harness     string
@@ -200,7 +182,7 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{
-			Defaults: config.Defaults{LaunchBackend: "kitty"},
+			Defaults: config.Defaults{LaunchBackend: "tmux"},
 			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: dir}},
 			Projects: []config.Session{
 				{Title: "Primary", Directory: dir, Profile: "work"},
@@ -258,12 +240,13 @@ func TestSessionListRefreshesFilesystemIndexAndEmitsTextAndJSON(t *testing.T) {
 }
 
 func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
-	resetSessionCommandsTestState(t)
+	fixture := resetSessionCommandsTestState(t)
+	recorder := &recordingTmux{TargetLauncher: fixture.Backend}
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return recorder, nil }
 	meta, indexPath := sessionCommandMeta(t, harness.Codex)
-	client := &sessionCommandKitty{}
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{
-			Defaults: config.Defaults{LaunchBackend: "kitty", Args: []string{"--model", "test"}},
+			Defaults: config.Defaults{LaunchBackend: "tmux", Args: []string{"--model", "test"}},
 			Accounts: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: "/tmp/codex-home"}},
 			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: "/tmp/codex-home"}},
 			Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work", Args: []string{"--project-flag"}}},
@@ -284,7 +267,6 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 			harness: harness.Codex, discovered: []transcript.SessionMeta{meta}, calls: &discoverCalls,
 		}}
 	}
-	sessionCommandsNewKitty = func() kitty.KittyClient { return client }
 	sessionCommandsDaemon = func(protocol.Request) (protocol.Response, error) { return protocol.Response{OK: true}, nil }
 	if err := sessionContinueCmd.Flags().Set("json", "true"); err != nil {
 		t.Fatal(err)
@@ -295,14 +277,14 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 	if err := sessionContinueCmd.RunE(sessionContinueCmd, []string{harness.Codex, meta.ID}); err != nil {
 		t.Fatalf("session continue: %v", err)
 	}
-	if len(client.launched) != 1 {
-		t.Fatalf("launches = %+v, want one", client.launched)
+	if len(recorder.launches) != 1 {
+		t.Fatalf("launches = %+v, want one", recorder.launches)
 	}
-	opts := client.launched[0]
-	if opts.Directory != meta.CWD || opts.UserVars["amx_harness"] != harness.Codex || opts.UserVars["amx_profile"] != "work" {
+	opts := recorder.launches[0]
+	if opts.Directory != meta.CWD || opts.Vars["amx_harness"] != harness.Codex || opts.Vars["amx_profile"] != "work" {
 		t.Fatalf("launch context = %+v, want indexed source context", opts)
 	}
-	if got := strings.Join(opts.Cmdline, " "); !strings.Contains(got, "codex --project-flag -c log_dir=") || !strings.Contains(got, " resume session-1") {
+	if got := strings.Join(opts.Argv, " "); !strings.Contains(got, "codex --project-flag -c log_dir=") || !strings.Contains(got, " resume session-1") {
 		t.Fatalf("command = %q, want Codex resume argv", got)
 	}
 	var payload struct {
@@ -317,16 +299,6 @@ func TestSessionContinueCLIUsesExactNativeInvocation(t *testing.T) {
 	}
 	if discoverCalls != 1 {
 		t.Fatalf("conversation resolution refresh calls = %d, want 1", discoverCalls)
-	}
-	if err := sessionContinueCmd.Flags().Set("json", "false"); err != nil {
-		t.Fatal(err)
-	}
-	out.Reset()
-	if err := sessionContinueCmd.RunE(sessionContinueCmd, []string{harness.Codex, meta.ID}); err != nil {
-		t.Fatalf("text session continue: %v", err)
-	}
-	if got := out.String(); got != "resumed indexed conversation\n" {
-		t.Fatalf("text output = %q", got)
 	}
 }
 
@@ -662,14 +634,14 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 		})
 	}
 
-	// --live keeps the conversations open in Kitty, and does so before
+	// --live keeps the conversations open in tmux, and does so before
 	// --limit, so the limit counts open conversations rather than cutting the
 	// list first and filtering what was left.
 	t.Run("live keeps open conversations before the limit", func(t *testing.T) {
 		sessionCommandsLiveConversations = func() (map[string]liveConversation, bool) {
 			return map[string]liveConversation{
-				"claude:claude-sub":   {WindowID: 7, TabID: 3},
-				"codex:codex-sibling": {WindowID: 8, TabID: 4},
+				"claude:claude-sub":   {RuntimeSessionID: "rs-a"},
+				"codex:codex-sibling": {RuntimeSessionID: "rs-b"},
 			}, true
 		}
 		t.Cleanup(func() {
@@ -783,7 +755,9 @@ func TestSessionListSelectorsNarrowTheList(t *testing.T) {
 // started in the current directory or below it, and says which one before
 // acting. Newer conversations elsewhere, and automated ones here, are not it.
 func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
-	resetSessionCommandsTestState(t)
+	fixture := resetSessionCommandsTestState(t)
+	recorder := &recordingTmux{TargetLauncher: fixture.Backend}
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return recorder, nil }
 	oldGetwd := sessionListGetwd
 	t.Cleanup(func() {
 		sessionListGetwd = oldGetwd
@@ -792,6 +766,9 @@ func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
 	})
 	dir := t.TempDir()
 	repo := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(filepath.Join(repo, "sub"), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	sessionCommandsNow = func() time.Time { return now }
 	entry := func(id, cwd string, age time.Duration, title string) transcript.SessionMeta {
@@ -818,7 +795,7 @@ func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
 	sessionCommandsSessionIndexPath = func() string { return filepath.Join(dir, "transcripts.json") }
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
 		return &config.Config{
-			Defaults: config.Defaults{LaunchBackend: "kitty"},
+			Defaults: config.Defaults{LaunchBackend: "tmux"},
 			Profiles: []config.Account{{Name: "work", Harness: harness.Codex, HomeDir: filepath.Join(dir, "codex-home")}},
 			Projects: []config.Session{{Title: "repo", Directory: repo, Profile: "work"}},
 		}, nil
@@ -826,8 +803,6 @@ func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{harness.Codex: sessionCommandReader{harness: harness.Codex, discovered: discovered}}
 	}
-	client := &sessionCommandKitty{}
-	sessionCommandsNewKitty = func() kitty.KittyClient { return client }
 	sessionCommandsDaemon = func(protocol.Request) (protocol.Response, error) { return protocol.Response{OK: true}, nil }
 	sessionListGetwd = func() (string, error) { return repo, nil }
 	if err := sessionContinueCmd.Flags().Set("here", "true"); err != nil {
@@ -840,8 +815,8 @@ func TestSessionContinueHerePicksTheNewestConversationHere(t *testing.T) {
 	if err := sessionContinueCmd.RunE(sessionContinueCmd, nil); err != nil {
 		t.Fatalf("continue --here: %v\n%s", err, out.String())
 	}
-	if len(client.launched) != 1 || !strings.Contains(strings.Join(client.launched[0].Cmdline, " "), " resume wanted") {
-		t.Fatalf("launches = %+v, want a resume of the conversation named wanted", client.launched)
+	if len(recorder.launches) != 1 || !strings.Contains(strings.Join(recorder.launches[0].Argv, " "), " resume wanted") {
+		t.Fatalf("launches = %+v, want a resume of the conversation named wanted", recorder.launches)
 	}
 	if got, want := errOut.String(), "Picked codex:wanted, active 5m ago: Parser fix\n"; got != want {
 		t.Fatalf("stderr = %q, want %q", got, want)

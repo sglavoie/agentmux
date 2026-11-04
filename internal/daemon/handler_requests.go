@@ -16,6 +16,10 @@ import (
 // the dispatched calls reach for. The Handler itself and its construction are
 // in handler.go.
 
+// legacyStateUpdate is nil in production. Tests install the old window-ID
+// request path for historical reducer fixtures.
+var legacyStateUpdate func(*Handler, protocol.Request) protocol.Response
+
 // Handle processes a Request and returns a Response.
 func (h *Handler) Handle(req protocol.Request) protocol.Response {
 	req = events.NormalizeProducerFields(req)
@@ -45,34 +49,11 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 			resp = h.handleStateUpdate(resolved)
 			break
 		}
-		if isRuntimeSyntheticSlot(req.WindowID) {
-			// Runtime slots are assigned by hook translation, never named by a
-			// client; a direct update could otherwise write into a session.
-			resp = protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
-			break
+		if legacyStateUpdate == nil {
+			resp = protocol.Response{OK: false, Error: protocol.OriginReasonInvalidRuntimeSession}
+		} else {
+			resp = legacyStateUpdate(h, req)
 		}
-		if req.WindowID > 0 {
-			h.stateMu.Lock()
-			if isReusableKittySocket(req.KittyListenOn) {
-				req.WindowID = h.kittySlotLocked(req.KittyListenOn, req.WindowID)
-			} else {
-				matches := 0
-				rawWindowID := req.WindowID
-				for key, slot := range h.runtimeRoutes.kittyByKey {
-					if key.windowID == rawWindowID {
-						matches++
-						req.WindowID = slot
-					}
-				}
-				if matches > 1 {
-					h.stateMu.Unlock()
-					resp = protocol.Response{OK: false, Error: protocol.OriginReasonTargetConflict}
-					break
-				}
-			}
-			h.stateMu.Unlock()
-		}
-		resp = h.handleStateUpdate(req)
 	case protocol.TypeStateQuery:
 		resp = h.handleStateQuery()
 	case protocol.TypeOverviewPreferences:
@@ -89,8 +70,6 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = asl.HandleAction(h.aslBridge.Current(), req)
 	case protocol.TypeASLWorkbench:
 		resp = asl.HandleWorkbench(h.aslBridge.Current(), req)
-	case protocol.TypeFocusWindow:
-		resp = h.handleFocusWindow(req)
 	case protocol.TypeNotificationSnooze:
 		resp = h.handleNotificationSnooze(req)
 	case protocol.TypeNotificationDisposition:
@@ -165,19 +144,8 @@ func (h *Handler) handleHealth() protocol.Response {
 		patterns := *h.screenPatterns
 		resp.ScreenPatterns = &patterns
 	}
-	// Status only, never the window tree: health is a probe with an
-	// acknowledgement budget, and the tree belongs to the state query. Published
-	// unconditionally, so a cold daemon still says so.
-	//
-	// Deliberately computed after Readiness above and never folded into it: a
-	// stale or cold snapshot means Kitty stopped answering, which is a different
-	// fault with a different remedy from a daemon that failed its bounded
-	// restore. Letting it move Ready or DegradedReason would make every wedged
-	// `kitten @ ls` look like a broken daemon, and would erase the real
-	// degraded reason a daemon already had.
-	resp.KittySnapshot = h.kittySnapshotStatus(time.Now())
 	resp.Companion = h.companionHealth()
-	// Published unconditionally, like the Kitty block: a daemon with no
+	// Published unconditionally: a daemon with no
 	// runtime session still says that its reconciliation runs.
 	resp.Runtime = h.runtimeHealthSnapshot(time.Now())
 	return resp
@@ -216,7 +184,7 @@ func (h *Handler) SetReducerConfig(cfg state.ReducerConfig) {
 }
 
 // IsMuted reports whether the given window is currently marked as muted. The
-// daemon refreshes this cache from Kitty snapshots; sweep paths that lack a
+// daemon refreshes this cache from tmux observations; sweep paths that lack a
 // request consult it via the Notifier closure installed in daemon.Run.
 func (h *Handler) IsMuted(windowID int) bool {
 	h.stateMu.Lock()
@@ -250,9 +218,8 @@ func (h *Handler) maybeNotifyTraced(windowID int, sessionTitle, account, action 
 }
 
 // notificationTitle names the session a notification for slot is about. A
-// Kitty session is named by its tab title, which the caller read. A session
-// on another backend has no tab, so it is named by the project its runtime
-// label holds; with neither, the notifier falls back to the product name.
+// session is named by its supplied title or by the project in its runtime
+// label. With neither, the notifier falls back to the product name.
 func (h *Handler) notificationTitle(windowID int, sessionTitle string) string {
 	if sessionTitle != "" || windowID <= 0 {
 		return sessionTitle
@@ -268,40 +235,19 @@ func (h *Handler) notificationTitle(windowID int, sessionTitle string) string {
 
 // notificationTarget names what a notification for slot is about and what a
 // click on it may focus. The runtime session holding the slot travels with the
-// target so a notice can be traced, and acted on, by session identity. A
-// Kitty pane is focused as the exact window, through the socket the daemon
-// learned for it: for a Kitty collision slot that is KittyWindowID, never
-// the slot. A session on another backend has no Kitty window behind its
-// slot: its click shows the runtime session (focus_session), and the target
-// never carries a slot number dressed as a window ID or a socket to dial.
+// target so a notice can be traced and acted on by session identity.
 func (h *Handler) notificationTarget(windowID int, account string) notification.NotificationTarget {
-	target := notification.NotificationTarget{WindowID: windowID, Account: account, Navigable: windowID > 0}
+	target := notification.NotificationTarget{WindowID: windowID, Account: account}
 	if windowID <= 0 {
 		return target
 	}
 	h.stateMu.Lock()
-	target.KittyListenOn = h.kittySockets[windowID]
-	if key, mapped := h.runtimeRoutes.kittyWindow(windowID); mapped {
-		// The slot stays the notifier's key, so cancelling or purging the
-		// slot reaches this notice; only a click uses the real window.
-		target.KittyWindowID = key.windowID
-		if target.KittyListenOn == "" {
-			target.KittyListenOn = key.socket
-		}
-	}
 	if binding, bound := h.runtimeRoutes.binding(windowID); bound {
 		target.RuntimeSessionID = binding.runtime
 		target.Backend = binding.target.backend
+		target.Navigable = target.RuntimeSessionID != "" && target.Backend == "tmux"
 	}
 	h.stateMu.Unlock()
-	if isRuntimeSyntheticSlot(windowID) {
-		target.Navigable = target.RuntimeSessionID != "" && target.Backend != ""
-		target.KittyListenOn = ""
-		return target
-	}
-	if !isReusableKittySocket(target.KittyListenOn) {
-		target.KittyListenOn = ""
-	}
 	return target
 }
 

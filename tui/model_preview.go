@@ -792,7 +792,7 @@ func (m *Model) refreshPreviewForCursor() tea.Cmd {
 	}
 	// A selection that is not a session tracks window 0, which fetchPreviewCmd
 	// short-circuits into the "(session not running)" placeholder rather than a
-	// Kitty read.
+	// terminal capture.
 	var winID int
 	if s, ok := m.selectedSession(); ok {
 		winID = s.WindowID

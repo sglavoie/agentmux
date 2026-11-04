@@ -63,8 +63,8 @@ fails there.
 Two of these keys survive their own spelling but change meaning: `p` moved
 from the preview toggle to the project switcher, and `Tab` from filter-chip
 cycling to pane switching. `Enter` keeps its meaning — open the selected
-session, which focuses a Kitty session's tab and attaches a tmux session to
-this terminal — but no longer shares it with `space`, and no longer removes a
+session, which attaches its tmux pane to this terminal — but no longer shares
+it with `space`, and no longer removes a
 focused filter chip, since chips are edited inside `/` now.
 
 ## Command-backed bindings
@@ -78,7 +78,7 @@ named first.
 
 | Key | Command ID | Capability | Disposition | Successor |
 | --- | --- | --- | --- | --- |
-| `enter` / `space` | `FocusSession` | Open the session: focus its Kitty tab, or attach a tmux session here | `enter` survives, `space` **retired** | `Enter`; actions `a` → **Open session**; palette |
+| `enter` / `space` | `FocusSession` | Open the tmux session here | `enter` survives, `space` **retired** | `Enter`; actions `a` → **Open session**; palette |
 | `e` | `PeekScrollback` | Peek at the pane's scrollback | **Retired** | actions `a`; palette |
 | `r` | `RestartSession` | Restart the harness in place | **Retired** | actions `a`; palette |
 | `c` | `OverrideProfile` | Relaunch under a different profile | **Retired** | actions `a`; palette |
@@ -87,7 +87,7 @@ named first.
 | `X` | `CloseSession` | End the session (30-second Resume/Relaunch recovery) | **Retired** | actions `a` → End Session; palette |
 | `o` | `OpenDirectoryID` | Open a shell in the session's directory | **Retired** | actions `a`; palette |
 | `O` | `OpenEditorID` | Open the configured editor there | **Retired** | actions `a`; palette |
-| `y` | `CopyTitleID` | Copy the tab title | **Retired** | actions `a`; palette |
+| `y` | `CopyTitleID` | Copy the session title | **Retired** | actions `a`; palette |
 | `L` | `ToggleLockID` | Lock/unlock the session | **Retired** | actions `a`; palette |
 | `m` | `ToggleMuteID` | Mute/unmute notifications | **Retired** | actions `a`; palette |
 | `s` | `SearchProject` | Past Sessions scoped to this project | Survives (restored) | `s`; palette |
@@ -106,7 +106,6 @@ named first.
 | `p` | `TogglePreview` | Toggle the preview pane | **Retired.** The command is `ToggleInspector` (`explore.toggle-inspector`) on `i`, and `p` has since been claimed by the project switcher (`explore.switch-project`) | inspector `i`; palette |
 | `b` | `ToggleRail` | Toggle the project rail | **Retired.** The rail, its command, and its key are gone; every scope it could apply is reachable from the switcher, which keeps `rail` as a palette alias so the old word still finds it | project switcher `p`; palette |
 | `v` | `ToggleListView` | Urgency ↔ Projects view | **Retired** | palette (the contract keeps Projects view palette-accessible) |
-| `R` | `ResortTabs` | Resort Kitty tabs | **Retired** | palette |
 | `u` | `UndoClose` | Recover the last ended session: resume its exact conversation, or relaunch its project when no exact conversation is known | Survives (restored) | `u`; palette **Recover Ended Session**. It came back because what it undoes expires: the recovery window is 30 seconds, and a capability that has to be reached by name before it lapses is not reachable. The recovery toast names `u` again, and the palette command runs the same recovery under the same name the footer and help use |
 | `?` | `ShowKeyboardHelp` | Keyboard help | Survives | `?` |
 | `q` / `ctrl+c` | `Quit` | Quit the dashboard | Survives | `q`, `Ctrl+C` |
@@ -182,6 +181,6 @@ file that was valid before the upgrade is valid after it, and Agent Mux does not
 rewrite the operator's config — but nothing reads it, and its presence is
 reported once as a dismissible Configuration warning in the health reading.
 
-Kitty-level shortcuts and the bindings of every other mode — launcher, history,
+Bindings of every other mode — launcher, history,
 plans, worktrees, Runs — were out of scope and are unchanged. The launcher in
 particular keeps its own full direct keymap; only the dashboard's shrank.

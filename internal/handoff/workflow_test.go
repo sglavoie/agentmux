@@ -14,7 +14,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -37,11 +36,11 @@ func (workflowGit) Inspect(context.Context, string, time.Duration) GitState {
 	return GitState{Kind: "not_git", Detail: "test workspace is not a Git repository"}
 }
 
-func testWorkflow(t *testing.T, launch func(kitty.KittyClient, config.Session, config.Account, *config.Config, string) error, edit func(string, *config.Config) error) *Workflow {
+func testWorkflow(t *testing.T, launch func(session.Runtime, config.Session, config.Account, *config.Config, string) error, edit func(string, *config.Config) error) *Workflow {
 	t.Helper()
 	artifactDirectory := filepath.Join(t.TempDir(), "handoffs")
 	if launch == nil {
-		launch = func(kitty.KittyClient, config.Session, config.Account, *config.Config, string) error { return nil }
+		launch = func(session.Runtime, config.Session, config.Account, *config.Config, string) error { return nil }
 	}
 	if edit == nil {
 		edit = func(string, *config.Config) error { return nil }
@@ -51,7 +50,7 @@ func testWorkflow(t *testing.T, launch func(kitty.KittyClient, config.Session, c
 		artifactDirectory: func() (string, error) { return artifactDirectory, nil },
 		edit:              edit,
 		launch: func(rt session.Runtime, sess config.Session, acc config.Account, cfg *config.Config, prompt string) (session.LaunchResult, error) {
-			return session.LaunchResult{}, launch(rt.Kitty, sess, acc, cfg, prompt)
+			return session.LaunchResult{}, launch(rt, sess, acc, cfg, prompt)
 		},
 		now:   func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
 		newID: func() (string, error) { return "handoff-test", nil },
@@ -76,7 +75,7 @@ func TestWorkflowLaunchesEverySourceTargetHarnessCombination(t *testing.T) {
 				var gotSession config.Session
 				var gotAccount config.Account
 				var gotPrompt string
-				workflow := testWorkflow(t, func(_ kitty.KittyClient, sess config.Session, acc config.Account, _ *config.Config, prompt string) error {
+				workflow := testWorkflow(t, func(_ session.Runtime, sess config.Session, acc config.Account, _ *config.Config, prompt string) error {
 					gotSession, gotAccount, gotPrompt = sess, acc, prompt
 					return nil
 				}, nil)
@@ -84,7 +83,7 @@ func TestWorkflowLaunchesEverySourceTargetHarnessCombination(t *testing.T) {
 					Source: transcript.SessionMeta{ID: "source-1", Harness: sourceHarness, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
 					Reader: workflowReader{harness: sourceHarness, messages: []transcript.Message{{Role: "user", Text: "Continue the migration."}}},
 					Config: cfg, TargetProfile: targetProfile,
-					Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+					Runtime: session.Runtime{Tmux: selectedTmux{}},
 				})
 				if err != nil {
 					t.Fatalf("Run: %v", err)
@@ -148,14 +147,14 @@ func TestWorkflowRetainsFinalArtifactWhenLaunchFails(t *testing.T) {
 	if err := os.WriteFile(sourcePath, []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	workflow := testWorkflow(t, func(kitty.KittyClient, config.Session, config.Account, *config.Config, string) error {
-		return errors.New("Kitty launch failed")
+	workflow := testWorkflow(t, func(session.Runtime, config.Session, config.Account, *config.Config, string) error {
+		return errors.New("tmux launch failed")
 	}, nil)
 	result, err := workflow.Run(context.Background(), Request{
 		Source:        transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
 		Reader:        workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Original goal"}}},
 		Config:        &config.Config{Accounts: []config.Account{{Name: "source", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
-		TargetProfile: "target", Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+		TargetProfile: "target", Runtime: session.Runtime{Tmux: selectedTmux{}},
 	})
 	var partial *PartialLaunchError
 	if !errors.As(err, &partial) {
@@ -234,7 +233,7 @@ func TestWorkflowUsesExplicitLaunchDirectoryWithoutChangingSourcePackContext(t *
 		t.Fatal(err)
 	}
 	var launched config.Session
-	workflow := testWorkflow(t, func(_ kitty.KittyClient, session config.Session, _ config.Account, _ *config.Config, _ string) error {
+	workflow := testWorkflow(t, func(_ session.Runtime, session config.Session, _ config.Account, _ *config.Config, _ string) error {
 		launched = session
 		return nil
 	}, nil)
@@ -242,7 +241,7 @@ func TestWorkflowUsesExplicitLaunchDirectoryWithoutChangingSourcePackContext(t *
 		Source:        transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: sourceCWD, Path: sourcePath},
 		Reader:        workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Original goal"}}},
 		Config:        &config.Config{Accounts: []config.Account{{Name: "source", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
-		TargetProfile: "target", LaunchDirectory: launchCWD, Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+		TargetProfile: "target", LaunchDirectory: launchCWD, Runtime: session.Runtime{Tmux: selectedTmux{}},
 	})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -270,7 +269,7 @@ func TestWorkflowDoesNotGuessAmongSeveralMatchingProjects(t *testing.T) {
 		},
 	}
 	var got config.Session
-	workflow := testWorkflow(t, func(_ kitty.KittyClient, sess config.Session, _ config.Account, _ *config.Config, _ string) error {
+	workflow := testWorkflow(t, func(_ session.Runtime, sess config.Session, _ config.Account, _ *config.Config, _ string) error {
 		got = sess
 		return nil
 	}, nil)
@@ -278,7 +277,7 @@ func TestWorkflowDoesNotGuessAmongSeveralMatchingProjects(t *testing.T) {
 		Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
 		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Continue."}}},
 		Config: cfg, TargetProfile: "target",
-		Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+		Runtime: session.Runtime{Tmux: selectedTmux{}},
 	}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -292,7 +291,7 @@ func TestWorkflowDoesNotGuessAmongSeveralMatchingProjects(t *testing.T) {
 		Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
 		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Continue."}}},
 		Config: cfg, TargetProfile: "target",
-		Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+		Runtime: session.Runtime{Tmux: selectedTmux{}},
 	}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -326,7 +325,7 @@ func TestWorkflowMatchesATargetProjectConfiguredThroughASymlink(t *testing.T) {
 		Projects: []config.Session{{Title: "api", Directory: link, Profile: "target", Args: []string{"--target-arg"}}},
 	}
 	var got config.Session
-	workflow := testWorkflow(t, func(_ kitty.KittyClient, sess config.Session, _ config.Account, _ *config.Config, _ string) error {
+	workflow := testWorkflow(t, func(_ session.Runtime, sess config.Session, _ config.Account, _ *config.Config, _ string) error {
 		got = sess
 		return nil
 	}, nil)
@@ -334,7 +333,7 @@ func TestWorkflowMatchesATargetProjectConfiguredThroughASymlink(t *testing.T) {
 		Source: transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "source", Project: "api", CWD: cwd, Path: sourcePath},
 		Reader: workflowReader{harness: harness.Claude, messages: []transcript.Message{{Role: "user", Text: "Continue."}}},
 		Config: cfg, TargetProfile: "target",
-		Kitty: kitty.NewClientWithSocket(kitty.NewMockRunner(nil), ""),
+		Runtime: session.Runtime{Tmux: selectedTmux{}},
 	}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}

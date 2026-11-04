@@ -18,7 +18,7 @@ final class WorkspaceWindowTests: XCTestCase {
         F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
         // A seen completion stays in its project; attention transitions are
         // exercised separately below so layout tests have a fixed baseline.
-        F.kitty(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
+        F.tmux(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000),
     ]
 
     override func setUp() async throws {
@@ -46,8 +46,8 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.shownNotice, AppDelegate.noSessionShown)
         XCTAssertTrue(workspace.noticeBanner.isDescendant(of: workspace.pane))
         XCTAssertNil(workspace.noticeBanner.hitTest(.zero), "clicks reach the terminal beneath")
-        workspace.showNotice("Kitty is not running.")
-        XCTAssertEqual(workspace.shownNotice, "Kitty is not running.", "a newer notice replaces it")
+        workspace.showNotice("Terminal is not running.")
+        XCTAssertEqual(workspace.shownNotice, "Terminal is not running.", "a newer notice replaces it")
         workspace.endNotice()
         XCTAssertNil(workspace.shownNotice)
 
@@ -263,7 +263,7 @@ final class WorkspaceWindowTests: XCTestCase {
         live[2].unseen = true
         app.store.apply(snapshot: F.snapshot(live))
 
-        XCTAssertEqual(workspace.state.rows.map(\.key), [waiting, AttentionCycler.key(live[2], snapshotSocket: "unix:/tmp/kitty-1"), selected])
+        XCTAssertEqual(workspace.state.rows.map(\.key), [waiting, AttentionCycler.key(live[2]), selected])
         XCTAssertEqual(workspace.sessionKey(of: waiting), "1")
         XCTAssertEqual(workspace.items[try index(of: waiting) + 1], .view(companion))
         XCTAssertEqual(workspace.state.selection, selected)
@@ -344,9 +344,9 @@ final class WorkspaceWindowTests: XCTestCase {
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 6) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "personal")
         XCTAssertEqual(cell.glyphLabel.stringValue, "✓")
-        let kitty = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 9) as? WorkspaceRowCellView)
-        XCTAssertEqual(kitty.titleLabel.stringValue, "work")
-        XCTAssertTrue(kitty.detailLabel.stringValue.hasSuffix("Kitty"))
+        let webCell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 9) as? WorkspaceRowCellView)
+        XCTAssertEqual(webCell.titleLabel.stringValue, "work")
+        XCTAssertFalse(webCell.detailLabel.stringValue.isEmpty)
 
         XCTAssertNil(workspace.state.selection, "nothing is selected until the operator selects")
         XCTAssertEqual(app.made, [], "listing a session attaches nothing")
@@ -377,7 +377,7 @@ final class WorkspaceWindowTests: XCTestCase {
         }
 
         // The selected line shows the list's selection, as the active tab
-        // shows Kitty's own colors.
+        // shows the terminal's own colors.
         workspace.select(.embedded(F.runtimeID(1)))
         (rowView, cell) = try line(work)
         XCTAssertNotNil(rowView.tabColor)
@@ -508,17 +508,14 @@ final class WorkspaceWindowTests: XCTestCase {
         asked[4].1("x")
         XCTAssertEqual(problems, ["tmux backend unavailable"])
 
-        // A Kitty window is named in Kitty; other lines have no menu.
-        let kitty = try row("web", "work")
-        items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Continue with Another Agent…", "Show in Kitty"])
-        XCTAssertNil(items[0].action, "listed, and greyed out")
-        XCTAssertNotNil(items[4].action, "a Kitty session can be pinned")
+        let web = try row("web", "work")
+        items = workspace.contextMenuItems(forRow: try index(of: web.key))
+        XCTAssertFalse(items.isEmpty)
         XCTAssertTrue(workspace.contextMenuItems(forRow: 0).isEmpty)
         XCTAssertEqual(workspace.contextMenuItems(forRow: -1).first?.title, "Go to…", "the list's empty space has its own menu")
-        workspace.select(kitty.key)
-        XCTAssertFalse(workspace.nameShownSession())
-        XCTAssertEqual(asked.count, 5)
+        workspace.select(web.key)
+        XCTAssertTrue(workspace.nameShownSession())
+        XCTAssertEqual(asked.count, 6)
     }
 
     func testNamingTerminalsFromMenuAndKeyboardPreservesTheRunningProgram() throws {
@@ -595,9 +592,11 @@ final class WorkspaceWindowTests: XCTestCase {
     }
 
     func testPinningASessionListsItAboveEveryProject() throws {
-        app.store.apply(snapshot: F.snapshot(sessions))
+        var pinSessions = sessions
+        pinSessions[2] = F.tmux(4, project: "web", icon: "stop", attention: true, changedAtMS: 1000)
+        app.store.apply(snapshot: F.snapshot(pinSessions))
         let work = try row("api", "work")
-        let kitty = try row("web", "work")
+        let other = try row("web", "work")
         workspace.activate(work)
         func lines() -> [String] {
             workspace.items.compactMap { item in
@@ -611,33 +610,32 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(lines(), ["[Done]", "[api]", "api/personal", "api/work", "[web]", "web/work"])
 
         // The right-click menu pins the session under the pointer.
-        var items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
+        var items = workspace.contextMenuItems(forRow: try index(of: other.key))
         _ = try XCTUnwrap(items[4].target).perform(try XCTUnwrap(items[4].action), with: items[4])
         XCTAssertEqual(lines(), ["[Pinned]", "web/work", "[Done]", "[api]", "api/personal", "api/work"],
                        "a project with nothing left under it is not listed")
-        XCTAssertEqual(workspace.sessionKey(of: kitty.key), "1", "the digits follow the list")
+        XCTAssertEqual(workspace.sessionKey(of: other.key), "1", "the digits follow the list")
         XCTAssertEqual(workspace.state.selection, work.key, "the pane stays where it is")
-        XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(kitty.key)])
+        XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(other.key)])
 
         // The menu pins the one the pane is on, below the ones pinned before.
         XCTAssertTrue(workspace.togglePinOfShownSession())
         XCTAssertEqual(lines(), ["[Pinned]", "web/work", "api/work", "[Done]", "[api]", "api/personal"])
 
         // Pinned sessions are dragged among themselves and nowhere else.
-        let top = try index(of: kitty.key)
+        let top = try index(of: other.key)
         XCTAssertEqual(workspace.dropSlots(forItemAt: top), [top, top + 1, top + 2])
         XCTAssertTrue(workspace.moveItem(at: top, to: top + 2))
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[Done]", "[api]", "api/personal"])
-        XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(work.key), WorkspaceOrder.token(kitty.key)])
+        XCTAssertEqual(app.orders.last?.pinned, [WorkspaceOrder.token(work.key), WorkspaceOrder.token(other.key)])
 
         // A snapshot keeps them there, and unpinning puts one back.
-        app.store.apply(snapshot: F.snapshot(sessions))
+        app.store.apply(snapshot: F.snapshot(pinSessions))
         workspace.refresh()
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[Done]", "[api]", "api/personal"])
-        items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Unpin", "", "Continue with Another Agent…", "Show in Kitty"],
-                       "a Kitty session is ended, and has its terminals, in Kitty")
-        workspace.setPinned(kitty.key, false)
+        items = workspace.contextMenuItems(forRow: try index(of: other.key))
+        XCTAssertEqual(items[4].title, "Unpin")
+        _ = try XCTUnwrap(items[4].target).perform(try XCTUnwrap(items[4].action), with: items[4])
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[Done]", "[api]", "api/personal", "[web]", "web/work"])
         XCTAssertTrue(workspace.togglePinOfShownSession())
         XCTAssertEqual(lines(), ["[Done]", "[api]", "api/personal", "api/work", "[web]", "web/work"])
@@ -666,7 +664,7 @@ final class WorkspaceWindowTests: XCTestCase {
         app.store.apply(snapshot: F.snapshot([sessions[0]]))
         XCTAssertEqual(app.orders.count, dragged + 1)
         XCTAssertEqual(app.orders.last?.projects, ["api": [WorkspaceOrder.token(work.key)]])
-        XCTAssertEqual(app.orders.last?.pinned, [], "the Kitty session ended, and its pin with it")
+        XCTAssertEqual(app.orders.last?.pinned, [], "the tmux session ended, and its pin with it")
         XCTAssertEqual(workspace.order, app.orders.last)
     }
 
@@ -873,13 +871,13 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(shown)
         let responder = workspace.window.firstResponder
         let position = workspace.sidebar.enclosingScrollView?.contentView.bounds.origin
-        // Both an embedded session and a Kitty session move from Done to Working.
+        // Both sessions move from Done to Working.
         live[0].iconState = "bolt"
         live[2].iconState = "bolt"
         app.store.apply(snapshot: F.snapshot(live))
         for row in workspace.state.rows {
             let view = try rowView(row.key)
-            let changed = row.key == .embedded(F.runtimeID(1)) || row.key.windowID == 4
+            let changed = row.key == .embedded(F.runtimeID(1)) || row.key == .embedded(F.runtimeID(4))
             XCTAssertEqual(view.isFlashing, changed)
             if changed {
                 let layer = try XCTUnwrap(view.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
@@ -943,31 +941,6 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
     }
 
-    func testAKittySessionIsRaisedInKittyOnlyWhenFocused() throws {
-        app.store.apply(snapshot: F.snapshot(sessions))
-        let (work, kitty) = (try row("api", "work"), try row("web", "work"))
-        workspace.activate(work)
-        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
-
-        // The arrow keys reach the Kitty row: it is shown, and Kitty is left alone.
-        workspace.sidebar.selectRowIndexes([try index(of: kitty.key)], byExtendingSelection: false)
-        XCTAssertEqual(workspace.state.selection, kitty.key)
-        XCTAssertEqual(workspace.content, .external(kitty.key))
-        XCTAssertEqual(app.external, [], "selecting never leaves the app")
-        XCTAssertEqual(app.made, [F.runtimeID(1)], "a Kitty session has no terminal here")
-        XCTAssertTrue(terminal.isHidden)
-        XCTAssertFalse(workspace.placeholder.isHidden)
-        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "web runs in Kitty")
-        XCTAssertTrue(workspace.window.firstResponder === workspace.sidebar, "the keyboard left the hidden terminal")
-
-        // A click focuses it where it is.
-        workspace.activate(kitty)
-        XCTAssertEqual(app.external.map(\.target), [.kitty(socket: "", windowID: 4)])
-        workspace.placeholder.press()
-        XCTAssertEqual(app.external.count, 2, "Show in Kitty does the same")
-        XCTAssertEqual(app.made, [F.runtimeID(1)])
-    }
-
     func testFocusFromOutsideSelectsTheSessionAndStepsStayInside() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         // What the menu bar row, the next-attention shortcut, and a banner call.
@@ -981,12 +954,12 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
         XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
         workspace.selectNeighbor(1)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
-        XCTAssertEqual(app.external, [], "stepping onto a Kitty session does not raise Kitty")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)))
+        XCTAssertEqual(app.external, [], "stepping between sessions stays in the workspace")
         workspace.selectNeighbor(1)
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
         workspace.selectNeighbor(-1)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)))
     }
 
     func testADigitGoesToTheSessionAtThatPlaceInTheSidebar() throws {
@@ -997,13 +970,13 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
         workspace.selectSession(at: 0)
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
-        // A Kitty session is shown here: the digit alone never leaves the app.
+        // The digit selects the third session in the workspace.
         workspace.selectSession(at: 2)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)))
         XCTAssertEqual(app.external, [])
         // No session is listed there: nothing moves.
         workspace.selectSession(at: 3)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)))
         // A view is not a place among the sessions.
         workspace.showView(WorkspaceUtilityView.dashboard.id)
         workspace.selectSession(at: 0)
@@ -1091,27 +1064,6 @@ final class WorkspaceWindowTests: XCTestCase {
         app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(3, project: "api", profile: "spare", icon: "stop")]))
         XCTAssertEqual(workspace.sessionKey(of: web), "1")
         XCTAssertEqual(try cell(web).keyLabel.stringValue, "⌘1")
-    }
-
-    func testShiftRaisesAKittySessionInKitty() throws {
-        app.store.apply(snapshot: F.snapshot(sessions))
-        // An embedded session has nowhere else to go: it is focused here.
-        workspace.selectSession(at: 1, raising: true)
-        XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(1)))
-        XCTAssertEqual(app.external, [])
-        workspace.selectSession(at: 2, raising: true)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
-        XCTAssertEqual(app.external.map(\.target), [.kitty(socket: "", windowID: 4)])
-        workspace.selectSession(at: 3, raising: true)
-        XCTAssertEqual(app.external.count, 1)
-
-        // Stepping with Shift does the same: api/personal, api/work, web/work.
-        workspace.selectNeighbor(1, raising: true)
-        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
-        XCTAssertEqual(app.external.count, 1)
-        workspace.selectNeighbor(-1, raising: true)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key))
-        XCTAssertEqual(app.external.count, 2)
     }
 
     func testRowsSelectionAndTerminalsSurviveTheDaemonGoingAway() throws {
@@ -1361,7 +1313,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.confirmClose = { row, answer in asked.append((row, answer)) }
 
         XCTAssertFalse(try cell(work.key).closeButton.isHidden)
-        XCTAssertTrue(try cell(try row("web", "work").key).closeButton.isHidden, "a Kitty window is not the workspace's to close")
+        XCTAssertFalse(try cell(try row("web", "work").key).closeButton.isHidden)
         workspace.closeSession(work.key)
         XCTAssertEqual(asked.map(\.0), [work], "an idle agent is ended only once the operator agrees")
         XCTAssertEqual(app.ended, [], "nothing ends before the answer")
@@ -1477,7 +1429,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(line.closeButton.alphaValue, 1)
         line.isHovered = false
         XCTAssertFalse(line.showsCloseButton)
-        XCTAssertFalse(try cell(try row("web", "work").key).showsCloseButton, "a Kitty window has none to draw")
+        XCTAssertFalse(try cell(try row("web", "work").key).showsCloseButton, "the terminal surface has none to draw")
 
         line.layoutSubtreeIfNeeded()
         XCTAssertGreaterThanOrEqual(line.closeButton.frame.width, 18)
@@ -1490,15 +1442,15 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(try row("api", "work"))
         XCTAssertEqual(workspace.closeShownTitle, "Detach Terminal")
         workspace.select(try row("web", "work").key)
-        XCTAssertEqual(workspace.closeShownTitle, "Close", "a Kitty window is not the workspace's to end")
+        XCTAssertEqual(workspace.closeShownTitle, "Detach Terminal")
         workspace.showView(WorkspaceUtilityView.dashboard.id)
         XCTAssertEqual(workspace.closeShownTitle, "Close View")
     }
 
     func testHandoffTargetsClickedConversationAndRetainsSourceNavigation() throws {
-        var kitty = F.kitty(4, project: "api")
-        kitty.conversation = .init(harness: "copilot", sessionID: "kitty-source")
-        let initial = [F.tmux(1, project: "api", conversation: "first"), F.tmux(2, project: "api", conversation: "second"), F.tmux(3, project: "api"), kitty]
+        var fourth = F.tmux(4, project: "api")
+        fourth.conversation = .init(harness: "copilot", sessionID: "fourth-source")
+        let initial = [F.tmux(1, project: "api", conversation: "first"), F.tmux(2, project: "api", conversation: "second"), F.tmux(3, project: "api"), fourth]
         app.store.apply(snapshot: F.snapshot(initial))
         workspace.select(.embedded(F.runtimeID(1)))
         let menu = workspace.contextMenuItems(forRow: try index(of: .embedded(F.runtimeID(2))))
@@ -1508,11 +1460,8 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.handoffRequests.map(\.conversation), [ConversationIdentity(harness: "claude", sessionID: "second")])
         let withoutIdentity = workspace.contextMenuItems(forRow: try index(of: .embedded(F.runtimeID(3))))
         XCTAssertFalse(try XCTUnwrap(withoutIdentity.first { $0.title == WorkspaceHandoffModel.title }).isEnabled)
-        let kittyKey = AttentionCycler.key(kitty, snapshotSocket: "unix:/tmp/kitty-1")
-        let kittyMenu = workspace.contextMenuItems(forRow: try index(of: kittyKey))
-        let kittyHandoff = try XCTUnwrap(kittyMenu.first { $0.title == WorkspaceHandoffModel.title })
-        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(kittyHandoff.action), to: kittyHandoff.target, from: kittyHandoff))
-        XCTAssertEqual(app.handoffRequests.last?.conversation, kitty.conversation)
+        let fourthKey = AttentionCycler.key(fourth)
+        XCTAssertFalse(workspace.contextMenuItems(forRow: try index(of: fourthKey)).isEmpty)
         let source = ConversationIdentity(harness: "codex", sessionID: "original")
         app.handoffSource = source
         workspace.setInspectorTab(.session)
@@ -1522,7 +1471,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.openedHandoffSources, [source])
         app.store.apply(snapshot: F.snapshot([initial[0]]))
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(handoff.action), to: handoff.target, from: handoff))
-        XCTAssertEqual(app.handoffRequests.count, 2, "an ended target cannot be handed off from a stale menu")
+        XCTAssertEqual(app.handoffRequests.count, 1, "an ended target cannot be handed off from a stale menu")
     }
 
     func testNewSessionMenuTargetsClickedRowAndLaunchFocusWaitsForSnapshot() throws {
@@ -1549,7 +1498,6 @@ final class WorkspaceWindowTests: XCTestCase {
     func testTheSessionMenuFollowsTheSessions() throws {
         XCTAssertNil(workspace.sessionName(at: 0), "nothing listed, nothing to go to")
         XCTAssertEqual(WorkspaceWindowController.sessionItemTitle(at: 6, name: nil), "Session 7")
-        XCTAssertEqual(WorkspaceWindowController.sessionItemTitle(at: 0, name: nil, inKitty: true), "Session 1 in Kitty")
         XCTAssertEqual(workspace.pinShownTitle, "Pin Session")
         XCTAssertNil(workspace.shownSessionRow, "so the pin item is greyed out")
         XCTAssertFalse(workspace.canOpenTerminalBesideSession)
@@ -1578,33 +1526,26 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(try row("web", "work").key)
         XCTAssertNotNil(workspace.shownSessionRow)
         XCTAssertEqual(workspace.pinShownTitle, "Pin Session")
-        XCTAssertFalse(workspace.canOpenTerminalBesideSession, "a Kitty session has its terminals in Kitty")
+        XCTAssertTrue(workspace.canOpenTerminalBesideSession)
     }
 
-    /// Show in Kitty does what a click on the line does; Reattach is offered
-    /// only on a detached session's line, and reattaches it even when the
-    /// pane is somewhere else.
-    func testKittyAndDetachedLinesOfferWhatAClickDoes() throws {
+    /// Reattach is offered only on a detached session's line, and reattaches
+    /// it even when the pane is somewhere else.
+    func testDetachedLinesOfferReattach() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
-        let kitty = try row("web", "work")
-        var items = workspace.contextMenuItems(forRow: try index(of: kitty.key))
-        let show = try XCTUnwrap(items.first { $0.title == WorkspaceWindowController.showInKittyTitle })
-        _ = try XCTUnwrap(show.target).perform(try XCTUnwrap(show.action), with: show)
-        XCTAssertEqual(app.external, [kitty])
-        XCTAssertEqual(workspace.state.selection, kitty.key)
-
+        let other = try row("web", "work")
         workspace.activate(work)
         XCTAssertFalse(workspace.contextMenuItems(forRow: try index(of: work.key)).map(\.title).contains("Reattach"))
         workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
         XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
-        workspace.select(kitty.key)
-        items = workspace.contextMenuItems(forRow: try index(of: work.key))
+        workspace.select(other.key)
+        let items = workspace.contextMenuItems(forRow: try index(of: work.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
                                             "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…"])
         _ = try XCTUnwrap(items[6].target).perform(try XCTUnwrap(items[6].action), with: items[6])
         XCTAssertEqual(workspace.state.selection, work.key)
-        XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(1)])
+        XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(4), F.runtimeID(1)])
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
         XCTAssertFalse(workspace.contextMenuItems(forRow: try index(of: work.key)).map(\.title).contains("Reattach"))
     }
@@ -1729,12 +1670,12 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNil(workspace.items.firstIndex { $0 == .row(work) }, "the row is collapsed away")
 
         workspace.selectNeighbor(1)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key), "the step is from api/work, not from the top")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)), "the step is from api/work, not from the top")
         XCTAssertTrue(workspace.state.groups.first { $0.project == "api" }?.collapsed == true, "a step expands nothing")
 
         workspace.activate(work)
         workspace.selectNeighbor(-1, sessionsOnly: true)
-        XCTAssertEqual(workspace.content, .external(try row("web", "work").key), "F7 wraps from api/work as well")
+        XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(4)), "F7 wraps from api/work as well")
 
         XCTAssertEqual(workspace.sessionName(at: 0), "web — work")
         XCTAssertEqual(workspace.sessionName(at: 1), "api — personal")
@@ -1801,45 +1742,6 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(workspace.state.groups.first { $0.project == "web" }?.collapsed == false, "other projects are left alone")
     }
 
-    /// The Show in Kitty items name Kitty only for a session in Kitty, and
-    /// the submenu is hidden when the digits reach none.
-    func testShowInKittyNamesKittyOnlyForKittySessions() throws {
-        app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertFalse(workspace.sessionIsInKitty(at: 0))
-        XCTAssertTrue(workspace.sessionIsInKitty(at: 2))
-        XCTAssertFalse(workspace.sessionIsInKitty(at: 3))
-        XCTAssertTrue(workspace.digitsReachKitty)
-
-        let windows = NSApp.windowsMenu
-        defer { NSApp.windowsMenu = windows }
-        let delegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
-        let menu = WorkspaceMenu.make(target: delegate)
-        let session = try XCTUnwrap(menu.item(withTitle: "Session")?.submenu)
-        XCTAssertTrue(session.delegate === delegate)
-        let holder = try XCTUnwrap(session.item(withTitle: WorkspaceWindowController.showInKittyTitle))
-        let places = try XCTUnwrap(holder.submenu?.items)
-        XCTAssertEqual(places.count, 10, "only the places are in the submenu; the steps are in Session")
-        let raising = try [WorkspaceMenu.nextSessionTitle, WorkspaceMenu.previousSessionTitle].map {
-            try XCTUnwrap(session.item(withTitle: $0))
-        }
-        XCTAssertTrue(raising.allSatisfy(\.allowsKeyEquivalentWhenHidden), "⌘} and ⌘{ keep their keys hidden")
-
-        WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
-        XCTAssertFalse(holder.isHidden)
-        XCTAssertEqual(places.map(\.isHidden), [true, true, false, true, true, true, true, true, true, true])
-        XCTAssertTrue(places.allSatisfy(\.allowsKeyEquivalentWhenHidden), "a hidden place keeps its key")
-        XCTAssertEqual(raising.map(\.isHidden), [false, false], "a Kitty session is listed")
-
-        app.store.apply(snapshot: F.snapshot(Array(sessions.prefix(2))))
-        XCTAssertFalse(workspace.digitsReachKitty)
-        XCTAssertFalse(workspace.listsKittySession)
-        WorkspaceMenu.updateKittyItems(in: session, workspace: workspace)
-        XCTAssertTrue(holder.isHidden, "nothing to show in Kitty")
-        XCTAssertEqual(raising.map(\.isHidden), [true, true], "with no Kitty session they would repeat F9 and F7")
-        WorkspaceMenu.updateKittyItems(in: session, workspace: nil)
-        XCTAssertTrue(holder.isHidden)
-    }
-
     func testReturnOrAClickOnADetachedSessionReattachesIt() throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         let work = try row("api", "work")
@@ -1865,7 +1767,7 @@ final class WorkspaceWindowTests: XCTestCase {
 
         // Any other button is not the default one.
         workspace.select(try row("web", "work").key)
-        XCTAssertEqual(workspace.placeholder.button.keyEquivalent, "")
+        XCTAssertEqual(workspace.placeholder.button.keyEquivalent, "\r")
     }
 
     func testAHiddenSidebarNeverTakesTheKeyboard() throws {
@@ -2224,7 +2126,7 @@ final class WorkspaceStreamTests: XCTestCase {
         let sessions = [
             F.tmux(1, project: "api", profile: "work"),
             F.tmux(2, project: "api", profile: "personal", icon: "stop", attention: true, changedAtMS: 2000),
-            F.kitty(4, project: "web", icon: "key", attention: true, changedAtMS: 1000),
+            F.tmux(4, project: "web", icon: "key", attention: true, changedAtMS: 1000),
         ]
         let subscribe = Locked<String?>(nil)
         let drop = DispatchSemaphore(value: 0)

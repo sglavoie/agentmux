@@ -31,25 +31,22 @@ const (
 	projectionKey = "agent_mux"
 	// ProjectionSchema is the only `agent_mux` schema version this build reads.
 	ProjectionSchema = 1
-	// ContractSetID is the fully vendored contract set. Projection ingestion
-	// also accepts exact identities whose loop components were independently
-	// reviewed as identical (aslcontract.SupportsLoopContract).
+	// ContractSetID is the only contract set projection ingestion accepts.
 	ContractSetID = aslcontract.ContractSetID
 
 	// ContractSetPrefix remains the family every well-formed ID carries. It is
 	// used only to describe a mismatch, never to accept one.
 	ContractSetPrefix = aslcontract.Prefix
 
-	maxRunIDChars         = 128
-	maxSessionIDChars     = 64
-	maxQuestionIDChars    = 128
-	maxHarnessChars       = 64
-	maxStartTokenChars    = 128
-	maxRegistryChars      = 64
-	maxPathChars          = 1024
-	maxTimestampChars     = 64
-	maxProjectionPID      = 4194304
-	maxProjectionWindowID = 1 << 31
+	maxRunIDChars      = 128
+	maxSessionIDChars  = 64
+	maxQuestionIDChars = 128
+	maxHarnessChars    = 64
+	maxStartTokenChars = 128
+	maxRegistryChars   = 64
+	maxPathChars       = 1024
+	maxTimestampChars  = 64
+	maxProjectionPID   = 4194304
 	// maxProjectionBytes is the contract's document cap. The per-field limits
 	// already bound a well-formed projection well under it; this bounds the
 	// work done on a malformed one before those limits ever apply.
@@ -95,7 +92,6 @@ var projectionFields = []string{
 	"contract_set_id",
 	"finished_at",
 	"harness",
-	"kitty_window_id",
 	"lifecycle_source_sequence",
 	"phase",
 	"plan_dir",
@@ -145,7 +141,6 @@ type Projection struct {
 	WorkspaceRoot  string
 	RegistryDigest string
 	Harness        string
-	KittyWindowID  int
 	Phase          string
 	SessionID      string
 	// TurnIndex is -1 when ASL reported null.

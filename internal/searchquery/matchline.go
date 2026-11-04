@@ -70,8 +70,8 @@ const (
 // PreviewAt picks the offset a result is previewed by, given first, the
 // earliest occurrence of any term in lower (as Tally.Add reports it). A
 // document matches when it holds every term somewhere, so the line showing
-// the first of them is often a line about only one: searching `kitty socket`
-// previewed a line that said "Kitty" and nothing about sockets. And a line
+// the first of them is often a line about only one: searching `tmux socket`
+// previewed a line that said "tmux" and nothing about sockets. And a line
 // holding every term may hold them inside other words: searching `daemon test`
 // previewed the file name daemon_state_acceptance_doc_test.go rather than the
 // sentence about the daemon test. So the first line where every term starts a

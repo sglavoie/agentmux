@@ -183,8 +183,8 @@ Codex: I will inspect the hook flow.
 ` + codexClearedScreen
 
 // codexEditApprovalScreen is a copy of the daemon fixture of the same name. The
-// daemon keeps its own because four probe tests still drive it through a Kitty
-// fake; this one exists so the moved clear-screen test above keeps its
+// daemon keeps its own because four probe tests use a separate terminal
+// fixture; this one exists so the moved clear-screen test above keeps its
 // visible-prompt case.
 const codexEditApprovalScreen = `
 ▌ Would you like to make the following edits?

@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/tui/commands"
 	tuiplans "github.com/sglavoie/agentmux/tui/plans"
 )
 
@@ -34,8 +35,7 @@ func planViewTestModel(t *testing.T) (Model, plans.PlanMeta) {
 	cfg := &config.Config{}
 	cfg.Defaults.PlansDirectory = root
 	cfg.Defaults.Editor = "myeditor"
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 
 	m := Model{
 		mode:   ModePlanSearch,
@@ -346,43 +346,31 @@ func TestPlanViewer_StaleLoadIsDropped(t *testing.T) {
 
 // TestPlanViewer_OpenEditorInvokesLaunch exercises the `e` keybinding from
 // inside the viewer.
-func TestPlanViewer_OpenEditorInvokesLaunch(t *testing.T) {
-	t.Parallel()
-
+func TestPlanViewerOpensEditorInWorkspace(t *testing.T) {
+	previous := commands.Portable
+	t.Cleanup(func() { commands.Portable = previous })
+	var shown []protocol.WorkspaceViewRequest
+	commands.Portable = commands.PortableTerminals{Desktop: func(request protocol.WorkspaceViewRequest) error {
+		shown = append(shown, request)
+		return nil
+	}}
 	m, meta := planViewTestModel(t)
-	runner := kitty.NewMockRunner(nil)
-	m.client = kitty.NewClientWithSocket(runner, "")
-
 	updated, cmd := m.enterPlanView(meta)
 	m = updated.(Model)
 	loaded := cmd().(planFilesLoadedMsg)
 	updated, _ = m.Update(loaded)
 	m = updated.(Model)
-
 	_, editorCmd := m.Update(keyPress("e"))
 	if editorCmd == nil {
-		t.Fatal("`e` produced nil cmd; want openPlanInEditorCmd")
+		t.Fatal("e produced no command")
 	}
 	if msg := editorCmd(); msg != nil {
 		if errMsg, ok := msg.(planEditorErrMsg); ok {
-			t.Fatalf("openPlanInEditorCmd surfaced an error: %v", errMsg.err)
+			t.Fatalf("opening editor: %v", errMsg.err)
 		}
 	}
-
-	launchCalled := false
-	for _, c := range runner.Calls {
-		if c.Name != "kitten" {
-			continue
-		}
-		for _, a := range c.Args {
-			if a == "launch" {
-				launchCalled = true
-				break
-			}
-		}
-	}
-	if !launchCalled {
-		t.Error("expected kitten @ launch call after `e` keypress in viewer")
+	if len(shown) != 1 || shown[0].Kind != protocol.WorkspaceViewEditor || shown[0].Path != meta.DirPath {
+		t.Fatalf("workspace editor requests = %+v", shown)
 	}
 }
 

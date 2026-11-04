@@ -43,7 +43,6 @@ const (
 	ToggleInspector    ID = "explore.toggle-inspector"
 	SwitchProject      ID = "explore.switch-project"
 	ToggleListView     ID = "explore.toggle-list-view"
-	ResortTabs         ID = "app.resort-tabs"
 	UndoClose          ID = "app.undo-close"
 	DismissDeprecation ID = "app.dismiss-deprecation"
 	ShowFeedback       ID = "app.show-feedback"
@@ -143,7 +142,7 @@ const (
 	ReasonNoProject       = "project is not configured"
 	ReasonPreviewTooSmall = "terminal is too small for preview"
 	ReasonNothingToUndo   = "nothing to undo"
-	ReasonSendNeedsTmux   = "only a tmux session can be sent to; type in its Kitty tab"
+	ReasonSendNeedsTmux   = "only a tmux session can be sent to"
 	ReasonSendLost        = "the session's tmux server is gone"
 	ReasonSendASLQuestion = "answer its agent-session-loop question from Runs"
 )

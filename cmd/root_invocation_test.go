@@ -215,7 +215,7 @@ func TestEveryLeafDeclaresItsArguments(t *testing.T) {
 
 func TestNoArgsLeavesRefuseAStrayArgument(t *testing.T) {
 	for _, path := range [][]string{
-		{"mute-toggle"}, {"focus-next"}, {"focus-next-managed"}, {"focus-prev-managed"}, {"resort"},
+		{"mute-toggle"}, {"focus-next"}, {"focus-next-managed"}, {"focus-prev-managed"},
 		{"config", "show"}, {"config", "validate"}, {"config", "path"}, {"config", "init"}, {"config", "edit"},
 		{"config", "hooks-status"}, {"transcripts", "status"}, {"transcripts", "compact"}, {"transcripts", "rebuild"},
 		{"daemon", "start"}, {"daemon", "restart"}, {"daemon", "status"}, {"session", "list"},

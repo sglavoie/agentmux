@@ -14,7 +14,7 @@
 // package only records, correlates, projects, and persists rows, so every
 // function here is either a pure projection or a caller-locked mutation of a
 // window's ring. It must never import the daemon root, and it performs no
-// Kitty, IPC, or journal I/O of its own: it builds the record the root
+// terminal, IPC, or journal I/O of its own: it builds the record the root
 // appends.
 //
 // It deliberately does not absorb the diagnostic tail, cursor, and replay

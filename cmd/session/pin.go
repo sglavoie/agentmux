@@ -7,7 +7,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
@@ -19,35 +18,20 @@ import (
 func PinSessionCommand() *cobra.Command { return pinSessionCmd }
 
 var (
-	pinSessionWindowID       int
 	pinSessionRuntimeSession string
 	pinSessionUnpin          bool
 	pinSessionJSON           bool
-	pinSessionClient         = cli.NewKittyClient
 )
 
 var pinSessionCmd = &cobra.Command{
 	Use:   "pin-session",
 	Short: "Pin an Agent Mux session above every other, or unpin it",
-	Long: `Pins the session in the Kitty window identified by --window-id (or
-$KITTY_WINDOW_ID when the flag is zero), or with --unpin unpins it. The pin
-is the ★ in front of the session's title, so the dashboard, the workspace
-sidebar, and the session order all read the same pins: pinned sessions are
-listed above every other, Needs you included. It sets the pin rather than
-flipping it, so asking twice changes nothing the second time. If the window
-is not a managed Agent Mux session, the command is a silent no-op.
+	Long: `Pins or unpins a managed tmux session. The pin is the ★ in front of
+the session's title. --runtime-session names the target explicitly; otherwise
+AMX_RUNTIME_SESSION_ID identifies the current session. A session that is not
+running is an error. Asking to pin an already pinned session changes nothing.
 
-With --runtime-session the session is named by its runtime session instead,
-which is how one on the tmux backend is pinned: the star is on its group's
-title, and no Kitty is consulted. A runtime session that is not running
-there is an error rather than a no-op, because it was named exactly. With
-neither flag and outside Kitty, a command that runs in a managed session
-(AMX_RUNTIME_SESSION_ID) pins that session the same way.
-
-With --json it reports {window_id, pinned, changed}: pinned is the session's
-pin after the command, and changed is false when it already had it or the
-window is not a managed session. A session named by --runtime-session reports
-runtime_session_id as well, and a window_id of zero.`,
+With --json it reports {window_id, runtime_session_id, pinned, changed}.`,
 	Example: `  amx pin-session
   amx pin-session --unpin
   amx pin-session --runtime-session rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --json`,
@@ -56,10 +40,8 @@ runtime_session_id as well, and a window_id of zero.`,
 }
 
 func init() {
-	pinSessionCmd.Flags().IntVar(&pinSessionWindowID, "window-id", 0,
-		"Kitty window ID of the target tab (defaults to $KITTY_WINDOW_ID)")
 	pinSessionCmd.Flags().StringVar(&pinSessionRuntimeSession, "runtime-session", "",
-		"runtime session ID of a tmux session to pin instead of a Kitty tab")
+		"runtime session ID of the tmux session to pin")
 	pinSessionCmd.Flags().BoolVar(&pinSessionUnpin, "unpin", false, "unpin the session instead of pinning it")
 	cli.AddJSONFlag(pinSessionCmd, &pinSessionJSON)
 }
@@ -72,7 +54,7 @@ type pinSessionResult struct {
 	RuntimeSessionID string `json:"runtime_session_id,omitempty"`
 	Pinned           bool   `json:"pinned"`
 	Changed          bool   `json:"changed"`
-	// managed is false for a Kitty window that is not a managed session.
+	// managed is false when the target is not a managed session.
 	managed bool
 }
 
@@ -92,9 +74,7 @@ func runPinSession(cmd *cobra.Command, _ []string) error {
 	var result pinSessionResult
 	var err error
 	named := strings.TrimSpace(pinSessionRuntimeSession)
-	if named == "" && pinSessionWindowID == 0 {
-		// With nothing named and no Kitty window around it, the session
-		// this command runs in is the one meant, as with mute-toggle.
+	if named == "" {
 		named = currentRuntimeSession()
 	}
 	if named != "" {
@@ -115,15 +95,11 @@ func runPinSession(cmd *cobra.Command, _ []string) error {
 			return cli.CommandFailure(cmd, pinSessionJSON, "not_found", err)
 		}
 	} else {
-		windowID := cli.WindowIDOrEnv(pinSessionWindowID)
-		if windowID == 0 {
-			return cli.MissingParameter(cmd, pinSessionJSON, "--window-id",
-				"the Kitty window of the session to pin (default: $KITTY_WINDOW_ID), or --runtime-session for a tmux session")
-		}
-		result, err = pinKittySession(pinSessionClient(), windowID, want)
+		return cli.MissingParameter(cmd, pinSessionJSON, "--runtime-session",
+			"the runtime session ID of the tmux session to pin (default: $AMX_RUNTIME_SESSION_ID)")
 	}
 	if err != nil {
-		return cli.CommandFailure(cmd, pinSessionJSON, "pin_session_failed", fmt.Errorf("pin session: %w", cli.PlainKittyError(err)))
+		return cli.CommandFailure(cmd, pinSessionJSON, "pin_session_failed", fmt.Errorf("pin session: %w", err))
 	}
 	if pinSessionJSON {
 		return cli.WriteJSON(cmd, result)
@@ -138,10 +114,7 @@ func runPinSession(cmd *cobra.Command, _ []string) error {
 
 // pinSessionSummary is the one line text mode prints.
 func pinSessionSummary(result pinSessionResult) string {
-	target := fmt.Sprintf("Kitty window %d", result.WindowID)
-	if result.RuntimeSessionID != "" {
-		target = result.RuntimeSessionID
-	}
+	target := result.RuntimeSessionID
 	switch {
 	case result.Pinned && result.Changed:
 		return "pinned " + target
@@ -152,19 +125,6 @@ func pinSessionSummary(result pinSessionResult) string {
 	default:
 		return target + " is not pinned"
 	}
-}
-
-func pinKittySession(client kitty.KittyClient, windowID int, want bool) (pinSessionResult, error) {
-	result := pinSessionResult{WindowID: windowID}
-	sessions, err := session.List(client)
-	if err != nil {
-		return result, err
-	}
-	rs, ok := session.FindByWindowID(sessions, windowID)
-	if !ok {
-		return result, nil
-	}
-	return applyPin(kitty.NewBackend(client), rs, want, result)
 }
 
 // pinRuntimeSession pins or unpins the tmux session a runtime session ID

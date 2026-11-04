@@ -82,7 +82,7 @@ func TestShareBundleKeepsBackendHealthAndDropsWhatItCouldCarry(t *testing.T) {
 	doctor := map[string]any{
 		"schema_version": 7,
 		"backend":        backend,
-		"versions":       map[string]any{"amx": "0.1.1", "go": "go1.26.0", "tmux": "3.7c", "tmux_source": "bundled", "tmux_min": "3.5", "kitty": "0.43.1"},
+		"versions":       map[string]any{"amx": "0.1.1", "go": "go1.26.0", "tmux": "3.7c", "tmux_source": "bundled", "tmux_min": "3.5"},
 		"daemon":         map[string]any{"alive": true, "runtime": runtime},
 		"findings": []any{map[string]any{
 			"severity": "failure", "check": "backend_server_unreadable", "message": "did not answer: " + promptCanary,
@@ -145,7 +145,7 @@ func TestShareBundleKeepsBackendHealthAndDropsWhatItCouldCarry(t *testing.T) {
 			t.Errorf("%s findings = %+v; want the identifier kept", name, shared.Findings)
 		}
 	}
-	if shared.Versions["tmux"] != "3.7c" || shared.Versions["tmux_min"] != "3.5" || shared.Versions["kitty"] != "0.43.1" || shared.Versions["go"] != "go1.26.0" {
+	if shared.Versions["tmux"] != "3.7c" || shared.Versions["tmux_min"] != "3.5" || shared.Versions["go"] != "go1.26.0" {
 		t.Errorf("doctor.json versions = %+v; want every release kept", shared.Versions)
 	}
 

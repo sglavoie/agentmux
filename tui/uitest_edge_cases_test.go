@@ -8,38 +8,11 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
+	"github.com/sglavoie/agentmux/tui/commands"
 )
 
-// The two dashboard edge cases the committed scenarios cannot reach, and why
-// they are here rather than in docs/tui-testing/scenarios/.
-//
-// A scenario is a JSON file over a static fixture. That buys reproducibility at
-// the cost of two things: it cannot make a trapped Kitty call FAIL, because the
-// recording client answers every focus and mutation with nil, and it cannot make
-// the world CHANGE ITS MIND between refreshes, because the fixture's overlay is
-// replayed identically on every tick. These two cases need exactly one of those
-// each. They are still driven through the same harness — the same fixture, the
-// same frozen clock, the same hermetic seams — so what they exercise is the real
-// model reached through real keys, not a hand-assembled one.
-
-// uitestFocusFailureClient is the recording client with one operation broken.
-// Embedding rather than reimplementing is the point: every other call, including
-// the ListWindows a refresh runs on, stays exactly what every other harness run
-// gets, so a difference in the rendered list can only have come from the focus.
-type uitestFocusFailureClient struct {
-	*kittytest.Client
-	err error
-}
-
-// FocusTab records the attempt and then refuses it. The attempt is still logged
-// because "the dashboard tried and was told no" is a different state from "the
-// dashboard never tried", and a test that could not tell them apart would keep
-// passing against a build that had silently stopped dispatching.
-func (c *uitestFocusFailureClient) FocusTab(matchExpr string) error {
-	c.Calls = append(c.Calls, kittytest.Call{Op: "FocusTab", Match: matchExpr})
-	return c.err
-}
+// These cases use the fixture driver to exercise focus refusal and a daemon
+// state transition through the dashboard update loop.
 
 // TestAFailedFocusLeavesTheRowUnacknowledged is the unhappy half of enter.
 //
@@ -54,11 +27,8 @@ func (c *uitestFocusFailureClient) FocusTab(matchExpr string) error {
 func TestAFailedFocusLeavesTheRowUnacknowledged(t *testing.T) {
 	t.Parallel()
 
-	d, client := newUITestFixtureDriver(unseenStopsFixture(), UITestSize{Width: 120, Height: 36})
+	d := newUITestFixtureDriver(unseenStopsFixture(), UITestSize{Width: 120, Height: 36})
 	defer func() { _ = d.Close() }()
-
-	refused := errors.New("kitty: no matching tab")
-	d.model.client = &uitestFocusFailureClient{Client: client, err: refused}
 
 	if before := uitestScreenText(d.Observe()); !strings.Contains(before, "• ▌ unread") {
 		t.Fatalf("fixture did not start with the unread row marked:\n%s", before)
@@ -67,10 +37,7 @@ func TestAFailedFocusLeavesTheRowUnacknowledged(t *testing.T) {
 		t.Fatalf("enter: %v", err)
 	}
 
-	if got := len(client.CallsFor("FocusTab")); got != 1 {
-		t.Fatalf("FocusTab calls = %d, want exactly one attempt", got)
-	}
-	if !errors.Is(d.model.actionErr, refused) {
+	if !errors.Is(d.model.actionErr, commands.ErrNoTerminal) {
 		t.Fatalf("actionErr = %v, want the refusal surfaced", d.model.actionErr)
 	}
 
@@ -105,7 +72,7 @@ func TestClearingTheUnseenBitDemotesTheRowOnTheNextRefresh(t *testing.T) {
 	t.Parallel()
 
 	fx := unseenStopsFixture()
-	d, _ := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 36})
+	d := newUITestFixtureDriver(fx, UITestSize{Width: 120, Height: 36})
 	defer func() { _ = d.Close() }()
 
 	before := uitestScreenText(d.Observe())
@@ -121,11 +88,11 @@ func TestClearingTheUnseenBitDemotesTheRowOnTheNextRefresh(t *testing.T) {
 		state.Unseen = false
 		seen[window] = state
 	}
-	d.model.backgroundCommands.topologyRefresh = hermeticTopologyRefresh(uitestSessionOverlay{
+	d.model.backgroundCommands.topologyRefresh = hermeticPortableRefresh(uitestSessionOverlay{
 		States:   seen,
 		Watchdog: fx.Watchdog,
 		Families: fx.Families,
-	})
+	}, append(fx.runningSessions(), fx.Portable...))
 	d.Tick(1)
 	if err := d.Err(); err != nil {
 		t.Fatalf("refresh: %v", err)

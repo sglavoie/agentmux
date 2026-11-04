@@ -113,10 +113,6 @@ final class PreferencesModel: ObservableObject {
     @Published var amxBinarySettingsRequest = 0 {
         didSet { if amxBinarySettingsRequest > oldValue { selectedTab = .advanced } }
     }
-    /// Whether any Kitty is in use: a Kitty session is listed, or the daemon
-    /// knows a Kitty socket. The app sets it; Settings shows its Kitty-only
-    /// fields only then, or while a preference already names Kitty.
-    @Published var kittyInUse = false
     let defaults: UserDefaults
 
     @Published var preferences: AppPreferences {
@@ -285,31 +281,6 @@ final class PreferencesModel: ObservableObject {
         guard let binary = snapshot.binary else { return snapshot.binaryProblem }
         let version = snapshot.binaryVersion?.line ?? "version unknown"
         return "Running \(Self.abbreviated(binary.url.path)) (\(PreferencesSnapshot.describe(binary.source))): \(version)"
-    }
-
-    /// Why the Kitty socket override cannot be what Kitty listens on.
-    var kittySocketProblem: String? {
-        let socket = preferences.kittySocketOverride.trimmingCharacters(in: .whitespaces)
-        guard !socket.isEmpty else { return nil }
-        if socket.hasPrefix("unix:@") || socket.hasPrefix("tcp:") { return nil }
-        guard socket.hasPrefix("unix:") else { return "Use Kitty's address form, e.g. unix:/tmp/kitty-1234." }
-        let path = String(socket.dropFirst("unix:".count))
-        return FileManager.default.fileExists(atPath: path) ? nil : "No socket at \(path) right now."
-    }
-
-    /// Whether Settings shows its Kitty-only fields (the socket override and
-    /// what the dashboard shortcut does in Kitty): while Kitty is in use, or
-    /// while a preference still names it, so a value set earlier can be seen
-    /// and undone.
-    nonisolated static func showsKittySettings(kittyInUse: Bool, preferences: AppPreferences) -> Bool {
-        kittyInUse
-            || !preferences.kittySocketOverride.trimmingCharacters(in: .whitespaces).isEmpty
-            || preferences.launchBackend == .kitty
-            || preferences.dashboardPlace == .kitty
-    }
-
-    var showsKittySettings: Bool {
-        Self.showsKittySettings(kittyInUse: kittyInUse, preferences: preferences)
     }
 
     /// The daemon's status as Settings' Daemon section shows it.
@@ -687,12 +658,7 @@ struct PreferencesView: View {
                                        defaultCombo: HotKeyPreference.dashboard.default, additionalOthers: [workspaceRecorder])
                 }
                 problem(for: HotKeyPreference.dashboard)
-                Picker("Show the dashboard in", selection: $model.preferences.dashboardPlace) {
-                    ForEach(DashboardPlacePreference.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                if model.showsKittySettings {
-                    note("In Kitty, the shortcut brings Kitty forward on the Agent Mux dashboard tab, opening one when none is running.")
-                }
+                note("The dashboard opens in the workspace.")
                 LabeledContent(HotKeyPreference.nextAttention.label) {
                     HotKeyRecorderView(combo: $model.preferences.hotKeyNextAttention, model: model,
                                        recorder: attentionRecorder, other: dashboardRecorder,
@@ -877,18 +843,6 @@ struct PreferencesView: View {
                     note("Leave empty to use the bundled amx, ~/.local/bin/amx, then PATH.")
                     ForEach(model.snapshot.lines.filter { $0.0 == "Missing commands" }, id: \.0) { row in
                         LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
-                    }
-                    if model.showsKittySettings {
-                        LabeledContent("Kitty socket") {
-                            TextField("", text: $model.preferences.kittySocketOverride, prompt: Text("From the daemon"))
-                                .labelsHidden()
-                                .font(.system(.body, design: .monospaced))
-                                .frame(minWidth: 220)
-                        }
-                        if let problem = model.kittySocketProblem {
-                            note(problem, warning: true)
-                        }
-                        note("Tried first when focusing a session in Kitty or opening the dashboard there.")
                     }
                 }
 

@@ -7,7 +7,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -15,20 +14,13 @@ import (
 func TestRunningSessionDisplayTitleFollowsConfigRename(t *testing.T) {
 	dir := t.TempDir()
 	const oldTitle, newTitle = "↗ZoomFlow", "⤴ZoomFlow"
-	for _, kind := range []runtimesession.BackendKind{runtimesession.BackendKitty, runtimesession.BackendTmux} {
+	for _, kind := range []runtimesession.BackendKind{runtimesession.BackendTmux} {
 		t.Run(string(kind), func(t *testing.T) {
 			cfg := &config.Config{Projects: []config.Session{{Title: oldTitle, Profile: "personal", Directory: dir}}}
 			discover := func() session.RunningSession {
-				var rows []session.RunningSession
-				if kind == runtimesession.BackendTmux {
-					rows = session.RunningSessionsFromPanes(kind, []backend.Pane{{GroupTitle: oldTitle, Vars: map[string]string{
-						"amx_profile": "personal", "amx_project": oldTitle, "amx_directory": dir,
-					}}}, cfg)
-				} else {
-					rows, _ = session.ListFromOSWindowsWithConfig([]kitty.OSWindow{{Tabs: []kitty.Tab{{ID: 1, Title: oldTitle, Windows: []kitty.Window{{
-						ID: 2, UserVars: kitty.UserVars{Profile: "personal", Project: oldTitle, AMXDirectory: dir, LaunchID: "launch-1"},
-					}}}}}}, cfg)
-				}
+				rows := session.RunningSessionsFromPanes(kind, []backend.Pane{{GroupTitle: oldTitle, Vars: map[string]string{
+					"amx_profile": "personal", "amx_project": oldTitle, "amx_directory": dir,
+				}}}, cfg)
 				if len(rows) != 1 {
 					t.Fatalf("discovered %d sessions, want 1", len(rows))
 				}

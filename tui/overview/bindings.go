@@ -192,7 +192,7 @@ func gridBindings() []gridBinding {
 		keys:     []string{"enter"},
 		parts:    []bindingPart{{display: "enter", short: "↵", available: footerFacts.canFocus}},
 		labelFor: fixedLabel("focus"),
-		help:     "Show the selected session: focus its Kitty tab and leave the overview, or attach this terminal to a tmux session until you detach with F12, then come back here. Nothing happens while a focus is already out.",
+		help:     "Show the selected tmux session in this terminal until you detach with F12, then return to the overview. Nothing happens while a focus is already out.",
 		section:  sectionAct,
 		priority: footerPriorityEssential,
 		onFooter: true,

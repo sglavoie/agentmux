@@ -119,12 +119,6 @@ func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
 			t.Errorf("cockpit-smoke contains %q; it must fail rather than skip:\n%s", absent, recipe)
 		}
 	}
-	// It runs from any terminal: nothing in it may ask for Kitty.
-	for _, kitty := range []string{"kitty", "kitten", "KITTY_", "--current-window"} {
-		if strings.Contains(recipe, kitty) {
-			t.Errorf("cockpit-smoke names %q; it must run from any terminal with no Kitty:\n%s", kitty, recipe)
-		}
-	}
 	// Read-only over the operator's live installation.
 	for _, mutation := range []string{"session launch", "worktree remove", "config init", "daemon stop", "backend stop", "amx send", "kill-session"} {
 		if strings.Contains(recipe, mutation) {
@@ -137,74 +131,6 @@ func TestJustCockpitSmokeFailsRatherThanSkips(t *testing.T) {
 		if strings.Contains(line, `"$tmux_bin" -`) && !strings.Contains(line, `"$tmux_bin" -S "$socket"`) {
 			t.Errorf("cockpit-smoke runs tmux outside its own socket: %s", strings.TrimSpace(line))
 		}
-	}
-}
-
-// TestJustKittySmokeIsOptInAndFailsRatherThanSkips keeps the Kitty smoke what
-// it was while it was the cockpit smoke, and out of every gate: Kitty is an
-// optional backend, so nothing an operator without it runs may depend on it.
-func TestJustKittySmokeIsOptInAndFailsRatherThanSkips(t *testing.T) {
-	justfile := readJustfile(t)
-	recipe := justfileRecipeClosure(t, justfile, "kitty-smoke")
-
-	for _, want := range []string{
-		"kitten @ ls",                    // a real Kitty remote-control round trip
-		"KITTY_WINDOW_ID",                // driven from a real window, not a headless shell
-		"ready: true",                    // the real daemon, not just a reachable socket
-		"export-events --current-window", // the daemon is reducing facts for that window
-		"doctor --strict",                // invariants hold on the installed amx
-	} {
-		if !strings.Contains(recipe, want) {
-			t.Errorf("kitty-smoke does not exercise %q:\n%s", want, recipe)
-		}
-	}
-	for _, absent := range []string{"exit 0", "skip"} {
-		if strings.Contains(recipe, absent) {
-			t.Errorf("kitty-smoke contains %q; it must fail rather than skip:\n%s", absent, recipe)
-		}
-	}
-	for _, mutation := range []string{"session launch", "worktree remove", "config init", "daemon stop"} {
-		if strings.Contains(recipe, mutation) {
-			t.Errorf("kitty-smoke runs %q; the smoke must observe, not mutate", mutation)
-		}
-	}
-
-	for _, optIn := range []string{"kitty-smoke", "install-kitty"} {
-		for _, gate := range []string{"check", "acceptance", "install", "install-restart-smoke", "update"} {
-			header := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(gate) + `:.*$`).FindString(justfile)
-			if header == "" {
-				t.Fatalf("Justfile has no %q recipe", gate)
-			}
-			if strings.Contains(header, optIn) {
-				t.Errorf("%s depends on %s; Kitty setup and its smoke are opt-in: %s", gate, optIn, header)
-			}
-		}
-		for _, step := range release.Plan("/amx", "/asl") {
-			if strings.Contains(strings.Join(step.Argv, " "), optIn) {
-				t.Errorf("the paired gate's %s step runs %s", step.Name, optIn)
-			}
-		}
-	}
-}
-
-// TestJustInstallCreatesNothingOfKittys is the install half of the same rule:
-// the Kitty directory and snippet link are `install-kitty`'s, and `uninstall`
-// still removes a link somebody made.
-func TestJustInstallCreatesNothingOfKittys(t *testing.T) {
-	justfile := readJustfile(t)
-
-	install := justfileRecipe(t, justfile, "install")
-	for _, kitty := range []string{"prefix_kitty", "agent-mux.conf"} {
-		if strings.Contains(install, kitty) {
-			t.Errorf("install touches %s; only install-kitty may:\n%s", kitty, install)
-		}
-	}
-	link := `ln -sf "{{root}}/agent-mux.conf" "{{prefix_kitty}}/agent-mux.conf"`
-	if got := justfileRecipe(t, justfile, "install-kitty"); !strings.Contains(got, link) {
-		t.Errorf("install-kitty does not link the Kitty snippet:\n%s", got)
-	}
-	if got := justfileRecipe(t, justfile, "uninstall"); !strings.Contains(got, `rm -f "{{prefix_kitty}}/agent-mux.conf"`) {
-		t.Errorf("uninstall no longer removes the Kitty snippet link:\n%s", got)
 	}
 }
 

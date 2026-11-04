@@ -6,20 +6,20 @@ import (
 	"time"
 )
 
-func TestPresentationChangedAtRoundTripsThroughUserVarInMilliseconds(t *testing.T) {
+func TestPresentationChangedAtRoundTripsThroughStatePayloadInMilliseconds(t *testing.T) {
 	changedAt := time.Unix(1_710_000_100, 123_456_789)
-	encoded, err := (WindowState{PresentationChangedAt: changedAt}).MarshalUserVar()
+	encoded, err := (WindowState{PresentationChangedAt: changedAt}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	wantMillis := changedAt.UnixMilli()
 	if !strings.Contains(encoded, `"pc":1710000100123`) {
-		t.Fatalf("MarshalUserVar() missing compact millisecond timestamp: %s", encoded)
+		t.Fatalf("MarshalStatePayload() missing compact millisecond timestamp: %s", encoded)
 	}
 
 	var got WindowState
-	if err := got.UnmarshalUserVar(encoded); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(encoded); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if got.PresentationChangedAt.UnixMilli() != wantMillis {
 		t.Fatalf("PresentationChangedAt = %v; want unix milliseconds %d", got.PresentationChangedAt, wantMillis)
@@ -27,24 +27,24 @@ func TestPresentationChangedAtRoundTripsThroughUserVarInMilliseconds(t *testing.
 }
 
 func TestPresentationChangedAtAbsentKeyRestoresZeroAndIsOmitted(t *testing.T) {
-	encoded, err := (WindowState{}).MarshalUserVar()
+	encoded, err := (WindowState{}).MarshalStatePayload()
 	if err != nil {
-		t.Fatalf("MarshalUserVar() error: %v", err)
+		t.Fatalf("MarshalStatePayload() error: %v", err)
 	}
 	if strings.Contains(encoded, `"pc"`) {
 		t.Fatalf("zero presentation timestamp was persisted: %s", encoded)
 	}
 
 	var got WindowState
-	if err := got.UnmarshalUserVar(`{"v":4,"ei":"stop"}`); err != nil {
-		t.Fatalf("UnmarshalUserVar() error: %v", err)
+	if err := got.UnmarshalStatePayload(`{"v":4,"ei":"stop"}`); err != nil {
+		t.Fatalf("UnmarshalStatePayload() error: %v", err)
 	}
 	if !got.PresentationChangedAt.IsZero() {
 		t.Fatalf("missing pc restored as %v; want zero", got.PresentationChangedAt)
 	}
 
-	if err := got.UnmarshalUserVar(`{"a":"stop","pc":1710000100123}`); err != nil {
-		t.Fatalf("UnmarshalUserVar(v1) error: %v", err)
+	if err := got.UnmarshalStatePayload(`{"a":"stop","pc":1710000100123}`); err != nil {
+		t.Fatalf("UnmarshalStatePayload(v1) error: %v", err)
 	}
 	if !got.PresentationChangedAt.IsZero() {
 		t.Fatalf("schema-v1 payload fabricated presentation recency %v", got.PresentationChangedAt)

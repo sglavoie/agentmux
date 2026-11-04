@@ -203,8 +203,7 @@ type Adapter interface {
 	// harness.Impl.Name().
 	Harness() string
 	// Classify reads a plain-text capture of a pane's visible screen, one line
-	// per terminal row: `kitten @ get-text --extent=screen` on Kitty,
-	// `capture-pane -p` on tmux. Text captured with styling goes through
+	// per terminal row, as returned by `tmux capture-pane -p`. Styled text goes through
 	// StripANSI first. It must compute vetoes first and unconditionally, and
 	// must consult positive terminal evidence only on a veto-free screen.
 	Classify(screen string) Observation

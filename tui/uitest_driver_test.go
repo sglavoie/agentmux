@@ -8,7 +8,6 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/tui/cmdtest"
 	"github.com/sglavoie/agentmux/tui/commands"
 	tuiworktrees "github.com/sglavoie/agentmux/tui/worktrees"
@@ -67,12 +66,11 @@ func TestUITestDriverOpenActionsAndResize(t *testing.T) {
 	}
 }
 
-func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
+func TestUITestDriverWorktreeOpenRunsWithoutLiveAccess(t *testing.T) {
 	t.Parallel()
 
 	fx := worktreesFixture()
-	client := kittytest.NewClient(fx.Windows)
-	d := newUITestDriver(fx.Config, client, UITestSize{Width: 120, Height: 30})
+	d := newUITestDriver(fx.Config, nil, UITestSize{Width: 120, Height: 30})
 	cleanupUITestDriver(t, d)
 
 	d.model.mode = ModeWorktrees
@@ -92,11 +90,8 @@ func TestUITestDriverWorktreeOpenUsesHermeticActionSeam(t *testing.T) {
 	if err := d.Key("o"); err != nil {
 		t.Fatalf("Key(o) error: %v", err)
 	}
-	if got := d.Model().actionErr; got == nil || got.Error() != "uitest: live worktree action access is disabled" {
-		t.Fatalf("shell action error = %v, want hermetic seam refusal", got)
-	}
-	if got := len(client.CallsFor("LaunchTab")); got != 0 {
-		t.Fatalf("LaunchTab calls = %d, want none from refused hermetic action", got)
+	if err := d.Err(); err != nil {
+		t.Fatalf("worktree shell attempted live access: %v", err)
 	}
 }
 

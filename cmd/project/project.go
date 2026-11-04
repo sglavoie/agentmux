@@ -38,17 +38,13 @@ import (
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/tui/layout"
 	"github.com/spf13/cobra"
 )
 
-// The seams the tests replace: a launch writes to the operator's real Kitty,
-// and both leaves read the operator's real configuration.
+// The seams tests replace for configuration and project actions.
 var (
 	projectLoadConfig = func() (*config.Config, error) { return cli.LoadRunnableConfig() }
-	projectNewKitty   = func() kitty.KittyClient { return cli.NewKittyClient() }
 	projectExecute    = func(ctx context.Context, deps actions.Dependencies, request actions.Request) (actions.Result, error) {
 		return actions.DefaultRegistry().Execute(ctx, deps, actions.Launch, request)
 	}
@@ -109,9 +105,9 @@ var projectLaunchCmd = &cobra.Command{
 	Use:   "launch TITLE [--profile PROFILE] [--directory DIR]",
 	Short: "Launch a new session from a configured project",
 	Long: `Launches a new session from the configured project named by TITLE (or
---title), in a new Kitty tab, through the same launch action the dashboard uses.
---backend tmux launches it on Agent Mux's private tmux server instead; the
-agent keeps running when no terminal shows it, and the JSON payload carries
+--title), through the same launch action the dashboard uses. It starts on
+Agent Mux's private tmux server. The agent keeps running when no terminal
+shows it, and the JSON payload carries
 the runtime_session_id that ` + "`amx attach`" + ` takes.
 
 A project is identified by its profile and title. A title that matches no
@@ -126,10 +122,7 @@ directory; a relative DIR is read from the current directory. The project, its
 profile, and its configuration are unchanged.
 
 --launch-profile uses another configured profile (and its harness) for this
-launch. --profile still identifies the source project; neither override is saved.
-
-Outside Kitty, set KITTY_LISTEN_ON to the instance's remote-control socket
-(a tmux launch needs no Kitty).`,
+launch. --profile still identifies the source project; neither override is saved.`,
 	Example: `  amx project launch api
   amx project launch amx --profile claude-work --backend tmux --json
   amx project launch api --directory ../api-hotfix`,
@@ -469,15 +462,6 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	if err := cli.SelectBackend(cmd, &deps); err != nil {
 		return projectActionError(cmd, err)
 	}
-	// Only a Kitty launch reads Kitty: a tmux launch must work with no Kitty
-	// running at all.
-	var client kitty.KittyClient
-	var before map[int]bool
-	if deps.Backend == runtimesession.BackendKitty {
-		client = projectNewKitty()
-		deps.Kitty = client
-		before = tabIDs(client)
-	}
 	request := actions.Request{Project: &project}
 	if directory := strings.TrimSpace(projectLaunchDir); directory != "" {
 		// Made absolute here, where "relative" still means the caller's
@@ -496,9 +480,6 @@ func runProjectLaunch(cmd *cobra.Command, args []string) error {
 	data := projectLaunchData{Action: result.Action, Changed: result.Changed, Message: result.Message, Project: projectViewOf(cfg, project), Backend: string(deps.Backend)}
 	if id, ok := result.Data["runtime_session_id"].(string); ok {
 		data.RuntimeSessionID = id
-	}
-	if before != nil {
-		data.TabID, data.WindowID = launchedTab(client, before, project.Title)
 	}
 	if projectLaunchJSON {
 		return cli.WriteJSON(cmd, data)
@@ -853,48 +834,4 @@ func projectViewOf(cfg *config.Config, project config.Session) projectView {
 		}
 	}
 	return view
-}
-
-// tabIDs records every tab before a launch, so the tab the launch adds can be
-// told apart from one that already carried the same title. A failed listing
-// returns nil and the launch is reported without a tab identity.
-func tabIDs(client kitty.KittyClient) map[int]bool {
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return nil
-	}
-	ids := make(map[int]bool)
-	for _, osWindow := range osWindows {
-		for _, tab := range osWindow.Tabs {
-			ids[tab.ID] = true
-		}
-	}
-	return ids
-}
-
-// launchedTab names the tab a launch opened: the one new tab whose title
-// contains the project title. Zero, or more than one, is reported as unknown.
-func launchedTab(client kitty.KittyClient, before map[int]bool, title string) (tabID, windowID int) {
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return 0, 0
-	}
-	found := 0
-	for _, osWindow := range osWindows {
-		for _, tab := range osWindow.Tabs {
-			if before[tab.ID] || !strings.Contains(tab.Title, title) {
-				continue
-			}
-			found++
-			tabID = tab.ID
-			windowID = 0
-			if len(tab.Windows) > 0 {
-				windowID = tab.Windows[0].ID
-			}
-		}
-	}
-	if found != 1 {
-		return 0, 0
-	}
-	return tabID, windowID
 }

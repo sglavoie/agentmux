@@ -20,7 +20,7 @@ import (
 // response form.
 func openASLResponseDriver(t *testing.T, rowID string) *uitestDriver {
 	t.Helper()
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, rowID)
 	if err := d.Key(keyASLRespond); err != nil {
 		t.Fatalf("opening the response form: %v", err)
@@ -341,7 +341,7 @@ func TestASLResponseRedactsDraftsAndBodiesInFormattedOutput(t *testing.T) {
 func TestASLResponseDoubleSubmitIsRefusedWhileInFlight(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
 	updated, _ := m.openASLResponse()
@@ -361,7 +361,7 @@ func TestASLResponseDoubleSubmitIsRefusedWhileInFlight(t *testing.T) {
 func TestASLResponseRetryReusesTheOperationIDForTheSameCall(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
 	updated, _ := m.openASLResponse()
@@ -396,7 +396,7 @@ func TestASLResponseFitsNarrowTerminals(t *testing.T) {
 	t.Parallel()
 
 	for _, size := range []UITestSize{{Width: 60, Height: 20}, {Width: 80, Height: 24}, {Width: 132, Height: 34}} {
-		d, _ := newUITestFixtureDriver(aslRunsFixture(), size)
+		d := newUITestFixtureDriver(aslRunsFixture(), size)
 		if err := d.Command(commands.ShowRuns); err != nil {
 			t.Fatalf("entering Runs at %dx%d: %v", size.Width, size.Height, err)
 		}
@@ -422,7 +422,7 @@ func TestASLResponseFitsNarrowTerminals(t *testing.T) {
 func TestASLResponseDropsAnAnswerToAnEarlierForm(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
 	updated, _ := m.openASLResponse()
@@ -458,7 +458,7 @@ func TestASLResponseDropsAnAnswerToAnEarlierForm(t *testing.T) {
 func TestASLResponseDropsABodyFetchedForAnEarlierForm(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	m := d.Model()
 	updated, _ := m.openASLResponse()

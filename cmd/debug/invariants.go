@@ -101,7 +101,7 @@ type doctorFinding struct {
 }
 
 // evaluateDaemonInvariants applies the correctness invariants to one export
-// snapshot. liveByID may be nil when Kitty was unreachable (the live-join
+// snapshot. liveByID may be nil when live topology was unavailable (the live-join
 // checks are skipped). Tombstoned windows are reported as informational and
 // exempt from failure checks: their live state was garbage-collected and the
 // retained metadata is post-mortem evidence, not a running session.
@@ -361,7 +361,7 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health,
 				"all %d source facts are acknowledged; retained as history", len(facts))
 		}
 
-		// Foreground harness (live Kitty user vars) vs stored harness drift.
+		// Foreground harness metadata vs stored harness drift.
 		if live, ok := liveByID[id]; ok && live.Found &&
 			live.Harness != "" && meta.Durable.Harness != "" &&
 			!strings.EqualFold(live.Harness, meta.Durable.Harness) {
@@ -404,8 +404,8 @@ func evaluateDaemonInvariants(snapshot protocol.EventsExport, health ipc.Health,
 // Two conditions, in the order they can go wrong:
 //
 //  1. The window is still live. A closed window is already exempt one level up
-//     as a tombstone, but a window Kitty no longer reports at all is equally not
-//     a pane anyone is looking at. When Kitty was unreachable the live join never
+//     as a tombstone, but a window no longer reported at all is equally not
+//     a pane anyone is looking at. When live topology was unavailable the join never
 //     ran (liveByID is nil), and suppressing the finding for the whole report
 //     would hide the fault it exists for, so the export's own view stands alone.
 //
@@ -433,7 +433,7 @@ func screenDeclineStillCurrent(meta protocol.WindowDebugMetadata, liveByID map[i
 		icons = append(icons, meta.Shadow.EffectiveIcon)
 	}
 	// A found live window always contributes its icon, including the empty one.
-	// Found already separates "Kitty has no such window" from "the tab is
+	// Found already separates "no such window" from "the tab is
 	// there", so an empty state on a tab that exists is not a missing reading —
 	// it is the clear/reset itself, and it is the only reading of the three that
 	// cannot be stale. Skipping it would let an export captured before the

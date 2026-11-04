@@ -672,7 +672,7 @@ func (m Model) handleLiveSessionPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.C
 		m.livePickerCandidates = nil
 		m.livePickerTitle = ""
 		if purpose == LivePickerASLFocus {
-			return m, commands.Focus(m.client, chosen.TabID)
+			return m, commands.Focus(chosen.TabID)
 		}
 		return m.reopenWorktreeWithParameters(map[string]string{"session": chosen.ID})
 	}
@@ -747,17 +747,8 @@ func formatLiveSessionCandidate(candidate actions.WorktreeLiveSession, width int
 	if identity == "" {
 		identity = "unknown profile"
 	}
-	// A Kitty session is its tab and window. A session on another backend is
-	// named by its backend: its tab and window are this process's stand-ins,
-	// and its candidate ID already is its runtime session.
-	location := fmt.Sprintf("tab %d", candidate.TabID)
-	if candidate.WindowID != 0 {
-		location += fmt.Sprintf(" / window %d", candidate.WindowID)
-	}
-	switch {
-	case candidate.Backend != "":
-		location = candidate.Backend
-	case candidate.TabID == 0:
+	location := candidate.Backend
+	if location == "" {
 		// Resolved from the error alone, with no listing to place it.
 		location = "-"
 	}

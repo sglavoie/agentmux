@@ -7,7 +7,7 @@ import (
 )
 
 // Observed Claude UI chrome below the context-limit banner (captured live
-// via `kitten @ get-text --extent=screen` on 2026-06-08). The current
+// on 2026-06-08). The current
 // release does NOT use the box-drawing brackets that the original plan
 // assumed; the real chrome is five non-empty trailing lines:
 //

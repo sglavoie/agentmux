@@ -11,7 +11,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/daemon/rendering"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
@@ -49,12 +48,6 @@ func (f *fakeHarnessProcessInspector) InspectHarnessProcesses(
 		out[identity] = f.statuses[identity]
 	}
 	return out
-}
-
-func (f *fakeHarnessProcessInspector) callCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.calls)
 }
 
 func applyLifecycleEvent(
@@ -105,18 +98,6 @@ func lifecycleEvents(st *state.WindowState) []protocol.SessionEvent {
 	return out
 }
 
-// lifecycleExitEvent returns the single process-exit row a window recorded.
-func lifecycleExitEvent(t *testing.T, h *Handler, windowID int) protocol.SessionEvent {
-	t.Helper()
-	h.stateMu.Lock()
-	defer h.stateMu.Unlock()
-	events := lifecycleEvents(h.store[windowID])
-	if len(events) != 1 {
-		t.Fatalf("window %d process-exit rows = %+v, want exactly one", windowID, events)
-	}
-	return events[0]
-}
-
 func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
 	t.Parallel()
 
@@ -125,7 +106,6 @@ func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
 			h := newTestHandler()
 			identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5101, StartToken: "Thu Jul 16 10:20:30 2026"}
 			applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-			h.renderQueue = rendering.NewQueue()
 			h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: status}})
 
 			h.stateMu.Lock()
@@ -147,9 +127,6 @@ func TestProcessLifecycleAliveAndUnknownPreserveState(t *testing.T) {
 			if got := h.guard.Current(42); got != beforeGuard {
 				t.Fatalf("guard = %q, want %q", got, beforeGuard)
 			}
-			if !h.renderQueue.Empty() {
-				t.Fatal("no-op inspection queued a render")
-			}
 		})
 	}
 }
@@ -163,7 +140,6 @@ func TestProcessLifecycleMissingAndReplacedSettleInteractiveSilently(t *testing.
 			h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
 			identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5201, StartToken: "Thu Jul 16 10:20:30 2026"}
 			applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-			h.renderQueue = rendering.NewQueue()
 			h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{identity: status}})
 
 			if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
@@ -186,9 +162,6 @@ func TestProcessLifecycleMissingAndReplacedSettleInteractiveSilently(t *testing.
 			if calls.len() != 0 {
 				t.Fatalf("synthetic process exit dispatched %d notifications", calls.len())
 			}
-			if h.renderQueue.Empty() {
-				t.Fatal("visible interactive exit did not queue a render")
-			}
 		})
 	}
 }
@@ -205,7 +178,6 @@ func TestProcessLifecycleSettlementPublishesSafeDiagnosticEvidenceOnce(t *testin
 	h.setDecisionJournal(journal)
 	identity := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5242, StartToken: "Thu Jul 16 10:20:30 2026"}
 	applyLifecycleEvent(t, h, 42, identity, "session", "active", 1, false)
-	h.renderQueue = rendering.NewQueue()
 	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{
 		identity: probes.HarnessProcessMissing,
 	}})
@@ -335,7 +307,7 @@ func TestProcessLifecycleCancelsPendingPermissionNotification(t *testing.T) {
 	}
 }
 
-func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
+func TestProcessLifecyclePipeExitRevealsParent(t *testing.T) {
 	t.Parallel()
 
 	h := newTestHandler()
@@ -343,7 +315,6 @@ func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
 	pipe := protocol.HarnessProcessIdentity{Harness: "claude", PID: 5302, StartToken: "Thu Jul 16 10:21:30 2026"}
 	applyLifecycleEvent(t, h, 42, parent, "parent", "stop", 1, false)
 	applyLifecycleEvent(t, h, 42, pipe, "pipe", "active", 1, true)
-	h.renderQueue = rendering.NewQueue()
 	h.SetHarnessProcessInspector(&fakeHarnessProcessInspector{statuses: map[protocol.HarnessProcessIdentity]probes.HarnessProcessInspection{pipe: probes.HarnessProcessMissing}})
 
 	if committed := h.processLifecycleTick(context.Background(), time.Now()); committed != 1 {
@@ -359,9 +330,6 @@ func TestProcessLifecyclePipeExitRevealsParentAndQueuesRender(t *testing.T) {
 		t.Fatalf("durable identity was discarded: %+v", meta.Durable)
 	}
 	h.stateMu.Unlock()
-	if h.renderQueue.Empty() {
-		t.Fatal("pipe exit visible transition did not queue render")
-	}
 }
 
 func TestProcessLifecycleResetClearsWithoutSynthesizingStop(t *testing.T) {

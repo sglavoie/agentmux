@@ -10,12 +10,12 @@ final class BackendSetupTests: XCTestCase {
 
     func testFollowingCLIUsesTheReportedDestinationAndNeverGuesses() {
         XCTAssertEqual(LaunchBackendPreference.followCLI.resolved(cliBackend: "tmux"), .workspace)
-        XCTAssertEqual(LaunchBackendPreference.followCLI.resolved(cliBackend: "kitty"), .kitty)
+        XCTAssertNil(LaunchBackendPreference.followCLI.resolved(cliBackend: "unsupported"))
         XCTAssertNil(LaunchBackendPreference.followCLI.resolved(cliBackend: nil))
         XCTAssertNil(LaunchBackendPreference.followCLI.resolved(cliBackend: "future"))
-        XCTAssertEqual(LaunchBackendPreference.workspace.resolved(cliBackend: "kitty"), .workspace)
-        XCTAssertEqual(LaunchBackendPreference.kitty.resolved(cliBackend: "tmux"), .kitty)
+        XCTAssertEqual(LaunchBackendPreference.workspace.resolved(cliBackend: "unsupported"), .workspace)
         XCTAssertEqual(LaunchBackendPreference.stored("automatic"), .workspace)
+        XCTAssertEqual(LaunchBackendPreference.stored("unsupported"), .workspace)
         XCTAssertEqual(LaunchBackendPreference.stored(nil), .workspace)
     }
 
@@ -25,11 +25,11 @@ final class BackendSetupTests: XCTestCase {
         input.cliLaunchBackend = "tmux"
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first,
                        .info("Launch in workspace (tmux) · CLI configuration"))
-        input.cliLaunchBackend = "kitty"
+        input.cliLaunchBackend = "unsupported"
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first,
-                       .info("Launch in Kitty · CLI configuration"))
+                       .info("Launch in CLI configuration (checking destination) · CLI configuration"))
         input.cliLaunchBackendSource = "compatibility default"
-        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first, .info("Launch in Kitty · compatibility default"))
+        XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first, .info("Launch in CLI configuration (checking destination) · compatibility default"))
         input.cliLaunchBackend = "tmux"
         input.cliLaunchBackendSource = "default"
         XCTAssertEqual(MenuBuilder.entries(for: .projects, input).first, .info("Launch in workspace (tmux) · default"))
@@ -57,7 +57,7 @@ final class BackendSetupTests: XCTestCase {
 
     func testAWorkingSetupDecodesAndReadsAsOneLineEach() throws {
         let result = decode("""
-        {"schema_version":1,"data":{"launch_backend":"kitty",
+        {"schema_version":1,"data":{"launch_backend":"tmux",
           "tmux":{"available":true,"path":"/Users/x/.local/share/agent-mux/runtime/tmux-3.7c-ab/bin/tmux",
                   "version":"3.7c","source":"bundled","verified":true,"min_version":"3.5","candidates":[]},
           "server":{"directory":"/tmp/d","socket":"/tmp/d/tmux.sock","running":true,
@@ -200,10 +200,9 @@ final class BackendSetupTests: XCTestCase {
 
 extension BackendSetupTests {
     func testAppDestinationExplainsCLIOverride() {
-        let text = LaunchBackendPreference.workspace.explanation(cliBackend: "kitty")
+        let text = LaunchBackendPreference.workspace.explanation(cliBackend: "tmux")
         XCTAssertTrue(text.contains("workspace (tmux)"))
-        XCTAssertTrue(text.contains("Command-line launches use Kitty"))
+        XCTAssertTrue(text.contains("Command-line launches use tmux"))
         XCTAssertTrue(text.contains("overrides config.toml"))
-        XCTAssertEqual(LaunchBackendPreference.kitty.destination(cliBackend: "tmux"), "Kitty")
     }
 }

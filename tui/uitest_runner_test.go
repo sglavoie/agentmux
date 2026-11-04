@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/agentmux/internal/backend"
 )
 
 // TestUITestRunnerCapturesObservationPerStep verifies runUITestModel returns one
@@ -84,21 +86,23 @@ func TestUITestRunnerFromConfigBuildsFreshModel(t *testing.T) {
 	}
 }
 
-// TestRunUITestScenarioConfigModeWithWindows exercises the isolated config path
-// end to end with live sessions. Unlike the CLI (which passes empty windows and
-// renders an empty dashboard), a package-level scenario can carry fake Kitty
-// windows, so this proves config.Load runs against a staged throwaway HOME, the
-// session list populates from those windows, and text/mode assertions hold. It
+// TestRunUITestScenarioConfigModeWithPanes exercises the isolated config path
+// end to end with live sessions. A package-level scenario can carry tmux panes,
+// so this proves config.Load runs against a staged throwaway HOME, the
+// session list populates from those panes, and text/mode assertions hold. It
 // also confirms the run reads only the staged HOME under the temp root, never a
 // real user path.
-func TestRunUITestScenarioConfigModeWithWindows(t *testing.T) {
+func TestRunUITestScenarioConfigModeWithPanes(t *testing.T) {
 	root := t.TempDir()
 	env := UITestScenarioEnv{
 		Root: root,
 		// t.Setenv restores every mutated variable when the test ends, so the
 		// staged HOME/AMX_CONFIG/XDG values never leak into later tests.
-		Setenv:  func(k, v string) error { t.Setenv(k, v); return nil },
-		Windows: basicFixture().Windows,
+		Setenv: func(k, v string) error { t.Setenv(k, v); return nil },
+		Panes: []backend.Pane{
+			{Ref: backend.PaneID("%11"), Group: backend.GroupID("$1"), GroupTitle: "🦊api", CWD: "~/projects/api", Vars: map[string]string{"amx_profile": "work", "amx_harness": "claude", "amx_project": "api", "amx_directory": "~/projects/api", "amx_launch_id": "uitest-api"}},
+			{Ref: backend.PaneID("%31"), Group: backend.GroupID("$3"), GroupTitle: "🤖dotfiles", CWD: "~/dotfiles", Vars: map[string]string{"amx_profile": "personal", "amx_harness": "codex", "amx_project": "dotfiles", "amx_directory": "~/dotfiles", "amx_launch_id": "uitest-dotfiles"}},
+		},
 	}
 	sc := UITestScenario{
 		Name:   "config-live",

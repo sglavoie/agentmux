@@ -13,7 +13,7 @@ func BuildRunning(sessions []session.RunningSession) map[string]int {
 }
 
 // RunningSessionKey is the logical identity a live session is counted under.
-// It prefers the session's own key when Kitty reported one, and otherwise
+// It prefers the session's own key when discovery reported one, and otherwise
 // derives it from the effective profile and project.
 func RunningSessionKey(sess session.RunningSession) string {
 	if sess.Key != "" {

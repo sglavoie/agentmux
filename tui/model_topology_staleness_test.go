@@ -12,7 +12,7 @@ import (
 	"github.com/sglavoie/agentmux/tui/dashboard"
 )
 
-// A sustained Kitty outage is a degradation, not a failure: the rows the
+// A sustained tmux outage is a degradation, not a failure: the rows the
 // dashboard already has keep working, and the only thing that changes is that
 // the operator is eventually told how old they are. These tests pin the two
 // halves of that — when the warning appears, and that the red cold-failure
@@ -76,11 +76,11 @@ func assertTopologyReading(t *testing.T, m Model, state dashboard.HealthState, s
 	// The dashboard status bar is the feedback slot; a standing condition never
 	// appears there.
 	assertStatusBarLacks(t, m, staleWarningPrefix)
-	assertStatusBarLacks(t, m, "Kitty error")
+	assertStatusBarLacks(t, m, "Session refresh failed")
 }
 
 // TestStaleWarningOnsetIsExactlyTheSharedThreshold pins both edges of the one
-// decision this feature makes. The threshold is protocol.KittySnapshotStaleAfter
+// decision this feature makes. The threshold is protocol.TopologyStaleAfter
 // rather than a second copy of six seconds, so the dashboard and the daemon
 // cannot drift apart about when topology has gone old.
 func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
@@ -92,9 +92,9 @@ func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
 		want    string
 	}{
 		{name: "well inside the threshold", elapsed: time.Second, want: ""},
-		{name: "one millisecond short", elapsed: protocol.KittySnapshotStaleAfter - time.Millisecond, want: ""},
-		{name: "exactly at the threshold", elapsed: protocol.KittySnapshotStaleAfter, want: staleWarningPrefix + " (6s old)"},
-		{name: "past the threshold", elapsed: protocol.KittySnapshotStaleAfter + 3*time.Second, want: staleWarningPrefix + " (9s old)"},
+		{name: "one millisecond short", elapsed: protocol.TopologyStaleAfter - time.Millisecond, want: ""},
+		{name: "exactly at the threshold", elapsed: protocol.TopologyStaleAfter, want: staleWarningPrefix + " (6s old)"},
+		{name: "past the threshold", elapsed: protocol.TopologyStaleAfter + 3*time.Second, want: staleWarningPrefix + " (9s old)"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -114,7 +114,7 @@ func TestStaleWarningOnsetIsExactlyTheSharedThreshold(t *testing.T) {
 // TestStaleWarningAgeAdvancesWithoutAnyRefreshResult is the reason the age is
 // derived at render time. During a real outage no message arrives at all, so an
 // age computed when the last message landed would freeze at the moment the
-// dashboard stopped being able to see Kitty.
+// dashboard stopped being able to list tmux sessions.
 func TestStaleWarningAgeAdvancesWithoutAnyRefreshResult(t *testing.T) {
 	t.Parallel()
 
@@ -130,7 +130,7 @@ func TestStaleWarningAgeAdvancesWithoutAnyRefreshResult(t *testing.T) {
 	// Failing refreshes must not reset the age either: a failure carries no
 	// capture, so the tree on screen is exactly as old as it was.
 	clock = staleTestEpoch.Add(42 * time.Second)
-	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
+	m = applyRefreshErr(m, errors.New("tmux list-sessions: signal: killed"))
 	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix+" (42s old)")
 }
 
@@ -143,7 +143,7 @@ func TestStaleWarningClearsOnTheNextSuccessfulTopology(t *testing.T) {
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(30 * time.Second)
-	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
+	m = applyRefreshErr(m, errors.New("tmux list-sessions: signal: killed"))
 	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix)
 
 	m = applySessions(m, commands.SessionsMsg{
@@ -166,7 +166,7 @@ func TestRecoveryToAnAlreadyStaleSnapshotReportsTheNewAge(t *testing.T) {
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(90 * time.Second)
-	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
+	m = applyRefreshErr(m, errors.New("tmux list-sessions: signal: killed"))
 	assertTopologyReading(t, m, dashboard.HealthWarning, staleWarningPrefix+" (90s old)")
 
 	m = applySessions(m, commands.SessionsMsg{
@@ -189,9 +189,9 @@ func TestColdRefreshFailureStaysRed(t *testing.T) {
 	m := testModel()
 	m.width = 100
 	m.now = func() time.Time { return staleTestEpoch }
-	m = applyRefreshErr(m, errors.New("kitten @ ls: connection refused"))
+	m = applyRefreshErr(m, errors.New("tmux list-sessions: connection refused"))
 
-	assertTopologyReading(t, m, dashboard.HealthFailed, "no session list: kitten @ ls: connection refused")
+	assertTopologyReading(t, m, dashboard.HealthFailed, "no session list: tmux list-sessions: connection refused")
 	// A cold failure is the whole state of the dashboard, so it is what the one
 	// header indicator reads out — not a phrase buried under an overall count.
 	if got := stripAnsi(headerHealthSegment(m).text); !strings.Contains(got, "sessions unavailable") {
@@ -211,7 +211,7 @@ func TestWarmRefreshFailureIsQuietThenNonfatal(t *testing.T) {
 	clock := staleTestEpoch
 	m := warmDashboard(&clock)
 	clock = staleTestEpoch.Add(2 * time.Second)
-	m = applyRefreshErr(m, errors.New("kitten @ ls: signal: killed"))
+	m = applyRefreshErr(m, errors.New("tmux list-sessions: signal: killed"))
 
 	assertTopologyReading(t, m, dashboard.HealthOK, "refreshed")
 

@@ -31,7 +31,7 @@ func undoTestModel(at *time.Time) Model {
 }
 
 // reportClose answers the close the model has in flight, the way the effect's
-// ActionDoneMsg does when Kitty reports back. The request identity is read from
+// ActionDoneMsg does when the backend reports back. The request identity is read from
 // the controller rather than guessed, which is what makes the completion land on
 // the dispatch the test made.
 func reportClose(t *testing.T, m Model, completion commands.ActionDoneMsg) Model {
@@ -194,7 +194,7 @@ func TestUnconfirmedCloseOffersNoRecovery(t *testing.T) {
 }
 
 // TestFailedCloseOffersNoRecovery is the other half: an attempt that reached
-// Kitty and failed names the failure and leaves nothing to undo.
+// tmux and failed names the failure and leaves nothing to undo.
 func TestFailedCloseOffersNoRecovery(t *testing.T) {
 	t.Parallel()
 

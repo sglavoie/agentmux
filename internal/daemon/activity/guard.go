@@ -7,7 +7,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
 
-// guardEntry holds the active guard state for one Kitty window.
+// guardEntry holds the active guard state for one session slot.
 type guardEntry struct {
 	action    string
 	priority  int

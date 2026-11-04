@@ -143,7 +143,7 @@ final class WorkspaceClarityPolishTests: XCTestCase {
         for (reason, icon, expected) in [("permission", "key", "Needs permission"), ("elicitation", "question", "Waiting for your answer"), ("done", "stop", "Turn complete")] {
             var session = WorkspaceFixture.tmux(1, project: "api", icon: icon, attention: true)
             session.reason = reason
-            let sidebar = WorkspaceSidebar.row(session, snapshotSocket: "", now: Date(), glyphs: .fallback)
+            let sidebar = WorkspaceSidebar.row(session, now: Date(), glyphs: .fallback)
             let waiting = WorkspaceInspector.waiting([session], glyphs: .fallback)
             XCTAssertTrue(sidebar.detail.contains(expected))
             XCTAssertTrue(waiting[0].detail.contains(expected))

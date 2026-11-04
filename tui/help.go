@@ -188,7 +188,7 @@ var helpSections = []struct {
 		"  S         Past Sessions across every project",
 		"  t         send text or keys to the selected tmux session",
 		"  (Plans, Worktrees, Runs, session detail, the phase timeline,",
-		"   health details, resort, and the list arrangement are palette",
+		"   health details and the list arrangement are palette",
 		"   entries — search the palette by name)",
 	}},
 }
@@ -233,14 +233,13 @@ func helpActOnRowLines() []string {
 }
 
 // helpOpenSessionText is what Enter on a session row does, named as the menu
-// names it and qualified by backend: the same key attaches a tmux session to
-// this terminal and focuses a Kitty session's tab.
+// names it: the key attaches the selected tmux session to this terminal.
 func helpOpenSessionText(open sessionactions.Definition) string {
 	label := "open session"
 	if open.MenuLabel != "" {
 		label = strings.ToLower(open.MenuLabel)
 	}
-	return label + " (attach on tmux, focus tab on Kitty)"
+	return label + " (attach tmux session)"
 }
 
 // helpFooterMoreLine is the dim footnote shown after the section list. It names

@@ -41,7 +41,7 @@ func TestFeedbackWrapsAndScrollsLongDiagnostic(t *testing.T) {
 func TestFooterHintASLRunsMixedAvailability(t *testing.T) {
 	t.Parallel()
 
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-verify")
 	m := d.Model()
 	m.width = 200
@@ -102,7 +102,7 @@ func TestHealthModeIsRegisteredAcrossDispatch(t *testing.T) {
 // `a` means actions everywhere else, so the Runs view no longer spends it on
 // abort; X (the actions menu's End Session letter) asks for the abort instead.
 func TestASLRunsAbortMovedOffA(t *testing.T) {
-	d, _ := enterASLRunsDriver(t)
+	d := enterASLRunsDriver(t)
 	selectASLRun(t, d, "row-reply")
 	if err := d.Key("a"); err != nil {
 		t.Fatalf("pressing a: %v", err)

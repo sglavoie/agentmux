@@ -13,7 +13,7 @@ import (
 // topologyRefreshRecorder replaces the model's live-topology seam with one that
 // records what it was asked for and runs nothing. Recording happens when the
 // command is built, not when it runs, so a test can see every dispatch without
-// a Bubble Tea runtime and without touching a daemon or Kitty.
+// a Bubble Tea runtime and without touching a daemon or tmux.
 type topologyRefreshRecorder struct {
 	dispatches []topologyDispatch
 }
@@ -96,7 +96,6 @@ func TestPostActionRefreshCoalescesWithTicks(t *testing.T) {
 
 	m = send(m, commands.TickMsg{})
 	m = send(m, commands.ActionDoneMsg{})
-	m = send(m, commands.ResortDoneMsg{})
 	if recorder.count() != 0 {
 		t.Fatalf("actions during an in-flight refresh dispatched %d refreshes, want 0", recorder.count())
 	}
@@ -128,7 +127,7 @@ func TestActionRefreshesWhenNothingIsInFlight(t *testing.T) {
 }
 
 // TestFailedRefreshWaitsForTheNextTick pins the anti-storm rule. A daemon and a
-// Kitty that are both down stay down for more than a moment; retrying the
+// tmux that are both down stay down for more than a moment; retrying the
 // instant the failure lands would spin against them at message speed.
 func TestFailedRefreshWaitsForTheNextTick(t *testing.T) {
 	t.Parallel()
@@ -139,7 +138,7 @@ func TestFailedRefreshWaitsForTheNextTick(t *testing.T) {
 		t.Fatal("tick during the startup refresh left no pending request")
 	}
 
-	m = send(m, commands.ErrMsg{Seq: startupSeq, Err: errors.New("kitten @ ls: signal: killed")})
+	m = send(m, commands.ErrMsg{Seq: startupSeq, Err: errors.New("tmux list-sessions: signal: killed")})
 	if recorder.count() != 0 {
 		t.Fatalf("failure dispatched %d immediate retries, want 0", recorder.count())
 	}

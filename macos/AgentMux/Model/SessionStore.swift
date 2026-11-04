@@ -84,12 +84,6 @@ final class SessionStore {
     /// restarting: the last snapshot stays, marked reconnecting, rather than
     /// the menu emptying for the second a restart takes.
     static let byeHold: TimeInterval = 5
-    /// Windows a focus attempt found already closed, hidden until a snapshot
-    /// that no longer lists them arrives. A window ID names a window only
-    /// inside the Kitty instance that issued it, so each entry is the
-    /// socket and window together: a stale window in one Kitty never hides a
-    /// live one sharing its number in another.
-    private(set) var staleWindows: Set<AttentionCycler.Key> = []
     /// Mutes the app has just asked for, shown on their rows until a snapshot
     /// agrees or `expectedMuteHold` passes. The daemon publishes a mute within
     /// a second, but a menu reopened before then would show the old state and
@@ -181,17 +175,16 @@ final class SessionStore {
         feed = .live
         byeAt = nil
         self.snapshot = snapshot
-        let listed = Set(snapshot.sessions.map { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) })
-        staleWindows.formIntersection(listed)
+        let listed = Set(snapshot.sessions.filter { $0.embeddedRuntimeSessionID != nil }.map { AttentionCycler.key($0) })
         let current = now()
         expectedMutes = expectedMutes.filter { key, expected in
             guard expected.until > current, listed.contains(key) else { return false }
-            let shown = snapshot.sessions.first { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) == key }
+            let shown = snapshot.sessions.first { AttentionCycler.key($0) == key }
             return shown?.muted != expected.muted
         }
         expectedPins = expectedPins.filter { key, expected in
             guard expected.until > current, listed.contains(key) else { return false }
-            let shown = snapshot.sessions.first { AttentionCycler.key($0, snapshotSocket: snapshot.kitty.socket) == key }
+            let shown = snapshot.sessions.first { AttentionCycler.key($0) == key }
             return shown?.pinned != expected.pinned
         }
         if noticeSeen, now().timeIntervalSince(noticeSince) >= Self.noticeHold {
@@ -208,23 +201,6 @@ final class SessionStore {
         onChange?()
     }
 
-    /// Records that focusing `windowID` in the Kitty at `socket` found it
-    /// gone. An empty socket names the snapshot's own, as it does on a row.
-    func markStale(socket: String, windowID: Int) {
-        let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
-        staleWindows.insert(AttentionCycler.Key(socket: socket, windowID: windowID))
-        setNotice("That session has closed.")
-        onChange?()
-    }
-
-    /// Shows `windowID` in the Kitty at `socket` as `muted` right away, ahead
-    /// of the snapshot that will confirm it. An empty socket names the
-    /// snapshot's own, as it does on a row.
-    func expectMute(socket: String, windowID: Int, muted: Bool) {
-        let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
-        expectMute(AttentionCycler.Key(socket: socket, windowID: windowID), muted: muted)
-    }
-
     /// Shows the session `key` names as `muted` right away; the key of an
     /// embedded session is its runtime session (`AttentionCycler.Key.embedded`).
     func expectMute(_ key: AttentionCycler.Key, muted: Bool) {
@@ -233,11 +209,6 @@ final class SessionStore {
     }
 
     /// Withdraws an expected mute, for a toggle that failed.
-    func dropExpectedMute(socket: String, windowID: Int) {
-        let socket = socket.isEmpty ? snapshot?.kitty.socket ?? "" : socket
-        dropExpectedMute(AttentionCycler.Key(socket: socket, windowID: windowID))
-    }
-
     func dropExpectedMute(_ key: AttentionCycler.Key) {
         guard expectedMutes.removeValue(forKey: key) != nil else { return }
         onChange?()
@@ -298,13 +269,31 @@ final class SessionStore {
         guard let snapshot else { return [] }
         let current = now()
         return snapshot.sessions.compactMap { session in
-            let key = AttentionCycler.key(session, snapshotSocket: snapshot.kitty.socket)
-            if staleWindows.contains(key) { return nil }
+            guard session.embeddedRuntimeSessionID != nil else { return nil }
+            let key = AttentionCycler.key(session)
             var session = session
             if let expected = expectedMutes[key], expected.until > current { session.muted = expected.muted }
             if let expected = expectedPins[key], expected.until > current { session.pinned = expected.pinned }
             return session
         }
+    }
+
+    /// Sessions the app can open in its embedded terminal workspace.
+    var managedSessions: [CompanionSession] {
+        sessions.filter { $0.embeddedRuntimeSessionID != nil }
+    }
+
+    var managedAttention: CompanionAttention {
+        let rows = managedSessions
+        return CompanionAttention(
+            total: rows.filter(\.attention).count,
+            stop: rows.filter { $0.attention && $0.iconState == "stop" }.count,
+            key: rows.filter { $0.attention && $0.iconState == "key" }.count,
+            error: rows.filter { $0.attention && $0.iconState == "error" }.count,
+            question: rows.filter { $0.attention && $0.iconState == "question" }.count,
+            working: rows.filter(\.isWorking).count,
+            unseen: rows.filter(\.unseen).count
+        )
     }
 
     /// Whether the daemon is holding notifications back right now; false
@@ -317,5 +306,10 @@ final class SessionStore {
     func title(style: StatusTitleStyle = .glyphs, showWorking: Bool = true, glyphs: Glyphs = .bundled) -> String {
         guard feed == .live, let snapshot else { return "" }
         return StatusTitle.text(for: snapshot.attention, style: style, showWorking: showWorking, glyphs: glyphs)
+    }
+
+    func managedTitle(style: StatusTitleStyle = .glyphs, showWorking: Bool = true, glyphs: Glyphs = .bundled) -> String {
+        guard feed == .live else { return "" }
+        return StatusTitle.text(for: managedAttention, style: style, showWorking: showWorking, glyphs: glyphs)
     }
 }

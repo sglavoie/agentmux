@@ -32,7 +32,7 @@ type sessionSelection struct {
 	// belonging to any of those names.
 	projectSelectors []string
 	projects         []string
-	// live is the conversations open in Kitty when --live asked for only
+	// live is the conversations open in tmux when --live asked for only
 	// those, and nil otherwise.
 	live map[string]liveConversation
 }
@@ -82,7 +82,7 @@ func readSessionSelection(cmd *cobra.Command, cfg *config.Config) (sessionSelect
 		if !known {
 			// Printing no rows would claim nothing is open; the truth is that
 			// nobody could say.
-			return selection, "live_status_unavailable", errors.New("--live: cannot tell which conversations are open, because the daemon or Kitty did not answer; `amx doctor` says why")
+			return selection, "live_status_unavailable", errors.New("--live: cannot tell which conversations are open because the daemon did not answer; `amx doctor` says why")
 		}
 		if live == nil {
 			live = map[string]liveConversation{}
@@ -207,7 +207,7 @@ func unknownProjectError(selector string, names []string) error {
 func addSessionSelectionFlags(cmd *cobra.Command) {
 	cmd.Flags().String("since", "", "only sessions active within this window, e.g. 12h, 7d, or 2w")
 	cmd.Flags().Bool("here", false, "only sessions started in the current directory or below it")
-	cmd.Flags().Bool("live", false, "only conversations open right now, in a Kitty tab or a tmux session")
+	cmd.Flags().Bool("live", false, "only conversations open right now in a tmux session")
 	cmd.Flags().StringSlice("harness", nil, "only sessions of this harness (repeatable)")
 	_ = cmd.RegisterFlagCompletionFunc("harness", cli.CompleteHarnesses)
 	cmd.Flags().StringSlice("profile", nil, "only sessions visible to this profile (repeatable)")
@@ -297,8 +297,8 @@ func shellWord(value string) string {
 	return shellquote.Quote(value)
 }
 
-// liveConversations is what list and search mark rows live from: the tabs
-// --live already asked Kitty for, else a fresh ask when the output shows it
+// liveConversations is what list and search mark rows live from: the sessions
+// --live already asked the daemon for, else a fresh ask when the output shows it
 // (always for list, and for search a terminal table or JSON, since its piped
 // rows have no LIVE field). known reports whether anyone answered, so a table
 // that could not ask leaves the column out, and a piped list row says "?",

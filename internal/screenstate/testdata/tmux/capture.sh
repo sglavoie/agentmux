@@ -20,9 +20,9 @@
 #
 # The server is private (-S under AMX_CAPTURE_DIR) and started with the exact
 # production config (internal/tmux.Config, extracted from server.go), so the
-# captures are what the tmux backend's Capture returns. Agents run with Kitty,
-# Claude Code, ASL, and AgentMux variables stripped so their hooks cannot report
-# into a live Kitty window or daemon.
+# captures are what the tmux backend's Capture returns. Agents run with
+# inherited harness, ASL, and AgentMux variables stripped so their hooks
+# cannot report into a live daemon.
 set -eu
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -42,7 +42,7 @@ case $cmd in
 start)
 	name=$1 cols=$2 rows=$3
 	shift 3
-	envs=$(env | grep -oE '^(KITTY_[A-Za-z0-9_]*|CLAUDECODE|CLAUDE_CODE_[A-Za-z0-9_]*|ASL_[A-Za-z0-9_]*|AMX_[A-Za-z0-9_]*|TMUX|TMUX_PANE)=' | tr -d =)
+	envs=$(env | grep -oE '^(CLAUDECODE|CLAUDE_CODE_[A-Za-z0-9_]*|ASL_[A-Za-z0-9_]*|AMX_[A-Za-z0-9_]*|TMUX|TMUX_PANE)=' | tr -d =)
 	unset_args=""
 	for v in $envs; do unset_args="$unset_args -u $v"; done
 	# shellcheck disable=SC2086

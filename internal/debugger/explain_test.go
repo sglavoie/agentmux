@@ -35,7 +35,6 @@ func TestExplanationClassifiesEveryInstrumentedBoundary(t *testing.T) {
 		want   string
 	}{
 		{"producer absence", explanationRecord("native.producer", "absent", "producer_not_invoked"), CauseProducerAbsence},
-		{"outside kitty", explanationRecord("hook.kitty_detection", "rejected", "outside_kitty"), CauseOutsideKitty},
 		{"invalid payload", explanationRecord("daemon.decision", "quarantined", protocol.DecisionReasonInvalidPayload), CauseInvalidPayload},
 		{"delivery failure", explanationRecord("hook.failure", "error", "daemon_unavailable"), CauseDeliveryFailure},
 		{"duplicate", explanationRecord("daemon.decision", "duplicate", protocol.DecisionReasonRequestReplayed), CauseDuplicate},

@@ -13,7 +13,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/asl"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/session"
 )
@@ -23,83 +22,26 @@ import (
 type Input struct {
 	Daemon protocol.CompanionDaemon
 	// States is the daemon's visible state keyed by its reducer slot.
-	States map[int]protocol.WindowStateSnapshot
-	// Sockets records the Kitty socket each window's hooks named, keyed by
-	// reducer slot. It attributes state to an instance.
-	Sockets map[int]string
-	// KittySlots maps a Kitty instance's real window ID to its distinct daemon
-	// state slot. It is empty for older single-instance state, where the slot
-	// and the real window ID are the same.
-	KittySlots map[KittyWindowKey]int
-	// Kitty is the daemon's cached window tree and the socket it was read
-	// through. A cold tree (Ready false) contributes no sessions.
-	Kitty KittyTree
-	// Others are the window trees of Kitty instances other than Kitty's,
-	// keyed by the socket each was read through. A state recorded against one
-	// of those sockets takes its tab, title, and identity from that tree; one
-	// whose instance has no tree here is published from its state alone.
-	Others       map[string][]kitty.OSWindow
+	States       map[int]protocol.WindowStateSnapshot
 	Notification Notification
 	// ASLTargets are the registered supervisor poll targets, which say which
 	// run a window is driving; ASLPending is the subset currently waiting on an
 	// answer (asl.SupervisorRegistry.Targets and Pending).
 	ASLTargets []asl.SupervisorTarget
 	ASLPending []asl.PendingQuestion
-	// Runtime names the runtime session bound to each slot, keyed like
-	// States. A slot whose Backend is not Kitty is not a Kitty window: v1
-	// never lists it, and v2 lists it by its runtime identity alone.
+	// Runtime names the tmux runtime session bound to each slot, keyed like
+	// States.
 	Runtime map[int]RuntimeSlot
 	// HarnessIcons is the configured harness emojis, longest first: the
 	// badges a session's title may carry.
 	HarnessIcons []string
-	// Sort is the configured sort mode, "alpha" or "account": the order a v2
+	// Sort is the configured sort mode, "alpha" or "account": the order a
 	// snapshot lists its sessions in (session.Order).
 	Sort string
-	// SnapshotVersion selects the shape: CompanionSnapshotVersionRuntime
-	// projects v2, anything else the v1 snapshot old clients read.
-	SnapshotVersion int
 	// Now decides only whether the configured quiet hours are in force. It is
 	// never published, so it cannot make two projections of the same world
 	// differ except across a quiet-hours boundary.
 	Now time.Time
-}
-
-// KittyWindowKey is the identity Kitty itself uses: a window number within
-// one remote-control endpoint. The same number may exist in another instance.
-type KittyWindowKey struct {
-	Socket   string
-	WindowID int
-}
-
-// A negative slot cannot be assigned by the daemon. Slot zero can carry
-// unbound ASL bookkeeping, so it is not a safe sentinel here.
-const unknownKittySlot = -1
-
-func kittySlot(in Input, socket string, windowID int) int {
-	if slot := in.KittySlots[KittyWindowKey{Socket: socket, WindowID: windowID}]; slot > 0 {
-		return slot
-	}
-	// A freshly observed instance may appear in the cached tree before a hook
-	// has assigned it a slot. Its bare window number must not borrow the
-	// first instance's ASL run or state while the mapping catches up.
-	for key := range in.KittySlots {
-		if key.WindowID == windowID && key.Socket != socket {
-			return unknownKittySlot
-		}
-	}
-	if owner := in.Sockets[windowID]; owner != "" && owner != socket {
-		return unknownKittySlot
-	}
-	return windowID
-}
-
-func kittyWindowID(in Input, socket string, slot int) int {
-	for key, mapped := range in.KittySlots {
-		if mapped == slot && key.Socket == socket {
-			return key.WindowID
-		}
-	}
-	return slot
 }
 
 // RuntimeSlot is the runtime session holding one slot and its target.
@@ -109,9 +51,7 @@ type RuntimeSlot struct {
 	Instance   string
 	Generation string
 	Pane       string
-	// Project and Profile label a session on a backend other than Kitty,
-	// which has no tab to read them from; empty until the daemon has read
-	// them. A Kitty session's come from its tab, never from here.
+	// Project and Profile label a session; empty until the daemon reads them.
 	Project string
 	Profile string
 	// Harness is the harness such a session was launched with, which names
@@ -129,16 +69,6 @@ type RuntimeSlot struct {
 	Title string
 }
 
-func (r RuntimeSlot) kitty() bool { return r.Backend == "kitty" }
-
-// KittyTree is the window tree a projection reads sessions from.
-type KittyTree struct {
-	Ready   bool
-	Stale   bool
-	Socket  string
-	Windows []kitty.OSWindow
-}
-
 // Notification is the notifier's posture as the caller read it.
 type Notification struct {
 	Backend      string
@@ -149,7 +79,7 @@ type Notification struct {
 }
 
 // Field bounds. Display text is clamped, because a shortened title is still a
-// title. Identifiers are never clamped — a shortened socket or session ID names
+// title. Identifiers are never clamped — a shortened session ID names
 // something else — so one over identifierMax is omitted instead.
 const (
 	displayMax    = 128
@@ -177,50 +107,22 @@ type candidate struct {
 
 // Project builds the companion snapshot for one moment of daemon state.
 func Project(in Input) protocol.CompanionSnapshot {
-	runtime := in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime
-	version := protocol.CompanionSnapshotVersion
-	if runtime {
-		version = protocol.CompanionSnapshotVersionRuntime
-	}
 	out := protocol.CompanionSnapshot{
-		V:            version,
+		V:            protocol.CompanionSnapshotVersion,
 		Daemon:       in.Daemon,
 		Notification: projectNotification(in.Notification, in.Now),
-		Kitty: protocol.CompanionKitty{
-			Ready:  in.Kitty.Ready,
-			Stale:  in.Kitty.Stale,
-			Socket: identifier(in.Kitty.Socket),
-		},
 	}
-	if in.Kitty.Ready {
-		out.Dashboard = projectDashboard(in.Kitty)
-	}
-
 	runs := runsByWindow(in.ASLTargets, in.ASLPending)
-	candidates := treeSessions(in, runs)
-	candidates = append(candidates, foreignSessions(in, runs, len(candidates))...)
-	if runtime {
-		candidates = append(candidates, runtimeSessions(in, runs, len(candidates))...)
-		// v2 lists every session in the order the dashboard does, whatever
-		// terminal holds it, so the session after this one is the same one on
-		// both. Sessions the order cannot tell apart are Kitty's in tab order,
-		// then the rest by runtime-session ID, as the order itself places
-		// them. v1 keeps the order its clients have always read.
-		session.Order(candidates, in.Sort, func(c candidate) session.OrderEntry { return c.entry })
-		for i := range candidates {
-			candidates[i].order = i
-		}
+	candidates := runtimeSessions(in, runs)
+	session.Order(candidates, in.Sort, func(c candidate) session.OrderEntry { return c.entry })
+	for i := range candidates {
+		candidates[i].order = i
 	}
 
-	sockets := map[string]bool{}
 	for _, c := range candidates {
 		countAttention(&out.Attention, c.session)
-		if c.session.KittySocket != "" {
-			sockets[c.session.KittySocket] = true
-		}
 	}
-	out.Kitty.Sockets = sortedKeys(sockets)
-	out.ASL.Waiting = projectWaiting(in, runtime)
+	out.ASL.Waiting = projectWaiting(in)
 
 	keep := min(len(candidates), protocol.CompanionSessionCap)
 	priority := byPriority(candidates)
@@ -271,155 +173,7 @@ func projectNotification(n Notification, now time.Time) protocol.CompanionNotifi
 	return out
 }
 
-func projectDashboard(tree KittyTree) protocol.CompanionDashboard {
-	loc, ok := kitty.FindDashboardWindow(tree.Windows, 0)
-	if !ok {
-		return protocol.CompanionDashboard{}
-	}
-	out := protocol.CompanionDashboard{
-		Open:        true,
-		KittySocket: identifier(tree.Socket),
-		TabID:       loc.TabID,
-		WindowID:    loc.WindowID,
-	}
-	for _, osw := range tree.Windows {
-		for _, tab := range osw.Tabs {
-			if tab.ID == loc.TabID {
-				out.OSWindowID = osw.ID
-				return out
-			}
-		}
-	}
-	return out
-}
-
-// sameInstance reports whether a state recorded against socket may describe a
-// window in a tree read through treeSocket. Two named sockets must agree. An
-// unnamed side is accepted: a single-instance install records no socket at
-// all, and refusing it would blank every session there.
-func sameInstance(socket, treeSocket string) bool {
-	return socket == "" || treeSocket == "" || socket == treeSocket
-}
-
-// treeSessions projects every managed window in the Kitty tree, in tree order.
-func treeSessions(in Input, runs map[int]string) []candidate {
-	if !in.Kitty.Ready {
-		return nil
-	}
-	var out []candidate
-	for _, osw := range in.Kitty.Windows {
-		for _, tab := range osw.Tabs {
-			parts := palette.ParseTitleParts(tab.Title)
-			for _, win := range tab.Windows {
-				vars := win.UserVars
-				if vars.EffectiveProfile() == "" && vars.EffectiveHarness() == "" {
-					continue
-				}
-				socket := in.Kitty.Socket
-				if socket == "" {
-					socket = in.Sockets[win.ID]
-				}
-				slot := kittySlot(in, socket, win.ID)
-				s := windowSession(osw, tab, parts, win, socket, slot, runs)
-				if st, ok := in.States[slot]; ok && sameInstance(in.Sockets[slot], in.Kitty.Socket) {
-					applyState(&s, st)
-				}
-				if in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime {
-					s.Runtime = kittyRuntime(in.Runtime, slot, in.Kitty.Socket)
-				}
-				s.Attention = protocol.AttentionStates[s.IconState] || tab.NeedsAttention
-				out = append(out, candidate{session: s, order: len(out), entry: orderEntry(vars.EffectiveProfile(), tab.Title)})
-			}
-		}
-	}
-	return out
-}
-
-// windowSession is the session one tree window shows before any daemon state
-// is laid over it.
-func windowSession(osw kitty.OSWindow, tab kitty.Tab, parts palette.TitleParts, win kitty.Window, socket string, slot int, runs map[int]string) protocol.CompanionSession {
-	vars := win.UserVars
-	return protocol.CompanionSession{
-		WindowID:    win.ID,
-		TabID:       tab.ID,
-		OSWindowID:  osw.ID,
-		KittySocket: identifier(socket),
-		Harness:     display(vars.EffectiveHarness()),
-		Profile:     display(vars.EffectiveProfile()),
-		Project:     display(vars.EffectiveProject(parts.Base)),
-		BaseTitle:   display(parts.Base),
-		IconState:   display(parts.State),
-		Muted:       parts.Muted || vars.Mute != "",
-		Locked:      parts.Locked || vars.Locked,
-		Looping:     parts.Looping,
-		Pinned:      parts.Starred,
-		ASLRunID:    identifier(runs[slot]),
-	}
-}
-
-// foreignSessions projects the daemon states recorded against a Kitty instance
-// other than the tree's, ordered by socket and window so the order is stable.
-// One whose instance's tree is in Others takes its tab and title from it; the
-// rest carry state and identity only.
-func foreignSessions(in Input, runs map[int]string, base int) []candidate {
-	if in.Kitty.Socket == "" {
-		return nil
-	}
-	var ids []int
-	for id := range in.States {
-		if r, ok := in.Runtime[id]; ok && !r.kitty() {
-			continue
-		}
-		if socket := in.Sockets[id]; socket != "" && socket != in.Kitty.Socket {
-			ids = append(ids, id)
-		}
-	}
-	sort.Slice(ids, func(i, j int) bool {
-		si, sj := in.Sockets[ids[i]], in.Sockets[ids[j]]
-		if si != sj {
-			return si < sj
-		}
-		return ids[i] < ids[j]
-	})
-	out := make([]candidate, 0, len(ids))
-	for _, slot := range ids {
-		storedSocket := in.Sockets[slot]
-		socket := identifier(storedSocket)
-		if socket == "" {
-			// An over-long socket cannot be named, and a session no client can
-			// address is not worth listing.
-			continue
-		}
-		windowID := kittyWindowID(in, storedSocket, slot)
-		s := protocol.CompanionSession{
-			WindowID:    windowID,
-			KittySocket: socket,
-			ASLRunID:    identifier(runs[slot]),
-		}
-		needsAttention := false
-		var entry session.OrderEntry
-		if osw, tab, win, ok := kitty.FindWindowLocationByID(in.Others[storedSocket], windowID); ok {
-			s = windowSession(*osw, *tab, palette.ParseTitleParts(tab.Title), *win, storedSocket, slot, runs)
-			needsAttention = tab.NeedsAttention
-			entry = orderEntry(win.UserVars.EffectiveProfile(), tab.Title)
-		}
-		applyState(&s, in.States[slot])
-		if s.Harness == "" && s.Conversation != nil {
-			s.Harness = display(s.Conversation.Harness)
-		}
-		if in.SnapshotVersion == protocol.CompanionSnapshotVersionRuntime {
-			s.Runtime = kittyRuntime(in.Runtime, slot, storedSocket)
-		}
-		s.Attention = protocol.AttentionStates[s.IconState] || needsAttention
-		out = append(out, candidate{session: s, order: base + len(out), entry: entry})
-	}
-	return out
-}
-
-// harnessIcon is the harness badge a session's title carries: the configured
-// emoji its base title starts with, empty when it starts with none. The
-// launch puts the harness's own there and the icon picker replaces or clears
-// it, so the title alone says which one the operator wants shown.
+// harnessIcon is the configured badge carried by a session's group title.
 func harnessIcon(title string, icons []string) string {
 	base := palette.ParseTitleParts(title).Base
 	for _, icon := range icons {
@@ -428,16 +182,6 @@ func harnessIcon(title string, icons []string) string {
 		}
 	}
 	return ""
-}
-
-// kittyRuntime is the runtime block of a Kitty window, when a runtime session
-// of that same Kitty instance holds it.
-func kittyRuntime(slots map[int]RuntimeSlot, windowID int, socket string) *protocol.CompanionRuntime {
-	r, ok := slots[windowID]
-	if !ok || !r.kitty() || !sameInstance(r.Instance, socket) {
-		return nil
-	}
-	return companionRuntime(r)
 }
 
 func companionRuntime(r RuntimeSlot) *protocol.CompanionRuntime {
@@ -454,14 +198,11 @@ func companionRuntime(r RuntimeSlot) *protocol.CompanionRuntime {
 	}
 }
 
-// runtimeSessions projects the v2-only sessions: daemon state held by a
-// runtime session on a backend other than Kitty, by runtime-session ID
-// (Project then puts them in the session order). They are addressed by their runtime block alone; no Kitty field is set,
-// because the session has no Kitty identity to report.
-func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
+// runtimeSessions projects tmux-backed daemon state by runtime-session ID.
+func runtimeSessions(in Input, runs map[int]string) []candidate {
 	var slots []int
 	for slot, r := range in.Runtime {
-		if _, ok := in.States[slot]; ok && !r.kitty() && identifier(r.SessionID) != "" {
+		if _, ok := in.States[slot]; ok && r.Backend == "tmux" && identifier(r.SessionID) != "" {
 			slots = append(slots, slot)
 		}
 	}
@@ -480,30 +221,26 @@ func runtimeSessions(in Input, runs map[int]string, base int) []candidate {
 			Runtime:     companionRuntime(in.Runtime[slot]),
 		}
 		applyState(&s, in.States[slot])
-		// A Kitty row reads its mute from its title and window; a session
-		// with no window has only the daemon's reading of its pane.
 		s.Muted = in.States[slot].Muted
 		if s.Conversation != nil {
 			s.Harness = display(s.Conversation.Harness)
 		}
 		s.Attention = protocol.AttentionStates[s.IconState]
 		out = append(out, candidate{
-			session: s, order: base + len(out),
+			session: s, order: len(out),
 			entry: runtimeOrderEntry(in.Runtime[slot]),
 		})
 	}
 	return out
 }
 
-// orderEntry is what the session order reads of a session with this profile
-// and tab or group title: the dashboard reads the same two of a running
-// session.
+// orderEntry is what the session order reads of a profile and group title.
 func orderEntry(profile, title string) session.OrderEntry {
 	parts := palette.ParseTitleParts(title)
 	return session.OrderEntry{Profile: profile, Base: parts.Base, Starred: parts.Starred}
 }
 
-// runtimeOrderEntry is orderEntry for a session with no tab. Until the daemon
+// runtimeOrderEntry is orderEntry for a session. Until the daemon
 // has read its group's title it is placed by its project, which is what the
 // title is built around. Its runtime-session ID breaks ties, as it does for
 // the same session in session.SortRunning.
@@ -517,9 +254,7 @@ func runtimeOrderEntry(r RuntimeSlot) session.OrderEntry {
 }
 
 // tabColor is the named palette color's bright background, which black text
-// reads on; empty for no color. Kitty's tab bar can afford the dim inactive
-// background because it also colors the title, and a companion's list has
-// only this to tell a session by.
+// reads on; empty for no color.
 func tabColor(name string) string {
 	color, err := palette.Lookup(name)
 	if err != nil {
@@ -550,7 +285,7 @@ func applyState(s *protocol.CompanionSession, st protocol.WindowStateSnapshot) {
 	}
 }
 
-// runsByWindow names the run each window drives. A window with a waiting run
+// runsByWindow names the run each slot drives. A slot with a waiting run
 // names that one; otherwise the lexically first, so the choice is stable.
 func runsByWindow(targets []asl.SupervisorTarget, pending []asl.PendingQuestion) map[int]string {
 	waiting := map[int]string{}
@@ -571,34 +306,24 @@ func runsByWindow(targets []asl.SupervisorTarget, pending []asl.PendingQuestion)
 	return runs
 }
 
-// projectWaiting lists the runs waiting on an answer. A run driven from a
-// non-Kitty runtime session is v2-only, and names that session rather than its
-// slot, which is no window ID; v2 also names the runtime session of a run
-// driven from a claimed Kitty window.
-func projectWaiting(in Input, runtime bool) []protocol.CompanionASLWaiting {
+// projectWaiting lists the runs waiting on an answer by runtime session.
+func projectWaiting(in Input) []protocol.CompanionASLWaiting {
 	var out []protocol.CompanionASLWaiting
 	for _, p := range in.ASLPending {
 		run := identifier(p.Target.Candidate.RunID)
 		if run == "" || p.Projection.UnansweredQuestions <= 0 {
 			continue
 		}
+		r, ok := in.Runtime[p.Target.WindowID]
+		if !ok || r.Backend != "tmux" || identifier(r.SessionID) == "" {
+			continue
+		}
 		w := protocol.CompanionASLWaiting{
 			RunID:            run,
 			PlanDir:          identifier(p.Target.Candidate.PlanDir),
-			WindowID:         p.Target.WindowID,
+			RuntimeSessionID: identifier(r.SessionID),
 			Unanswered:       p.Projection.UnansweredQuestions,
 			LatestQuestionID: identifier(p.Projection.LatestQuestionID),
-		}
-		if r, ok := in.Runtime[p.Target.WindowID]; ok {
-			if !r.kitty() {
-				if !runtime {
-					continue
-				}
-				w.WindowID = 0
-			}
-			if runtime {
-				w.RuntimeSessionID = identifier(r.SessionID)
-			}
 		}
 		if !p.Projection.LatestQuestionCreatedAt.IsZero() {
 			w.LatestQuestionCreatedAt = p.Projection.LatestQuestionCreatedAt.Unix()
@@ -606,9 +331,6 @@ func projectWaiting(in Input, runtime bool) []protocol.CompanionASLWaiting {
 		out = append(out, w)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].WindowID != out[j].WindowID {
-			return out[i].WindowID < out[j].WindowID
-		}
 		if out[i].RuntimeSessionID != out[j].RuntimeSessionID {
 			return out[i].RuntimeSessionID < out[j].RuntimeSessionID
 		}
@@ -692,16 +414,4 @@ func identifier(s string) string {
 		return ""
 	}
 	return s
-}
-
-func sortedKeys(set map[string]bool) []string {
-	if len(set) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(set))
-	for k := range set {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

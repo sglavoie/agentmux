@@ -31,7 +31,7 @@ func TestAccountPrefix(t *testing.T) {
 // TestProfilePrefix_Unicode pins the multibyte-first-rune contract: a profile
 // name whose first character spans more than one UTF-8 byte must yield a
 // valid UTF-8 prefix, not a truncated invalid byte that corrupts the tab
-// title rendered by Kitty.
+// title rendered by tmux.
 func TestProfilePrefix_Unicode(t *testing.T) {
 	t.Parallel()
 

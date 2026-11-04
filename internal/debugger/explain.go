@@ -32,7 +32,6 @@ const (
 	CauseHookDisabled             = "hook_disabled"
 	CauseHookUntrusted            = "hook_untrusted"
 	CauseProducerAbsence          = "producer_absence"
-	CauseOutsideKitty             = "outside_kitty"
 	CauseInvalidPayload           = "invalid_payload"
 	CauseDeliveryFailure          = "delivery_failure"
 	CauseDuplicate                = "duplicate"

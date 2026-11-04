@@ -10,9 +10,8 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/overrides"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -22,7 +21,7 @@ import (
 func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
 	t.Parallel()
 
-	m, _, _ := commandTestModel(session.RunningSession{
+	m, _ := commandTestModel(session.RunningSession{
 		TabID: 1, WindowID: 101, Base: "api", Project: "api", Profile: "work", Locked: true,
 	})
 	ctx := captureCommandContext(m)
@@ -37,76 +36,12 @@ func TestCommandRunRejectsDisabledAndHiddenCommands(t *testing.T) {
 	}
 }
 
-func TestCommandExecutionUsesCapturedTarget(t *testing.T) {
-	t.Parallel()
-
-	client := kittytest.NewClient(nil)
-	m := testModelWithSessions()
-	m.client = client
-	m = loadSessions(m, []session.RunningSession{
-		{TabID: 11, WindowID: 101, Base: "api", Project: "api", Profile: "work"},
-		{TabID: 22, WindowID: 202, Base: "backend", Project: "backend", Profile: "work"},
-	})
-	m.cursor = 1
-	ctx := captureCommandContext(m)
-	m.cursor = 0 // A refresh/controller move after capture must not retarget.
-	_, cmd := commandByID(t, commands.FocusSession).Run(m, ctx)
-	if cmd == nil {
-		t.Fatal("focus returned nil command")
-	}
-	_ = cmd()
-	calls := client.CallsFor("FocusTab")
-	if len(calls) != 1 || calls[0].Match != kitty.MatchTabByID(22) {
-		t.Fatalf("focus calls = %+v, want captured tab 22", calls)
-	}
-}
-
-func TestCommandRowSideEffects(t *testing.T) {
-	t.Parallel()
-
-	target := session.RunningSession{
-		TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work", State: "bolt",
-	}
-	cases := []struct {
-		name      string
-		id        commands.ID
-		wantOp    string
-		wantMatch string
-		wantVar   string
-	}{
-		{"focus", commands.FocusSession, "FocusTab", kitty.MatchTabByID(22), ""},
-		{"peek", commands.PeekScrollback, "LaunchOverlayPager", kitty.MatchWindowByID(202), ""},
-		{"lock", commands.ToggleLockID, "SetUserVars", kitty.MatchWindowByID(202), "amx_locked"},
-		{"mute", commands.ToggleMuteID, "SetUserVars", kitty.MatchWindowByID(202), "cc_mute"},
-		{"pin", commands.TogglePinID, "SetTabTitle", kitty.MatchTabByWindowID(202), ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			m, ctx, client := commandTestModel(target)
-			_, cmd := commandByID(t, tc.id).Run(m, ctx)
-			if cmd == nil {
-				t.Fatal("execution returned nil command")
-			}
-			_ = cmd()
-			calls := client.CallsFor(tc.wantOp)
-			if len(calls) != 1 || calls[0].Match != tc.wantMatch {
-				t.Fatalf("%s calls = %+v, want one call matching %q", tc.wantOp, calls, tc.wantMatch)
-			}
-			if tc.wantVar != "" {
-				if _, ok := calls[0].Vars[tc.wantVar]; !ok {
-					t.Fatalf("%s vars = %v, want %q", tc.wantOp, calls[0].Vars, tc.wantVar)
-				}
-			}
-		})
-	}
-}
-
 func TestCommandCopyAndClearStatusEffects(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/kitty-test")
 	target := session.RunningSession{
 		TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work", State: "key",
+		Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-0123456789abcdef0123456789abcdef",
 	}
-	m, ctx, _ := commandTestModel(target)
+	m, ctx := commandTestModel(target)
 
 	originalCopy := commands.CopyToClipboard
 	defer func() { commands.CopyToClipboard = originalCopy }()
@@ -134,8 +69,8 @@ func TestCommandCopyAndClearStatusEffects(t *testing.T) {
 		t.Fatal("clear status returned nil command")
 	}
 	drainMsgs(t, clearCmd)
-	if request.Action != "user_clear" || request.WindowID != 202 || request.KittyListenOn != "unix:/kitty-test" {
-		t.Fatalf("clear-status request = %+v, want user_clear for window 202", request)
+	if request.Action != "user_clear" || request.RuntimeSessionID != string(target.RuntimeSessionID) || request.WindowID != 0 {
+		t.Fatalf("clear-status request = %+v, want user_clear for the runtime session", request)
 	}
 }
 
@@ -147,7 +82,7 @@ func TestCommandConfiguredProjectExecutions(t *testing.T) {
 	}
 	for _, id := range []commands.ID{commands.OpenDirectoryID, commands.OpenEditorID} {
 		t.Run(string(id), func(t *testing.T) {
-			m, ctx, _ := commandTestModel(target)
+			m, ctx := commandTestModel(target)
 			got, cmd := commandByID(t, id).Run(m, ctx)
 			if cmd == nil {
 				t.Fatal("configured project execution returned nil command")
@@ -251,7 +186,7 @@ func TestCommandRowTransitions(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m, ctx, _ := commandTestModel(target)
+			m, ctx := commandTestModel(target)
 			if tc.setup != nil {
 				tc.setup(&m)
 			}
@@ -268,7 +203,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	target := session.RunningSession{TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work"}
 
 	t.Run("filter and clear filters", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		got, cmd := commandByID(t, commands.FilterSessions).Run(m, ctx)
 		if got.mode != ModeSearch || got.filterText != "" || cmd != nil {
 			t.Fatalf("filter result: mode=%v text=%q cmd=%v", got.mode, got.filterText, cmd != nil)
@@ -284,7 +219,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	})
 
 	t.Run("cycle profile filter", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		got, cmd := commandByID(t, commands.CycleProfileFilter).Run(m, ctx)
 		if got.activeFilter.Account != "work" || got.activeFilter.Raw != "@work" || len(got.filtered) != 1 || cmd != nil {
 			t.Fatalf("cycle result: filter=%+v rows=%d cmd=%v", got.activeFilter, len(got.filtered), cmd != nil)
@@ -292,7 +227,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	})
 
 	t.Run("launcher", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		t.Setenv(overrides.PathEnvVar, t.TempDir()+"/overrides.json")
 		got, cmd := commandByID(t, commands.OpenLauncher).Run(m, ctx)
 		if got.mode != ModePicker || len(got.pickerSessions) != 3 || len(got.pickerFilteredIdx) != 3 || got.pickerSearchMode || cmd == nil {
@@ -302,12 +237,12 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	})
 
 	t.Run("search surfaces", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		got, cmd := commandByID(t, commands.SearchAllSessions).Run(m, ctx)
 		if got.mode != ModeSessionSearch || cmd == nil {
 			t.Fatalf("session search result: mode=%v cmd=%v", got.mode, cmd != nil)
 		}
-		m, ctx, _ = commandTestModel(target)
+		m, ctx = commandTestModel(target)
 		got, cmd = commandByID(t, commands.SearchPlans).Run(m, ctx)
 		if got.mode != ModePlanSearch || cmd == nil {
 			t.Fatalf("plan search result: mode=%v cmd=%v", got.mode, cmd != nil)
@@ -319,7 +254,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	// unchanged: hiding releases the read target, and showing re-acquires it and
 	// arms the read.
 	t.Run("inspector", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		requireInspector(t, m)
 		got, cmd := commandByID(t, commands.ToggleInspector).Run(m, ctx)
 		if got.inspectorActive() || got.previewWindowID != 0 || cmd != nil {
@@ -335,16 +270,8 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("resort", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
-		got, cmd := commandByID(t, commands.ResortTabs).Run(m, ctx)
-		if cmd == nil || len(got.toasts) != 1 || got.toasts[0].Text != "Resorting tabs…" {
-			t.Fatalf("resort result: cmd=%v toasts=%v", cmd != nil, got.toasts)
-		}
-	})
-
 	t.Run("undo", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		m.recovery = recoveryWith(undoTestNow, "api")
 		m.now = func() time.Time { return undoTestNow }
 		got, cmd := commandByID(t, commands.UndoClose).Run(m, ctx)
@@ -356,7 +283,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	})
 
 	t.Run("dismiss warning and help", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		m.deprecations = []config.Deprecation{{Key: "old", Replacement: "new"}}
 		got, cmd := commandByID(t, commands.DismissDeprecation).Run(m, ctx)
 		if !got.deprecationDismissed || got.mode != ModeList || cmd != nil {
@@ -370,7 +297,7 @@ func TestCommandExploreAndAppExecution(t *testing.T) {
 	})
 
 	t.Run("quit", func(t *testing.T) {
-		m, ctx, _ := commandTestModel(target)
+		m, ctx := commandTestModel(target)
 		got, cmd := commandByID(t, commands.Quit).Run(m, ctx)
 		if got.mode != ModeList || cmd == nil {
 			t.Fatalf("quit result: mode=%v cmd=%v", got.mode, cmd != nil)
@@ -392,7 +319,7 @@ func TestPaletteRestartMatchesActionsOverlay(t *testing.T) {
 	t.Parallel()
 
 	target := session.RunningSession{TabID: 22, WindowID: 202, Base: "api", Project: "api", Profile: "work"}
-	m, ctx, _ := commandTestModel(target)
+	m, ctx := commandTestModel(target)
 	m.cfg.Defaults.ConfirmDestructive = false
 
 	paletteResult, paletteCmd := commandByID(t, commands.RestartSession).Run(m, ctx)

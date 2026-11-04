@@ -22,8 +22,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/testutil"
@@ -318,13 +316,7 @@ type aslDaemon struct {
 	once   sync.Once
 }
 
-// aslWorldKittySocket is the one Kitty instance of the world: the socket its
-// Kitty runtime session is registered on, and the one the daemon's snapshot is
-// published for. A managed hook names its session's socket, and the daemon
-// reads the tab title only from a snapshot of that same instance.
-const aslWorldKittySocket = "unix:/tmp/amx-s10-kitty"
-
-func (w *aslWorld) startDaemon(kittyWindows []kitty.OSWindow) *aslDaemon {
+func (w *aslWorld) startDaemon() *aslDaemon {
 	w.t.Helper()
 	notifier, calls := newTestNotifier(&config.NotificationConfig{Permission: true})
 	h := NewHandler(activity.NewStateGuard(time.Hour), notifier)
@@ -332,10 +324,6 @@ func (w *aslWorld) startDaemon(kittyWindows []kitty.OSWindow) *aslDaemon {
 	h.SetRuntimeSessionDirectory(runtimesession.NewReader(w.tmux.Registry))
 	h.SetRuntimeCheckpointPath(filepath.Join(w.root, runtimeCheckpointFileName))
 	h.SetASLStateRoot(w.stateRoot)
-	if kittyWindows != nil {
-		h.SetKittyClient(&fakeKittyClient{windows: kittyWindows})
-		h.lastKittyListenOn = aslWorldKittySocket
-	}
 	report := h.restoreRuntimeCheckpoint(time.Now())
 	if report.Corrupt {
 		w.t.Fatalf("runtime checkpoint restore = %+v", report)
@@ -424,15 +412,12 @@ func (w *aslWorld) bridgeLauncher() aslbridge.Launcher {
 	}
 }
 
-// TestInstalledBridgeRoutesRunsByRuntimeSession runs two real ASL runs — one
-// inside a tmux runtime session, one inside a Kitty runtime session — and
-// checks that each run's lease, supervisor question, notification, and reply
-// reach the session that owns it and nothing else, across a daemon restart and
-// with no viewer attached anywhere.
+// TestInstalledBridgeRoutesRunsByRuntimeSession runs a real ASL run in a
+// tmux runtime session and checks its lease, question, notification, and reply
+// across a daemon restart with no viewer attached.
 func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	w := newASLWorld(t)
 	tmuxPlan := w.newPlan("plan-tmux")
-	kittyPlan := w.newPlan("plan-kitty")
 
 	// The tmux session's pane runs the real `asl run`, isolated to the world.
 	// The launch hands the pane its runtime session; everything else in its
@@ -446,8 +431,8 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	}
 	t.Setenv("SHELL", paneShell)
 
-	// --- Daemon lifetime A: no Kitty, no companion, no attached tmux client.
-	first := w.startDaemon(nil)
+	// --- Daemon lifetime A: no desktop workspace, no companion, no attached tmux client.
+	first := w.startDaemon()
 
 	project := config.Session{Title: "api", Directory: tmuxPlan.repo, Profile: "work"}
 	cfg := &config.Config{
@@ -474,13 +459,13 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 		return ok && len(liveLeases(first.h, slot)) == 1
 	}, testutil.Within(60*time.Second), testutil.Every(50*time.Millisecond))
 	if !isRuntimeSyntheticSlot(tmuxSlot) {
-		t.Fatalf("the tmux run landed on Kitty-range slot %d", tmuxSlot)
+		t.Fatalf("the tmux run landed on window-range slot %d", tmuxSlot)
 	}
 	tmuxRun := liveLeases(first.h, tmuxSlot)[0]
-	t.Logf("OBSERVED tmux-asl: run %s delivered lifecycle hooks as runtime session %s; lease live on non-Kitty slot (base+%d), daemon has no Kitty client",
+	t.Logf("OBSERVED tmux-asl: run %s delivered lifecycle hooks as runtime session %s; lease live on runtime slot (base+%d), daemon uses tmux only",
 		tmuxRun, onTmux, tmuxSlot-runtimeSlotBase)
 
-	// What a dashboard outside Kitty binds the run on: the state query names
+	// What a dashboard outside the desktop workspace binds the run on: the state query names
 	// the runtime session holding the slot and the run leasing it, so the row
 	// discovered from tmux and the bridge's run row meet without a window ID.
 	query := first.h.Handle(protocol.Request{Type: protocol.TypeStateQuery})
@@ -491,7 +476,7 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	if runs := query.States[tmuxSlot].ASLRunIDs; len(runs) != 1 || runs[0] != tmuxRun {
 		t.Fatalf("state query asl_run_ids for the tmux slot = %v, want [%s]", runs, tmuxRun)
 	}
-	t.Logf("OBSERVED dashboard-binding: state query ties slot base+%d to runtime session %s (backend %s) and to run %s, phases %v — the keys a dashboard with no Kitty client binds a tmux row and its ASL run on",
+	t.Logf("OBSERVED dashboard-binding: state query ties slot base+%d to runtime session %s (backend %s) and to run %s, phases %v — the keys a dashboard with no desktop workspace binds a tmux row and its ASL run on",
 		tmuxSlot-runtimeSlotBase, slotOwner.RuntimeSessionID, slotOwner.Backend, tmuxRun, query.States[tmuxSlot].ASLPhases)
 
 	// The worker asks; the supervisor in the same session surfaces it.
@@ -504,10 +489,10 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 		t.Fatalf("the private tmux server has attached clients:\n%s", clients)
 	}
 	target := first.h.notificationTarget(tmuxSlot, "")
-	if !target.Navigable || target.KittyListenOn != "" || target.RuntimeSessionID != string(onTmux) || target.Backend != "tmux" {
+	if !target.Navigable || target.RuntimeSessionID != string(onTmux) || target.Backend != "tmux" {
 		t.Fatalf("tmux notification target = %+v", target)
 	}
-	t.Logf("OBSERVED viewer-absent: question %s raised the question icon and %d notification on the tmux slot with no Kitty client, no companion app, and zero clients attached to the private tmux server (list-clients empty); target runtime_session=%s backend=%s navigable=%v",
+	t.Logf("OBSERVED viewer-absent: question %s raised the question icon and %d notification on the tmux slot with no desktop workspace, no companion app, and zero clients attached to the private tmux server (list-clients empty); target runtime_session=%s backend=%s navigable=%v",
 		tmuxQuestion, len(first.notificationsFor(tmuxSlot)), target.RuntimeSessionID, target.Backend, target.Navigable)
 
 	// Surfacing the same open set again, and maintenance polling the run's
@@ -592,21 +577,7 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 
 	// --- Daemon restart, while the run is still blocked on its question.
 	first.stop()
-	projectKitty := kittyPlan.repo
-	kittyWindows := []kitty.OSWindow{{ID: 1, Tabs: []kitty.Tab{
-		// Managed tabs sharing each run's directory and harness: what
-		// workspace matching would have picked.
-		{ID: 10, Title: palette.BuildTitleParts(palette.TitleParts{Base: "tmux-decoy"}), Windows: []kitty.Window{
-			{ID: 41, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: tmuxPlan.repo}},
-		}},
-		{ID: 11, Title: palette.BuildTitleParts(palette.TitleParts{Base: "kitty-decoy"}), Windows: []kitty.Window{
-			{ID: 42, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: projectKitty}},
-		}},
-		{ID: 12, Title: palette.BuildTitleParts(palette.TitleParts{Base: "kitty-session"}), Windows: []kitty.Window{
-			{ID: 43, UserVars: kitty.UserVars{Profile: "work", Harness: "claude", AMXDirectory: projectKitty}},
-		}},
-	}}}
-	second := w.startDaemon(kittyWindows)
+	second := w.startDaemon()
 	restoredSlot, bound := second.boundSlot(onTmux)
 	if !bound || !isRuntimeSyntheticSlot(restoredSlot) {
 		t.Fatalf("after restart the tmux session is bound to %d (bound %v)", restoredSlot, bound)
@@ -631,128 +602,20 @@ func TestInstalledBridgeRoutesRunsByRuntimeSession(t *testing.T) {
 	if afterRestart != 0 {
 		t.Fatalf("the restarted daemon re-notified %d time(s) for a question announced before the restart", afterRestart)
 	}
-	t.Logf("OBSERVED daemon-restart: new daemon restored runtime session %s on a non-Kitty slot with run %s's lease live (icon after restore %q); the question resurfaced by `asl outbox wait` shows the question icon again with %d new notifications",
+	t.Logf("OBSERVED daemon-restart: new daemon restored runtime session %s on a runtime slot with run %s's lease live (icon after restore %q); the question resurfaced by `asl outbox wait` shows the question icon again with %d new notifications",
 		onTmux, tmuxRun, restoredIcon, afterRestart)
 
-	// --- A second run, inside a Kitty runtime session, on the new daemon.
-	var onKitty runtimesession.ID
-	if err := w.tmux.Registry.Update(func(registry *runtimesession.Registry) error {
-		record, err := registry.Begin(runtimesession.BeginRequest{
-			Project: "api-kitty", LaunchID: "s10-kitty", Relation: runtimesession.RelationFresh,
-		}, time.Now())
-		if err != nil {
-			return err
-		}
-		onKitty = record.ID
-		_, err = registry.Commit(record.ID, runtimesession.Target{
-			Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendKitty, Address: aslWorldKittySocket, Generation: "kitty-s10-1"},
-			Ref:      "43",
-		}, runtimesession.ProcessFingerprint{PID: os.Getpid(), StartToken: "s10-test-process"}, time.Now())
-		return err
-	}); err != nil {
-		t.Fatalf("register the Kitty runtime session: %v", err)
-	}
-	runLog, err := os.Create(filepath.Join(w.logs, "run-plan-kitty.out"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = runLog.Close() }()
-	kittyArgv := w.runArgv(kittyPlan)
-	kittyRunCmd := exec.Command(kittyArgv[0], kittyArgv[1:]...)
-	kittyRunCmd.Env = w.sessionEnv(onKitty)
-	kittyRunCmd.Dir = kittyPlan.repo
-	kittyRunCmd.Stdout = runLog
-	kittyRunCmd.Stderr = runLog
-	if err := kittyRunCmd.Start(); err != nil {
-		t.Fatalf("start the Kitty session's run: %v", err)
-	}
-	kittyExited := make(chan error, 1)
-	go func() { kittyExited <- kittyRunCmd.Wait() }()
-	t.Cleanup(func() {
-		_ = kittyRunCmd.Process.Kill()
-	})
-
-	testutil.Eventually(t, "the Kitty run's lifecycle hooks to reach window 43", func() bool {
-		return len(liveLeases(second.h, 43)) == 1
-	}, testutil.Within(60*time.Second), testutil.Every(50*time.Millisecond))
-	kittyRun := liveLeases(second.h, 43)[0]
-	if slot, ok := second.boundSlot(onKitty); !ok || slot != 43 {
-		t.Fatalf("the Kitty runtime session is bound to %d (bound %v); want window 43", slot, ok)
-	}
-	kittyQuestion := w.surfaceQuestion(onKitty, kittyPlan)
-	testutil.Eventually(t, "window 43 to show the Kitty run's question", func() bool {
-		_, icon, _ := slotState(second.h, 43)
-		return icon == "question" && len(second.notificationsFor(43)) >= 1
-	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
-	second.h.maintenanceTick(time.Now().Add(22 * time.Second))
-	time.Sleep(500 * time.Millisecond)
-	kittyTarget := second.h.notificationTarget(43, "work")
-	if !kittyTarget.Navigable || kittyTarget.KittyListenOn != aslWorldKittySocket || kittyTarget.RuntimeSessionID != string(onKitty) {
-		t.Fatalf("Kitty notification target = %+v", kittyTarget)
-	}
-	if got := second.notificationsFor(43); len(got) != 1 || got[0].title != "kitty-session" {
-		t.Fatalf("notifications for window 43 = %+v; want exactly one titled kitty-session", got)
-	}
-	t.Logf("OBSERVED kitty-asl: run %s delivered lifecycle hooks as Kitty runtime session %s; lease and question %s on its registered window 43, 1 notification, click target socket %s",
-		kittyRun, onKitty, kittyQuestion, kittyTarget.KittyListenOn)
-
-	// Nothing crossed: with both runs live and reconciled against the real
-	// state root, each lease sits only on its own session, and the managed
-	// Kitty tabs sharing the runs' directories hold nothing.
-	second.h.maintenanceTick(time.Now().Add(33 * time.Second))
-	for _, decoy := range []int{41, 42} {
-		if leases := liveLeases(second.h, decoy); len(leases) != 0 {
-			t.Fatalf("decoy Kitty window %d holds leases %v", decoy, leases)
-		}
-		if _, icon, _ := slotState(second.h, decoy); icon != "" {
-			t.Fatalf("decoy Kitty window %d shows icon %q", decoy, icon)
-		}
-		if got := second.notificationsFor(decoy); len(got) != 0 {
-			t.Fatalf("decoy Kitty window %d was notified: %+v", decoy, got)
-		}
-	}
-	if leases := liveLeases(second.h, restoredSlot); len(leases) != 1 || leases[0] != tmuxRun {
-		t.Fatalf("tmux slot leases = %v; want only %s", leases, tmuxRun)
-	}
-	if leases := liveLeases(second.h, 43); len(leases) != 1 || leases[0] != kittyRun {
-		t.Fatalf("window 43 leases = %v; want only %s", leases, kittyRun)
-	}
-	if total := len(second.calls.snapshot()); total != 1 {
-		t.Fatalf("daemon B dispatched %d notifications in total; want 1 (the Kitty question)", total)
-	}
-	t.Logf("OBSERVED notification-deduplication (across sessions and restart): daemon A dispatched 1 notification (tmux question), daemon B dispatched 1 (Kitty question); decoy Kitty windows 41 and 42 sharing the runs' directories hold no lease, icon, or notification")
-
-	// --- Replies route by run: each clears only its own session's question.
+	// Reply through the installed supervisor and wait for the tmux run to finish.
 	w.supervise(onTmux, "inbox", "reply", tmuxPlan.dir, "--to", tmuxQuestion, "--text", "Go ahead.", "--state-dir", w.stateRoot, "--json")
 	testutil.Eventually(t, "the tmux session's question to clear after its reply", func() bool {
 		_, icon, _ := slotState(second.h, restoredSlot)
 		return icon != "question"
 	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
-	if _, icon, _ := slotState(second.h, 43); icon != "question" {
-		t.Fatalf("replying to the tmux run cleared the Kitty session's question (icon %q)", icon)
-	}
-	w.supervise(onKitty, "inbox", "reply", kittyPlan.dir, "--to", kittyQuestion, "--text", "Go ahead.", "--state-dir", w.stateRoot, "--json")
-	testutil.Eventually(t, "the Kitty session's question to clear after its reply", func() bool {
-		_, icon, _ := slotState(second.h, 43)
-		return icon != "question"
-	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
-
-	// Both workers finish their sessions; each run's end releases its lease.
-	select {
-	case err := <-kittyExited:
-		// The leases below are what this checks; how the run ended is context.
-		t.Logf("the Kitty session's run exited: %v", err)
-	case <-time.After(120 * time.Second):
-		t.Fatalf("the Kitty session's run did not exit; log:\n%s", w.readLog("run-plan-kitty.out"))
-	}
-	testutil.Eventually(t, "the Kitty run's lease to be released", func() bool {
-		return len(liveLeases(second.h, 43)) == 0
-	}, testutil.Within(30*time.Second), testutil.Every(50*time.Millisecond))
 	testutil.Eventually(t, "the tmux run's lease to be released", func() bool {
 		return len(liveLeases(second.h, restoredSlot)) == 0
 	}, testutil.Within(120*time.Second), testutil.Every(50*time.Millisecond))
-	t.Logf("OBSERVED misrouting check: replies cleared each session's question independently; both runs ended and released their leases on their own slots (tmux harness log: %q; kitty harness log: %q)",
-		strings.TrimSpace(w.readLog("harness-plan-tmux.log")), strings.TrimSpace(w.readLog("harness-plan-kitty.log")))
+	t.Logf("OBSERVED tmux reply: run %s cleared its question and released its lease after restart", tmuxRun)
+
 }
 
 func shellQuote(word string) string {

@@ -9,10 +9,8 @@ GitHub settings. This is a publication checklist, not a release certification.
   maintainer. The desktop build includes it; existing third-party notices remain.
 - [ ] Review redistribution of the ASL contract corpus under
   `internal/aslcontract/`, including its source repository's licensing.
-- [ ] Review the committed acceptance evidence for publication. There are 128
-  PNG screenshots and 49 text files containing the maintainer's home path.
-  Other records include signing identities and local machine details. These
-  are privacy review items, not automatically credentials.
+- [ ] Review any newly captured acceptance evidence before publication for
+  local paths, signing identities, and machine details.
 - [ ] Decide whether to publish the existing history or a clean export after
   that review. Deleting a file in a new commit does not remove earlier copies.
   Do not rewrite the existing repository as part of routine cleanup.
@@ -82,10 +80,8 @@ the README. Raw captures and scan reports remain outside the repository.
   text and a description of the workflow shown.
 - [ ] Review and commit the prepared changes before publication.
 
-Existing automation starts in
-[`session-15/driver/README.md`](acceptance/ghostty-desktop/session-15/driver/README.md).
-It is an acceptance driver with machine-specific assumptions; adapt its
-isolation and input mechanisms for a public demo instead of running it as-is.
+Any public demo automation should isolate its state and document its input
+mechanisms before publication.
 
 ## Binary distribution, after source publication
 
@@ -101,5 +97,5 @@ downloadable binaries.
   signing, with notarization unobserved.
 - [ ] Publish versioned artifacts with checksums, release notes, requirements,
   and installation instructions.
-- [x] The operator waived the [daily-driver trial](daily-driver-trial.md) on
+- [x] The operator waived the daily-driver trial on
   2026-10-30. The waiver does not claim completed workdays or a passed trial.

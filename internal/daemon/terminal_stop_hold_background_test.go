@@ -13,10 +13,10 @@ import (
 // shell. The held stop waits for as long as that count is on screen, well past
 // its deadline and the active watchdog, and paints only once the probe confirms
 // the pane with the shell gone.
-func TestHeldStopWaitsForABackgroundShellOnEitherBackend(t *testing.T) {
+func TestHeldStopWaitsForABackgroundShellOnTmux(t *testing.T) {
 	running := readCodexCapture(t, "claude_idle_background_shell.txt")
 	done := readCodexCapture(t, "claude_idle_background_shell_done.txt")
-	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+	eachProbedTmux(t, func(t *testing.T, s *probedSession) {
 		s.h.SetStaleThresholds(map[string]time.Duration{"active": 10 * time.Second}, nil)
 		s.show(running)
 		s.startTurn()
@@ -25,7 +25,7 @@ func TestHeldStopWaitsForABackgroundShellOnEitherBackend(t *testing.T) {
 		// Four deadlines' worth of a pane that keeps counting the shell.
 		for elapsed := time.Duration(0); elapsed < 4*terminalHoldTestTimeout; elapsed += 2 * time.Second {
 			s.tick(time.Now())
-			s.h.SweepStale(time.Now())
+			s.h.sweepStale(time.Now(), 2*time.Second, false, false)
 			time.Sleep(2 * time.Second)
 			synctest.Wait()
 		}
@@ -72,7 +72,7 @@ func TestHeldStopWaitsForABackgroundShellOnEitherBackend(t *testing.T) {
 // after the last reading that showed the work.
 func TestHeldStopOverBackgroundWorkIsReleasedWhenThePaneGoesUnreadable(t *testing.T) {
 	running := readCodexCapture(t, "claude_idle_background_shell.txt")
-	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+	eachProbedTmux(t, func(t *testing.T, s *probedSession) {
 		s.show(running)
 		s.startTurn()
 		s.stopHeld()

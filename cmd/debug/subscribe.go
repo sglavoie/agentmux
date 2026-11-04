@@ -151,14 +151,11 @@ func writeSubscribeFrame(w io.Writer, frame protocol.StreamFrame) error {
 }
 
 // summarizeSnapshot renders the facts a reader watches change: readiness, the
-// attention counts, and each session's window and icon, with * marking one
+// attention counts, and each session's identifier and icon, with * marking one
 // that needs attention.
 func summarizeSnapshot(snap protocol.CompanionSnapshot) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "ready=%t kitty_ready=%t sessions=%d attention=%d", snap.Daemon.Ready, snap.Kitty.Ready, len(snap.Sessions), snap.Attention.Total)
-	if snap.Kitty.Stale {
-		b.WriteString(" kitty_stale")
-	}
+	fmt.Fprintf(&b, "ready=%t sessions=%d attention=%d", snap.Daemon.Ready, len(snap.Sessions), snap.Attention.Total)
 	if snap.Truncated {
 		b.WriteString(" truncated")
 	}
@@ -171,7 +168,11 @@ func summarizeSnapshot(snap protocol.CompanionSnapshot) string {
 			if i > 0 {
 				b.WriteByte(' ')
 			}
-			fmt.Fprintf(&b, "%d:%s", s.WindowID, emptyDash(s.IconState))
+			id := ""
+			if s.Runtime != nil {
+				id = s.Runtime.SessionID
+			}
+			fmt.Fprintf(&b, "%s:%s", emptyDash(id), emptyDash(s.IconState))
 			if s.Attention {
 				b.WriteByte('*')
 			}

@@ -21,7 +21,7 @@ func inspectorPane(m Model) string {
 func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
 
@@ -60,7 +60,7 @@ func TestInspectorTellsAPendingReadFromAnEmptyBuffer(t *testing.T) {
 func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
 
@@ -92,7 +92,7 @@ func TestRetargetResetsTheInspectorsReadState(t *testing.T) {
 func TestInspectorPaneNamesTheSelectedSession(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	m.retargetPreview(m.currentPreviewWindowID())
 
@@ -112,7 +112,7 @@ func TestInspectorPaneNamesTheSelectedSession(t *testing.T) {
 func TestInspectorPaneOverAVanishedWindow(t *testing.T) {
 	t.Parallel()
 
-	m, _ := listViewModel(dashboard.ViewUrgency)
+	m := listViewModel(dashboard.ViewUrgency)
 	m = selectLine(t, m, "session:api")
 	for i := range m.sessions {
 		m.sessions[i].WindowID = 0

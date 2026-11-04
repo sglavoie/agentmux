@@ -28,7 +28,7 @@ func listFooterStates(t *testing.T, width int) []struct {
 	twoChips := filtered
 	oneChip := filtered
 	oneChip.activeFilter = dashboard.Parse("api")
-	summary, _, _ := summaryModel(t)
+	summary := summaryModel(t)
 	summary.width, summary.height, summary.mode = width, 24, ModeList
 	return []struct {
 		name string

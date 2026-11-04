@@ -12,7 +12,7 @@
 // The remaining division is a safety
 // property rather than an organizing one:
 //
-//   - MOVEMENT keys change one integer. They start no command, touch no Kitty
+//   - MOVEMENT keys change one integer. They start no command, touch no terminal
 //     window, and write no metadata anywhere. Every arrow, every hjkl, every
 //     page and every end is in this group, which is what makes "browsing the
 //     overview is observation" true by construction instead of by review.
@@ -55,8 +55,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleCaptureDone(msg)
 	case commands.ErrMsg:
 		return m.handleRefreshErr(msg)
-	case commands.FocusDoneMsg:
-		return m.handleFocusDone(msg)
 	case commands.ActionDoneMsg:
 		return m.handleActionDone(msg)
 	case commands.PickerOpenDoneMsg:
@@ -222,7 +220,7 @@ func (m model) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 // those would otherwise start or complete against a program that is quitting.
 // Stopping it drops the queue, declines the next tick, and makes every late reply
 // release its slot and be ignored — which is the only shutdown available, since
-// the Kitty client offers no cancellation and the reads that are already out are
+// the capture command offers no cancellation and the reads that are already out are
 // bounded by their own subprocess deadline rather than by anything here.
 func (m model) dismiss() (tea.Model, tea.Cmd) {
 	m.captures.stop()
@@ -319,7 +317,7 @@ func (m model) focusIndex(index int) (tea.Model, tea.Cmd) {
 	return next, tea.Batch(focusCmd, captureCmd)
 }
 
-// requestFocus handles Enter and digits: focus the selected tab, and leave only once Kitty has
+// requestFocus handles Enter and digits: focus the selected session, and leave only once it has
 // confirmed it.
 //
 // The tab is CAPTURED here rather than read again when the answer returns. A
@@ -328,7 +326,7 @@ func (m model) focusIndex(index int) (tea.Model, tea.Cmd) {
 // whichever one the index came to address.
 //
 // A second focus key while the first is pending is ignored, not queued. Focus is
-// idempotent from Kitty's side, but a queued duplicate would still be a second
+// idempotent at the terminal, but a queued duplicate would still be a second
 // command whose completion arrived after the program had already been told to
 // quit on the first.
 func (m model) requestFocus() (tea.Model, tea.Cmd) {
@@ -354,18 +352,13 @@ func (m model) focusCapturedTab(tabID int) (model, tea.Cmd) {
 	return m, m.deps.focus(tabID)
 }
 
-// handleFocusDone quits on success and reports the failure otherwise.
-//
-// Exiting ONLY on success is the contract: a focus that failed leaves the
-// operator on the overview, with the reason on the feedback row and the same tab
-// still selected, which is the only state from which retrying makes sense. A
-// completion arriving with nothing pending is dropped — the surface already dealt
-// with that attempt.
-// handleAttachDone settles an attach to a portable session. The attached view
-// ran in this terminal and has now given it back, so unlike a Kitty focus
-// there is nowhere else the operator went: the overview stays up, with any
-// failure on the feedback row.
+// handleAttachDone settles a pending tmux attach. A switched terminal needs
+// the overview popup to close; a failed switch leaves the error visible for
+// retry. A late completion with no pending focus is ignored.
 func (m model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd) {
+	if m.focusTabID == 0 {
+		return m, nil
+	}
 	m.focusTabID = 0
 	m.focusErr = msg.Err
 	// An overview that is a popup over the terminal it just switched is in
@@ -374,16 +367,4 @@ func (m model) handleAttachDone(msg commands.AttachDoneMsg) (tea.Model, tea.Cmd)
 		return m.dismiss()
 	}
 	return m, nil
-}
-
-func (m model) handleFocusDone(msg commands.FocusDoneMsg) (tea.Model, tea.Cmd) {
-	if m.focusTabID == 0 {
-		return m, nil
-	}
-	m.focusTabID = 0
-	if msg.Err != nil {
-		m.focusErr = msg.Err
-		return m, nil
-	}
-	return m.dismiss()
 }

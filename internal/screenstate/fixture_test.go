@@ -10,8 +10,8 @@ import (
 // its real screen captures in a sibling testdata/ directory and reads them
 // verbatim.
 //
-// Every file under it is a byte-for-byte `kitten @ get-text --extent=screen`
-// capture of a live harness pane, never hand-edited. That rule is the point of
+// Every file under it is a byte-for-byte capture of a live harness pane,
+// never hand-edited. That rule is the point of
 // the directory rather than a tidiness preference: the bug this package exists
 // to close survived a full test suite because every committed "Claude is
 // working" screen was hand-modelled with an `esc to interrupt` hint that Claude

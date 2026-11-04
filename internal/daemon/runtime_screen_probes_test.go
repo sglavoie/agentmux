@@ -15,15 +15,11 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/hookevent"
-	"github.com/sglavoie/agentmux/internal/kitty"
-	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 // The stop hold, the idle probe that confirms it, and the context-limit
-// banner are one behaviour whichever backend holds the agent. Each scenario
-// below runs twice, on a Kitty window and on a tmux runtime session, through
-// the production probe tick, and has to end the same way on both.
+// banner are exercised through the production tmux screen-probe tick.
 
 // probedHarness is how one harness's hooks name a turn.
 type probedHarness struct {
@@ -65,9 +61,7 @@ type probedSession struct {
 	hook        func(event string) protocol.Response
 	// tick is one pass of the daemon's screen probes.
 	tick func(now time.Time)
-	// end closes the session the way its backend reports it gone: Kitty
-	// lists the window no more, or the registry records the runtime session
-	// ended and maintenance retires its slot.
+	// end marks the runtime session ended and retires its slot.
 	end func()
 }
 
@@ -138,53 +132,8 @@ func newProbedHandler(t *testing.T) (*Handler, *callRecorder) {
 	return h, rec
 }
 
-func newProbedKittySessionOf(t *testing.T, agent probedHarness) *probedSession {
-	t.Helper()
-	h, rec := newProbedHandler(t)
-	fake := &fakeKittyClient{
-		windows:         codexProbeWindows(42, palette.BuildTitle("api", "bolt", false), kitty.UserVars{Profile: "work", Harness: agent.name}),
-		getText:         map[string]string{},
-		getTextByExtent: map[getTextKey]string{},
-	}
-	h.SetKittyClient(fake)
-	return &probedSession{
-		t: t, h: h, rec: rec, slot: 42, harness: agent,
-		// The maintenance loop republishes the window tree between probe
-		// ticks; here the test does.
-		tick: func(now time.Time) {
-			h.primeSnapshot()
-			h.runScreenProbeTick(now)
-		},
-		show: func(text string) {
-			fake.mu.Lock()
-			defer fake.mu.Unlock()
-			fake.getText[kitty.MatchWindowByID(42)], fake.getTextErr = text, nil
-		},
-		unreadable: func() {
-			fake.mu.Lock()
-			defer fake.mu.Unlock()
-			fake.getTextErr = errors.New("get-text failed")
-		},
-		retitle: func(title string) {
-			fake.mu.Lock()
-			defer fake.mu.Unlock()
-			fake.windows[0].Tabs[0].Windows[0].Title = title
-		},
-		showHistory: func(text string) {
-			fake.mu.Lock()
-			defer fake.mu.Unlock()
-			fake.getTextByExtent[getTextKey{match: kitty.MatchWindowByID(42), extent: "all"}] = text
-		},
-		hook: func(event string) protocol.Response {
-			return h.Handle(protocol.Request{Type: protocol.TypeHookEvent, WindowID: 42, Event: event, Harness: agent.name,
-				PayloadJSON: hookPayloadJSON(t, agent.payload(event))})
-		},
-		end: func() { h.pruneClosedWindows(time.Now(), map[int]bool{}) },
-	}
-}
-
 // newProbedTmuxSession is the same agent on a tmux runtime session, in a
-// daemon with no Kitty at all.
+// daemon with an isolated tmux screen reader.
 func newProbedTmuxSession(t *testing.T) (*probedSession, *fakePaneScreens) {
 	t.Helper()
 	return newProbedTmuxSessionOf(t, probedClaude)
@@ -229,16 +178,13 @@ func newProbedTmuxSessionOf(t *testing.T, agent probedHarness) (*probedSession, 
 	return session, screens
 }
 
-func eachProbedBackend(t *testing.T, scenario func(t *testing.T, s *probedSession)) {
+func eachProbedTmux(t *testing.T, scenario func(t *testing.T, s *probedSession)) {
 	t.Helper()
-	eachProbedBackendOf(t, probedClaude, scenario)
+	eachProbedTmuxOf(t, probedClaude, scenario)
 }
 
-func eachProbedBackendOf(t *testing.T, agent probedHarness, scenario func(t *testing.T, s *probedSession)) {
+func eachProbedTmuxOf(t *testing.T, agent probedHarness, scenario func(t *testing.T, s *probedSession)) {
 	t.Helper()
-	t.Run("kitty", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) { scenario(t, newProbedKittySessionOf(t, agent)) })
-	})
 	t.Run("tmux", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			s, _ := newProbedTmuxSessionOf(t, agent)
@@ -286,8 +232,8 @@ func (s *probedSession) confirmed() bool {
 
 // An idle screen confirms the held stop after two agreeing reads, and the
 // native stop is what paints: one notification, no stop of the probe's own.
-func TestHeldStopIsConfirmedByTheIdleScreenOnEitherBackend(t *testing.T) {
-	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+func TestHeldStopIsConfirmedByTheIdleScreenOnTmux(t *testing.T) {
+	eachProbedTmux(t, func(t *testing.T, s *probedSession) {
 		s.show(claudeIdleScreen)
 		s.startTurn()
 		s.stopHeld()
@@ -325,8 +271,8 @@ func TestHeldStopIsConfirmedByTheIdleScreenOnEitherBackend(t *testing.T) {
 // A pane that cannot be captured confirms nothing: the stop stays held past
 // its quiet period and is released at the deadline, as a stop nothing
 // confirmed.
-func TestHeldStopOfAnUnreadablePaneIsReleasedAtTheDeadlineOnEitherBackend(t *testing.T) {
-	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+func TestHeldStopOfAnUnreadablePaneIsReleasedAtTheDeadlineOnTmux(t *testing.T) {
+	eachProbedTmux(t, func(t *testing.T, s *probedSession) {
 		s.unreadable()
 		s.startTurn()
 		s.stopHeld()
@@ -366,8 +312,8 @@ func TestHeldStopOfAnUnreadablePaneIsReleasedAtTheDeadlineOnEitherBackend(t *tes
 // release it: the stop neither paints nor notifies, and the closed slot does
 // not come back. On tmux the binding that named the session goes with the
 // slot, so a release would notify under no session's name.
-func TestHeldStopOfASessionThatEndsIsDroppedOnEitherBackend(t *testing.T) {
-	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+func TestHeldStopOfASessionThatEndsIsDroppedOnTmux(t *testing.T) {
+	eachProbedTmux(t, func(t *testing.T, s *probedSession) {
 		s.unreadable()
 		s.startTurn()
 		s.stopHeld()
@@ -467,9 +413,9 @@ func TestStopFoldedAfterItsTmuxSessionEndsLeavesTheSlotClosed(t *testing.T) {
 // The context-limit banner on a working agent's screen turns it to the error
 // state once, with one notification; a pane that cannot be read reports
 // nothing.
-func TestContextLimitBannerIsDetectedOnEitherBackend(t *testing.T) {
+func TestContextLimitBannerIsDetectedOnTmux(t *testing.T) {
 	banner := loadClaudeContextLimitFixture(t)
-	eachProbedBackend(t, func(t *testing.T, s *probedSession) {
+	eachProbedTmux(t, func(t *testing.T, s *probedSession) {
 		s.startTurn()
 		now := time.Now()
 
@@ -552,7 +498,7 @@ func TestTmuxScreensFromAnotherGenerationOrAnExitedPaneAreNoEvidence(t *testing.
 
 // A tmux stop is held for confirmation only when something can confirm it:
 // a reader for its pane and a probe for its harness. Otherwise it keeps the
-// short reset hold, as a Kitty stop does in a daemon with no Kitty.
+// short reset hold.
 func TestTmuxStopIsHeldOnlyWhenItsPaneCanConfirmIt(t *testing.T) {
 	t.Parallel()
 
@@ -568,8 +514,6 @@ func TestTmuxStopIsHeldOnlyWhenItsPaneCanConfirmIt(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, _ := newProbedHandler(t)
-			// A Kitty that is running changes nothing for a tmux session.
-			h.SetKittyClient(&fakeKittyClient{})
 			if tc.reader {
 				h.SetRuntimeScreenReader(func(runtimesession.BackendInstance) (RuntimeScreen, error) {
 					return &fakePaneScreens{generation: probedGeneration}, nil
@@ -637,7 +581,7 @@ func TestRuntimeProbesSpareSessionsThatAreNotWorking(t *testing.T) {
 }
 
 // The production reader against a real private tmux server: the daemon reads
-// the registered pane of a tmux agent with no terminal attached and no Kitty,
+// the registered pane of a tmux agent with no terminal attached,
 // finds the context-limit banner on it, and reads nothing once the server is
 // gone.
 func TestRuntimeScreenProbeReadsARealTmuxPane(t *testing.T) {

@@ -31,11 +31,11 @@ func TestMatchLineEntersALongLineNearTheMatch(t *testing.T) {
 }
 
 func TestPreviewAtPrefersTheFirstLineHoldingEveryTerm(t *testing.T) {
-	text := "kitty tabs are colored\nthe socket is closed\nthe kitty socket listens\n"
-	terms := Parse("socket kitty")
+	text := "tmux tabs are colored\nthe socket is closed\nthe tmux socket listens\n"
+	terms := Parse("socket tmux")
 	first := terms.NewTally().Add(text)
 	pos, fit := terms.PreviewAt(text, first)
-	if fit != FitWords || !strings.HasPrefix(text[pos:], "kitty socket listens") {
+	if fit != FitWords || !strings.HasPrefix(text[pos:], "tmux socket listens") {
 		t.Fatalf("PreviewAt = %d (%q), %v; want the earliest match on the line holding both", pos, text[pos:], fit)
 	}
 }
@@ -68,8 +68,8 @@ func TestPreviewAtFallsBackToTheFirstLineHoldingEveryTermInsideWords(t *testing.
 }
 
 func TestPreviewAtFallsBackToAWordWhenNoLineHoldsEveryTerm(t *testing.T) {
-	text := "kitty tabs\nsocket closed\n"
-	terms := Parse("kitty socket")
+	text := "tmux tabs\nsocket closed\n"
+	terms := Parse("tmux socket")
 	if pos, fit := terms.PreviewAt(text, 0); pos != 0 || fit != FitTerm {
 		t.Fatalf("PreviewAt = %d, %v; want first, which starts a word", pos, fit)
 	}
@@ -83,7 +83,7 @@ func TestPreviewAtFallsBackToAWordWhenNoLineHoldsEveryTerm(t *testing.T) {
 	if pos, fit := Parse("message count").PreviewAt(inside, first); pos != first || fit != FitFirst {
 		t.Fatalf("PreviewAt = %d, %v; want first unchanged when no term starts a word", pos, fit)
 	}
-	if pos, fit := Parse("kitty").PreviewAt(text, 0); pos != 0 || fit != FitWords {
+	if pos, fit := Parse("tmux").PreviewAt(text, 0); pos != 0 || fit != FitWords {
 		t.Fatalf("single term PreviewAt = %d, %v; want first", pos, fit)
 	}
 	if pos, fit := terms.PreviewAt(text, -1); pos != -1 || fit != FitFirst {

@@ -18,7 +18,7 @@ import (
 // tmuxSessionIn returns the v2 snapshot's session for runtime.
 func tmuxSessionIn(t *testing.T, h *Handler, runtime runtimesession.ID) protocol.CompanionSession {
 	t.Helper()
-	snap := h.buildCompanionSnapshots(time.Now())[protocol.CompanionSnapshotVersionRuntime]
+	snap := h.buildCompanionSnapshot(time.Now())
 	for _, s := range snap.Sessions {
 		if s.Runtime != nil && s.Runtime.SessionID == string(runtime) {
 			return s
@@ -81,11 +81,9 @@ func TestRuntimeSessionsAreLabeledForCompanions(t *testing.T) {
 		t.Fatalf("a labeled session was read again: %d reads", reads)
 	}
 
-	v1 := h.buildCompanionSnapshots(time.Now())[protocol.CompanionSnapshotVersion]
-	for _, s := range v1.Sessions {
-		if s.WindowID == 0 || s.Runtime != nil || s.Profile == "work" {
-			t.Fatalf("v1 lists a tmux session: %+v", s)
-		}
+	snapshot := h.buildCompanionSnapshot(time.Now())
+	if snapshot.V != protocol.CompanionSnapshotVersion || len(snapshot.Sessions) != 1 {
+		t.Fatalf("runtime snapshot = %+v", snapshot)
 	}
 
 	directory.put(onTmux, runtimesession.StateEnded, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
@@ -151,34 +149,30 @@ func TestTmuxRuntimeSessionLabelReadsPaneMetadata(t *testing.T) {
 	if _, err := TmuxRuntimeSessionLabel(gone); err == nil {
 		t.Fatal("read a label for a pane that is not there")
 	}
-	kitty := record
-	onKitty := *record.Target
-	onKitty.Instance.Kind = runtimesession.BackendKitty
-	kitty.Target = &onKitty
-	if _, err := TmuxRuntimeSessionLabel(kitty); !errors.Is(err, errRuntimeLabelUnsupported) {
-		t.Fatalf("a Kitty record: %v", err)
+	unsupported := record
+	otherBackend := *record.Target
+	otherBackend.Instance.Kind = runtimesession.BackendKind("unsupported")
+	unsupported.Target = &otherBackend
+	if _, err := TmuxRuntimeSessionLabel(unsupported); !errors.Is(err, errRuntimeLabelUnsupported) {
+		t.Fatalf("an unsupported backend record: %v", err)
 	}
 }
 
 // TestRuntimeSessionColorFollowsThePickAndTheProfile: a tmux session is
 // published on its profile's color, in the palette's bright background. A color picked for it replaces the profile's as
 // soon as a reconciliation pass reads the pick, survives a later labeling
-// pass, and gives way to the profile's again when the pick is removed. A
-// Kitty slot never takes a color from the tmux observation.
+// pass, and gives way to the profile's again when the pick is removed.
 func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	onTmux := newRuntimeID(t)
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
 	h.SetProfileColors(map[string]string{"Work": "blue"})
 	h.SetRuntimeSessionLabeler(func(runtimesession.Record) (RuntimeSessionLabel, error) {
 		return RuntimeSessionLabel{Project: "API", Profile: "work"}, nil
 	})
-	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
-		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
-	}
+	requireAccepted(t, h.Handle(runtimeHook(t, onTmux, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(onTmux)})))
 	color := func(name string) string {
 		t.Helper()
 		c, err := palette.Lookup(name)
@@ -194,15 +188,9 @@ func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
 		t.Fatalf("tab color with no pick = %q; want the profile's, %q", got, color("blue"))
 	}
 
-	h.observeRuntimeColors([]tmux.Colored{{ID: onTmux, Color: "red"}, {ID: onKitty, Color: "red"}, {ID: newRuntimeID(t), Color: "red"}})
+	h.observeRuntimeColors([]tmux.Colored{{ID: onTmux, Color: "red"}, {ID: newRuntimeID(t), Color: "red"}})
 	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != color("red") {
 		t.Fatalf("tab color after a pick = %q; want %q", got, color("red"))
-	}
-	h.stateMu.Lock()
-	_, kittyLabeled := h.runtimeLabels[string(onKitty)]
-	h.stateMu.Unlock()
-	if kittyLabeled {
-		t.Fatal("a Kitty slot took a color from the tmux observation")
 	}
 	h.labelRuntimeSessions(now.Add(10 * runtimeLabelRetry))
 	if got := tmuxSessionIn(t, h, onTmux).TabColor; got != color("red") {
@@ -221,36 +209,26 @@ func TestRuntimeSessionColorFollowsThePickAndTheProfile(t *testing.T) {
 
 // TestRuntimeSessionNameFollowsThePane: a tmux session is published under the
 // name a reconciliation pass read from its pane, keeps it across a later
-// labeling pass, and loses it when the name is removed. A Kitty slot never
-// takes a name from the tmux observation.
+// labeling pass, and loses it when the name is removed.
 func TestRuntimeSessionNameFollowsThePane(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	onKitty, onTmux := newRuntimeID(t), newRuntimeID(t)
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	onTmux := newRuntimeID(t)
 	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%4")
 	h.SetRuntimeSessionLabeler(func(runtimesession.Record) (RuntimeSessionLabel, error) {
 		return RuntimeSessionLabel{Project: "API", Profile: "work"}, nil
 	})
-	for _, runtime := range []runtimesession.ID{onKitty, onTmux} {
-		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(runtime)})))
-	}
+	requireAccepted(t, h.Handle(runtimeHook(t, onTmux, "PermissionRequest", hookevent.HookPayload{SessionID: "conv-" + string(onTmux)})))
 
 	now := time.Now()
 	h.labelRuntimeSessions(now)
 	if got := tmuxSessionIn(t, h, onTmux).Name; got != "" {
 		t.Fatalf("name before any was given = %q", got)
 	}
-	h.observeRuntimeNames([]tmux.Named{{ID: onTmux, Name: "billing fix"}, {ID: onKitty, Name: "billing fix"}, {ID: newRuntimeID(t), Name: "billing fix"}})
+	h.observeRuntimeNames([]tmux.Named{{ID: onTmux, Name: "billing fix"}, {ID: newRuntimeID(t), Name: "billing fix"}})
 	if got := tmuxSessionIn(t, h, onTmux).Name; got != "billing fix" {
 		t.Fatalf("name after naming = %q", got)
-	}
-	h.stateMu.Lock()
-	_, kittyLabeled := h.runtimeLabels[string(onKitty)]
-	h.stateMu.Unlock()
-	if kittyLabeled {
-		t.Fatal("a Kitty slot took a name from the tmux observation")
 	}
 	h.labelRuntimeSessions(now.Add(10 * runtimeLabelRetry))
 	if got := tmuxSessionIn(t, h, onTmux).Name; got != "billing fix" {

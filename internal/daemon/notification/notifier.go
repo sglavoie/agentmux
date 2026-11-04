@@ -2,10 +2,8 @@ package notification
 
 // Notification backends and click-to-focus contract.
 //
-// macOS notifications require Alerter 26.x or newer. A pane-specific
-// notification also carries the reusable Kitty socket that can focus its exact
-// source after Alerter reports a click. Notifications are suppressed when
-// either half of that interactive contract is unavailable.
+// macOS notifications require Alerter 26.x or newer. Runtime session notices
+// carry a stable session ID for click-to-focus.
 
 import (
 	"context"
@@ -15,7 +13,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // defaultCooldown is the per-(window, action) gap when the config does not set
@@ -72,43 +69,20 @@ type NotificationTrace struct {
 }
 
 // NotificationTarget identifies what a notification is about and the one
-// thing a click may focus. WindowID is the daemon's slot for the session: it
-// keys cooldown, debounce, mute, and retraction, and is a Kitty window ID only
-// for a Kitty session. Navigable is false for profile-wide informational
-// notifications such as hook-silence alerts, which intentionally have no
-// arbitrary pane fallback.
-//
-// RuntimeSessionID and Backend name the runtime session holding the slot, when
-// one does. For a session on a backend other than Kitty they are also the
-// focus target: its click shows the runtime session (SetSessionFocus), and
-// neither WindowID nor KittyListenOn is ever handed to Kitty.
-//
-// KittyWindowID is the Kitty window a click focuses when it differs from the
-// slot: two Kitty instances can each have a window 7, and the second one's
-// slot is then a collision slot that Kitty has never heard of. It is used for
-// focusing alone, never as a bookkeeping key; zero means WindowID.
+// thing a click may focus. WindowID is the daemon's slot for cooldown,
+// debounce, mute, and retraction. RuntimeSessionID is the focus target.
+// Navigable is false for profile-wide informational notifications.
 type NotificationTarget struct {
 	WindowID         int
-	KittyWindowID    int
 	Account          string
-	KittyListenOn    string
 	Navigable        bool
 	RuntimeSessionID string
 	Backend          string
 }
 
-// focusWindowID is the Kitty window a click on the target focuses.
-func (t NotificationTarget) focusWindowID() int {
-	if t.KittyWindowID > 0 {
-		return t.KittyWindowID
-	}
-	return t.WindowID
-}
-
-// sessionFocus reports whether a click on the target shows a runtime session
-// rather than focusing a Kitty window.
+// sessionFocus reports whether a click can show a runtime session.
 func (t NotificationTarget) sessionFocus() bool {
-	return t.Navigable && t.RuntimeSessionID != "" && t.Backend != "" && t.Backend != BackendKindKitty
+	return t.Navigable && t.RuntimeSessionID != ""
 }
 
 // SessionFocus shows the runtime session a clicked notification is about. It
@@ -142,42 +116,6 @@ const (
 	BackendAlerter = "alerter"
 )
 
-// FocusClient scopes every read/write to the notification's captured socket.
-// The production adapter wraps kitty.SubprocessClient; tests record the socket
-// directly without implementing unrelated Kitty operations.
-type FocusClient interface {
-	ListWindows(socket string) ([]kitty.OSWindow, error)
-	FocusTab(socket, matchExpr string) error
-	FocusWindow(socket, matchExpr string) error
-}
-
-type kittyNotificationFocus struct {
-	client *kitty.SubprocessClient
-}
-
-// NewKittyFocus adapts the daemon's Kitty client to the focus contract a
-// clicked notification needs. The adapter itself stays unexported: the daemon
-// only ever hands the result straight to SetFocus.
-func NewKittyFocus(client *kitty.SubprocessClient) FocusClient {
-	return &kittyNotificationFocus{client: client}
-}
-
-func (f *kittyNotificationFocus) scoped(socket string) *kitty.SubprocessClient {
-	return f.client.WithSocket(socket)
-}
-
-func (f *kittyNotificationFocus) ListWindows(socket string) ([]kitty.OSWindow, error) {
-	return f.scoped(socket).ListWindows()
-}
-
-func (f *kittyNotificationFocus) FocusTab(socket, matchExpr string) error {
-	return f.scoped(socket).FocusTab(matchExpr)
-}
-
-func (f *kittyNotificationFocus) FocusWindow(socket, matchExpr string) error {
-	return f.scoped(socket).FocusWindow(matchExpr)
-}
-
 // Notifier tracks per-window cooldowns and fires macOS notifications via
 // the selected Alerter backend when its startup capability probe succeeds.
 type Notifier struct {
@@ -198,7 +136,6 @@ type Notifier struct {
 	now              func() time.Time // injectable for tests
 	dispatch         dispatchFn       // nil when compatible Alerter is unavailable; injectable for tests
 	capability       protocol.NotificationCapability
-	focus            FocusClient           // optional; nil when the daemon has no Kitty client wired
 	sessionFocus     SessionFocus          // optional; shows the runtime session of a clicked notice
 	isMuted          func(int) bool        // optional; nil treats every window as unmuted (tests + pre-wire)
 	ctx              context.Context       // parent ctx for dispatch goroutines; defaults to Background until SetParentContext
@@ -269,18 +206,8 @@ func (n *Notifier) SetCapability(capability protocol.NotificationCapability) {
 	n.capability = capability
 }
 
-// SetFocus installs the Kitty client used to surface the originating
-// tab/window when a notification is clicked. Wiring is optional — tests
-// that omit it keep the focus path inert.
-func (n *Notifier) SetFocus(f FocusClient) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.focus = f
-}
-
-// SetSessionFocus installs what a click does for a notification about a
-// runtime session with no Kitty window. Wiring is optional; without it such a
-// click is recorded as focus_unavailable.
+// SetSessionFocus installs what a click does for a runtime session notice.
+// Wiring is optional; without it the click is recorded as focus_unavailable.
 func (n *Notifier) SetSessionFocus(f SessionFocus) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
@@ -289,7 +216,7 @@ func (n *Notifier) SetSessionFocus(f SessionFocus) {
 
 // SetIsMuted installs the closure MaybeNotify consults to suppress
 // notifications for muted windows. The closure is typically Handler.IsMuted,
-// which reads the daemon's muted-window cache populated from Kitty snapshots.
+// which reads the daemon's muted-session cache.
 // A nil closure (or one that returns false) leaves the gate open.
 func (n *Notifier) SetIsMuted(fn func(int) bool) {
 	n.mu.Lock()

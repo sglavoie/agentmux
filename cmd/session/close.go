@@ -33,8 +33,7 @@ work in progress is lost; its conversation stays on disk and can be resumed.
 
 Only the pane the launch tagged with this runtime session is ever killed. A
 session whose agent already stopped has what is left of it cleaned up, and
-closing one that is already gone succeeds without doing anything. A Kitty
-runtime session is closed by closing its tab.`,
+closing one that is already gone succeeds without doing anything.`,
 	Example: `  amx close rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --yes
   amx close rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --yes --json`,
 	Args: cobra.MaximumNArgs(1),

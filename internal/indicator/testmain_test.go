@@ -4,14 +4,13 @@ import (
 	"os"
 	"testing"
 
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/testenv"
 )
 
-// Most indicator fixtures exercise legacy Kitty hooks. Tests that exercise
-// managed hooks set their own runtime ID explicitly; the test runner's session
-// must not turn every other fixture into a managed hook, so testenv clears it
-// with the rest of the session environment.
+// Hook fixtures run inside a managed tmux session unless a test clears it.
 func TestMain(m *testing.M) {
 	testenv.ClearSessionEnv()
+	_ = os.Setenv(runtimesession.EnvVar, testRuntimeSession)
 	os.Exit(m.Run())
 }

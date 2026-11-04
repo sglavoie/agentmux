@@ -125,7 +125,7 @@ func TestDoctorBrokenScreenPatternOverrideWarnsWithoutFailingStrict(t *testing.T
 		t.Fatalf("decode doctor report: %v\n%s", err, out.String())
 	}
 	// v3 was bumped for screenstate_persistent_decline, a FAILURE identifier,
-	// v4 for kitty_snapshot_stale, and v5 for the companion identifiers. This
+	// and v5 for the companion identifiers. This
 	// warning-severity finding is not what moved any of them and must never
 	// move the version again (v7 is the backend and runtime identifiers).
 	if report.SchemaVersion != 7 {

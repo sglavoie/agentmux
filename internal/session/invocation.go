@@ -94,12 +94,11 @@ func buildInvocation(
 	return invocation, nil
 }
 
-// RenderInvocation turns a structured invocation into the shell command that
-// Kitty launches. Arguments are quoted here, after each harness has finalized
+// RenderInvocation turns a structured invocation into the shell command a
+// tmux pane launches. Arguments are quoted after each harness has finalized
 // their ordering. Environment values that determine the selected profile or
-// native logging coverage are also pinned here: an interactive login shell can
-// otherwise overwrite the environment passed to Kitty before the harness
-// starts.
+// native logging coverage are pinned here so the login shell cannot override
+// them before the harness starts.
 func RenderInvocation(invocation harness.Invocation) string {
 	command := renderInvocation(invocation)
 	if !isolateCodexLaunch(invocation) {

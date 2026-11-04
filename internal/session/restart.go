@@ -6,24 +6,12 @@ import (
 	"strings"
 
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 var debugLog = newFileLogger("/tmp/amx-debug.log", "[restart] ")
 
-// Restart relaunches a running session and then closes the original tab,
-// preserving metadata from the running tab's user vars (profile, directory,
-// args, env, groups). Launch happens before Close so that when the
-// dashboard overlay is on top of the tab being closed, the new tab is
-// already committed in Kitty before the dashboard process is torn down.
-func Restart(client kitty.KittyClient, running RunningSession, cfg *config.Config) error {
-	_, err := RestartOn(KittyRuntime(client), running, cfg)
-	return err
-}
-
-// RestartOn is Restart on the backend that hosts running, which rt must
-// select. The replacement launches before the original closes on every
-// backend; a launch failure leaves the original untouched.
+// RestartOn replaces a running session on tmux. A launch failure leaves the
+// original untouched.
 func RestartOn(rt Runtime, running RunningSession, cfg *config.Config) (LaunchResult, error) {
 	result := LaunchResult{Backend: rt.Kind()}
 	if err := rt.Owns(running); err != nil {
@@ -43,27 +31,8 @@ func RestartOn(rt Runtime, running RunningSession, cfg *config.Config) (LaunchRe
 	return result, closeReplaced(rt, running)
 }
 
-// RestartWithAccount relaunches a running session under a different profile's
-// harness config and then closes the original tab. The managed Kitty tab keeps
-// the same project-only base title while user vars and tab color update to
-// match the target profile. If the target profile is already the current one,
-// it is a no-op. Launch precedes Close for the same reason as Restart.
-func RestartWithAccount(client kitty.KittyClient, running RunningSession, targetAcc config.Account, cfg *config.Config) error {
-	return RestartWithAccountTemplate(client, running, SessionFromRunning(running), targetAcc, cfg)
-}
-
-// RestartWithAccountTemplate relaunches a running session using an explicit
-// launch template, then closes the original tab. Callers that can resolve the
-// configured project template should pass it here so switching harnesses
-// recomputes target-profile args/env instead of inheriting source-harness
-// resolved values from the running tab.
-func RestartWithAccountTemplate(client kitty.KittyClient, running RunningSession, template config.Session, targetAcc config.Account, cfg *config.Config) error {
-	_, err := RestartWithAccountTemplateOn(KittyRuntime(client), running, template, targetAcc, cfg)
-	return err
-}
-
-// RestartWithAccountTemplateOn is RestartWithAccountTemplate on the backend
-// that hosts running, which rt must select.
+// RestartWithAccountTemplateOn relaunches a session using the target profile's
+// project template, then closes the original.
 func RestartWithAccountTemplateOn(rt Runtime, running RunningSession, template config.Session, targetAcc config.Account, cfg *config.Config) (LaunchResult, error) {
 	result := LaunchResult{Backend: rt.Kind()}
 	debugLog.Printf("RestartWithAccount: running=%+v targetAcc=%+v", running, targetAcc)
@@ -100,9 +69,6 @@ func closeReplaced(rt Runtime, running RunningSession) error {
 	observation, closeErr := CloseObserved(rt.Terminal(), running.GroupRef())
 	debugLog.Printf("Restart: Close err=%v", closeErr)
 	if closeErr != nil && !errors.Is(closeErr, ErrCloseTimeout) {
-		if running.Backend == "" {
-			return fmt.Errorf("closing tab %d: %w", running.TabID, closeErr)
-		}
 		return fmt.Errorf("closing %s session %s: %w", running.Backend, running.GroupRef().ID, closeErr)
 	}
 	if !observation.Confirmed() {
@@ -125,8 +91,7 @@ func findAccount(cfg *config.Config, name string) (config.Account, bool) {
 	return config.Account{}, false
 }
 
-// SessionFromRunning reconstructs a config.Session from a running tab's
-// user vars. This preserves runtime overrides not written back to config.
+// SessionFromRunning reconstructs a config.Session from pane metadata.
 func SessionFromRunning(rs RunningSession) config.Session {
 	projectArgs := rs.ExplicitFlags
 	if !rs.ExplicitFlagsSet && projectArgs == "" {

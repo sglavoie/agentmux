@@ -17,7 +17,7 @@ func TestDigitsFocusFirstTenOverallFromAnyPage(t *testing.T) {
 		for index, digit := range "1234567890" {
 			sessions := viewSessions(20)
 			for i := range sessions {
-				sessions[i].TabID = 500 - i*7 // digits follow card order, not Kitty IDs
+				sessions[i].TabID = 500 - i*7 // digits follow card order, not session IDs
 			}
 			m, r := atSize(t, sessions, 19, 160, 45)
 			if compact {
@@ -34,7 +34,7 @@ func TestDigitsFocusFirstTenOverallFromAnyPage(t *testing.T) {
 			if cmd == nil || quits(t, cmd) {
 				t.Fatal("digit focus must wait for confirmation before exiting")
 			}
-			_, cmd = send(t, m, commands.FocusDoneMsg{})
+			_, cmd = send(t, m, commands.AttachDoneMsg{Switched: true})
 			if !quits(t, cmd) {
 				t.Fatal("confirmed digit focus did not exit")
 			}
@@ -68,7 +68,7 @@ func TestDigitFocusIsSingleFlightAndFailureKeepsTarget(t *testing.T) {
 		}
 		m = next
 	}
-	m, cmd := send(t, m, commands.FocusDoneMsg{Err: errors.New("focus failed")})
+	m, cmd := send(t, m, commands.AttachDoneMsg{Err: errors.New("focus failed")})
 	if quits(t, cmd) || m.focusErr == nil || m.selectedTabID != target.TabID {
 		t.Fatal("failed digit focus did not retain target for retry")
 	}

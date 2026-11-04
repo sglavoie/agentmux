@@ -9,22 +9,11 @@ is in [Usage](usage.md).
 
 ## Default launch backend
 
-CLI launches, Dashboard, Overview, and Past Sessions now default to tmux when
-`[defaults] launch_backend` is absent or empty, including inside Kitty.
-Configurations that previously relied on the implicit Kitty default will
-start new agents on the private tmux server. Existing sessions stay on their
-recorded backend and remain reachable.
-Restart an already-open terminal dashboard or overview to refresh its captured
-launch destination.
+CLI launches, Dashboard, Overview, and Past Sessions use the private tmux
+server. Remove any old `launch_backend` setting that names a different
+backend; the only supported value is `tmux`. Restart an already-open terminal
+dashboard or overview to refresh its captured launch destination.
 
-To keep launching new agents in Kitty tabs, set this in the existing
-`[defaults]` table:
-
-```toml
-launch_backend = "kitty"
-```
-
-`--backend kitty` selects Kitty for one command and overrides configuration.
 If tmux is unavailable, launches report the setup error; run
 `amx backend status --check` to see the required fix. See
 [launch destinations](usage.md#launch-destinations) for all entry points.
@@ -47,8 +36,7 @@ Two keys kept their spelling but changed meaning, so check these first:
 - `Tab` cycled the focused filter chip; it switches the focused pane now
   (filter chips are edited inside `/`).
 
-`Enter` keeps its meaning (it opens the session: attaches this terminal on
-tmux, focuses the tab on Kitty), but no longer shares it with `space`, which
+`Enter` keeps its meaning (it opens the tmux session), but no longer shares it with `space`, which
 is retired, and no longer removes a focused filter chip.
 
 | You used to press | Do this instead |
@@ -61,7 +49,7 @@ is retired, and no longer removes a focused filter chip.
 | `d` session detail, `T` timeline | `i` for the inspector, or `:` → **Show Session Details** / **Show Session Timeline** |
 | `v` urgency ↔ projects | `:` → **Show Projects View** / **Show Urgency View** |
 | `f` cycle profile | `:` → **Cycle Profile Filter**, or `/` for any filter component |
-| `R` resort tabs | `:` → **Resort Tabs** |
+| `R` resort tabs | Sessions are always shown in the selected sort order |
 | `p` preview | `i` — the inspector absorbed it. `p` is the project switcher now |
 | `b` project rail | `p` — the rail is gone; the switcher applies the same scopes |
 | `g` / `G` | Restored as aliases for `Home` / `End`, including the dashboard's focused queue or inspector |

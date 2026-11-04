@@ -17,12 +17,12 @@ func TestStateQuerySeparatesAgentCompletionAndASLAfterRestore(t *testing.T) {
 	r := state.NewReducer(state.ReducerConfig{})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceHarness, Key: "codex:parent"}, SessionID: "parent", Action: "stop", Seq: 1, At: now - 42})
 	r.Apply(protocol.ReducerEvent{Source: protocol.SourceID{Kind: protocol.SourceASL, Key: "run"}, RunID: "run", Phase: state.ASLPhaseBetween, Seq: 1, At: now - 10})
-	encoded, err := (state.WindowState{Reducer: r, Effective: r.Reduce(now)}).MarshalUserVar()
+	encoded, err := (state.WindowState{Reducer: r, Effective: r.Reduce(now)}).MarshalStatePayload()
 	if err != nil {
 		t.Fatal(err)
 	}
 	var restored state.WindowState
-	if err := restored.UnmarshalUserVar(encoded); err != nil {
+	if err := restored.UnmarshalStatePayload(encoded); err != nil {
 		t.Fatal(err)
 	}
 	h := newTestHandler()

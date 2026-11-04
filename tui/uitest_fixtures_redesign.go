@@ -20,7 +20,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
 
@@ -71,7 +70,7 @@ func duplicateNamesFixture() uitestFixture {
 			{Title: "notes", Directory: "~/notes", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 		uitestTab(2, 21, "⚡🦊api", false, managedVars("work", "claude", "api", "~/projects/worktrees/api-feat-x")),
 		uitestTab(3, 31, "⚡🦊web", false, managedVars("work", "claude", "web", "~/projects/web")),
@@ -86,7 +85,7 @@ func duplicateNamesFixture() uitestFixture {
 		Description: "three colliding row names separated only by branch, only by profile, and only by session identity, beside one name that must stay alone",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: busySince(42 * time.Second), Branch: "main", Dirty: true},
 			21: {IconState: "bolt", BusySinceAt: busySince(3*time.Minute + 7*time.Second), Branch: "amx/feat-x"},
@@ -143,7 +142,7 @@ func pausedOutputFixture() uitestFixture {
 			{Title: "quiet", Directory: "~/projects/quiet", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊streaming", true, managedVars("work", "claude", "streaming", "~/projects/streaming")),
 		uitestTab(2, 21, "🛑🦊quiet", false, managedVars("work", "claude", "quiet", "~/projects/quiet")),
 	)}
@@ -152,7 +151,7 @@ func pausedOutputFixture() uitestFixture {
 		Description: "a working session whose scrollback is longer than the pane, numbered so following and holding are distinguishable on screen",
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		Text:        numberedScrollback(40),
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-42 * time.Second).Unix()},
@@ -208,7 +207,7 @@ func healthStatesFixture() uitestFixture {
 			{Title: "site", Directory: "~/projects/site", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 		uitestTab(2, 21, "⚡🤖site", false, managedVars("personal", "codex", "site", "~/projects/site")),
 	)}
@@ -217,7 +216,7 @@ func healthStatesFixture() uitestFixture {
 		Description: "a live daemon with hook files in all three states at once — one in sync, one drifted, one missing",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-42 * time.Second).Unix()},
 			21: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-12 * time.Second).Unix()},
@@ -280,7 +279,7 @@ func attentionOverlapFixture() uitestFixture {
 			{Title: "warned", Directory: "~/projects/warned", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🔑🦊blocked", true, managedVars("work", "claude", "blocked", "~/projects/blocked")),
 		uitestTab(2, 21, "❗🤖failed", false, managedVars("personal", "codex", "failed", "~/projects/failed")),
 		uitestTab(3, 31, "❓🔁🦊looping", false, managedVars("work", "claude", "looping", "~/projects/looping")),
@@ -293,15 +292,15 @@ func attentionOverlapFixture() uitestFixture {
 		Description: "rows carrying several reasons to want the operator at once — blocked-and-unread, failed-and-unread, looping-and-asking-and-unread — beside a tool warning that must stay Active",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "key", Reason: "permission", Unseen: true},
 			21: {IconState: "error", Unseen: true},
 			// Looping is set here and not only in the title. A non-nil States map
 			// is authoritative for every field it owns, Looping included, so a
-			// fixture that marked the loop in the Kitty title alone would have it
+			// fixture that marked the loop in the terminal title alone would have it
 			// cleared out from under the row. The title keeps the marker anyway,
-			// because that is what Kitty would really be showing.
+			// because that is what the terminal would really be showing.
 			31: {IconState: "question", Reason: "request_user_input", Unseen: true, Looping: true},
 			41: {IconState: "stop", Unseen: true},
 			51: {IconState: "warning", BusySinceAt: busySince(42 * time.Second)},

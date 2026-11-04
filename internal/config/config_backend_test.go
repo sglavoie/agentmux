@@ -26,13 +26,13 @@ func TestLaunchBackendDefaultsToTmux(t *testing.T) {
 	}
 }
 
-func TestLaunchBackendPreservesExplicitKitty(t *testing.T) {
-	cfg := mustParse(t, "[defaults]\nlaunch_backend = \" KITTY \"\n")
-	if err := Validate(cfg); err != nil {
-		t.Fatal(err)
+func TestLaunchBackendRejectsUnsupportedValue(t *testing.T) {
+	cfg := mustParse(t, "[defaults]\nlaunch_backend = \" UNSUPPORTED \"\n")
+	if err := Validate(cfg); err == nil || !strings.Contains(err.Error(), "only \"tmux\" is supported") {
+		t.Fatalf("Validate = %v, want a tmux-only error", err)
 	}
-	if got := cfg.LaunchBackendOrDefault(); got != LaunchBackendKitty {
-		t.Fatalf("explicit Kitty resolved to %q", got)
+	if got := cfg.LaunchBackendOrDefault(); got != LaunchBackendTmux {
+		t.Fatalf("unsupported setting resolved to %q", got)
 	}
 }
 

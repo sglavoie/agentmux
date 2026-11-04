@@ -16,7 +16,7 @@
 //   - The effects are INJECTED. Every action reaches the world through the
 //     deps.action seam rather than by calling commands directly, exactly as the
 //     topology read and the focus already do, so the package's acceptance
-//     sequences can park an action and deliver its completion with no Kitty, no
+//     sequences can park an action and deliver its completion with no terminal, no
 //     daemon, and no clock.
 //   - Four actions SETTLE AT DISPATCH. Focus, peek, and the two open-somewhere
 //     actions report back with messages that carry no request identity — they
@@ -39,7 +39,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -757,18 +756,13 @@ func (m model) handleActionDone(msg commands.ActionDoneMsg) (tea.Model, tea.Cmd)
 	return m, m.requestRefresh()
 }
 
-// handlePickerOpenDone is the destination contract for the two open-somewhere
-// actions: a shell or an editor that opened is where the operator now is, so the
-// overview leaves. One that failed keeps them here with the reason, which is the
-// only state from which retrying makes sense.
+// handlePickerOpenDone reports the result of opening a shell or editor. The
+// operator returns to the overview after either view closes.
 func (m model) handlePickerOpenDone(msg commands.PickerOpenDoneMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
 		return m.withFailureReport("open failed: " + msg.Err.Error()), nil
 	}
-	if msg.Stay {
-		return m, nil
-	}
-	return m.dismiss()
+	return m, nil
 }
 
 // handlePeekDone stays put either way. The pager is an overlay over the session's
@@ -787,39 +781,39 @@ func (m model) handlePeekDone(msg commands.PeekDoneMsg) (tea.Model, tea.Cmd) {
 // method, because it is bound once in defaultDeps and must not be able to read
 // the model — every fact it needs is on the dispatch, which is the capture the
 // operator chose rather than whatever the cursor has since moved to.
-func actionCommand(cfg *config.Config, client kitty.KittyClient, d sessionactions.Dispatch) tea.Cmd {
+func actionCommand(cfg *config.Config, client any, d sessionactions.Dispatch) tea.Cmd {
 	target := d.Target.Session
 	switch d.Action {
 	case commands.PeekScrollback:
-		return commands.Peek(client, d.Target.WindowID())
+		return commands.Peek(d.Target.WindowID())
 	case commands.RestartSession:
-		return commands.Restart(client, target, cfg)
+		return commands.Restart(target, cfg)
 	case commands.OverrideProfile:
 		return restartWithProfileCmd(cfg, client, target, d.Profile)
 	case commands.LaunchAnother:
 		return launchWithProfileCmd(cfg, client, target, d.Profile)
 	case commands.ClearStatusIcon:
-		return commands.ClearStatus(client, target)
+		return commands.ClearStatus(target)
 	case commands.MarkActiveIcon:
-		return commands.MarkActive(client, target)
+		return commands.MarkActive(target)
 	case commands.CloseSession:
-		return commands.CloseSessionRow(client, cfg, target)
+		return commands.CloseSessionRow(cfg, target)
 	case commands.OpenDirectoryID:
 		if cs, ok := commands.FindConfigSession(cfg, target.EffectiveProfile(), target.EffectiveProject()); ok {
-			return commands.OpenDirectory(client, cfg, cs)
+			return commands.OpenDirectory(cfg, cs)
 		}
 		return nil
 	case commands.OpenEditorID:
 		if cs, ok := commands.FindConfigSession(cfg, target.EffectiveProfile(), target.EffectiveProject()); ok {
-			return commands.OpenInEditor(client, cfg, cs)
+			return commands.OpenInEditor(cfg, cs)
 		}
 		return nil
 	case commands.CopyTitleID:
 		return commands.CopyTitle(dashboard.SessionDisplayTitle(target))
 	case commands.ToggleLockID:
-		return commands.ToggleLock(client, target)
+		return commands.ToggleLock(target)
 	case commands.ToggleMuteID:
-		return commands.ToggleMute(client, target)
+		return commands.ToggleMute(target)
 	}
 	return nil
 }
@@ -830,7 +824,7 @@ func actionCommand(cfg *config.Config, client kitty.KittyClient, d sessionaction
 // program does not own: a panic there would take the overview down over a
 // session the operator can still see, and reporting it as a failed action leaves
 // them on the grid with the reason.
-func restartWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs session.RunningSession, profile string) tea.Cmd {
+func restartWithProfileCmd(cfg *config.Config, client any, rs session.RunningSession, profile string) tea.Cmd {
 	template := commands.DashboardSessionTemplate(cfg, rs)
 	return func() (msg tea.Msg) {
 		defer func() {
@@ -840,7 +834,7 @@ func restartWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs sess
 		}()
 		_, err := commands.Registry.Execute(
 			context.Background(),
-			commands.TerminalDependencies(client, cfg),
+			commands.TerminalDependencies(cfg),
 			actions.Restart,
 			actions.Request{
 				Session:    &rs,
@@ -859,7 +853,7 @@ func restartWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs sess
 // It deliberately does not reuse the dashboard's launcher: that path drives a
 // batch with progress reporting, a queue, and a launcher view, none of which
 // exist here. One session, one completion, reported on the feedback row.
-func launchWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs session.RunningSession, profile string) tea.Cmd {
+func launchWithProfileCmd(cfg *config.Config, client any, rs session.RunningSession, profile string) tea.Cmd {
 	template := commands.SessionWithProfile(commands.DashboardSessionTemplate(cfg, rs), profile)
 	return func() (msg tea.Msg) {
 		defer func() {
@@ -869,7 +863,7 @@ func launchWithProfileCmd(cfg *config.Config, client kitty.KittyClient, rs sessi
 		}()
 		_, err := commands.Registry.Execute(
 			context.Background(),
-			commands.TerminalDependencies(client, cfg),
+			commands.TerminalDependencies(cfg),
 			actions.Launch,
 			actions.Request{Project: &template},
 		)

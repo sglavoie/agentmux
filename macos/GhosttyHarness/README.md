@@ -24,8 +24,7 @@ python3 -I macos/GhosttyHarness/scripts/run_matrix.py --skip-probe --agents clau
   agent is the same process. Results and captures go to
   `macos/.cache/ghostty-harness/runs/<UTC stamp>/`.
 - The tmux server uses `tmux.conf` and a socket under `/tmp`; agents start with
-  `KITTY_*`, `CLAUDECODE`/`CLAUDE_CODE_*`, `ASL_*`, and `AMX_*` removed.
+  `CLAUDECODE`/`CLAUDE_CODE_*`, `ASL_*`, and `AMX_*` removed.
 - Running the live cases sends two short prompts to each agent account.
 
-Recorded evidence: `docs/acceptance/ghostty-desktop/session-2.json`, with the
-copied run artifacts under `docs/acceptance/ghostty-desktop/session-2/`.
+Run artifacts are kept under `macos/.cache/ghostty-harness/runs/`.

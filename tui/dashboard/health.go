@@ -515,10 +515,10 @@ func healthTopologyDetails(f HealthFacts) []string {
 		}
 		details = append(details, detail)
 	case "direct":
-		details = append(details, "source: direct kitty listing")
+		details = append(details, "source: direct tmux listing")
 	}
 	if f.TopologyStale {
-		details = append(details, "the daemon has marked this snapshot stale; it drives no kitty writes")
+		details = append(details, "the daemon has marked this snapshot stale")
 	}
 	if f.TopologyErr != "" {
 		details = append(details, "last refresh failed: "+f.TopologyErr)

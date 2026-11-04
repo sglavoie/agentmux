@@ -11,39 +11,24 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/screenstate"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
-// A session on a backend other than Kitty is probed by the same bodies a
-// Kitty window is: the Claude context-limit banner, the prompt label, and the
-// idle screen that settles a stuck turn or confirms a held stop; the Codex
-// prompt and idle screen. What differs is only where the binding comes from
-// and how its screen is read.
+// Runtime screen probes read the registered tmux pane of each session. A
+// binding is derived from the slot table: its source and target are both the
+// session's slot, and its freshness is the reducer receipt. A restarted
+// server, recycled pane ID, exited agent, or failed read is never classified
+// (probes.CheckScreen). A pane that cannot be read supplies no evidence this
+// tick: a held stop waits for its deadline, and no banner is reported.
 //
-// A Kitty binding is derived from the window tree and names two windows. A
-// runtime binding is derived from the slot table: its source and target are
-// both the session's slot, its freshness is the reducer receipt alone, and
-// its screen must be the registered pane under the registered generation, so
-// a pane of a restarted server, a recycled pane ID, an exited agent, or a
-// read that failed is never classified (probes.CheckScreen). A pane that
-// cannot be read is "no evidence this tick", exactly as a Kitty window whose
-// get-text failed: a held stop then waits for its deadline, and no banner is
-// reported.
-//
-// Three things a Kitty probe takes from the window tree come from elsewhere
-// here. The title Claude sets on its pane is read with the screen
-// (backend.Screen.Title), so the busy-title recovery and the idle title bump
-// judge it by the same generation and instant as the text. The whole
-// scrollback the Codex cleared-screen check wants is a second read of the
-// registered pane (probeScrollbackText). And the routes the Kitty probes find
-// by walking managed windows, a stopped Codex session and a Copilot stop its
-// transcript probe may take back, are found by walking the slot table
-// (runtimeProbeTargets): a slot holds one session on one pane, so each is a
-// direct route and none needs the ambiguity rule a window tree does.
+// Claude's pane title is read with its screen (backend.Screen.Title), so the
+// busy-title recovery and idle title bump use the same capture. Codex's
+// cleared-screen check reads scrollback from the registered pane. Stopped
+// Codex and Copilot recovery routes come from the slot table
+// (runtimeProbeTargets), where each slot owns one session on one pane.
 
 // RuntimeScreen reads the panes of one backend instance: the visible screen
 // with the facts that qualify it, and a pane's text with its history.
@@ -56,7 +41,7 @@ type RuntimeScreen interface {
 // runs off stateMu and may start a subprocess.
 type RuntimeScreenReader func(instance runtimesession.BackendInstance) (RuntimeScreen, error)
 
-// SetRuntimeScreenReader installs the reader the probes of non-Kitty sessions
+// SetRuntimeScreenReader installs the reader the probes of runtime sessions
 // read their panes through. It is called once at startup; nil leaves those
 // sessions unprobed.
 func (h *Handler) SetRuntimeScreenReader(reader RuntimeScreenReader) {
@@ -79,7 +64,7 @@ func NewTmuxRuntimeScreenReader() RuntimeScreenReader {
 }
 
 // harnessHasRuntimeStopProbe reports whether a held stop of this harness can
-// be confirmed on a backend other than Kitty.
+// be confirmed from its tmux pane.
 func harnessHasRuntimeStopProbe(name string) bool {
 	switch harness.NormalizeKnown(name) {
 	case harness.Claude, harness.Codex, harness.Copilot:
@@ -91,7 +76,7 @@ func harnessHasRuntimeStopProbe(name string) bool {
 
 // runtimeScreenRouter is the observer behind the per-tick screen cache. A
 // reference naming a runtime slot is read from the pane that slot's session
-// is registered on; anything else is a Kitty window and goes to base.
+// is registered on. The optional base observer serves historical probe tests.
 type runtimeScreenRouter struct {
 	h    *Handler
 	base backend.Observer
@@ -100,6 +85,9 @@ type runtimeScreenRouter struct {
 func (r runtimeScreenRouter) Observe(pane backend.Ref) (backend.Screen, error) {
 	slot, ok := probes.RuntimeSlotOfPane(pane)
 	if !ok {
+		if r.base == nil {
+			return backend.Screen{}, fmt.Errorf("pane %q has no screen observer", pane.ID)
+		}
 		return r.base.Observe(pane)
 	}
 	r.h.stateMu.Lock()
@@ -117,9 +105,7 @@ func (r runtimeScreenRouter) Observe(pane backend.Ref) (backend.Screen, error) {
 
 // probeScrollbackText returns the producer pane's text with its history, the
 // second read the Codex cleared-screen check makes once the visible screen
-// looks cleared. A Kitty window is read through the Kitty client, as before.
-//
-// A pane on another backend is captured from the server the binding
+// looks cleared. The pane is captured from the server the binding
 // registered, and a capture names no generation. So the pane is observed
 // once more afterwards: a server that answers under the registered
 // generation after the capture is the one that answered it, since a
@@ -127,15 +113,7 @@ func (r runtimeScreenRouter) Observe(pane backend.Ref) (backend.Screen, error) {
 // probes.CheckScreen refuses of that observation withholds the capture too.
 func (h *Handler) probeScrollbackText(binding probes.Binding) (string, error) {
 	if !binding.OnRuntimeBackend() {
-		if h.kittyClient == nil {
-			return "", fmt.Errorf("window %d has no scrollback to read", binding.SourceWindowID)
-		}
-		socket := binding.KittySocket
-		if socket == "" {
-			socket = h.snapshots.View().Socket()
-		}
-		client := scopedKittyClient(h.kittyClient, socket)
-		return client.GetText(kitty.MatchWindowByID(binding.SourceWindowID), string(backend.ExtentAll))
+		return "", fmt.Errorf("pane %d is not a registered runtime target", binding.SourceWindowID)
 	}
 	if h.runtimeScreens == nil {
 		return "", fmt.Errorf("slot %d has no pane to read", binding.SourceWindowID)
@@ -171,16 +149,16 @@ func (t runtimeTarget) instanceOf() runtimesession.BackendInstance {
 	}
 }
 
-// runtimeProbeTarget is one non-Kitty session a tick may probe, with the
-// presentation context a Kitty window's tab title and user vars would supply.
+// runtimeProbeTarget is one tmux session a tick may probe, with its
+// presentation context from reducer state.
 type runtimeProbeTarget struct {
 	binding probes.Binding
 	harness string
 	title   palette.TitleParts
-	vars    kitty.UserVars
+	vars    probeWindowVars
 }
 
-// runtimeProbeTargets lists the non-Kitty slots a tick may probe, in slot
+// runtimeProbeTargets lists the runtime slots a tick may probe, in slot
 // order: those holding a live producer, and the two a probe may still act on
 // after the live route closed. Each binding captures the slot's reducer
 // receipt now, so anything that lands before a probe acts makes the binding
@@ -212,11 +190,10 @@ func (h *Handler) runtimeProbeTargets(now time.Time) []runtimeProbeTarget {
 			binding.Producer = identity
 		case name == harness.Codex && st.Effective.Icon == "stop":
 			// A stopped Codex session has no live route left, and its stop is
-			// what a /clear typed at rest must take away. On Kitty that pane is
-			// reached as the tab's title owner (screenProbeBindings); a slot's
-			// pane is its session's by construction.
+			// what a /clear typed at rest must take away. A slot's pane is
+			// its session's by construction.
 			binding.Producer = conversation.Identity{Harness: harness.Codex}
-			binding.LegacyDirectManaged = true
+			binding.StoppedCodexRecovery = true
 			source = slot
 		case name == harness.Copilot:
 			// The transcript probe's own stop retired the live route; the
@@ -242,7 +219,7 @@ func (h *Handler) runtimeProbeTargets(now time.Time) []runtimeProbeTarget {
 			binding: binding,
 			harness: name,
 			title:   palette.TitleParts{Base: st.LastSessionTitle, State: st.Effective.Icon, Muted: st.Muted},
-			vars:    kitty.UserVars{Profile: st.LastAccount, Harness: name},
+			vars:    probeWindowVars{Profile: st.LastAccount, Harness: name},
 		})
 	}
 	sort.Slice(targets, func(i, j int) bool {
@@ -266,8 +243,8 @@ func runtimeProbeQuiet(target runtimeProbeTarget) bool {
 	return target.title.State == "" || (target.harness == harness.Codex && target.title.State == "stop")
 }
 
-// probeRuntimeScreens runs one tick of the screen probes over the sessions on
-// backends other than Kitty. Every probe body bails before reading a screen
+// probeRuntimeScreens runs one tick of the screen probes over tmux sessions.
+// Every probe body bails before reading a screen
 // unless the slot's icon is one it may act on, so a Claude or Copilot session
 // at rest on a finished turn costs no read at all.
 func (h *Handler) probeRuntimeScreens(now time.Time, screens *activity.ScreenTextCache) {
@@ -282,8 +259,8 @@ func (h *Handler) probeRuntimeScreens(now time.Time, screens *activity.ScreenTex
 		}
 		switch target.harness {
 		case harness.Claude:
-			// Same order as the Kitty tick: the banner settles to the error
-			// state first, and the idle classifier reads the same frame.
+			// The banner settles to the error state first, and the idle
+			// classifier reads the same frame.
 			if h.claudeContextLimitProbeEnabled {
 				h.probeClaudeContextLimitWindow(now, target.binding, target.title, target.vars, screens)
 			}
@@ -294,7 +271,7 @@ func (h *Handler) probeRuntimeScreens(now time.Time, screens *activity.ScreenTex
 			if target.title.State == "" || target.title.State == "bolt" {
 				paneTitle = probeScreenTitle(screens, target.binding)
 			}
-			// As on Kitty, a promotion committed here makes the binding stale
+			// A promotion committed here makes the binding stale
 			// for the rest of this tick; the next one reads the screen.
 			if activity.ClaudeWindowTitleHasDescriptionMarker(paneTitle) {
 				h.recoverClaudeBusyTitle(now, target.binding, target.title, target.vars, paneTitle)

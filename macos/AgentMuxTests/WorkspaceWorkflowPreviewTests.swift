@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import ScreenCaptureKit
 import Vision
+import CoreImage
 import XCTest
 @testable import AgentMux
 
@@ -163,7 +164,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             }
             return #"{"runtime_session_id":"\#(WorkspaceFixture.runtimeID(1))","state":"live","directory":"/Projects/api/worktree"}"#
         }
-        let row = WorkspaceSidebar.row(WorkspaceFixture.tmux(1, project: "API"), snapshotSocket: "", now: Date(), glyphs: .fallback)
+        let row = WorkspaceSidebar.row(WorkspaceFixture.tmux(1, project: "API"), now: Date(), glyphs: .fallback)
         let model = WorkspaceNewSessionModel(source: row, command: { amx }, runner: PreviewRunner())
         model.load()
         XCTAssertTrue(model.canLaunch)
@@ -267,7 +268,10 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         recognition.recognitionLevel = .accurate
         recognition.recognitionLanguages = ["en-US"]
         recognition.minimumTextHeight = 0.005
-        try VNImageRequestHandler(cgImage: capture).perform([recognition])
+        let scale = CGFloat(3)
+        let enlarged = CIImage(cgImage: capture).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        let ocrImage = CIContext().createCGImage(enlarged, from: enlarged.extent) ?? capture
+        try VNImageRequestHandler(cgImage: ocrImage).perform([recognition])
         let visible = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         XCTAssertGreaterThan(visible.count, 40, "Capture must contain rendered content, not just a window frame")
         let read = Self.ocrFolded(visible)
@@ -379,8 +383,8 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suite) }
         let model = PreferencesModel(defaults: defaults)
         var backend = BackendStatus()
-        backend.launchBackend = "kitty"
-        backend.launchBackendSource = "compatibility default"
+        backend.launchBackend = "tmux"
+        backend.launchBackendSource = "default"
         model.snapshot.backend = .status(backend)
         let view = PreferencesView(model: model, dashboardRecorder: HotKeyRecorder(),
                                    attentionRecorder: HotKeyRecorder(), workspaceRecorder: HotKeyRecorder())
@@ -389,7 +393,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
                 model.launchSettingsRequest += 1
             }
         try await render(view, name: "launch-settings", width: 560, height: 450,
-                         expected: ["Launch projects in", "Workspace", "CLI launches", "compatibility default", "Follow CLI"])
+                         expected: ["Launch projects in", "Workspace", "CLI launches", "default"])
     }
 
     func testTranscriptTablesQuotesAndNestedListsAtMinimumSize() async throws {

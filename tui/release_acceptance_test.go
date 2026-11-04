@@ -14,11 +14,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/plans"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
@@ -224,7 +225,7 @@ func TestAcceptanceTUIContinuityForkUsesFilesystemSnapshotWithoutDatabase(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	driver, client := newUITestFixtureDriver(fixture, fixture.Size)
+	driver := newUITestFixtureDriver(fixture, fixture.Size)
 	t.Cleanup(func() {
 		if err := driver.Close(); err != nil {
 			t.Errorf("close TUI driver: %v", err)
@@ -236,17 +237,28 @@ func TestAcceptanceTUIContinuityForkUsesFilesystemSnapshotWithoutDatabase(t *tes
 	if err := driver.Key("f"); err != nil {
 		t.Fatalf("fork past session: %v", err)
 	}
-	if got := len(client.CallsFor("LaunchTab")); got != 1 {
-		t.Fatalf("recorded LaunchTab calls = %d, want 1", got)
-	}
 	if mode := driver.Model().mode; mode != ModeSessionSearch {
 		t.Fatalf("mode after continuity fork = %v, want Past Sessions", mode)
 	}
 	assertNoRetiredDatabaseArtifacts(t, home)
 }
 
+type acceptanceTmuxLauncher struct {
+	backend.Backend
+	launches []backend.LaunchSpec
+}
+
+func (f *acceptanceTmuxLauncher) Discover() ([]backend.Pane, error) { return nil, nil }
+func (f *acceptanceTmuxLauncher) Close(backend.Ref) error           { return nil }
+func (f *acceptanceTmuxLauncher) LaunchTarget(spec backend.LaunchSpec) (backend.Launched, error) {
+	f.launches = append(f.launches, spec)
+	return backend.Launched{
+		Group: backend.GroupID("test-session"), Pane: backend.PaneID("%1"), PID: os.Getpid(),
+		Instance: runtimesession.BackendInstance{Kind: runtimesession.BackendTmux, Address: "test-socket", Generation: "test-generation"},
+	}, nil
+}
+
 func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext(t *testing.T) {
-	t.Parallel()
 
 	root := t.TempDir()
 	sharedDir := filepath.Join(root, "shared")
@@ -277,11 +289,19 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 
 	for _, key := range []string{"c", "f"} {
 		t.Run(key, func(t *testing.T) {
-			client := kittytest.NewClient(nil)
+			launcher := &acceptanceTmuxLauncher{}
+			registry, err := runtimesession.NewStore(filepath.Join(t.TempDir(), "sessions.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			previous := commands.Portable
+			commands.Portable.Launch = runtimesession.BackendTmux
+			commands.Portable.Tmux = launcher
+			commands.Portable.Registry = registry
+			t.Cleanup(func() { commands.Portable = previous })
 			m := Model{
 				mode:              ModeSessionSearch,
 				cfg:               cfg,
-				client:            client,
 				filterProject:     []string{"streamutil"},
 				transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
 				sessionResults:    []transcript.Result{{Meta: meta}},
@@ -302,16 +322,16 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 			if done.Err != nil {
 				t.Fatalf("%s action failed: %v", key, done.Err)
 			}
-			launches := client.CallsFor("LaunchTab")
-			if len(launches) != 1 || launches[0].Opts == nil {
-				t.Fatalf("%s LaunchTab calls = %+v, want one launch", key, launches)
+			launches := launcher.launches
+			if len(launches) != 1 {
+				t.Fatalf("%s tmux launches = %+v, want one launch", key, launches)
 			}
-			opts := launches[0].Opts
-			if opts.UserVars["amx_project"] != "streamutil" || opts.Directory != sharedDir {
-				t.Fatalf("%s launch = project %q directory %q, want streamutil and %q", key, opts.UserVars["amx_project"], opts.Directory, sharedDir)
+			opts := launches[0]
+			if opts.Vars["amx_project"] != "streamutil" || opts.Directory != sharedDir {
+				t.Fatalf("%s launch = project %q directory %q, want streamutil and %q", key, opts.Vars["amx_project"], opts.Directory, sharedDir)
 			}
-			if !strings.Contains(strings.Join(opts.Cmdline, " "), meta.ID) {
-				t.Fatalf("%s launch command %q did not retain transcript ID %q", key, strings.Join(opts.Cmdline, " "), meta.ID)
+			if !strings.Contains(strings.Join(opts.Argv, " "), meta.ID) {
+				t.Fatalf("%s launch command %q did not retain transcript ID %q", key, strings.Join(opts.Argv, " "), meta.ID)
 			}
 			if m.sessionResults[0].Meta.Project != "SS" {
 				t.Fatalf("%s mutated stored project to %q", key, m.sessionResults[0].Meta.Project)

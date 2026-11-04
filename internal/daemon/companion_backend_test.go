@@ -115,7 +115,7 @@ func TestAppNotificationReachesASubscriberAndSettles(t *testing.T) {
 
 	h.notifier.MaybeNotify(7, "W:api", "work", "stop", false)
 	notice := nextNotice(t, sub)
-	if notice.NotificationID == "" || notice.WindowID != 7 || notice.Action != "stop" || notice.Title != "W:api" {
+	if notice.NotificationID == "" || notice.Action != "stop" || notice.Title != "W:api" {
 		t.Fatalf("notice = %+v", notice)
 	}
 	if resp := dispose(h, notice.NotificationID, protocol.DispositionDelivered); !resp.OK {

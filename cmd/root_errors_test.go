@@ -12,7 +12,7 @@ import (
 
 // executeRootArgs drives execute, the path the real binary takes, with a
 // temporary leaf registered under root so the stderr contract can be checked
-// without any configuration, daemon, or Kitty.
+// without any configuration, daemon, or tmux.
 func executeRootArgs(t *testing.T, leaf *cobra.Command, args ...string) (string, string, int) {
 	t.Helper()
 	if leaf != nil {

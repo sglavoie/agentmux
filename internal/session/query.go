@@ -1,25 +1,24 @@
 package session
 
 import (
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/projectresolve"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
-// RunningSession is a currently open managed harness tab in Kitty.
+// RunningSession is a managed harness running in a tmux pane.
 type RunningSession struct {
 	TabID                 int
-	TabNumber             int // 1-based physical position within the containing Kitty OS window
+	TabNumber             int // legacy positional metadata
 	WindowID              int
 	Key                   string
-	Title                 string                      // raw Kitty tab title (may include icons)
+	Title                 string                      // terminal title (may include icons)
 	Base                  string                      // title with all icons stripped (e.g., "api"; older tabs may still be "W:api")
 	State                 string                      // "bolt", "stop", "key", "warning", "error", "subagent", "compact", "question", or ""
 	Looping               bool                        // daemon-owned loop marker; title-derived only when the daemon is unreachable
@@ -48,17 +47,17 @@ type RunningSession struct {
 	FamilyPrimaryRoot  string   // main checkout root, or the configured directory for a non-repository
 	Project            string   // configured project title
 	DisplayProject     string   // current config title; presentation only, never a launch identity
-	Profile            string   // from amx_profile / legacy cc_account user vars
+	Profile            string   // configured launch profile
 	Account            string   // compatibility alias for Profile
-	Harness            string   // from amx_harness or inferred from legacy vars
-	HomeDir            string   // from amx_home_dir / legacy cc_config_dir
-	Directory          string   // from amx_directory / legacy cc_cwd user var, or the selected managed window's CWD
-	Args               string   // from amx_args / legacy cc_flags (shell-quoted)
+	Harness            string   // configured agent harness
+	HomeDir            string   // agent home directory
+	Directory          string   // session working directory
+	Args               string   // launch arguments (shell-quoted)
 	Flags              string   // compatibility alias for Args
-	ExplicitFlags      string   // from cc_explicit_flags (shell-quoted); empty when inherited or legacy
-	ExplicitFlagsSet   bool     // true when cc_explicit_flags was present in Kitty user vars
-	Env                string   // from amx_env / legacy cc_env (raw serialized)
-	Groups             []string // decoded from cc_groups user var (\x1f-delimited)
+	ExplicitFlags      string   // explicitly supplied launch arguments (shell-quoted)
+	ExplicitFlagsSet   bool     // whether launch arguments were supplied explicitly
+	Env                string   // serialized launch environment
+	Groups             []string // session groups
 	LaunchID           string
 	NativeCoverage     string
 	NativeLogPath      string
@@ -66,26 +65,23 @@ type RunningSession struct {
 	NativeOverride     string
 	HarnessSessionID   string
 	ASLRunID           string
-	// Backend is the terminal backend hosting the session. Empty means Kitty,
-	// whose rows are addressed by TabID and WindowID.
+	// Backend is the terminal backend hosting the session. Empty means tmux.
 	Backend runtimesession.BackendKind
-	// Group and Pane address a non-Kitty session inside its backend.
+	// Group and Pane address the session inside its backend.
 	Group backend.Ref
 	Pane  backend.Ref
 	// RuntimeSessionID is the runtime session the launch registered, when it
 	// registered one.
 	RuntimeSessionID runtimesession.ID
-	// Color is the palette color the operator picked for this session, on a
-	// backend that keeps the pick in the session's metadata (ColorVar). Empty
-	// means the profile's color, and is always empty for a Kitty tab, whose
-	// pick Kitty itself draws.
+	// Color is the palette color the operator picked for this session.
+	// Empty means the profile's color.
 	Color string
 }
 
-// BackendKind is the backend hosting the session; Kitty when unrecorded.
+// BackendKind is the backend hosting the session; tmux when unrecorded.
 func (rs RunningSession) BackendKind() runtimesession.BackendKind {
 	if rs.Backend == "" {
-		return runtimesession.BackendKitty
+		return runtimesession.BackendTmux
 	}
 	return rs.Backend
 }
@@ -125,25 +121,6 @@ func (rs RunningSession) TitleParts() palette.TitleParts {
 	}
 }
 
-// GhostTab is a managed tab whose anchor window (the one bearing amx user vars)
-// no longer exists, but whose surviving live harness window still matches a
-// unique configured project by title or working directory. Callers can use the
-// WindowID to re-stamp user vars onto that harness window and restore normal
-// detection.
-type GhostTab struct {
-	TabID    int
-	WindowID int
-	Profile  string
-	Project  string
-	Account  config.Account
-	Session  config.Session
-}
-
-type titleFallbackMatch struct {
-	acc  config.Account
-	sess config.Session
-}
-
 type projectMatchContext struct {
 	cfg      *config.Config
 	resolver projectresolve.Resolver
@@ -177,45 +154,6 @@ func (ctx projectMatchContext) stampFamily(rs RunningSession) RunningSession {
 	return rs
 }
 
-// List returns all managed running sessions from Kitty.
-// A tab is "managed" if any of its windows has cc_account set (non-empty).
-func List(client kitty.KittyClient) ([]RunningSession, error) {
-	sessions, _, err := ListWithConfig(client, nil)
-	return sessions, err
-}
-
-// ListFromOSWindows returns all managed running sessions from an already-fetched
-// kitten-@-ls payload. This avoids a second Kitty roundtrip for callers that
-// already have the raw window list and only need session reconstruction.
-func ListFromOSWindows(osWindows []kitty.OSWindow) []RunningSession {
-	sessions, _ := runningSessionsFromOSWindows(osWindows, nil)
-	return sessions
-}
-
-// ListFromOSWindowsWithConfig returns managed sessions and recoverable ghost
-// tabs from an already-fetched kitten-@-ls payload. It is the config-aware
-// counterpart to ListFromOSWindows and lets callers retain the raw Kitty
-// topology for related lookups without issuing a second remote-control query.
-func ListFromOSWindowsWithConfig(osWindows []kitty.OSWindow, cfg *config.Config) ([]RunningSession, []GhostTab) {
-	return runningSessionsFromOSWindows(osWindows, cfg)
-}
-
-// ListWithConfig returns running sessions plus any "ghost" tabs whose anchor
-// window is gone but whose surviving live harness window resolves
-// unambiguously to a configured project. Title matching is tried first,
-// including legacy "<initial>:<project>" titles. If that fails, the harness
-// window's CWD can recover a tab whose title no longer identifies the project.
-// When cfg is nil, no fallback occurs and ghosts is always empty — behavior is
-// identical to List.
-func ListWithConfig(client kitty.KittyClient, cfg *config.Config) (sessions []RunningSession, ghosts []GhostTab, err error) {
-	osWindows, err := client.ListWindows()
-	if err != nil {
-		return nil, nil, err
-	}
-	sessions, ghosts = ListFromOSWindowsWithConfig(osWindows, cfg)
-	return sessions, ghosts, nil
-}
-
 // Find returns the first running session whose Base title equals baseTitle.
 func Find(sessions []RunningSession, baseTitle string) (RunningSession, bool) {
 	for _, s := range sessions {
@@ -246,24 +184,21 @@ func FindByWindowID(sessions []RunningSession, windowID int) (RunningSession, bo
 	return RunningSession{}, false
 }
 
-// GroupRef is the backend group (Kitty tab) hosting the session.
+// GroupRef is the tmux window hosting the session.
 func (rs RunningSession) GroupRef() backend.Ref {
 	if !rs.Group.IsZero() {
 		return rs.Group
 	}
-	return kitty.GroupRef(rs.TabID)
+	return backend.Ref{}
 }
 
-// PaneRef is the backend pane (Kitty window) the session is anchored to.
+// PaneRef is the tmux pane the session is anchored to.
 func (rs RunningSession) PaneRef() backend.Ref {
 	if !rs.Pane.IsZero() {
 		return rs.Pane
 	}
-	return kitty.PaneRef(rs.WindowID)
+	return backend.Ref{}
 }
-
-// PaneRef is the backend pane (Kitty window) the ghost tab is anchored to.
-func (g GhostTab) PaneRef() backend.Ref { return kitty.PaneRef(g.WindowID) }
 
 // PaneTarget names one session pane without saying how to reach it: the
 // backend that hosts it and the pane's reference there. It is comparable, so a
@@ -274,21 +209,9 @@ type PaneTarget struct {
 	Pane    backend.Ref
 }
 
-// KittyPaneTarget is the pane target of a Kitty window. A non-positive window
-// ID yields the zero target, which names nothing.
-func KittyPaneTarget(windowID int) PaneTarget {
-	if windowID <= 0 {
-		return PaneTarget{}
-	}
-	return PaneTarget{Backend: runtimesession.BackendKitty, Pane: kitty.PaneRef(windowID)}
-}
-
 // PaneTarget is the session's pane in its recorded backend. A session with no
 // addressable pane yields the zero target.
 func (rs RunningSession) PaneTarget() PaneTarget {
-	if rs.BackendKind() == runtimesession.BackendKitty {
-		return KittyPaneTarget(rs.WindowID)
-	}
 	if rs.Pane.Scope != backend.ScopePane || rs.Pane.ID == "" {
 		return PaneTarget{}
 	}
@@ -298,18 +221,61 @@ func (rs RunningSession) PaneTarget() PaneTarget {
 // IsZero reports a target that names no pane.
 func (t PaneTarget) IsZero() bool { return t == PaneTarget{} }
 
-// KittyWindowID is the Kitty window ID of a Kitty target, and zero for any
-// other backend or a reference that is not a canonical window ID.
-func (t PaneTarget) KittyWindowID() int {
-	if t.Backend != runtimesession.BackendKitty || t.Pane.Scope != backend.ScopePane {
-		return 0
-	}
-	id, err := strconv.Atoi(t.Pane.ID)
-	if err != nil || id <= 0 || strconv.Itoa(id) != t.Pane.ID {
-		return 0
-	}
-	return id
-}
-
 // String renders a target for diagnostics.
 func (t PaneTarget) String() string { return string(t.Backend) + "/" + t.Pane.String() }
+
+// configuredProjects returns the current project entries, including older config aliases.
+func configuredProjects(cfg *config.Config) []config.Session {
+	if cfg == nil {
+		return nil
+	}
+	if len(cfg.Sessions) > 0 {
+		return cfg.Sessions
+	}
+	return cfg.Projects
+}
+
+// displayProject follows config renames without rewriting launch metadata.
+func (ctx projectMatchContext) displayProject(rs RunningSession) string {
+	matches := ctx.resolver.Matches(rs.Directory)
+	for _, match := range matches {
+		if match.Title == rs.EffectiveProject() {
+			return match.Title
+		}
+	}
+	var profileMatches []projectresolve.Match
+	for _, match := range matches {
+		if strings.EqualFold(match.Profile, rs.EffectiveProfile()) {
+			profileMatches = append(profileMatches, match)
+		}
+	}
+	if len(profileMatches) > 0 {
+		matches = profileMatches
+	}
+	title := ""
+	for i, match := range matches {
+		if i > 0 && match.Title != title {
+			return ""
+		}
+		title = match.Title
+	}
+	return title
+}
+
+// SessionKey builds a case-insensitive identity for a configured session.
+func SessionKey(profileName, projectTitle string) string {
+	return strings.ToLower(profileName) + "\x1f" + strings.ToLower(projectTitle)
+}
+
+func decodeGroups(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, group := range strings.Split(raw, "\x1f") {
+		if group != "" {
+			out = append(out, group)
+		}
+	}
+	return out
+}

@@ -61,11 +61,6 @@ type Handshake struct {
 	SnapshotDigest   string `json:"snapshot_digest"`
 }
 
-// Window is the projected Kitty binding of one run.
-type Window struct {
-	KittyWindowID int `json:"kitty_window_id"`
-}
-
 // Question is body-free question metadata. The prose an operator answers is
 // never part of a snapshot; QuestionBody fetches it on demand.
 type Question struct {
@@ -99,7 +94,7 @@ type Row struct {
 	WorkspaceRoot      string            `json:"workspace_root"`
 	RegistryDigest     string            `json:"registry_digest"`
 	RepositoryCount    int               `json:"repository_count"`
-	Window             *Window           `json:"window"`
+	Window             json.RawMessage   `json:"window"`
 	RunStartedAt       string            `json:"run_started_at"`
 	RunFinishedAt      string            `json:"run_finished_at"`
 	LastActivityAt     string            `json:"last_activity_at"`

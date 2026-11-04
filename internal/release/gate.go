@@ -47,13 +47,11 @@ const (
 	// SchemaVersion is the evidence record's schema version. Consumers must
 	// refuse a record they do not recognize rather than reading it optimistically.
 	//
-	// Version 2 made environment.kitty optional and took kitty-version out of
-	// the steps: the gate no longer needs a Kitty to release the pair.
+	// Version 2 records the environment needed to release the pair.
 	SchemaVersion = 2
 
 	// OldestSchemaVersion is the oldest record LoadEvidence still reads. A
-	// schema-1 record is a schema-2 record that happens to name a Kitty, so
-	// the releases already signed stay verifiable.
+	// Existing signed releases remain verifiable.
 	OldestSchemaVersion = 1
 
 	// SigningNamespace is the `ssh-keygen -Y sign` namespace for release

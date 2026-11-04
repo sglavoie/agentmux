@@ -232,7 +232,7 @@ extension WorkspaceWindowController {
     }
 
     private func wantedSessionContent(_ row: WorkspaceRow, previous: Content, retry: Bool) -> Content {
-        guard let id = row.embeddedRuntimeSessionID else { return .external(row.key) }
+        guard let id = row.embeddedRuntimeSessionID else { return .empty }
         if closing[id] != nil { return .closing(runtimeSessionID: id) }
         if detached.contains(id) { return .detached(runtimeSessionID: id) }
         if terminals[id] != nil {
@@ -384,15 +384,6 @@ extension WorkspaceWindowController {
                 button: "Restart",
                 isDefault: true
             ) { [weak self] in self?.restartViewAfterRendererFailure(id) }
-        case .external:
-            placeholder.show(
-                title: row.map { "\($0.project) runs in Kitty" } ?? "This session runs in Kitty",
-                message: "Its terminal is a Kitty window. Agent Mux brings Kitty forward on it.",
-                button: "Show in Kitty"
-            ) { [weak self] in
-                guard let self, let row = self.state.selectedRow else { return }
-                self.activate(row)
-            }
         case .restoring:
             // A daemon that is down or too old never says: what would bring
             // it back is offered here, not only under the sidebar.

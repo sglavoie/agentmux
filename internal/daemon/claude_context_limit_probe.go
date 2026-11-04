@@ -1,20 +1,15 @@
 package daemon
 
 import (
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/contextlimit"
 	"github.com/sglavoie/agentmux/internal/daemon/activity"
-	"github.com/sglavoie/agentmux/internal/daemon/events"
 	"github.com/sglavoie/agentmux/internal/daemon/probes"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
-	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/hookevent"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/palette"
 )
 
@@ -31,58 +26,6 @@ const (
 	claudeContextLimitFactSource = "claude_context_limit"
 )
 
-// ProbeClaudeContextLimit scans each tab's managed Claude title owner when the
-// current icon is either active-class (bolt, subagent) or empty for the
-// "Context limit reached" recovery banner. When found, the window's icon is
-// swapped to the error state via the stop_failure action so the user has a
-// visual signal that the session is stuck and needs /compact or /clear.
-//
-// Empty state is included because some upstream Claude hook events resolve
-// to "idle" or "clear" and wipe the bolt to empty before the probe ticks;
-// without covering empty, a stalled session would show no emoji at all.
-// Banner detection itself (contextlimit.ScreenShowsMarker) remains the real
-// gate, so the broader filter cannot trigger false positives.
-//
-// The icon swap is deduped per stall episode by contextLimitNotified so we
-// don't churn the tab title on every probe cycle (the shared rendering.Interval
-// ticker driving runScreenProbes). The flag is cleared by an
-// "active"-class event re-entering the window (S3) or when the window closes.
-func (h *Handler) ProbeClaudeContextLimit(now time.Time) {
-	client, socket := h.kittyListTarget()
-	if client == nil {
-		return
-	}
-	if !h.claudeContextLimitProbeEnabled {
-		return
-	}
-	reducerReceipts := h.captureSnapshotReducerReceiptsFor(socket)
-	windows, err := client.ListWindows()
-	if err != nil {
-		slog.Debug("claude context-limit probe: list windows failed", "err", err)
-		return
-	}
-	h.probeClaudeContextLimitWithSnapshot(now, probes.NewSnapshotWithSocket(windows, reducerReceipts, socket),
-		h.screenTextCacheForSocket(socket))
-	h.renderSnapshotFor(windows, socket)
-}
-
-func (h *Handler) probeClaudeContextLimitWithSnapshot(
-	now time.Time,
-	snapshot probes.Snapshot,
-	screens *activity.ScreenTextCache,
-) {
-	if !h.claudeContextLimitProbeEnabled {
-		return
-	}
-	for _, binding := range h.screenProbeBindings(snapshot, harness.Claude) {
-		_, tab, target, ok := kitty.FindWindowLocationByID(snapshot.Windows(), binding.TargetWindowID)
-		if !ok {
-			continue
-		}
-		h.probeClaudeContextLimitWindow(now, binding, palette.ParseTitleParts(tab.Title), target.UserVars, screens)
-	}
-}
-
 func claudeContextLimitProbeCanOverwrite(iconState string) bool {
 	switch iconState {
 	case "", "bolt", "subagent":
@@ -96,12 +39,12 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	now time.Time,
 	binding probes.Binding,
 	titleParts palette.TitleParts,
-	userVars kitty.UserVars,
+	userVars probeWindowVars,
 	screens *activity.ScreenTextCache,
 ) {
 	targetWindowID := binding.TargetSlot()
 	h.stateMu.Lock()
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, func(icon string) bool {
 		return claudeContextLimitProbeCanOverwrite(icon)
 	}) {
 		h.stateMu.Unlock()
@@ -156,7 +99,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 	// through the guard call and the reducer application keeps them atomic with
 	// this check; stateMu → guard.mu is an established ordering
 	// (markWindowStateDirtyLocked snapshots the guard under stateMu).
-	if !h.screenProbeBindingEligibilityCurrentLocked(binding, titleParts.State, func(icon string) bool {
+	if !h.screenProbeBindingEligibilityCurrentLocked(binding, func(icon string) bool {
 		return claudeContextLimitProbeCanOverwrite(icon)
 	}) {
 		h.stateMu.Unlock()
@@ -171,7 +114,7 @@ func (h *Handler) probeClaudeContextLimitWindow(
 		return
 	}
 	before, effective, account := h.recordClaudeContextLimitProbeStateLocked(
-		now, targetWindowID, baseTitle, currentIconState, profile, userVars, binding.LegacyDirectManaged,
+		now, targetWindowID, baseTitle, currentIconState, profile, userVars,
 		binding.SourceSlot(),
 	)
 	h.stateMu.Unlock()
@@ -210,8 +153,7 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	baseTitle string,
 	currentIconState string,
 	profile string,
-	userVars kitty.UserVars,
-	legacyDirectManaged bool,
+	userVars probeWindowVars,
 	originWindowID int,
 ) (before, effective state.EffectiveState, account string) {
 	st := h.ensureWindowStateLocked(windowID)
@@ -222,13 +164,9 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	if profile != "" && st.LastAccount == "" {
 		st.LastAccount = profile
 	}
-	// Probe evidence describes the producer, not the managed target. Preserve a
-	// routed Codex/Copilot target's durable ownership and only fill ownership on
-	// the legacy direct-managed path where no hook metadata exists yet.
+	// Probe evidence describes the producer. Keep the target's existing
+	// ownership when it is already set.
 	targetHarness := harness.NormalizeKnown(userVars.EffectiveHarness())
-	if targetHarness == "" && legacyDirectManaged {
-		targetHarness = harness.Claude
-	}
 	if st.LastHarness == "" && targetHarness != "" {
 		st.LastHarness = targetHarness
 	}
@@ -287,45 +225,6 @@ func (h *Handler) recordClaudeContextLimitProbeStateLocked(
 	return before, effective, st.LastAccount
 }
 
-// This file converts the hook-time context-limit screen read into a targeted
-// asynchronous probe request. A GetText round-trip to Kitty can be slow or wedge
-// entirely; doing it on the hook goroutine would delay the hook acknowledgement
-// and stall the serialized ingress queue behind it. Instead the hook path
-// resolves and dispatches the base event immediately, then hands a
-// contextLimitProbe to an async runner. When the banner is found the probe
-// applies a stop_failure upgrade through the normal state path, so the icon
-// still reaches error — just eventually, without ever blocking the ack.
-
-// contextLimitProbeTarget is one managed window whose icon should be promoted to
-// error when the source pane's screen shows the context-limit banner. It carries
-// the render context a stop_failure state update needs, captured at hook time.
-type contextLimitProbeTarget struct {
-	windowID      int
-	sessionTitle  string
-	profile       string
-	targetHarness string
-	currentIcon   string
-}
-
-// contextLimitProbe describes a single asynchronous screen read. sourceWindowID
-// is the pane that stalled (the banner is only visible there); targets are the
-// managed windows to promote on detection. For an in-pane hook the source is
-// also the sole target; for an ASL sibling hook the source is the unmanaged pane
-// and the targets are the managed title owners. sourceWindowID is a reducer
-// slot; kittyWindowID is the source's real Kitty window, resolved when the
-// probe is enqueued and used only to match the screen read, since a second
-// Kitty instance's colliding window has a slot that is no Kitty window ID.
-type contextLimitProbe struct {
-	sourceWindowID int
-	kittyWindowID  int
-	req            protocol.Request
-	event          string
-	payload        hookevent.HookPayload
-	targets        []contextLimitProbeTarget
-	traceID        string
-	parentTraceID  string
-}
-
 // runProbeAsync runs fn off the hook goroutine. Production spawns a goroutine so
 // a slow GetText never delays hook acknowledgement; tests inject a synchronous
 // runner for deterministic assertions.
@@ -335,84 +234,4 @@ func (h *Handler) runProbeAsync(fn func()) {
 		return
 	}
 	go fn()
-}
-
-// enqueueContextLimitProbe schedules an asynchronous context-limit screen read.
-// It is a no-op when there is no Kitty client or nothing to promote, so the hook
-// path can call it unconditionally after deciding a probe is warranted.
-func (h *Handler) enqueueContextLimitProbe(p contextLimitProbe) {
-	if h.kittyClient == nil || p.sourceWindowID <= 0 || len(p.targets) == 0 {
-		return
-	}
-	if p.traceID == "" {
-		p.traceID = diagnostics.NewTraceID()
-	}
-	p.kittyWindowID = h.deliveryKittyWindowID(p.sourceWindowID)
-	p.parentTraceID = p.req.TraceID
-	targetIDs := make([]int, 0, len(p.targets))
-	for _, target := range p.targets {
-		targetIDs = append(targetIDs, target.windowID)
-	}
-	h.linkProbeChild(p.parentTraceID, p.traceID, targetIDs)
-	h.recordProbeStageBounded(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "queued", "pending", "screen_read_scheduled", map[string]string{
-		"event": p.event, "target_count": fmt.Sprint(len(p.targets)),
-	})
-	h.runProbeAsync(func() { h.runContextLimitProbe(p) })
-}
-
-// runContextLimitProbe performs the targeted screen read and, on a banner match,
-// applies a stop_failure upgrade to every target. It runs off the hook
-// goroutine; a read error or a clean screen leaves the base event's outcome
-// untouched.
-func (h *Handler) runContextLimitProbe(p contextLimitProbe) {
-	h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "attempted", "pending", "screen_read_started", map[string]string{
-		"event": p.event,
-	})
-	text, err := h.hookKittyClient(p.req).GetText(kitty.MatchWindowByID(p.kittyWindowID), "screen")
-	if err != nil {
-		slog.Debug("context-limit probe failed", "window_id", p.sourceWindowID, "event", p.event, "err", err)
-		h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "failed", "screen_read_failed", map[string]string{"event": p.event})
-		return
-	}
-	if !contextlimit.ScreenShowsMarker(text) {
-		h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "success", "marker_absent", map[string]string{"event": p.event})
-		return
-	}
-	for _, t := range p.targets {
-		stateReq := events.BuildHookStateUpdateRequest(
-			t.windowID,
-			"stop_failure",
-			p.event,
-			p.payload,
-			t.sessionTitle,
-			t.profile,
-			p.req.Harness,
-			t.targetHarness,
-			t.currentIcon,
-			p.req.PipeMode,
-			false, // preservesIcon: an error promotion never preserves the current icon
-			true,  // contextLimitDetected
-			false, // resetFlowDetected: a context-limit stall is not a reset flow
-			p.req.KittyListenOn,
-		)
-		// The promotion is daemon-synthesized, so its shadow fact is attributed
-		// to the probe source rather than the harness session.
-		normalized := protocol.NormalizedEvent{
-			Source:         protocol.ProbeSource(),
-			Action:         "stop_failure",
-			Event:          p.event,
-			OriginWindowID: p.sourceWindowID,
-		}
-		stateReq.Normalized = &normalized
-		stateReq.TraceID = p.traceID
-		stateReq.ParentTraceID = p.parentTraceID
-		stateReq.SourceEventID = firstNonEmpty(p.req.SourceEventID, p.req.RequestID, p.traceID) + ":context-limit-probe"
-		stateReq.PayloadHMAC = p.req.PayloadHMAC
-		stateReq.PayloadSize = p.req.PayloadSize
-		stateReq.PayloadEncoding = p.req.PayloadEncoding
-		h.handleStateUpdate(stateReq)
-	}
-	h.recordProbeStage(p.traceID, p.parentTraceID, p.req, p.sourceWindowID, "completed", "success", "marker_promoted", map[string]string{
-		"event": p.event, "target_count": fmt.Sprint(len(p.targets)),
-	})
 }

@@ -96,32 +96,18 @@ func TestSetupSummaryNamesMissingRequirementsAndActualDestinations(t *testing.T)
 	setupBackendStatus = func(*config.Config) cli.BackendStatus {
 		return cli.BackendStatus{Problems: []cli.BackendProblem{{Severity: "warning", Message: "tmux unavailable", Hint: "Install tmux 3.5+."}}}
 	}
-	for _, kitty := range []bool{false, true} {
-		t.Run(map[bool]string{false: "plain terminal", true: "Kitty socket"}[kitty], func(t *testing.T) {
-			t.Setenv("KITTY_WINDOW_ID", "")
-			t.Setenv("KITTY_LISTEN_ON", "")
-			if kitty {
-				t.Setenv("KITTY_LISTEN_ON", "unix:/fixture")
-			}
-			cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: "codex", HomeDir: "/isolated/codex"}}}
-			if kitty {
-				cfg.Defaults.LaunchBackend = "  "
-			}
-			var out bytes.Buffer
-			if err := setupSummary(&out, cfg, "work", false, nil); err != nil {
-				t.Fatal(err)
-			}
-			destination := "tmux"
-			if !strings.Contains(out.String(), "Dashboard launch blocked") {
-				t.Fatalf("missing tmux must block launches in every terminal: %s", out.String())
-			}
-			for _, want := range []string{"CLI: tmux (default", "Dashboard in this terminal: " + destination,
-				"Agent CLI missing", "Install tmux 3.5+", "Authentication: not checked", "/isolated/codex", "Hooks: not synced"} {
-				if !strings.Contains(out.String(), want) {
-					t.Errorf("missing %q in %s", want, out.String())
-				}
-			}
-		})
+	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: "codex", HomeDir: "/isolated/codex"}}}
+	var out bytes.Buffer
+	if err := setupSummary(&out, cfg, "work", false, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "Dashboard launch blocked") {
+		t.Fatalf("missing tmux must block launches: %s", out.String())
+	}
+	for _, want := range []string{"CLI: tmux (default", "Dashboard in this terminal: tmux", "Agent CLI missing", "Install tmux 3.5+", "Authentication: not checked", "/isolated/codex", "Hooks: not synced"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("missing %q in %s", want, out.String())
+		}
 	}
 }
 
@@ -311,19 +297,23 @@ func TestSetupUpdatesEmptyBackendAndTablesWithHeaderComments(t *testing.T) {
 	}
 }
 
-func TestSetupAcceptsExplicitKittyDestination(t *testing.T) {
+func TestSetupRejectsUnsupportedDestination(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	t.Setenv("amx_CONFIG", path)
 	project := t.TempDir()
-	if _, err := runSetupWithInput(t, "\n\n\n"+project+"\n\nkitty\nno\n"); err != nil {
+	out, err := runSetupWithInput(t, "\n\n\n"+project+"\n\nunsupported\ntmux\nno\n")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(out, "Choose keep, tmux") {
+		t.Fatalf("setup did not reject an unsupported backend: %s", out)
 	}
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.LaunchBackendOrDefault(); got != config.LaunchBackendKitty {
-		t.Fatalf("launch backend = %q, want kitty", got)
+	if got := cfg.LaunchBackendOrDefault(); got != config.LaunchBackendTmux {
+		t.Fatalf("launch backend = %q, want tmux", got)
 	}
 }
 
@@ -351,7 +341,7 @@ func TestSetupAllowsCorrectingAChoice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "Choose claude, copilot, codex") || !strings.Contains(out, "Choose keep, tmux, kitty") {
+	if !strings.Contains(out, "Choose claude, copilot, codex") || !strings.Contains(out, "Choose keep, tmux") {
 		t.Fatalf("setup did not explain the choices: %s", out)
 	}
 	cfg, err := config.Load(path)
@@ -363,37 +353,17 @@ func TestSetupAllowsCorrectingAChoice(t *testing.T) {
 	}
 }
 
-// Keep leaves the configuration unpinned and selects tmux regardless of the
-// terminal or whether Kitty is installed. Explicit choices remain available.
-func TestSetupKeepUsesTmuxInEveryTerminal(t *testing.T) {
-	for _, tc := range []struct {
-		name, windowID, answer string
-		noKitten               bool
-		pinned                 string
-	}{
-		{name: "plain terminal, keep", answer: ""},
-		{name: "no Kitty installed", windowID: "5", answer: "", noKitten: true},
-		{name: "inside Kitty", windowID: "5", answer: ""},
-		{name: "plain terminal, tmux chosen", answer: "tmux", pinned: config.LaunchBackendTmux},
+// Keep leaves the configuration unpinned and selects tmux.
+func TestSetupKeepUsesTmux(t *testing.T) {
+	for _, tc := range []struct{ name, answer, pinned string }{
+		{name: "keep", answer: ""},
+		{name: "tmux chosen", answer: "tmux", pinned: config.LaunchBackendTmux},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "config.toml")
 			t.Setenv("amx_CONFIG", path)
-			t.Setenv("KITTY_WINDOW_ID", tc.windowID)
-			t.Setenv("KITTY_LISTEN_ON", "")
 			input := "codex\n\n\n" + t.TempDir() + "\n\n" + tc.answer + "\nno\n"
-			var out string
-			var err error
-			if tc.noKitten {
-				out, err = runSetupWithLookPath(t, input, func(name string) (string, error) {
-					if name == "kitten" {
-						return "", errors.New("not installed")
-					}
-					return "/fixture/bin/" + name, nil
-				})
-			} else {
-				out, err = runSetupWithInput(t, input)
-			}
+			out, err := runSetupWithInput(t, input)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -401,9 +371,6 @@ func TestSetupKeepUsesTmuxInEveryTerminal(t *testing.T) {
 				if !strings.Contains(out, want) {
 					t.Fatalf("missing %q:\n%s", want, out)
 				}
-			}
-			if strings.Contains(out, "Kitty client missing") {
-				t.Fatalf("default tmux launch requires Kitty: %s", out)
 			}
 			cfg, err := config.Load(path)
 			if err != nil {
@@ -414,24 +381,4 @@ func TestSetupKeepUsesTmuxInEveryTerminal(t *testing.T) {
 			}
 		})
 	}
-}
-
-// runSetupWithLookPath is runSetupWithInput with the PATH lookup replaced
-// after its own stub is installed.
-func runSetupWithLookPath(t *testing.T, input string, look func(string) (string, error)) (string, error) {
-	t.Helper()
-	oldStatus := setupBackendStatus
-	setupBackendStatus = func(*config.Config) cli.BackendStatus {
-		return cli.BackendStatus{Tmux: cli.TmuxStatus{Available: true, Version: "3.5", Path: "/fixture/tmux"}}
-	}
-	oldLook := setupLookPath
-	setupLookPath = look
-	t.Cleanup(func() { setupLookPath, setupBackendStatus = oldLook, oldStatus })
-	oldIn, oldOut := configSetupCmd.InOrStdin(), configSetupCmd.OutOrStdout()
-	t.Cleanup(func() { configSetupCmd.SetIn(oldIn); configSetupCmd.SetOut(oldOut) })
-	var out bytes.Buffer
-	configSetupCmd.SetIn(strings.NewReader(input))
-	configSetupCmd.SetOut(&out)
-	err := configSetupCmd.RunE(configSetupCmd, nil)
-	return out.String(), err
 }

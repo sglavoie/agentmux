@@ -60,10 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// True while a Preferences recorder listens for a shortcut.
     var isRecordingHotKey = false
     var wakeObserver: NSObjectProtocol?
-    var activationObserver: NSObjectProtocol?
     var becameActiveObserver: NSObjectProtocol?
-    /// The Kitty the operator used last, where new tabs open.
-    var lastActiveKittyPID: pid_t?
 
     var projects = ProjectCatalog()
     /// A first installation opens its setup entry point once, after amx
@@ -129,8 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     private(set) lazy var connection = DaemonConnection(store: store, request: subscribeRequest.params, control: controlRunner)
     private(set) lazy var snoozes = SnoozeController(store: store, preferences: preferencesModel, runner: focusRunner)
 
-    /// The embedded terminal runtime, made the first time a terminal is
-    /// wanted: a companion used only beside Kitty never starts Ghostty.
+    /// The embedded terminal runtime, made the first time a terminal is wanted.
     var terminals: Ghostty.App?
 
     /// A hosted test bundle launches this app too; it must not start the
@@ -227,7 +223,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
                 self.connection.reconnectIfWaiting()
             }
         }
-        trackActiveKitty()
         resolveBinary()
         restoreWorkspace()
     }
@@ -388,7 +383,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         configWatcher?.stop()
         workspaceConfirmationFile.remove()
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
-        if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
         if let becameActiveObserver { NotificationCenter.default.removeObserver(becameActiveObserver) }
     }
 
@@ -429,7 +423,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     }
 
     /// What a utility view's terminal runs: `amx workspace-view …`, which
-    /// decides the program and strips every session and Kitty variable from
+    /// decides the program and strips session metadata from
     /// its environment first. Nil until amx is resolved.
     func utilityConfiguration(for view: WorkspaceUtilityView) -> Ghostty.SurfaceConfiguration? {
         guard let command else { return nil }

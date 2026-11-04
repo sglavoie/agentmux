@@ -9,18 +9,17 @@ import (
 )
 
 // An events export restricted to a runtime session returns that session's
-// slot and nothing else, on a tmux session (no Kitty window to name) and on a
-// Kitty one alike, and says whose slot it is.
+// slot and nothing else, and says whose slot it is.
 func TestEventsExportSelectsByRuntimeSession(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	onKitty, onTmux, other := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
-	directory.put(onKitty, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
-	directory.put(onTmux, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
+	onTmuxA, onTmuxB, other := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
+	directory.put(onTmuxA, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
+	directory.put(onTmuxB, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%9")
 	directory.put(other, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%8")
 	for runtime, session := range map[runtimesession.ID]string{
-		onKitty: "session-kitty", onTmux: "session-tmux", other: "session-other",
+		onTmuxA: "session-a", onTmuxB: "session-b", other: "session-other",
 	} {
 		requireAccepted(t, h.Handle(runtimeHook(t, runtime, "UserPromptSubmit", hookevent.HookPayload{SessionID: session})))
 	}
@@ -28,7 +27,7 @@ func TestEventsExportSelectsByRuntimeSession(t *testing.T) {
 	for _, tc := range []struct {
 		runtime runtimesession.ID
 		backend string
-	}{{onKitty, "kitty"}, {onTmux, "tmux"}} {
+	}{{onTmuxA, "tmux"}, {onTmuxB, "tmux"}} {
 		slot := slotOf(t, h, tc.runtime)
 		resp := h.Handle(protocol.Request{Type: protocol.TypeEventsExport, RuntimeSessionID: string(tc.runtime)})
 		if !resp.OK {

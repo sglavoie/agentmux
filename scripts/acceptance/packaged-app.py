@@ -64,7 +64,7 @@ class Acceptance:
             (root / name).mkdir()
         # Git integration must degrade without triggering Apple's git shim
         # (which would ask to install Command Line Tools on a fresh Mac).
-        for tool in ("git", "go", "just", "brew", "xcodebuild", "kitten"):
+        for tool in ("git", "go", "just", "brew", "xcodebuild"):
             if tool == "git" and apple_git_shim:
                 continue
             stub = root / "bin" / tool

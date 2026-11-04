@@ -12,10 +12,8 @@ import (
 // can — and neither half of that claim is worth anything unless the screens come
 // off live harness panes.
 //
-// The captures were taken with `kitten @ get-text --extent=screen`, the same
-// call and the same extent the daemon reads panes with (internal/kitty:
-// GetText(match, "screen")), against Claude Code 2.1.231, codex-cli 0.149.1 and
-// GitHub Copilot CLI 1.0.82.
+// The live pane captures cover Claude Code 2.1.231, codex-cli 0.149.1,
+// and GitHub Copilot CLI 1.0.82.
 
 // TestFingerprintSeparatesConsecutiveWorkingCaptures is the assertion the
 // stabilization gate rests on: two captures of the same working pane, taken 3s
@@ -69,7 +67,7 @@ func TestFingerprintSeparatesConsecutiveWorkingCaptures(t *testing.T) {
 // on ⚡ forever.
 //
 // The pair is one Claude pane captured twice with nothing happening in between.
-// The only thing that changed is the cursor cell after the ❯ composer: Kitty
+// The only thing that changed is the cursor cell after the ❯ composer: the terminal
 // emits it as a trailing space while the pane holds focus and omits it when the
 // pane does not, so a pane the operator merely clicks away from would otherwise
 // look like a pane that changed.

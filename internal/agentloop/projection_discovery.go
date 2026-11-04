@@ -6,6 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/sglavoie/agentmux/internal/harness"
 )
 
 // Tri-state plan discovery.
@@ -322,21 +325,29 @@ func newCandidate(stateDir, planDir string, projection Projection) Candidate {
 		UpdatedAt:       projection.UpdatedAt,
 		UpdatedAtRaw:    projection.UpdatedAtRaw,
 	}
-	if projection.KittyWindowID > 0 {
-		candidate.WindowID = projection.KittyWindowID
-	}
 	if projection.Process != nil {
 		candidate.PID = projection.Process.PID
 		candidate.StartToken = projection.Process.StartToken
 	}
-	// The projection carries the plan's workspace root, which for a workspace
-	// plan is exactly the directory ASL runs in. A plan with no workspace has
-	// none, and CWD-keyed routing degrades to window-ID routing for it rather
-	// than matching some other plan's directory.
+	// The projection carries the plan's workspace root. A plan with no
+	// workspace has none; callers use this path for plan association.
 	if projection.WorkspaceRoot != "" {
 		if cwd, err := CanonicalizePath(projection.WorkspaceRoot); err == nil {
 			candidate.CWD = cwd
 		}
 	}
 	return candidate
+}
+
+func normalizeKnownHarness(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case harness.Codex:
+		return harness.Codex
+	case harness.Copilot:
+		return harness.Copilot
+	case harness.Claude:
+		return harness.Claude
+	default:
+		return ""
+	}
 }

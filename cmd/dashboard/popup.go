@@ -15,10 +15,10 @@ import (
 )
 
 // In a plain terminal attached to a tmux session, the dashboard and the
-// overview are popups over that terminal (the keys in internal/kittykeys.Tmux
+// overview are popups over that terminal (the keys in internal/keybindings.Tmux
 // open them, and `amx open-dashboard` does for the terminal used last). A
 // terminal shows one popup at a time and tmux ignores a second, so the popup
-// is the terminal's one dashboard, as a Kitty session had one dashboard tab.
+// is the terminal's one dashboard.
 // It opens on the session the terminal is on, and choosing a row switches the
 // terminal to that session and ends the surface, which closes the popup.
 //
@@ -26,7 +26,7 @@ import (
 // it starts (a pager, a shell, an editor) runs inside it without the
 // variables of the session it is over.
 
-// View is how a surface outside Kitty was asked to open.
+// View is how a surface was asked to open.
 type View struct {
 	// Select is --select: the runtime session whose row the surface opens
 	// on. Empty means the session this process runs in, when it runs in one.
@@ -42,9 +42,9 @@ type View struct {
 
 // The flags of a surface that can open as a popup.
 const (
-	selectFlagUsage = "outside Kitty: open on this runtime session's row (default: $" + runtimesession.EnvVar + ")"
-	clientFlagUsage = "outside Kitty: the tmux client this surface is a popup over; choosing a session switches it"
-	popupFlagUsage  = "outside Kitty: run as a popup over the terminal attached to the selected session"
+	selectFlagUsage = "open on this runtime session's row (default: $" + runtimesession.EnvVar + ")"
+	clientFlagUsage = "the tmux client this surface is a popup over; choosing a session switches it"
+	popupFlagUsage  = "run as a popup over the terminal attached to the selected session"
 )
 
 // AddViewFlags adds --select, --client, and --popup to a surface's command.
@@ -61,7 +61,7 @@ var (
 	viewRegistryPath   = runtimesession.DefaultRegistryPath
 )
 
-// terminalView prepares a surface outside Kitty, after its terminals were
+// terminalView prepares a surface after its terminals were
 // selected: it returns the ID the surface starts selected on, and in a popup
 // installs the switch that showing a session becomes. A popup then gives up
 // the identity of the session it is over, so nothing it starts speaks as

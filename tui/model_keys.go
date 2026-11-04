@@ -213,7 +213,7 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // moveToNeedsYou is `n` and `N`: walk the filtered sessions to the next one that
 // needs the operator and put the cursor on it.
 //
-// It moves and nothing more. No Kitty tab is focused and no status icon is
+// It moves and nothing more. No session is focused and no status icon is
 // acknowledged — the `}`/`{` jump this replaced did focus a tab, and the
 // keystroke that finds a waiting session is not the keystroke that decides to
 // answer it. Enter is still how a terminal is opened.

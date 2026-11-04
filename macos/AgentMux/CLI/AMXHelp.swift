@@ -2,7 +2,7 @@ import Foundation
 
 /// A cobra `--help` text, read for what it declares: the subcommands under
 /// "Available Commands:", "Additional Commands:", or any command group title
-/// (cobra lets a group be called anything, such as "Kitty tabs:"), and every
+/// (cobra lets a group be called anything), and every
 /// `--flag` under "Flags:" or "Global Flags:". Prose that merely mentions a
 /// flag is not a declaration.
 struct AMXHelp: Equatable {

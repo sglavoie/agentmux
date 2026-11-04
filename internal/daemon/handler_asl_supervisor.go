@@ -12,7 +12,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/daemon/state"
 	"github.com/sglavoie/agentmux/internal/hookevent"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // The Handler half of ASL supervision: polling registered lease records,
@@ -150,7 +149,7 @@ func (h *Handler) acceptASLSupervisorProjection(
 func (h *Handler) handleASLSupervisorMailboxQuestion(
 	payload hookevent.HookPayload,
 	baseReq protocol.Request,
-	windows []kitty.OSWindow,
+	targets []loopLifecycleTarget,
 	now time.Time,
 ) {
 	h.companionDirty()
@@ -158,7 +157,6 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 	if !ok {
 		return
 	}
-	targets, _ := h.aslHookTargets(baseReq, windows, payload)
 	for _, routeTarget := range targets {
 		targetCtx := h.loopTargetContextFor(routeTarget)
 		profile := targetCtx.profile

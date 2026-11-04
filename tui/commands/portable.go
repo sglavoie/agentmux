@@ -19,32 +19,23 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
-// This file is what the TUI needs in order to run outside Kitty, or beside a
-// second backend inside it. A Kitty session is a tab the surface can ask Kitty
-// to bring forward; a session on the private tmux server has no tab anywhere,
-// so the surface discovers it itself, reads its screen through the backend,
-// and shows it by attaching this terminal to it.
+// This file lets the TUI discover sessions on the private tmux server, read
+// their screens, and show them by attaching this terminal.
 //
-// Every surface in this tree was written against integer Kitty tab and window
-// IDs: the selection, the preview target, the scheduler keys, and the daemon's
-// state maps are all keyed by them. A portable session is therefore given a
-// process-local integer of its own, far above any Kitty ID, and the daemon's
-// state for it is re-keyed onto that integer as it arrives. Nothing outside
-// this process ever sees the number; anything sent out names the session's
-// backend reference or its runtime session.
+// The TUI uses process-local integers for selection and previews. Daemon state
+// is re-keyed onto those integers as it arrives; external requests use the
+// backend reference or runtime session ID.
 
-// PortableTerminals is the non-Kitty half of the terminals a surface works
-// with. The zero value is a Kitty-only surface.
+// PortableTerminals contains the tmux dependencies a surface uses.
 type PortableTerminals struct {
 	// Tmux is the private tmux server. Nil means tmux sessions are neither
 	// listed nor launched.
 	Tmux backend.TargetLauncher
-	// Launch is the backend new agents start on. Empty means Kitty.
+	// Launch is the backend new agents start on.
 	Launch runtimesession.BackendKind
 	// LaunchSource explains the already-resolved destination.
 	LaunchSource string
@@ -73,10 +64,7 @@ type PortableTerminals struct {
 }
 
 // Portable is the process's portable terminal set, installed once by the
-// command that starts a surface, before its program runs. Like StateQuery and
-// LocalKittySocket it is a package seam rather than a parameter: every effect
-// builder here takes the Kitty client it has always taken, and the portable
-// half rides beside it.
+// command that starts a surface, before its program runs.
 var Portable PortableTerminals
 
 // ErrNoTerminal reports an action that needs a terminal backend this surface
@@ -263,24 +251,21 @@ func PortableSelection(id runtimesession.ID) int {
 	return portableID(session.RunningSession{RuntimeSessionID: id})
 }
 
-// IsPortable reports a session hosted outside Kitty.
+// IsPortable reports a session hosted on tmux.
 func IsPortable(rs session.RunningSession) bool {
-	return rs.BackendKind() != runtimesession.BackendKitty
+	return rs.BackendKind() == runtimesession.BackendTmux
 }
 
-// TerminalDependencies is the dependency set every terminal action starts
-// from: the Kitty client when there is one, and the portable half beside it.
-func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.Dependencies {
+// TerminalDependencies is the dependency set every terminal action starts from.
+func TerminalDependencies(cfg *config.Config) actions.Dependencies {
 	deps := actions.Dependencies{
-		Kitty:    client,
 		Config:   cfg,
 		Backend:  Portable.Launch,
 		Tmux:     Portable.Tmux,
 		Runtimes: Portable.Registry,
 	}
 	if desktop := Portable.Desktop; desktop != nil {
-		// A Kitty launch leaves the operator in the tab it opened. Hosted by
-		// the workspace, the equivalent is the new agent's native view, which
+		// Hosted by the workspace, a new agent opens in its native view, which
 		// the workspace shows as soon as the daemon lists the session.
 		deps.Launched = func(launched session.LaunchResult) {
 			_ = desktop(protocol.WorkspaceViewRequest{
@@ -291,8 +276,7 @@ func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.
 		}
 	}
 	if desktop := Portable.Desktop; desktop != nil {
-		// With no Kitty tab to open a shell or an editor in, the workspace's
-		// own utility view is the place for it.
+		// The workspace's own utility view is the place for a shell or editor.
 		deps.Utility = func(view actions.UtilityView) error {
 			request := protocol.WorkspaceViewRequest{Kind: protocol.WorkspaceViewShell, Directory: view.Path, Title: filepath.Base(view.Path)}
 			if view.Editor {
@@ -302,18 +286,8 @@ func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.
 		}
 	}
 	if Portable.Tmux != nil {
-		// The actions' own live-session probe reads Kitty alone. With a
-		// portable backend in play, "is anything running here" has to count
-		// its sessions too.
+		// A live-session probe counts only sessions whose backend answers.
 		deps.LiveSessions = func(cfg *config.Config) ([]session.RunningSession, error) {
-			var running []session.RunningSession
-			if client != nil {
-				listed, _, err := session.ListWithConfig(client, cfg)
-				if err != nil {
-					return nil, err
-				}
-				running = listed
-			}
 			// This answers "is it running", so rows an outage kept on the
 			// list are not an answer: a backend that cannot be read is an
 			// error, and a lost session is not running.
@@ -324,23 +298,14 @@ func TerminalDependencies(client kitty.KittyClient, cfg *config.Config) actions.
 				}
 				portable = nil
 			}
-			return append(running, portable...), nil
+			return portable, nil
 		}
 	}
 	return deps
 }
 
-// LaunchesInKitty reports whether a launch opens a Kitty tab, which takes the
-// operator away from this surface. A portable launch leaves them here.
-func LaunchesInKitty() bool {
-	return Portable.Launch == "" || Portable.Launch == runtimesession.BackendKitty
-}
-
 // LaunchDestination names the backend the effect layer will actually use.
 func LaunchDestination() string {
-	if LaunchesInKitty() {
-		return "Kitty"
-	}
 	if Portable.Desktop != nil {
 		return "workspace (tmux)"
 	}
@@ -351,7 +316,7 @@ func LaunchDestination() string {
 func LaunchExplanation() string {
 	source := Portable.LaunchSource
 	if source == "" {
-		source = "compatibility default"
+		source = "default"
 	}
 	return LaunchDestination() + ": " + source
 }
@@ -390,8 +355,7 @@ func portableSessions(cfg *config.Config) ([]session.RunningSession, *PortableOu
 // onto the ID this process gave it, and applies it to the rows. The daemon
 // keys that state by a slot only it can name; RuntimeSlots is what ties a slot
 // to a runtime session, and a runtime session is globally unique, so this
-// needs none of the instance proof Kitty window IDs do. A session the daemon
-// has not heard from yet simply has no state.
+// A session the daemon has not heard from yet simply has no state.
 func overlayPortableState(sessions []session.RunningSession, resp *protocol.Response, into *daemonState) {
 	if resp == nil || len(sessions) == 0 {
 		return
@@ -436,9 +400,7 @@ func overlayPortableState(sessions []session.RunningSession, resp *protocol.Resp
 		}
 	}
 	ApplyDaemonStates(sessions, states)
-	// A Kitty row learns its ASL run from a user variable the daemon writes
-	// on the window. A portable row has no such variable, so the run comes
-	// from the same state entry.
+	// The ASL run comes from the daemon state entry.
 	for i := range sessions {
 		if runs := states[sessions[i].WindowID].ASLRunIDs; len(runs) > 0 {
 			sessions[i].ASLRunID = runs[0]
@@ -521,45 +483,29 @@ func utilityPath(path string) string {
 	return abs
 }
 
-// ReadScrollback reads the whole scrollback of the pane a window ID names: a
-// Kitty window through Kitty, a portable session through its backend.
-func ReadScrollback(client kitty.KittyClient, windowID int) (string, error) {
+// ReadScrollback reads the whole scrollback of a tmux pane.
+func ReadScrollback(windowID int) (string, error) {
 	if rs, ok := PortableSession(windowID); ok {
 		if Portable.Tmux == nil {
 			return "", ErrNoTerminal
 		}
 		return Portable.Tmux.Capture(rs.PaneRef(), backend.ExtentAll)
 	}
-	if client == nil || windowID >= PortableIDBase {
-		return "", ErrNoTerminal
-	}
-	return client.GetText(kitty.MatchWindowByID(windowID), "all")
+	return "", ErrNoTerminal
 }
 
-// SessionDetailRequest is the event-log request for the session a window ID
-// names. A portable session is named by runtime session; a Kitty window needs
-// its socket as well as its number. Without that socket, the detail pane
-// reports an error instead of showing another instance's events.
+// SessionDetailRequest names a tmux session by runtime session ID.
 func SessionDetailRequest(windowID int) (protocol.Request, error) {
-	req := protocol.Request{Type: protocol.TypeSessionDetail, WindowID: windowID}
 	if rs, ok := PortableSession(windowID); ok {
-		req.WindowID, req.RuntimeSessionID = 0, string(rs.RuntimeSessionID)
-		return req, nil
+		return protocol.Request{Type: protocol.TypeSessionDetail, RuntimeSessionID: string(rs.RuntimeSessionID)}, nil
 	}
-	req.KittyListenOn = LocalKittySocket()
-	if req.KittyListenOn == "" {
-		return protocol.Request{}, fmt.Errorf("kitty socket unavailable; cannot identify this window's event history")
-	}
-	return req, nil
+	return protocol.Request{}, fmt.Errorf("runtime session unavailable")
 }
 
 // UtilityDoneMsg reports that a utility view run in this terminal ended.
 type UtilityDoneMsg struct{ Err error }
 
-// pagerCommand is the pager a portable scrollback view runs. It is less, the
-// program Kitty's own overlay pager runs, opened at the end of the text;
-// $PAGER is not consulted because it is routinely set to something that is
-// not a general pager.
+// pagerCommand opens a scrollback view at the end of the text.
 func pagerCommand(path string) *exec.Cmd {
 	// #nosec G204 -- fixed program; path is a file this process just wrote.
 	return exec.Command("less", "-R", "+G", path)
@@ -646,7 +592,7 @@ func utilityShell() string {
 	return "/bin/sh"
 }
 
-// utilityEditor resolves the editor the way the Kitty path does:
+// utilityEditor resolves the editor:
 // defaults.editor, then $VISUAL, then $EDITOR, then vi.
 func utilityEditor(cfg *config.Config) []string {
 	candidates := []string{os.Getenv("VISUAL"), os.Getenv("EDITOR"), "vi"}
@@ -661,10 +607,8 @@ func utilityEditor(cfg *config.Config) []string {
 	return []string{"vi"}
 }
 
-// openedHere is how a utility view opened for a project reports: through
-// PickerOpenDoneMsg with Stay set, because nothing took the operator away from
-// this surface.
-func openedHere(err error) tea.Msg { return PickerOpenDoneMsg{Err: err, Stay: true} }
+// openedHere reports a utility view that ran from this surface and returned.
+func openedHere(err error) tea.Msg { return PickerOpenDoneMsg{Err: err} }
 
 // RunHere runs argv in dir as a utility view in this terminal: the surface is
 // suspended while it runs and done reports how it ended.
@@ -718,8 +662,7 @@ var portableConversations = struct {
 
 // LivePortableConversation returns the portable session the daemon last
 // reported as running a conversation. It is what lets "continue" show a
-// conversation that is already live on a backend Kitty cannot see, instead of
-// trying to resume it a second time.
+// conversation that is already live instead of resuming it a second time.
 func LivePortableConversation(identity conversation.Identity) (session.RunningSession, bool) {
 	portableConversations.Lock()
 	id, ok := portableConversations.byIdentity[identity]
@@ -730,10 +673,9 @@ func LivePortableConversation(identity conversation.Identity) (session.RunningSe
 	return PortableSession(id)
 }
 
-// OverviewCaptureSources is what a grid of live tiles reads panes through:
-// Kitty for Kitty windows and the portable backend for its own panes.
-func OverviewCaptureSources(client kitty.KittyClient) CaptureSources {
-	sources := CaptureSources{Kitty: client}
+// OverviewCaptureSources is what a grid of live tiles reads panes through.
+func OverviewCaptureSources() CaptureSources {
+	sources := CaptureSources{}
 	if Portable.Tmux != nil {
 		sources.Panes = map[runtimesession.BackendKind]backend.Capturer{runtimesession.BackendTmux: Portable.Tmux}
 	}

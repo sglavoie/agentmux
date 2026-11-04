@@ -2,10 +2,8 @@ package notification
 
 // Notification backends and click-to-focus contract.
 //
-// macOS notifications require Alerter 26.x or newer. A pane-specific
-// notification also carries the reusable Kitty socket that can focus its exact
-// source after Alerter reports a click. Notifications are suppressed when
-// either half of that interactive contract is unavailable.
+// macOS notifications require Alerter 26.x or newer. A notification about a
+// runtime session carries its stable session ID for click-to-focus.
 
 import (
 	"context"
@@ -14,7 +12,6 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/diagnostics"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 // MaybeNotify fires a notification for the given window if:
@@ -30,16 +27,15 @@ import (
 // CancelPending discards the pending notification when a later non-permission
 // event makes it stale.
 //
-// This compatibility entry point has no captured Kitty socket, so its
-// notifications are informational. Production pane notifications use
-// MaybeNotifyTarget with a reusable socket and Navigable set to true.
+// This entry point has no focus target, so its notifications are informational.
+// Production session notifications use MaybeNotifyTarget.
 func (n *Notifier) MaybeNotify(windowID int, sessionTitle, account, action string, pipeMode bool) {
 	n.MaybeNotifyTarget(NotificationTarget{
 		WindowID: windowID, Account: account,
 	}, sessionTitle, action, pipeMode)
 }
 
-// MaybeNotifyTarget is MaybeNotify with an explicit socket-aware click target.
+// MaybeNotifyTarget is MaybeNotify with an explicit click target.
 func (n *Notifier) MaybeNotifyTarget(target NotificationTarget, sessionTitle, action string, pipeMode bool) {
 	n.MaybeNotifyTracedTarget(target, sessionTitle, action, pipeMode, NotificationTrace{})
 }
@@ -52,7 +48,7 @@ func (n *Notifier) MaybeNotifyTraced(windowID int, sessionTitle, account, action
 	}, sessionTitle, action, pipeMode, trace)
 }
 
-// MaybeNotifyTracedTarget retains both causal identity and the exact Kitty
+// MaybeNotifyTracedTarget retains causal identity and the runtime session
 // focus target across debounce, dispatch, and click processing.
 func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTitle, action string, pipeMode bool, trace NotificationTrace) {
 	windowID := target.WindowID
@@ -95,20 +91,11 @@ func (n *Notifier) MaybeNotifyTracedTarget(target NotificationTarget, sessionTit
 	}
 	n.mu.Lock()
 	dispatchAvailable := n.dispatch != nil
-	focusAvailable := n.focus != nil
 	n.mu.Unlock()
 	// Either backend can carry the notification; runDispatch chooses between
 	// them when it runs, since the app may come or go during a debounce.
 	if !dispatchAvailable && !n.appReady() {
 		emit("decision", "suppressed", "backend_unavailable")
-		return
-	}
-	// Production wires focus before accepting requests. The focusAvailable
-	// guard preserves isolated reducer tests whose intentionally incomplete
-	// handler topology has no Kitty client at all.
-	// A runtime session's click needs no Kitty socket: it is shown by session.
-	if target.Navigable && !target.sessionFocus() && focusAvailable && !kitty.IsReusableListenAddress(target.KittyListenOn) {
-		emit("decision", "suppressed", "focus_unavailable")
 		return
 	}
 
@@ -255,104 +242,35 @@ func (n *Notifier) settleInteraction(target NotificationTarget, action string, t
 		return
 	}
 	n.mu.Lock()
-	focus := n.focus
 	sessionFocus := n.sessionFocus
 	n.mu.Unlock()
-	if target.sessionFocus() {
-		// The companion shows a runtime session itself and asks with
-		// focus_session; doing it here as well would show it twice.
-		if backend == BackendApp {
-			emit("suppressed", "focus_delegated")
-			return
-		}
-		if sessionFocus == nil {
-			emit("suppressed", "focus_unavailable")
-			return
-		}
-		switch err := sessionFocus(target.RuntimeSessionID); {
-		case err == nil:
-			emit("focused", "focus_success")
-		case errors.Is(err, ErrFocusTargetStale):
-			emit("suppressed", "focus_target_stale")
-		case errors.Is(err, ErrFocusNoViewer):
-			emit("suppressed", "focus_no_viewer")
-		default:
-			emit("failed", "focus_failed")
-		}
+	if !target.sessionFocus() {
+		emit("suppressed", "focus_target_missing")
 		return
 	}
-	if focus == nil {
+	// The companion shows the session itself after a click.
+	if backend == BackendApp {
+		emit("suppressed", "focus_delegated")
+		return
+	}
+	if sessionFocus == nil {
 		emit("suppressed", "focus_unavailable")
 		return
 	}
-	if !kitty.IsReusableListenAddress(target.KittyListenOn) {
-		emit("suppressed", "focus_unavailable")
-		return
-	}
-	if err := n.focusForClick(focus, target); err != nil {
-		if errors.Is(err, ErrFocusTargetStale) {
-			emit("suppressed", "focus_target_stale")
-			return
-		}
+	switch err := sessionFocus(target.RuntimeSessionID); {
+	case err == nil:
+		emit("focused", "focus_success")
+	case errors.Is(err, ErrFocusTargetStale):
+		emit("suppressed", "focus_target_stale")
+	case errors.Is(err, ErrFocusNoViewer):
+		emit("suppressed", "focus_no_viewer")
+	default:
 		emit("failed", "focus_failed")
-		return
 	}
-	emit("focused", "focus_success")
 }
 
-// focusForClick brings the source of a clicked notification back to the
-// foreground through FocusKittyWindow. It returns errors so runDispatch can
-// record a precise terminal focus disposition after the notification
-// subprocess exits.
-func (n *Notifier) focusForClick(focus FocusClient, target NotificationTarget) error {
-	_, err := FocusKittyWindow(focus, target.KittyListenOn, target.focusWindowID())
-	return err
-}
-
-// ErrFocusTargetStale reports that the window to focus is no longer in the
-// tree its Kitty instance lists.
-var ErrFocusTargetStale = errors.New("kitty focus target is no longer live")
-
-// KittyWindowLocation names where a focused window lives: the tab that was
-// brought forward and the OS window that holds it.
-type KittyWindowLocation struct {
-	OSWindowID int
-	TabID      int
-	WindowID   int
-}
-
-// FocusKittyWindow focuses windowID in the Kitty instance at socket. It lists
-// that instance first and returns ErrFocusTargetStale without writing anything
-// when the window is gone, then applies the two-step focus pattern — FocusTab
-// before FocusWindow, so a window in a background tab is actually shown. Both
-// steps are attempted even when the first fails; their errors are joined. The
-// location is the one the verifying list reported, and is returned with any
-// focus error so a caller can still name what it tried to focus.
-//
-// It is shared by click-to-focus and the daemon's focus_window request, so the
-// two cannot disagree about what focusing a window means. The caller decides
-// which sockets are acceptable; this function dials the one it is given.
-func FocusKittyWindow(focus FocusClient, socket string, windowID int) (KittyWindowLocation, error) {
-	windows, err := focus.ListWindows(socket)
-	if err != nil {
-		return KittyWindowLocation{}, err
-	}
-	osWindow, tab, _, ok := kitty.FindWindowLocationByID(windows, windowID)
-	if !ok {
-		return KittyWindowLocation{}, ErrFocusTargetStale
-	}
-	loc := KittyWindowLocation{OSWindowID: osWindow.ID, TabID: tab.ID, WindowID: windowID}
-	var errs []error
-	if err := focus.FocusTab(socket, kitty.MatchTabByWindowID(windowID)); err != nil {
-		slog.Debug("notifier: focus tab failed", "err", err, "window_id", windowID)
-		errs = append(errs, err)
-	}
-	if err := focus.FocusWindow(socket, kitty.MatchWindowByID(windowID)); err != nil {
-		slog.Debug("notifier: focus window failed", "err", err, "window_id", windowID)
-		errs = append(errs, err)
-	}
-	return loc, errors.Join(errs...)
-}
+// ErrFocusTargetStale reports a session whose agent has stopped.
+var ErrFocusTargetStale = errors.New("focus target is no longer live")
 
 func (n *Notifier) actionEnabled(action string) bool {
 	switch action {
@@ -376,7 +294,7 @@ func (n *Notifier) actionEnabled(action string) bool {
 
 // MarkNotified records a dispatched notification for (windowID, action) at
 // `at`, starting its cooldown. It is the write half of the cooldown
-// bookkeeping PurgeWindow releases when Kitty stops reporting a window.
+// bookkeeping PurgeWindow releases when a session disappears.
 func (n *Notifier) MarkNotified(windowID int, action string, at time.Time) {
 	n.mu.Lock()
 	defer n.mu.Unlock()

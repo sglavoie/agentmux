@@ -28,7 +28,7 @@ import (
 // topology age comes from topologyAge, which already owns the "age the tree on
 // screen carries plus everything elapsed since" rule that lets an outage age a
 // warm tree with no message arriving. And the stale threshold is the daemon's
-// own protocol.KittySnapshotStaleAfter, passed in as a value so the leaf keeps
+// own protocol.TopologyStaleAfter, passed in as a value so the leaf keeps
 // its single in-repo dependency instead of importing the daemon wire contract to
 // paint a line.
 func healthFacts(m Model) dashboard.HealthFacts {
@@ -41,7 +41,7 @@ func healthFacts(m Model) dashboard.HealthFacts {
 		HookInSync:            m.hookHealth.InSync,
 		HookDrifted:           m.hookHealth.Drifted,
 		HookMissing:           m.hookHealth.Missing,
-		TopologyStaleAfter:    protocol.KittySnapshotStaleAfter,
+		TopologyStaleAfter:    protocol.TopologyStaleAfter,
 		TopologySource:        string(m.topology.Source),
 		TopologyStale:         m.topology.Stale,
 		TopologyGeneration:    m.topology.Generation,

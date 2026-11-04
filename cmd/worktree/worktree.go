@@ -33,7 +33,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/tmux"
@@ -43,13 +42,8 @@ import (
 )
 
 var (
-	worktreeCommandsLoadConfig   = cli.LoadRunnableConfig
-	worktreeCommandsNewManager   = func() actions.WorktreeLifecycle { return worktree.NewManager() }
-	worktreeCommandsNewKitty     = func() kitty.KittyClient { return cli.NewKittyClient() }
-	worktreeCommandsLiveSessions = func(client kitty.KittyClient, cfg *config.Config) ([]session.RunningSession, error) {
-		running, _, err := session.ListWithConfig(client, cfg)
-		return running, err
-	}
+	worktreeCommandsLoadConfig = cli.LoadRunnableConfig
+	worktreeCommandsNewManager = func() actions.WorktreeLifecycle { return worktree.NewManager() }
 	// worktreeCommandsTmuxSessions lists what runs on the private tmux
 	// server, for the commands that must know whether a worktree is in use.
 	worktreeCommandsTmuxSessions = func(server backend.TargetLauncher, cfg *config.Config) ([]session.RunningSession, error) {
@@ -58,15 +52,6 @@ var (
 			return nil, err
 		}
 		return session.RunningSessionsFromPanes(runtimesession.BackendTmux, panes, cfg), nil
-	}
-	// worktreeCommandsObservedTmux opens the private tmux server only to read
-	// what runs on it, when launches go to Kitty. Listing a server that is
-	// not running starts nothing.
-	worktreeCommandsObservedTmux = func() (backend.TargetLauncher, error) { return cli.NewTmuxBackend() }
-	// worktreeCommandsInsideKitty says the command was typed in a Kitty
-	// window, where Kitty's sessions count even for a tmux launch.
-	worktreeCommandsInsideKitty = func() bool {
-		return os.Getenv("KITTY_LISTEN_ON") != "" || cli.WindowIDFromEnv() > 0
 	}
 	// worktreeCommandsWorkspace asks the desktop workspace for a utility
 	// view. It refuses unless the workspace hosts this terminal, so a shell
@@ -193,10 +178,9 @@ With --json it reports {worktree, warnings}.`,
   amx worktree show 3f9c2a1e --json`)
 
 var worktreeShellCmd = newWorktreeSelectorCommand("shell", actions.WorktreeShell, "Open a shell in a managed worktree",
-	`Opens $SHELL (else /bin/sh) in a managed worktree. On the Kitty backend it
-opens in a new Kitty tab; hosted by the Agent Mux workspace it opens as a
-view beside the session; otherwise it runs in this terminal and returns when
-the shell exits. The <selector> is one of:
+	`Opens $SHELL (else /bin/sh) in a managed worktree. Hosted by the Agent Mux
+workspace it opens as a view beside the session; otherwise it runs in this
+terminal and returns when the shell exits. The <selector> is one of:
 
 `+worktreeSelectorHelp+`
 
@@ -208,8 +192,8 @@ run it itself (continuation "here").`,
 
 var worktreeEditCmd = newWorktreeSelectorCommand("edit", actions.WorktreeEditor, "Open a managed worktree in the configured editor",
 	`Opens a managed worktree in the configured editor. Where it opens follows
-the same rules as `+"`amx worktree shell`"+`: a Kitty tab, a view in the Agent
-Mux workspace, or this terminal. The <selector> is one of:
+the same rules as `+"`amx worktree shell`"+`: a view in the Agent Mux workspace
+or this terminal. The <selector> is one of:
 
 `+worktreeSelectorHelp+`
 
@@ -345,7 +329,7 @@ func newWorktreeSelectorCommand(name string, actionID actions.ID, short, long, e
 }
 
 // runWorktreeViewHere runs the shell or editor an open left to this
-// terminal: outside Kitty and outside the workspace there is no tab or view
+// terminal: outside the workspace there is no embedded view
 // to open, so the worktree is opened where the command was typed. A --json
 // caller is told so instead (continuation "here") and runs it itself.
 func runWorktreeViewHere(cmd *cobra.Command, view actions.UtilityView) error {
@@ -402,40 +386,10 @@ func executeWorktreeAction(cmd *cobra.Command, actionID actions.ID, request acti
 		}
 		tmuxErr = err
 	}
-	// Only the Kitty backend opens Kitty tabs: on tmux a reopen launches on
-	// the private server, and a shell or an editor goes to the workspace or
-	// this terminal. Kitty is still read for what is running in it when the
-	// command was typed in a Kitty window.
-	var client kitty.KittyClient
-	if deps.Backend != runtimesession.BackendTmux {
-		client = worktreeCommandsNewKitty()
-		deps.Kitty = client
-	} else if worktreeCommandsInsideKitty() {
-		client = worktreeCommandsNewKitty()
-	}
 	server := deps.Tmux
-	if server == nil && tmuxErr == nil {
-		// Launches go to Kitty, but agents may still run on the private tmux
-		// server (started from the workspace or with --backend tmux). They
-		// count toward a worktree's use; a tmux that cannot be opened has
-		// none to count.
-		if observed, err := worktreeCommandsObservedTmux(); err == nil {
-			server = observed
-		}
-	}
-	// Each backend is read on its own, so a Kitty that does not answer still
-	// leaves the tmux sessions counted; the error says what is missing, and
-	// land and remove refuse on it.
 	deps.LiveSessions = func(current *config.Config) ([]session.RunningSession, error) {
 		var running []session.RunningSession
 		var problems []error
-		if client != nil {
-			listed, err := worktreeCommandsLiveSessions(client, current)
-			if err != nil {
-				problems = append(problems, fmt.Errorf("sessions in Kitty are not counted: %w", cli.PlainKittyError(err)))
-			}
-			running = listed
-		}
 		if tmuxErr != nil {
 			problems = append(problems, tmuxErr)
 		} else if server != nil {
@@ -605,7 +559,7 @@ const worktreeCompletionTimeout = 2 * time.Second
 
 // completeWorktreeSelectors suggests managed worktree IDs for the selector
 // argument, each described by its branch and project, and nothing after it.
-// It reads the inventory alone — no configuration, Kitty, or transcript
+// It reads the inventory alone — no configuration or transcript
 // index — and degrades to no suggestions on any failure.
 func completeWorktreeSelectors(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	if len(args) > 0 {
@@ -660,13 +614,12 @@ func init() {
 	for _, command := range []*cobra.Command{worktreeListCmd, worktreeShowCmd, worktreeShellCmd, worktreeEditCmd} {
 		cli.AddJSONFlag(command, nil)
 	}
-	// Where a reopen launches, and so whether a shell or an editor opens a
-	// Kitty tab or runs outside Kitty.
+	// Where a reopen launches, and where a shell or editor opens.
 	cli.AddBackendFlag(worktreeReopenCmd)
 	for _, command := range []*cobra.Command{worktreeShellCmd, worktreeEditCmd} {
-		cli.AddBackendFlagUsage(command, "where it opens: kitty for a new Kitty tab, tmux for the workspace or this terminal (default: [defaults] launch_backend; unset, tmux)")
+		cli.AddBackendFlagUsage(command, "where it opens: tmux in the workspace or this terminal (default: [defaults] launch_backend; unset, tmux)")
 	}
-	worktreeReopenCmd.Flags().String("live-session", "", "live session to focus when several run in the worktree: a candidate ID from the ambiguous_live_sessions error (a Kitty tab ID, or a tmux session's runtime session ID)")
+	worktreeReopenCmd.Flags().String("live-session", "", "live session to focus when several run in the worktree: a runtime session ID from the ambiguous_live_sessions error")
 	// --session was the flag's first name; it stays as a hidden alias so
 	// scripts that pass it keep working.
 	worktreeReopenCmd.Flags().String("session", "", "deprecated alias of --live-session")

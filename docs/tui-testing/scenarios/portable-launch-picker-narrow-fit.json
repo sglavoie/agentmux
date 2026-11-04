@@ -12,7 +12,6 @@
     { "type": "contains_text", "text": "Home: ~/.claude-work" },
     { "type": "contains_text", "text": "codex-work" },
     { "type": "excludes_text", "text": "requires" },
-    { "type": "excludes_text", "text": "Kitty" },
     { "type": "no_layout_issues" }
   ]
 }

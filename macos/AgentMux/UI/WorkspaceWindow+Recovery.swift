@@ -83,9 +83,7 @@ extension WorkspaceWindowController {
     private func savedPane(_ place: Place?) -> WorkspaceRestoration.Pane? {
         switch place {
         case let .session(key)?:
-            return .session((key.runtimeSessionID.isEmpty
-                ? WorkspaceRestoration.Place.kitty(socket: key.socket, windowID: key.windowID)
-                : .session(runtimeSessionID: key.runtimeSessionID)).encoded)
+            return .session(WorkspaceRestoration.Place.session(runtimeSessionID: key.runtimeSessionID).encoded)
         case let .view(id)?: return views.view(id).flatMap { $0.isOverlay ? nil : .utility($0) }
         case .review?: return reviewDirectory().map(WorkspaceRestoration.Pane.review)
         case nil: return nil
@@ -111,7 +109,7 @@ extension WorkspaceWindowController {
         switch place {
         case let .view(id):
             if !showView(id, focus: true) { showView(WorkspaceUtilityView.dashboard.id) }
-        case .session, .kitty:
+        case .session:
             state.select(nil)
             viewSelection = nil
             gone = nil
@@ -131,19 +129,7 @@ extension WorkspaceWindowController {
     /// Takes the next step of a restore once the feed is live.
     func continueRestoring() {
         guard let place = restoring, !restoreChecking, state.current, let key = place.sessionKey else { return }
-        guard case let .session(id) = place else {
-            // A Kitty session is selected, never raised: coming back must not
-            // pull another app forward.
-            restoring = nil
-            if state.row(key) != nil {
-                Self.logger.notice("workspace: restored the selection of Kitty window \(key.windowID)")
-                select(key)
-            } else {
-                Self.logger.notice("workspace: Kitty window \(key.windowID) is no longer listed; nothing restored")
-                reportPlace()
-            }
-            return
-        }
+        guard case let .session(id) = place else { return }
         let listed = state.row(key) != nil
         let name = state.row(key)?.displayName ?? "The session this window was on"
         restoring = nil
@@ -252,9 +238,7 @@ extension WorkspaceWindowController {
         } else if let viewSelection {
             now = views.view(viewSelection)?.isPermanent == true ? .view(id: viewSelection) : reportedPlace
         } else if let key = state.selection {
-            now = key.runtimeSessionID.isEmpty
-                ? .kitty(socket: key.socket, windowID: key.windowID)
-                : .session(runtimeSessionID: key.runtimeSessionID)
+            now = .session(runtimeSessionID: key.runtimeSessionID)
         } else {
             now = nil
         }
@@ -298,8 +282,7 @@ extension WorkspaceWindowController {
         return true
     }
 
-    /// Focuses a row the way a click does: an embedded session takes the
-    /// keyboard here, a Kitty session comes forward in Kitty. With
+    /// Focuses a row the way a click does. With
     /// `reattaching`, which only the operator's own click or Return on the
     /// row asks for, a session whose terminal was detached is attached
     /// again, taking it from whichever terminal has it.
@@ -311,10 +294,6 @@ extension WorkspaceWindowController {
                 Self.logger.notice("workspace: reattaching \(id, privacy: .public)")
             }
             select(row.key, focus: true)
-        case let .kitty(_, windowID):
-            Self.logger.notice("workspace: focus Kitty window \(windowID) externally")
-            select(row.key)
-            delegate?.focusExternally(row)
         }
     }
 

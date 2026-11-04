@@ -282,7 +282,7 @@ final class GhosttyInteractionTests: XCTestCase {
         expect("a", "sidebar zoom sends no Option characters to the program")
     }
 
-    /// ⌘0 and ⌘⇧0 are the tenth session's. With fewer sessions that item
+    /// ⌘0 is the tenth session's. With fewer sessions that item
     /// is disabled, and Ghostty must not reset the zoom behind it.
     @MainActor
     func testCommandZeroNeverResetsTheZoomBehindTheMenu() throws {
@@ -295,7 +295,7 @@ final class GhosttyInteractionTests: XCTestCase {
         }
         let menu = try XCTUnwrap(NSApp.mainMenu)
         let surface = try XCTUnwrap(view.surface)
-        let zeros = [TestKey.command("0", keyCode: 29), .command("0", keyCode: 29, shifted: ")")]
+        let zeros = [TestKey.command("0", keyCode: 29)]
         for key in zeros {
             var flags = ghostty_binding_flags_e(0)
             let isBinding = key.characters.withCString { ptr in
@@ -626,7 +626,7 @@ final class GhosttyInteractionTests: XCTestCase {
 
 /// Who owns a shortcut: the workspace's main menu, or the program in the
 /// focused terminal. Every menu shortcut holds ⌘, is Shift+Page Up/Down, or
-/// is one of the function keys Kitty binds too (F1 to F11), so nothing else
+/// is one of the function keys the terminal reserves (F1 to F11), so nothing else
 /// an agent or the Dashboard binds is taken from it.
 @MainActor
 final class WorkspaceShortcutTests: XCTestCase {
@@ -654,15 +654,12 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("p", keyCode: 35), "Go to…"),
             (.command("p", keyCode: 35, shifted: "P"), "Command Palette…"),
             (.command("1", keyCode: 18), "⌘1"),
-            (.command("1", keyCode: 18, shifted: "!"), "⌘⇧1"),
             (.command("]", keyCode: 30), "⌘]"),
             (.command("[", keyCode: 33), "⌘["),
             (.left.with(.command), "Previous Tab in Project"),
             (.right.with(.command), "Next Tab in Project"),
             (.left.with([.command, .shift]), WorkspaceMenu.previousStopTitle),
             (.right.with([.command, .shift]), WorkspaceMenu.nextStopTitle),
-            (.command("]", keyCode: 30, shifted: "}"), "⌘}"),
-            (.command("[", keyCode: 33, shifted: "{"), "⌘{"),
             (.command("l", keyCode: 37), "Back to Last Shown"),
             (.command("b", keyCode: 11), "Toggle Sidebar"),
             (.command("b", keyCode: 11, shifted: "B"), "Toggle Inspector"),
@@ -767,18 +764,6 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.function(NSF9FunctionKey, keyCode: 101), "Next Session Only"),
             (.function(NSF10FunctionKey, keyCode: 109), "Toggle Session Mute"),
             (.function(NSF11FunctionKey, keyCode: 103), "Mark Session Active"),
-            (.command("]", keyCode: 30, shifted: "}"), WorkspaceMenu.nextSessionTitle),
-            (.command("[", keyCode: 33, shifted: "{"), WorkspaceMenu.previousSessionTitle),
-            (.command("1", keyCode: 18, shifted: "!"), "Session 1 in Kitty"),
-            (.command("2", keyCode: 19, shifted: "@"), "Session 2 in Kitty"),
-            (.command("3", keyCode: 20, shifted: "#"), "Session 3 in Kitty"),
-            (.command("4", keyCode: 21, shifted: "$"), "Session 4 in Kitty"),
-            (.command("5", keyCode: 23, shifted: "%"), "Session 5 in Kitty"),
-            (.command("6", keyCode: 22, shifted: "^"), "Session 6 in Kitty"),
-            (.command("7", keyCode: 26, shifted: "&"), "Session 7 in Kitty"),
-            (.command("8", keyCode: 28, shifted: "*"), "Session 8 in Kitty"),
-            (.command("9", keyCode: 25, shifted: "("), "Session 9 in Kitty"),
-            (.command("0", keyCode: 29, shifted: ")"), "Session 10 in Kitty"),
             (.command("1", keyCode: 18), "Session 1"),
             (.command("2", keyCode: 19), "Session 2"),
             (.command("3", keyCode: 20), "Session 3"),
@@ -808,7 +793,7 @@ final class WorkspaceShortcutTests: XCTestCase {
         XCTAssertEqual(listed, expected.count + 1, "a menu shortcut is missing from this test (Hide is the one not listed)")
     }
 
-    func testOnlyCommandSidebarZoomPagingAndKittysFunctionKeysAreTheMenus() {
+    func testOnlyCommandSidebarZoomPagingAndFunctionKeysAreTheMenus() {
         let functionKeys = Set(WorkspaceMenu.functionKeys.map(\.title))
         XCTAssertEqual(WorkspaceMenu.functionKeys.map(\.number).sorted(), Array(1...11), "F12 detaches and stays tmux's")
         func check(_ menu: NSMenu) {

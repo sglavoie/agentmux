@@ -309,7 +309,7 @@ func TestTickTriggersRefetch(t *testing.T) {
 func TestErrMsgSetsErr(t *testing.T) {
 	t.Parallel()
 
-	m := applyRefreshErr(testModel(), errors.New("kitty offline"))
+	m := applyRefreshErr(testModel(), errors.New("tmux offline"))
 	if m.err == nil {
 		t.Fatal("expected err to be set after commands.ErrMsg")
 	}
@@ -318,7 +318,7 @@ func TestErrMsgSetsErr(t *testing.T) {
 func TestSessionsMsgClearsErr(t *testing.T) {
 	t.Parallel()
 
-	m := applyRefreshErr(testModel(), errors.New("kitty offline"))
+	m := applyRefreshErr(testModel(), errors.New("tmux offline"))
 	m = loadSessions(m, makeSessions())
 	if m.err != nil {
 		t.Fatalf("expected err cleared after commands.SessionsMsg, got %v", m.err)

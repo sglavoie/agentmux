@@ -95,31 +95,23 @@ struct ProjectEntry: Decodable, Equatable, Hashable {
 }
 
 /// `amx project launch --json`'s data. The tab and window are reported only
-/// when amx could tell which new tab the launch opened.
+/// when amx registered a new runtime session.
 struct ProjectLaunchResult: Decodable, Equatable {
     var changed = false
     var message = ""
     var project: ProjectEntry?
-    var tabID = 0
-    var windowID = 0
-    /// The runtime session a launch on the tmux backend registered; empty
-    /// for a Kitty launch, which reports a tab and a window instead.
+    /// The runtime session registered by the launch.
     var runtimeSessionID = ""
 
-    init(changed: Bool = true, message: String = "", project: ProjectEntry? = nil, tabID: Int = 0, windowID: Int = 0,
-         runtimeSessionID: String = "") {
+    init(changed: Bool = true, message: String = "", project: ProjectEntry? = nil, runtimeSessionID: String = "") {
         self.changed = changed
         self.message = message
         self.project = project
-        self.tabID = tabID
-        self.windowID = windowID
         self.runtimeSessionID = runtimeSessionID
     }
 
     enum CodingKeys: String, CodingKey {
         case changed, message, project
-        case tabID = "tab_id"
-        case windowID = "window_id"
         case runtimeSessionID = "runtime_session_id"
     }
 
@@ -128,8 +120,6 @@ struct ProjectLaunchResult: Decodable, Equatable {
         changed = c.lenient(.changed, false)
         message = c.lenient(.message, "")
         project = c.lenient(.project)
-        tabID = c.lenient(.tabID, 0)
-        windowID = c.lenient(.windowID, 0)
         runtimeSessionID = c.lenient(.runtimeSessionID, "")
     }
 }
@@ -209,12 +199,6 @@ struct ProjectCatalog: Equatable {
         if !project.profile.isEmpty { arguments += ["--profile", project.profile] }
         if let directory { arguments += ["--directory", directory] }
         return arguments
-    }
-
-    /// An explicit app preference must override the command-line default,
-    /// even when config.toml sends other launches to tmux.
-    static func kittyLaunchArguments(for project: ProjectEntry, directory: String? = nil) -> [String] {
-        launchArguments(for: project, directory: directory) + ["--backend", "kitty"]
     }
 
     /// The same launch on the private tmux server, for the workspace to embed.

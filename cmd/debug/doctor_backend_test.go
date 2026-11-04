@@ -8,7 +8,6 @@ package debug
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -17,7 +16,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
 
@@ -68,6 +66,7 @@ func runDoctorForBackend(t *testing.T, backend cli.BackendStatus, runtime *proto
 
 func TestDoctorReportsAHealthyBackendWithoutAFinding(t *testing.T) {
 	backend := quietBackendStatus()
+	backend.LaunchBackend = "tmux"
 	backend.Tmux.Source, backend.Tmux.Verified = "bundled", true
 	backend.Server = cli.TmuxServerStatus{Running: true, Binary: backend.Tmux.Path, Sessions: 3, Agents: 3}
 	got, report, err := runDoctorForBackend(t, backend, healthyRuntime(), true)
@@ -75,11 +74,11 @@ func TestDoctorReportsAHealthyBackendWithoutAFinding(t *testing.T) {
 		t.Fatalf("a healthy backend must not fail --strict: %v\n%s", err, got)
 	}
 	for _, want := range []string{
-		"backend: launches go to kitty; tmux 3.7c (bundled, verified); server running with 3 agents in 3 sessions",
+		"backend: launches go to tmux; tmux 3.7c (bundled, verified); server running with 3 agents in 3 sessions",
 		"runtime sessions: 3 live (3 on tmux, 1 server), 2 with a terminal attached, 1 unattached; reconciled 400ms ago in 12ms (412 passes, 0 failed)",
 		"screen captures: 320 read, 2 failed, last good one 1.2s ago (slowest 31ms); tmux clients: 1450 run, at most 2 at once (limit 4), 0 timed out",
 		"versions: amx " + doctorTestBuild.Version,
-		"tmux 3.7c (needs " + tmux.MinVersion + " or newer), kitty 0.43.1",
+		"tmux 3.7c (needs " + tmux.MinVersion + " or newer)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("doctor output missing %q:\n%s", want, got)
@@ -94,14 +93,14 @@ func TestDoctorReportsAHealthyBackendWithoutAFinding(t *testing.T) {
 	if report.Daemon.Runtime == nil || report.Daemon.Runtime.Sessions.Attached != 2 {
 		t.Errorf("daemon.runtime = %+v; want the daemon's block carried through", report.Daemon.Runtime)
 	}
-	if !report.Backend.Server.Running || report.Versions.Tmux != "3.7c" || report.Versions.TmuxMin != tmux.MinVersion || report.Versions.Kitty != "0.43.1" {
+	if !report.Backend.Server.Running || report.Versions.Tmux != "3.7c" || report.Versions.TmuxMin != tmux.MinVersion {
 		t.Errorf("backend = %+v versions = %+v", report.Backend, report.Versions)
 	}
 }
 
 // The backend is read by doctor itself, so a daemon that is down does not
 // hide a tmux that cannot be used, and a tmux that cannot be used fails
-// --strict exactly where the operator launches on tmux.
+// --strict when launches require tmux.
 func TestDoctorDiagnosesAnUnusableTmuxWithTheDaemonDown(t *testing.T) {
 	unusable := func(launch, severity string) cli.BackendStatus {
 		return cli.BackendStatus{
@@ -129,11 +128,11 @@ func TestDoctorDiagnosesAnUnusableTmuxWithTheDaemonDown(t *testing.T) {
 		t.Errorf("doctor must not describe the work of a daemon it never reached:\n%s", got)
 	}
 
-	// The same machine, for someone who launches in Kitty: how it is set up.
-	_, report, _ = runDoctorForBackend(t, unusable(config.LaunchBackendKitty, "warning"), nil, false)
+	// A running server without a replacement binary is a warning.
+	_, report, _ = runDoctorForBackend(t, unusable(config.LaunchBackendTmux, "warning"), nil, false)
 	found = findingsFor(report, "backend_tmux_unavailable")
-	if len(found) != 1 || found[0].Severity != severityInfo {
-		t.Fatalf("backend_tmux_unavailable = %+v; want one note where launches go to Kitty and no server runs", found)
+	if len(found) != 1 || found[0].Severity != severityWarning {
+		t.Fatalf("backend_tmux_unavailable = %+v; want a warning", found)
 	}
 }
 
@@ -262,89 +261,5 @@ func TestBackendFindingIdentifiersAreStable(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("identifier %d = %q; want %q", i, got[i], want[i])
 		}
-	}
-}
-
-type failingKittyLister struct{}
-
-func (failingKittyLister) ListWindows() ([]kitty.OSWindow, error) {
-	return nil, errors.New("KITTY_LISTEN_ON is not set")
-}
-
-// A Kitty that does not answer is a failure wherever one is in use: named by
-// this terminal, or currently read by the daemon. Where launches go to Kitty
-// and nothing names one it is a warning. Where launches go to tmux and no
-// live Kitty is named, Kitty is not in use, and none of doctor's Kitty
-// findings is raised, however old the daemon's last topology is.
-func TestDoctorKittyIsNotAFailureWhereItIsNotInUse(t *testing.T) {
-	run := func(launch, listenOn, daemonSocket string, stale bool) (string, doctorReport, error) {
-		backend := quietBackendStatus()
-		backend.LaunchBackend = launch
-		health := ipc.Health{Alive: true}
-		if daemonSocket != "" {
-			health.KittySnapshot = &protocol.KittySnapshot{Ready: true, Socket: daemonSocket, Stale: stale}
-		}
-		setUpDoctorFixture(t, health, protocol.EventsExport{})
-		previousStatus, previousGetenv := doctorBackendStatus, doctorGetenv
-		doctorBackendStatus = func() cli.BackendStatus { return backend }
-		doctorGetenv = func(key string) string {
-			if key == "KITTY_LISTEN_ON" {
-				return listenOn
-			}
-			return ""
-		}
-		t.Cleanup(func() { doctorBackendStatus, doctorGetenv = previousStatus, previousGetenv })
-		newDoctorKitty = func() cli.KittyWindowLister { return failingKittyLister{} }
-		previousAt := newDoctorKittyAt
-		newDoctorKittyAt = func(string) cli.KittyWindowLister { return failingKittyLister{} }
-		t.Cleanup(func() { newDoctorKittyAt = previousAt })
-		doctorJSON = true
-		var out bytes.Buffer
-		doctorCmd.SetOut(&out)
-		err := runDoctor(doctorCmd, nil)
-		var report doctorReport
-		if decodeErr := json.Unmarshal(out.Bytes(), &report); decodeErr != nil {
-			t.Fatalf("decode doctor report: %v\n%s", decodeErr, out.String())
-		}
-		return out.String(), report, err
-	}
-	severityOf := func(report doctorReport) string {
-		found := findingsFor(report, "kitty")
-		if len(found) != 1 {
-			t.Fatalf("kitty findings = %+v; want exactly one", found)
-		}
-		return found[0].Severity
-	}
-	kittyFindings := func(report doctorReport) []doctorFinding {
-		var found []doctorFinding
-		for _, check := range []string{"kitty", checkKittySnapshotStale, "renderer_drift"} {
-			found = append(found, findingsFor(report, check)...)
-		}
-		return found
-	}
-
-	if _, report, _ := run(config.LaunchBackendTmux, "", "", false); len(kittyFindings(report)) != 0 {
-		t.Errorf("launches on tmux, no Kitty listening: %+v; want no Kitty finding", kittyFindings(report))
-	}
-	if _, report, _ := run(config.LaunchBackendTmux, "", "unix:/tmp/kitty-1", true); len(kittyFindings(report)) != 0 {
-		t.Errorf("launches on tmux, the daemon's Kitty long gone: %+v; want no Kitty finding", kittyFindings(report))
-	}
-	if _, report, _ := run(config.LaunchBackendKitty, "", "unix:/tmp/kitty-1", true); len(findingsFor(report, checkKittySnapshotStale)) != 1 {
-		t.Errorf("launches in Kitty with a stale topology: %+v; want the stale warning", report.Findings)
-	}
-	if _, report, _ := run(config.LaunchBackendTmux, "", "unix:/tmp/kitty-1", false); severityOf(report) != severityFailure {
-		t.Errorf("launches on tmux while the daemon reads a Kitty that does not answer here: kitty is %s; want a failure", severityOf(report))
-	}
-	if _, report, _ := run(config.LaunchBackendTmux, "unix:/tmp/kitty-1", "", false); severityOf(report) != severityFailure {
-		t.Errorf("launches on tmux inside a Kitty window that does not answer: kitty is %s; want a failure", severityOf(report))
-	}
-	if _, report, _ := run(config.LaunchBackendKitty, "unix:/tmp/kitty-1", "", false); severityOf(report) != severityFailure {
-		t.Errorf("launches in Kitty, inside a Kitty window that does not answer: kitty is %s; want a failure", severityOf(report))
-	}
-	if _, report, _ := run(config.LaunchBackendKitty, "", "unix:/tmp/kitty-1", false); severityOf(report) != severityFailure {
-		t.Errorf("outside Kitty, the daemon's Kitty does not answer: kitty is %s; want a failure", severityOf(report))
-	}
-	if _, report, _ := run(config.LaunchBackendKitty, "", "", false); severityOf(report) != severityWarning {
-		t.Errorf("launches in Kitty, no Kitty named by this terminal or the daemon: kitty is %s; want a warning", severityOf(report))
 	}
 }

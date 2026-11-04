@@ -119,7 +119,6 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	outcome.reduceAction = req.Action
 	outcome.notifyAction = req.Action
 	h.touchWindowMetadataLocked(req)
-	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
 	st := h.ensureWindowStateLocked(req.WindowID)
 	// Capture the visible state before any mutation so the final dirty mark
 	// can distinguish a visual change (immediate render) from activity-only
@@ -230,7 +229,7 @@ func (h *Handler) applyStateUpdate(req protocol.Request) (protocol.Response, app
 	//
 	// eventLog is intentionally preserved across terminal actions so the detail
 	// pane can still surface the session's history after the session ends.
-	// Window-existence GC in SweepStale drops the entry once Kitty closes the
+	// Window-existence GC in SweepStale drops the entry once the runtime closes the
 	// window.
 	if req.Action == "stop" || req.Action == "stop_failure" || req.Action == "failure" ||
 		req.Action == "idle" || req.Action == "clear" || isOperatorAction(req.Action) {
@@ -472,7 +471,6 @@ func (h *Handler) handleLoopMarkerStateUpdate(req protocol.Request) protocol.Res
 		return protocol.Response{OK: false, Error: "runtime slot is closed"}
 	}
 	h.touchWindowMetadataLocked(req)
-	h.rememberKittySocketLocked(req.WindowID, req.KittyListenOn)
 	st := h.ensureWindowStateLocked(req.WindowID)
 	if req.Account != "" {
 		accountKey := strings.ToLower(req.Account)

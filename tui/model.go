@@ -12,13 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/handoff"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -45,7 +43,7 @@ type Model struct {
 	flightError, flightEventKind                          string
 	flightSequence, flightTab, flightCursor, flightOffset int
 	// deps
-	client kitty.KittyClient
+	client any
 	cfg    *config.Config
 	// Production watches the config off the update loop. Constructors remain
 	// usable with an in-memory config by leaving configPath empty.
@@ -103,7 +101,7 @@ type Model struct {
 	projectSwitcherOffset int
 	projectSwitcherQuery  string
 	projectSwitcherSearch bool
-	// initialSourceWindowID is the Kitty window from which the dashboard was
+	// initialSourceWindowID is the session window from which the dashboard was
 	// opened, used to select the matching tab row. It is retained across
 	// refreshes and cleared by the first usable topology result, so a startup
 	// refresh that fails does not cost the operator their selection.
@@ -136,7 +134,7 @@ type Model struct {
 	// fatal enough to render red.
 	topology           commands.TopologyFreshness
 	topologyObservedAt time.Time
-	// lastSelectionRequestToken prevents a request left on a Kitty window
+	// lastSelectionRequestToken prevents a request left on a session window
 	// after a failed best-effort clear from repeatedly stealing the cursor.
 	lastSelectionRequestToken string
 
@@ -167,7 +165,7 @@ type Model struct {
 	width  int
 	height int
 
-	// last error from Kitty query
+	// last error from session query
 	err error
 	// portableErr is set while the tmux rows are kept from an earlier
 	// listing (commands.PortableOutage); nil once a refresh reads them again.
@@ -206,12 +204,6 @@ type Model struct {
 	pickerDirValue string
 	pickerDirError string // why the last entry was refused; cleared by the next edit
 
-	// active agent-session-loop runs retained for detail views. Dashboard loop
-	// markers come from the daemon's bulk state snapshot.
-	activeLoopCandidates []agentloop.Candidate
-	activeLoopRefreshErr error
-	activeLoopRefreshSeq int
-
 	// last error from a close/restart action
 	actionErr error
 
@@ -240,8 +232,8 @@ type Model struct {
 	// direct dashboard binding must not inherit the palette query of whatever
 	// ran before it.
 	pendingActionOrigin sessionactions.Origin
-	// actionHost is the Kitty tab and window this dashboard is itself running
-	// in, republished by every topology refresh. It answers "would this action
+	// actionHost holds the session IDs this dashboard is itself running in,
+	// republished by every topology refresh. It answers "would this action
 	// close the surface I am standing on", which is a different question from
 	// every selection the dashboard makes and must not be confused with
 	// initialSourceWindowID, which names the tab to SELECT and is spent by the
@@ -596,7 +588,7 @@ type Model struct {
 	aslNotice string
 
 	// Shared live-session ambiguity picker (ModeLiveSessionPicker). Any caller
-	// that resolves a target to more than one live Kitty session raises it;
+	// that resolves a target to more than one live session raises it;
 	// livePickerPurpose decides what Enter does and where Esc lands.
 	livePickerCandidates []actions.WorktreeLiveSession
 	livePickerCursor     int
@@ -685,7 +677,7 @@ const (
 	ModePlanSearch             // searchable list of past agent-plan directories
 	ModePlanView               // inline pager for a single plan directory
 	ModeCommandPalette         // searchable dashboard command catalog
-	ModeLiveSessionPicker      // ambiguous live Kitty sessions for one target
+	ModeLiveSessionPicker      // ambiguous live sessions for one target
 	ModeASLRuns                // agent-session-loop active and actionable runs
 	ModeASLResponse            // answer editor and closure buttons for one ASL question
 	ModeProjectSwitcher        // overlay choosing the dashboard's project scope

@@ -16,11 +16,7 @@
 // retained line is therefore cloned, and the result is bounded by the tile's own
 // width and height.
 //
-// There is no cancellation. kitty.KittyClient.GetText takes no context, and the
-// bound that already exists — the ten-second subprocess deadline in
-// internal/kitty/exec.go — is the one this reuses rather than promising an
-// immediacy the interface cannot deliver. A caller that has stopped caring about
-// a read drops the answer; it does not stop the read.
+// A caller that has stopped caring about a read drops the answer.
 
 package commands
 
@@ -33,7 +29,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/backend"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -67,10 +62,7 @@ func CaptureTick(d time.Duration) tea.Cmd {
 type CaptureRequest struct {
 	// Target is the pane to read, in whichever backend hosts it. It is the
 	// identity the scheduler keys on.
-	Target session.PaneTarget
-	// WindowID is the Kitty window ID of a Kitty target and zero for any other;
-	// it is what the Kitty read matches on.
-	WindowID   int
+	Target     session.PaneTarget
 	Generation int
 	RequestID  int
 	// Width and Height are the tile's output region in cells and lines. The
@@ -84,26 +76,17 @@ type CaptureRequest struct {
 // and the tile shows the failure instead of content.
 var ErrCaptureUnavailable = errors.New("capture unavailable for this backend")
 
-// CaptureSources is what the surface can read panes through: the Kitty client
-// and, per other backend, a capturer.
+// CaptureSources is what the surface can read panes through.
 type CaptureSources struct {
-	Kitty kitty.KittyClient
 	Panes map[runtimesession.BackendKind]backend.Capturer
 }
 
 // CaptureScreen reads one target's scrollback through the source for its
-// backend and returns its clipped tail. A Kitty target is read exactly as
-// CaptureOutput reads it; any other goes through that backend's capturer; a
-// target with no source fails with ErrCaptureUnavailable. Every path replies.
+// backend and returns its clipped tail. A target with no source fails with
+// ErrCaptureUnavailable. Every path replies.
 func CaptureScreen(sources CaptureSources, req CaptureRequest) tea.Cmd {
-	if req.Target.Backend == runtimesession.BackendKitty || req.Target.IsZero() {
-		if sources.Kitty == nil {
-			return func() tea.Msg { return CaptureOutputMsg{Request: req, Err: ErrCaptureUnavailable} }
-		}
-		if !req.Target.IsZero() {
-			req.WindowID = req.Target.KittyWindowID()
-		}
-		return CaptureOutput(sources.Kitty, req)
+	if req.Target.IsZero() || req.Target.Backend != runtimesession.BackendTmux {
+		return func() tea.Msg { return CaptureOutputMsg{Request: req, Err: ErrCaptureUnavailable} }
 	}
 	return func() tea.Msg {
 		capturer := sources.Panes[req.Target.Backend]
@@ -128,25 +111,6 @@ type CaptureOutputMsg struct {
 	// with nothing in it.
 	Lines []string
 	Err   error
-}
-
-// CaptureOutput reads one window's scrollback and returns its clipped tail.
-//
-// A window ID of zero short-circuits to an empty successful read rather than
-// asking Kitty about a window that does not exist, for the reason the inspector's
-// fetch does: the reply still has to come back, because the caller is holding a
-// slot against it.
-func CaptureOutput(client kitty.KittyClient, req CaptureRequest) tea.Cmd {
-	return func() tea.Msg {
-		if req.WindowID == 0 {
-			return CaptureOutputMsg{Request: req}
-		}
-		text, err := client.GetText(kitty.MatchWindowByID(req.WindowID), "all")
-		if err != nil {
-			return CaptureOutputMsg{Request: req, Err: err}
-		}
-		return CaptureOutputMsg{Request: req, Lines: ClipCapture(text, req.Width, req.Height)}
-	}
 }
 
 // ClipCapture cuts a raw scrollback down to the last height lines, each at most

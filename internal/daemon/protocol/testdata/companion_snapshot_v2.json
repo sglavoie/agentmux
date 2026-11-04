@@ -14,15 +14,6 @@
     "ready": false,
     "degraded_reason": "restore_timeout"
   },
-  "kitty": {
-    "ready": true,
-    "stale": true,
-    "socket": "unix:/tmp/kitty-100",
-    "sockets": [
-      "unix:/tmp/kitty-100",
-      "unix:/tmp/kitty-200"
-    ]
-  },
   "notification": {
     "backend": "alerter",
     "app_connected": true,
@@ -31,18 +22,9 @@
     "quiet_hours": "22:00-07:00",
     "quiet_now": true
   },
-  "dashboard": {
-    "open": true,
-    "kitty_socket": "unix:/tmp/kitty-100",
-    "os_window_id": 1,
-    "tab_id": 5,
-    "window_id": 50
-  },
   "attention": {
-    "total": 4,
+    "total": 2,
     "stop": 1,
-    "key": 1,
-    "error": 1,
     "question": 1,
     "working": 2,
     "unseen": 1
@@ -52,16 +34,10 @@
       {
         "run_id": "run-1",
         "plan_dir": "/plans/p",
-        "window_id": 101,
         "runtime_session_id": "rs-0123456789abcdef0123456789abcdef",
         "unanswered": 2,
         "latest_question_id": "q-1",
         "latest_question_created_at": 1700000100
-      },
-      {
-        "run_id": "run-2",
-        "runtime_session_id": "rs-fedcba9876543210fedcba9876543210",
-        "unanswered": 1
       }
     ]
   },
@@ -71,14 +47,9 @@
         "kind": "asl",
         "at": 1700000050
       },
-      "window_id": 101,
-      "tab_id": 10,
-      "os_window_id": 1,
-      "kitty_socket": "unix:/tmp/kitty-100",
       "harness": "claude",
       "profile": "work",
       "project": "API",
-      "base_title": "W:api",
       "conversation": {
         "harness": "claude",
         "session_id": "0b5c-session"
@@ -89,7 +60,6 @@
       "unseen": true,
       "attention": true,
       "muted": true,
-      "locked": true,
       "looping": true,
       "pinned": true,
       "busy_since_at": 1699999000,
@@ -102,29 +72,6 @@
       "harness_icon": "🦊",
       "runtime": {
         "session_id": "rs-0123456789abcdef0123456789abcdef",
-        "backend": "kitty",
-        "instance": "unix:/tmp/kitty-100",
-        "generation": "kitty-gen-1",
-        "pane": "101"
-      }
-    },
-    {
-      "harness": "codex",
-      "profile": "work",
-      "project": "API",
-      "conversation": {
-        "harness": "codex",
-        "session_id": "019a-session"
-      },
-      "asl_run_id": "run-2",
-      "icon_state": "stop",
-      "attention": true,
-      "last_event_at": 1700000060,
-      "tab_color": "#e49591",
-      "name": "billing fix",
-      "harness_icon": "📟",
-      "runtime": {
-        "session_id": "rs-fedcba9876543210fedcba9876543210",
         "backend": "tmux",
         "instance": "/tmp/amx-tmux.sock",
         "generation": "tmux-gen-1",

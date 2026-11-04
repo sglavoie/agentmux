@@ -16,7 +16,7 @@ import (
 // visible prompt is exactly what makes a Codex pane Blocked.
 
 // CodexPromptKind identifies the user-blocking Codex TUI prompt visible in a
-// Kitty screen scrape.
+// pane screen capture.
 //
 // These five constants stay Go constants and are deliberately NOT data. They
 // are an API contract, re-exported by internal/daemon/codex_prompt.go, which

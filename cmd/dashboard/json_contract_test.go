@@ -28,11 +28,11 @@ func TestDashboardJSONCommandSurfaceIsVersioned(t *testing.T) {
 		t.Fatalf("unexpected JSON schema version %d", cli.JSONSchemaVersion)
 	}
 	// The payload's field names are the contract the app and scripts read.
-	encoded, err := json.Marshal(openDashboardData{WindowID: 4, TabID: 2, Opened: true})
+	encoded, err := json.Marshal(openDashboardData{Opened: true, Client: "/dev/ttys004"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := string(encoded), `{"window_id":4,"tab_id":2,"opened":true}`; got != want {
+	if got, want := string(encoded), `{"opened":true,"client":"/dev/ttys004"}`; got != want {
 		t.Fatalf("open-dashboard data = %s; want %s", got, want)
 	}
 	if encoded, _ = json.Marshal(openDashboardData{Client: "/dev/ttys004"}); !strings.Contains(string(encoded), `"client":"/dev/ttys004"`) {

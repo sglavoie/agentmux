@@ -35,7 +35,7 @@ func TestSharedFlagsCompleteEverywhere(t *testing.T) {
 	// a real shell, one process per <Tab>, never meets.
 	if complete, ok := rootCmd.GetFlagCompletionFunc(cli.BackendFlag); !ok {
 		t.Error("amx --backend has no completion")
-	} else if got, _ := complete(rootCmd, nil, ""); len(got) != 2 {
+	} else if got, _ := complete(rootCmd, nil, ""); len(got) != 1 || got[0] != "tmux" {
 		t.Errorf("amx --backend completes %q", got)
 	}
 	if seen[cli.RuntimeSessionFlag] < 5 || seen[cli.BackendFlag] < 5 {
@@ -59,8 +59,8 @@ func TestStaticAndRuntimeSessionCompletions(t *testing.T) {
 		{[]string{"debug", "probe", "--runtime-session", ""}, runtimeDirective, nil},
 		{[]string{"send", "rs-x", "--key", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"enter", "escape"}},
 		{[]string{"overseer", "policy", "--access", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
-		{[]string{"overview", "--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"kitty", "tmux"}},
-		{[]string{"worktree", "shell", "--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"kitty", "tmux"}},
+		{[]string{"overview", "--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"tmux"}},
+		{[]string{"worktree", "shell", "--backend", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"tmux"}},
 		{[]string{"plans", "run", "--project", ""}, cobra.ShellCompDirectiveNoFileComp, nil},
 		{[]string{"debug", "tail", "--stage", "hook."}, cobra.ShellCompDirectiveNoFileComp, []string{"hook.delivery"}},
 		{[]string{"debug", "tail", "--outcome", ""}, cobra.ShellCompDirectiveNoFileComp, []string{"accepted"}},

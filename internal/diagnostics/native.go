@@ -107,7 +107,7 @@ func InspectNative(paths Paths, options NativeOptions, active map[string]struct{
 // MaintainNative applies age, per-launch, and aggregate limits to inactive
 // launches. A launch ID in active is observation-only and may temporarily
 // exceed both limits. Very recent directories receive the same short grace so
-// concurrent launchers cannot prune one another before Kitty exposes both IDs.
+// concurrent launchers cannot prune one another before tmux exposes both IDs.
 func MaintainNative(paths Paths, options NativeOptions, active map[string]struct{}) (NativeReport, error) {
 	if err := paths.Ensure(); err != nil {
 		return NativeReport{}, err

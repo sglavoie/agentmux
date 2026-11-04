@@ -1,19 +1,47 @@
 {
   "name": "asl-runs-wide",
   "fixture": "asl_runs",
-  "size": { "width": 132, "height": 34 },
+  "size": {
+    "width": 132,
+    "height": 34
+  },
   "actions": [
-    { "type": "command", "command_id": "explore.show-runs" }
+    {
+      "type": "command",
+      "command_id": "explore.show-runs"
+    }
   ],
   "assertions": [
-    { "type": "mode_equals", "mode": "asl_runs" },
-    { "type": "contains_text", "text": "3 need action" },
-    { "type": "contains_text", "text": "api-refactor" },
-    { "type": "contains_text", "text": "gateway-upgrade" },
-    { "type": "contains_text", "text": "sess-dotfiles" },
-    { "type": "contains_text", "text": "codex" },
-    { "type": "excludes_text", "text": "unavailable" },
-    { "type": "kitty_calls", "op": "FocusTab", "count": 0 },
-    { "type": "no_layout_issues" }
+    {
+      "type": "mode_equals",
+      "mode": "asl_runs"
+    },
+    {
+      "type": "contains_text",
+      "text": "3 need action"
+    },
+    {
+      "type": "contains_text",
+      "text": "api-refactor"
+    },
+    {
+      "type": "contains_text",
+      "text": "gateway-upgrade"
+    },
+    {
+      "type": "contains_text",
+      "text": "sess-dotfiles"
+    },
+    {
+      "type": "contains_text",
+      "text": "codex"
+    },
+    {
+      "type": "excludes_text",
+      "text": "unavailable"
+    },
+    {
+      "type": "no_layout_issues"
+    }
   ]
 }

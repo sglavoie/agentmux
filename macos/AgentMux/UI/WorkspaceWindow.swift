@@ -5,11 +5,8 @@ import os
 /// project, beside the terminal of the selected one.
 ///
 /// Selection and focus are separate. Selecting a row shows what there is to
-/// show for it — a tmux session's embedded terminal, or a note that the
-/// session is a Kitty window — and never leaves the app. Focusing a row, by a
-/// click or from the menu bar, a shortcut, or a banner, goes where the session
-/// is: keyboard focus moves into the embedded terminal, or Kitty comes forward
-/// on its window.
+/// show for it in its embedded terminal. Focusing a row, by a click or from
+/// the menu bar, a shortcut, or a banner, moves keyboard focus into the terminal.
 ///
 /// Each embedded session has at most one terminal, made the first time it is
 /// selected and kept, hidden, while another is shown. A terminal is let go
@@ -18,8 +15,7 @@ import os
 ///
 /// The × on a session row and ⌘⇧W end its agent through the same confirmation
 /// policy. ⌘W detaches its terminal. The × on an opened view closes that view
-/// and ends its program. A Kitty session and the
-/// Dashboard and Overview have none.
+/// and ends its program. The Dashboard and Overview have none.
 ///
 /// The workspace only ever shows agents that are running. It comes back to
 /// where it was after a crash or a restart (`restore(_:)`), keeps its rows and
@@ -551,7 +547,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard let store = delegate?.store else { return }
         var live: [WorkspaceGroup]?
         if store.feed == .live, let snapshot = store.snapshot {
-            live = WorkspaceSidebar.groups(store.sessions, snapshotSocket: snapshot.kitty.socket, now: now(), glyphs: glyphs, order: order)
+            live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order)
         }
         let wasCurrent = state.current
         let previousRows = state.rows

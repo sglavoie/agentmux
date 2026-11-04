@@ -1,13 +1,9 @@
 import Foundation
-import CryptoKit
 
 /// Where focusing a session goes.
 enum WorkspaceTarget: Equatable {
     /// A terminal embedded in the workspace, attached to this runtime session.
     case embedded(runtimeSessionID: String)
-    /// A Kitty window, brought forward in Kitty itself. An empty socket names
-    /// the snapshot's own, as it does on a menu row.
-    case kitty(socket: String, windowID: Int)
 }
 
 /// The color a session's line is drawn on, as the daemon publishes it.
@@ -43,16 +39,15 @@ struct WorkspaceRow: Equatable {
     let muted: Bool
     let toolTip: String
     /// What the line is drawn on while it is not the selected one: the color
-    /// picked for the session, else its profile's. Only an embedded session has one; a Kitty
-    /// session's color is on its tab, in Kitty.
+    /// picked for the session, else its profile's.
     var tabColor: WorkspaceTabColor?
     /// The name the operator gave the session, shown on a line of its own
     /// above the label; empty for none, and the row then looks as it always
-    /// did. Only an embedded session has one.
+    /// did.
     var name = ""
     /// The session's harness icon, shown ahead of the label: its harness's
     /// own until the icon picker replaces or clears it. Empty for none, and
-    /// only an embedded session has one; a Kitty session's is on its tab.
+    /// only an embedded session has one.
     var harnessIcon = ""
     /// The session's harness, which orders rows of one profile.
     var harness = ""
@@ -170,10 +165,9 @@ struct WorkspaceOrder: Equatable {
     /// into again comes back the way it was left.
     private(set) var collapsed: Set<String> = []
 
-    /// What a session is named by here: its runtime session, or its Kitty
-    /// socket and window.
+    /// What a session is named by here: its runtime session.
     static func token(_ key: AttentionCycler.Key) -> String {
-        key.runtimeSessionID.isEmpty ? "kitty:\(key.windowID):\(key.socket)" : key.runtimeSessionID
+        key.runtimeSessionID
     }
 
     /// Records the order of a project's sessions, replacing the one it had.
@@ -335,32 +329,25 @@ enum WorkspaceSidebar {
     static let pinnedSection = "Pinned"
     /// What a session with no profile and no harness is called.
     static let unlabeled = "session"
-    /// Marks a row whose terminal is a Kitty window.
-    static let kittyBadge = "Kitty"
 
     static func groups(
         _ sessions: [CompanionSession],
-        snapshotSocket: String = "",
         now: Date = Date(),
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [WorkspaceGroup] {
-        groups(rows(sessions, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs), order: order)
+        groups(rows(sessions, now: now, glyphs: glyphs), order: order)
     }
 
     /// Use the complete snapshot, including collapsed and non-waiting sessions,
     /// so every surface gives an agent the same name. Ordering and age never
     /// participate in its identity. A branch distinguishes different worktrees;
     /// a short runtime identity distinguishes agents sharing the same branch.
-    static func rows(_ sessions: [CompanionSession], snapshotSocket: String = "", now: Date = Date(),
+    static func rows(_ sessions: [CompanionSession], now: Date = Date(),
                      glyphs: Glyphs = .bundled) -> [WorkspaceRow] {
-        var rows = sessions.map { row($0, snapshotSocket: snapshotSocket, now: now, glyphs: glyphs) }
-        // Kitty's identity contains a socket path. Hash that tuple so a long
-        // common path cannot hide the distinguishing window number in a row.
-        let tokens = rows.map { row -> String in
-            if !row.key.runtimeSessionID.isEmpty { return row.key.runtimeSessionID }
-            return SHA256.hash(data: Data(WorkspaceOrder.token(row.key).utf8)).map { String(format: "%02x", $0) }.joined()
-        }
+        var rows = sessions.filter { $0.embeddedRuntimeSessionID != nil }
+            .map { row($0, now: now, glyphs: glyphs) }
+        let tokens = rows.map { $0.key.runtimeSessionID }
         let duplicates = Dictionary(grouping: rows.indices, by: { rows[$0].displayName })
         for indices in duplicates.values where indices.count > 1 {
             for index in indices {
@@ -434,18 +421,17 @@ enum WorkspaceSidebar {
     /// next-attention shortcut steps through the ones that wait.
     static func ordered(
         _ sessions: [CompanionSession],
-        snapshotSocket: String = "",
         order: WorkspaceOrder = WorkspaceOrder()
     ) -> [CompanionSession] {
         let byKey = Dictionary(
-            sessions.map { (AttentionCycler.key($0, snapshotSocket: snapshotSocket), $0) },
+            sessions.map { (AttentionCycler.key($0), $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        return groups(sessions, snapshotSocket: snapshotSocket, order: order).flatMap(\.rows).compactMap { byKey[$0.key] }
+        return groups(sessions, order: order).flatMap(\.rows).compactMap { byKey[$0.key] }
     }
 
-    static func row(_ session: CompanionSession, snapshotSocket: String, now: Date, glyphs: Glyphs) -> WorkspaceRow {
-        let key = AttentionCycler.key(session, snapshotSocket: snapshotSocket)
+    static func row(_ session: CompanionSession, now: Date, glyphs: Glyphs) -> WorkspaceRow {
+        let key = AttentionCycler.key(session)
         let embedded = session.embeddedRuntimeSessionID
         let label = !session.profile.isEmpty ? session.profile : (!session.harness.isEmpty ? session.harness : unlabeled)
 
@@ -455,16 +441,10 @@ enum WorkspaceSidebar {
         if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
         // State remains readable without interpreting an emoji or profile color.
         detail.insert(session.reason.isEmpty ? WorkspaceInspector.word(for: session.iconState) : WorkspaceWording.status(session.reason), at: 0)
-        if embedded == nil { detail.append(kittyBadge) }
-
-        var tip = [MenuBuilder.place(of: session)]
-        if !session.baseTitle.isEmpty { tip.append(session.baseTitle) }
-        if embedded == nil, !session.kittySocket.isEmpty { tip.append(session.kittySocket) }
 
         return WorkspaceRow(
             key: key,
-            target: embedded.map { .embedded(runtimeSessionID: $0) }
-                ?? .kitty(socket: session.kittySocket, windowID: session.windowID),
+            target: .embedded(runtimeSessionID: embedded ?? ""),
             project: MenuBuilder.name(of: session),
             label: label,
             detail: detail.joined(separator: " · "),
@@ -472,10 +452,10 @@ enum WorkspaceSidebar {
             attention: session.attention,
             working: session.isWorking,
             muted: session.muted,
-            toolTip: tip.joined(separator: " · "),
-            tabColor: embedded == nil ? nil : WorkspaceTabColor(hex: session.tabColor),
-            name: embedded == nil ? "" : session.name,
-            harnessIcon: embedded == nil ? "" : session.harnessIcon,
+            toolTip: MenuBuilder.place(of: session),
+            tabColor: WorkspaceTabColor(hex: session.tabColor),
+            name: session.name,
+            harnessIcon: session.harnessIcon,
             harness: session.harness,
             pinned: session.pinned,
             needsAttention: session.needsAttention,
@@ -506,10 +486,7 @@ enum WorkspaceSidebar {
     private static func rowOrder(_ lhs: WorkspaceRow, _ rhs: WorkspaceRow) -> Bool {
         if lhs.label != rhs.label { return nameOrder(lhs.label, rhs.label) }
         if lhs.harness != rhs.harness { return lhs.harness < rhs.harness }
-        let (a, b) = (lhs.key, rhs.key)
-        if a.socket != b.socket { return a.socket < b.socket }
-        if a.windowID != b.windowID { return a.windowID < b.windowID }
-        return a.runtimeSessionID < b.runtimeSessionID
+        return lhs.key.runtimeSessionID < rhs.key.runtimeSessionID
     }
 
     /// What the sidebar says about a feed that is not delivering snapshots;
@@ -586,7 +563,7 @@ enum WorkspaceSidebar {
 /// The rows are replaced only by a live snapshot. While the feed is down —
 /// the daemon restarting, the socket half-open after sleep — the last rows
 /// stay listed, marked not current, and the selection stays where it is: the
-/// sessions themselves live in tmux and Kitty and did not go anywhere. The
+/// sessions themselves live in tmux and did not go anywhere. The
 /// first snapshot after the reconnect then decides what is still there.
 struct WorkspaceState: Equatable {
     private(set) var groups: [WorkspaceGroup] = []

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -14,47 +13,12 @@ import (
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
-// recordingKittyClient is a Kitty that holds a window tree and grows it: a
-// LaunchTab adds a tab carrying the launched title, so the real launch path's
-// colour retry and the command's new-tab lookup both see what a live Kitty
-// would show them.
-type recordingKittyClient struct {
-	windows  []kitty.OSWindow
-	launched []kitty.LaunchOpts
-	nextID   int
-}
-
-func (c *recordingKittyClient) ListWindows() ([]kitty.OSWindow, error) { return c.windows, nil }
-func (c *recordingKittyClient) LaunchTab(opts kitty.LaunchOpts) error {
-	c.launched = append(c.launched, opts)
-	c.nextID++
-	tab := kitty.Tab{ID: 500 + c.nextID, Title: opts.Title, Windows: []kitty.Window{{ID: 900 + c.nextID}}}
-	if len(c.windows) == 0 {
-		c.windows = []kitty.OSWindow{{ID: 1, IsFocused: true}}
-	}
-	c.windows[0].Tabs = append(c.windows[0].Tabs, tab)
-	return nil
-}
-func (*recordingKittyClient) LaunchOverlay(kitty.LaunchOpts) error { return nil }
-func (*recordingKittyClient) CloseTab(string) error                { return nil }
-func (*recordingKittyClient) MoveTab(string, int) error            { return nil }
-func (*recordingKittyClient) SetTabColor(string, string, string, string, string) error {
-	return nil
-}
-func (*recordingKittyClient) SetTabTitle(string, string) error            { return nil }
-func (*recordingKittyClient) SetUserVars(string, map[string]string) error { return nil }
-func (*recordingKittyClient) FocusTab(string) error                       { return nil }
-func (*recordingKittyClient) FocusWindow(string) error                    { return nil }
-func (*recordingKittyClient) GetText(string, string) (string, error)      { return "", nil }
-func (*recordingKittyClient) LaunchOverlayPager(string) error             { return nil }
-
 func testConfig() *config.Config {
 	return &config.Config{
-		Defaults: config.Defaults{Sort: "alpha", LaunchBackend: "kitty"},
+		Defaults: config.Defaults{Sort: "alpha", LaunchBackend: "tmux"},
 		Profiles: []config.Account{
 			{Name: "work", Harness: "claude", Color: "purple"},
 			{Name: "codex-work", Harness: "codex", Color: "blue"},
@@ -67,30 +31,29 @@ func testConfig() *config.Config {
 	}
 }
 
-// runProject runs one leaf's real RunE against cfg and client with the given
+// runProject runs one leaf's real RunE against cfg with the given
 // flags, restoring every seam and flag afterwards.
-func runProject(t *testing.T, leaf string, cfg *config.Config, client kitty.KittyClient, jsonOut bool, profile, title string) (string, error) {
+func runProject(t *testing.T, leaf string, cfg *config.Config, jsonOut bool, profile, title string) (string, error) {
 	t.Helper()
-	return runProjectArgs(t, leaf, cfg, client, jsonOut, profile, title, nil)
+	return runProjectArgs(t, leaf, cfg, jsonOut, profile, title, nil)
 }
 
 // runProjectArgs is runProject with positional arguments.
-func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.KittyClient, jsonOut bool, profile, title string, args []string) (string, error) {
+func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, jsonOut bool, profile, title string, args []string) (string, error) {
 	t.Helper()
-	oldLoad, oldKitty := projectLoadConfig, projectNewKitty
+	oldLoad := projectLoadConfig
 	oldListJSON, oldLaunchJSON, oldProfile, oldTitle := projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle
 	oldMissing, oldArchived := projectListMissing, projectListArchived
 	oldProfiles, oldHarnesses, oldGroups := projectListProfiles, projectListHarnesses, projectListGroups
 	oldIsTerminal, oldWidth := projectListIsTerminal, projectListTerminalWidth
 	t.Cleanup(func() {
 		projectListIsTerminal, projectListTerminalWidth = oldIsTerminal, oldWidth
-		projectLoadConfig, projectNewKitty = oldLoad, oldKitty
+		projectLoadConfig = oldLoad
 		projectListJSON, projectLaunchJSON, projectLaunchProfile, projectLaunchTitle = oldListJSON, oldLaunchJSON, oldProfile, oldTitle
 		projectListMissing, projectListArchived = oldMissing, oldArchived
 		projectListProfiles, projectListHarnesses, projectListGroups = oldProfiles, oldHarnesses, oldGroups
 	})
 	projectLoadConfig = func() (*config.Config, error) { return cfg, nil }
-	projectNewKitty = func() kitty.KittyClient { return client }
 	// Text output is the table a person reads unless a test installs a pipe.
 	if !projectListPiped {
 		projectListIsTerminal = func(io.Writer) bool { return true }
@@ -119,7 +82,7 @@ func runProjectArgs(t *testing.T, leaf string, cfg *config.Config, client kitty.
 }
 
 func TestProjectListJSONContract(t *testing.T) {
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+	out, err := runProject(t, "list", testConfig(), true, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +110,7 @@ func withDirectoryProblems(t *testing.T) {
 
 func TestProjectListMarksUnusableDirectories(t *testing.T) {
 	withDirectoryProblems(t)
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+	out, err := runProject(t, "list", testConfig(), true, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +118,7 @@ func TestProjectListMarksUnusableDirectories(t *testing.T) {
 		strings.Count(out, "directory_problem") != 1 {
 		t.Fatalf("json does not mark exactly the missing directory: %s", out)
 	}
-	out, err = runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	out, err = runProject(t, "list", testConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +131,7 @@ func TestProjectListMissingKeepsOnlyUnusableDirectories(t *testing.T) {
 	withDirectoryProblems(t)
 	t.Cleanup(func() { projectListMissing = false })
 	projectListMissing = true
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", testConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +141,7 @@ func TestProjectListMissingKeepsOnlyUnusableDirectories(t *testing.T) {
 
 	projectDirectoryProblem = func(string) string { return "" }
 	projectListMissing = true
-	out, err = runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	out, err = runProject(t, "list", testConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +151,7 @@ func TestProjectListMissingKeepsOnlyUnusableDirectories(t *testing.T) {
 }
 
 func TestProjectListJSONEmptyIsAnArray(t *testing.T) {
-	out, err := runProject(t, "list", &config.Config{}, &recordingKittyClient{}, true, "", "")
+	out, err := runProject(t, "list", &config.Config{}, true, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +173,7 @@ func TestProjectListPipedIsTabSeparated(t *testing.T) {
 	withDirectoryProblems(t)
 	t.Cleanup(func() { projectListPiped = false })
 	projectListPiped = true
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", testConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,14 +196,14 @@ func TestProjectListPipedCleansDirectoriesAndSortsGroups(t *testing.T) {
 	cfg := testConfig()
 	cfg.Projects[0].Directory = "/tmp/api/"
 	cfg.Projects[0].Groups = []string{"work", "backend"}
-	out, err := runProject(t, "list", cfg, &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", cfg, false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first := strings.SplitN(out, "\n", 2)[0]; first != "work\tAPI\tclaude\t/tmp/api\tbackend,work\t" {
 		t.Fatalf("first piped row = %q", first)
 	}
-	out, err = runProject(t, "list", cfg, &recordingKittyClient{}, true, "", "")
+	out, err = runProject(t, "list", cfg, true, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +217,7 @@ func TestProjectListPipedCleansDirectoriesAndSortsGroups(t *testing.T) {
 func TestProjectListPipedEmptyPrintsNothing(t *testing.T) {
 	t.Cleanup(func() { projectListPiped = false })
 	projectListPiped = true
-	out, err := runProject(t, "list", &config.Config{}, &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", &config.Config{}, false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +242,7 @@ func TestProjectListFitsDirectoriesToTheTerminal(t *testing.T) {
 	}
 	t.Cleanup(func() { projectListWidth = 0 })
 	projectListWidth = 70
-	out, err := runProject(t, "list", cfg, &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", cfg, false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +260,7 @@ func TestProjectListFitsDirectoriesToTheTerminal(t *testing.T) {
 }
 
 func TestProjectListText(t *testing.T) {
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", testConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +277,7 @@ func TestProjectListTextAlignsEmojiTitles(t *testing.T) {
 	cfg := testConfig()
 	cfg.Projects[0].Title = "🐱API"
 	cfg.Projects[2].Title = "🗣️Web"
-	out, err := runProject(t, "list", cfg, &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", cfg, false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,79 +301,12 @@ func TestProjectListTextAlignsEmojiTitles(t *testing.T) {
 }
 
 // The launch goes through the real DefaultRegistry and the real session launch
-// path; only Kitty is recorded.
-func TestProjectLaunchJSONGoesThroughTheLaunchAction(t *testing.T) {
-	client := &recordingKittyClient{windows: []kitty.OSWindow{{ID: 1, IsFocused: true, Tabs: []kitty.Tab{{ID: 10, Title: "shell", Windows: []kitty.Window{{ID: 100}}}}}}}
-	out, err := runProject(t, "launch", testConfig(), client, true, "codex-work", "API")
-	if err != nil {
-		t.Fatalf("launch: %v\n%s", err, out)
-	}
-	if len(client.launched) != 1 {
-		t.Fatalf("launched %d tabs, want 1", len(client.launched))
-	}
-	if opts := client.launched[0]; opts.Directory != "/tmp/api" || !strings.Contains(opts.Title, "API") {
-		t.Fatalf("launch opts = %+v, want the codex-work API project", opts)
-	}
-	var envelope struct {
-		SchemaVersion int               `json:"schema_version"`
-		Data          projectLaunchData `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
-		t.Fatalf("decode %q: %v", out, err)
-	}
-	data := envelope.Data
-	if envelope.SchemaVersion != 1 || data.Action != actions.Launch || !data.Changed {
-		t.Fatalf("envelope = %+v", envelope)
-	}
-	if data.Project.Profile != "codex-work" || data.Project.Harness != "codex" || data.Project.Title != "API" {
-		t.Fatalf("project = %+v, want codex-work API", data.Project)
-	}
-	if data.TabID != 501 || data.WindowID != 901 {
-		t.Fatalf("tab/window = %d/%d, want the new tab 501/901", data.TabID, data.WindowID)
-	}
-}
-
-func TestProjectLaunchDirectoryOverridesTheConfiguredOne(t *testing.T) {
-	dir := t.TempDir()
-	t.Chdir(filepath.Dir(dir))
-	projectLaunchDir = filepath.Base(dir)
-	t.Cleanup(func() { projectLaunchDir = "" })
-	client := &recordingKittyClient{windows: []kitty.OSWindow{{ID: 1, IsFocused: true, Tabs: []kitty.Tab{{ID: 10, Title: "shell", Windows: []kitty.Window{{ID: 100}}}}}}}
-	cfg := testConfig()
-	out, err := runProject(t, "launch", cfg, client, true, "codex-work", "API")
-	if err != nil {
-		t.Fatalf("launch: %v\n%s", err, out)
-	}
-	want, err := filepath.Abs(filepath.Base(dir))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(client.launched) != 1 || client.launched[0].Directory != want {
-		t.Fatalf("launched = %+v, want one tab in %q", client.launched, want)
-	}
-	var envelope struct {
-		Data projectLaunchData `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
-		t.Fatalf("decode %q: %v", out, err)
-	}
-	if envelope.Data.Project.Directory != want || envelope.Data.Project.Title != "API" {
-		t.Fatalf("project = %+v, want API in %q", envelope.Data.Project, want)
-	}
-	if cfg.Projects[1].Directory != "/tmp/api" {
-		t.Fatalf("the configured project was rewritten to %q", cfg.Projects[1].Directory)
-	}
-}
-
+// path; the default tmux backend refuses unexpected launches.
 func TestProjectLaunchAmbiguousTitleReturnsCandidates(t *testing.T) {
-	client := &recordingKittyClient{}
-	out, err := runProject(t, "launch", testConfig(), client, true, "", "API")
+	out, err := runProject(t, "launch", testConfig(), true, "", "API")
 	var exit *cli.ExitError
 	if !errors.As(err, &exit) || !exit.Quiet || exit.Code == 0 {
 		t.Fatalf("err = %v, want a quiet nonzero exit", err)
-	}
-	if len(client.launched) != 0 {
-		t.Fatal("an ambiguous selector launched a tab")
 	}
 	want := `{"schema_version":1,"error":{"code":"ambiguous_project","message":"2 configured projects are titled \"API\"; choose one with --profile",` +
 		`"candidates":[{"id":"codex-work/API","display_name":"API","canonical_path":"/tmp/api"},{"id":"work/API","display_name":"API","canonical_path":"/tmp/api"}],` +
@@ -421,7 +317,7 @@ func TestProjectLaunchAmbiguousTitleReturnsCandidates(t *testing.T) {
 }
 
 func TestProjectLaunchAmbiguousTitleTextListsCandidates(t *testing.T) {
-	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "API")
+	_, err := runProject(t, "launch", testConfig(), false, "", "API")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -433,7 +329,7 @@ func TestProjectLaunchAmbiguousTitleTextListsCandidates(t *testing.T) {
 }
 
 func TestProjectLaunchNotFoundOffersNearMisses(t *testing.T) {
-	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "missing", "web")
+	out, err := runProject(t, "launch", testConfig(), true, "missing", "web")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -448,7 +344,7 @@ func TestProjectLaunchNotFoundOffersNearMisses(t *testing.T) {
 
 func TestProjectLaunchWithNoNearMissPointsAtProjectList(t *testing.T) {
 	cfg := testConfig()
-	out, err := runProject(t, "launch", cfg, &recordingKittyClient{}, true, "", "zzz")
+	out, err := runProject(t, "launch", cfg, true, "", "zzz")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -464,7 +360,7 @@ func TestProjectLaunchWithNoNearMissPointsAtProjectList(t *testing.T) {
 func TestProjectLaunchTypoOffersClosestProjectsFirst(t *testing.T) {
 	cfg := testConfig()
 	cfg.Projects = append(cfg.Projects, config.Session{Title: "🐱amx", Directory: "/tmp/amx", Profile: "work"}, config.Session{Title: "Amp", Directory: "/tmp/amp", Profile: "work"})
-	out, err := runProject(t, "launch", cfg, &recordingKittyClient{}, true, "", "amxx")
+	out, err := runProject(t, "launch", cfg, true, "", "amxx")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -490,7 +386,7 @@ func TestProjectLaunchTypoOffersClosestProjectsFirst(t *testing.T) {
 func TestProjectLaunchTypoOfAFirstWordOffersItsProject(t *testing.T) {
 	cfg := testConfig()
 	cfg.Projects = append(cfg.Projects, config.Session{Title: "🥧Raspberry Pi", Directory: "/tmp/pi", Profile: "work"})
-	out, err := runProject(t, "launch", cfg, &recordingKittyClient{}, true, "", "rasberry")
+	out, err := runProject(t, "launch", cfg, true, "", "rasberry")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -539,7 +435,7 @@ func stubProjectDirectories(t *testing.T, missing ...string) {
 func TestProjectLaunchMissingTitleTextListsProjects(t *testing.T) {
 	stubProjectDirectories(t)
 	cfg := testConfig()
-	_, err := runProject(t, "launch", cfg, &recordingKittyClient{}, false, "", "")
+	_, err := runProject(t, "launch", cfg, false, "", "")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -557,7 +453,7 @@ func TestProjectLaunchMissingTitleTextListsProjects(t *testing.T) {
 // does not offer one; it says how many it left out and where to find them.
 func TestProjectLaunchMissingTitleLeavesOutUnusableProjects(t *testing.T) {
 	stubProjectDirectories(t, "/tmp/web")
-	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "")
+	_, err := runProject(t, "launch", testConfig(), false, "", "")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -571,7 +467,7 @@ func TestProjectLaunchMissingTitleLeavesOutUnusableProjects(t *testing.T) {
 
 func TestProjectLaunchMissingTitle(t *testing.T) {
 	stubProjectDirectories(t, "/tmp/web")
-	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "work", "")
+	out, err := runProject(t, "launch", testConfig(), true, "work", "")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -589,13 +485,13 @@ func TestProjectLaunchFailureUsesTheErrorEnvelope(t *testing.T) {
 	old := projectExecute
 	t.Cleanup(func() { projectExecute = old })
 	projectExecute = func(context.Context, actions.Dependencies, actions.Request) (actions.Result, error) {
-		return actions.Result{}, errors.New("kitty refused")
+		return actions.Result{}, errors.New("tmux refused")
 	}
-	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "work", "Web")
+	out, err := runProject(t, "launch", testConfig(), true, "work", "Web")
 	if err == nil {
 		t.Fatal("want an error")
 	}
-	if !strings.Contains(out, `"code":"action_failed"`) || !strings.Contains(out, "kitty refused") {
+	if !strings.Contains(out, `"code":"action_failed"`) || !strings.Contains(out, "tmux refused") {
 		t.Fatalf("json = %s, want action_failed", out)
 	}
 }
@@ -614,43 +510,33 @@ func emojiConfig() *config.Config {
 	return cfg
 }
 
-func TestProjectLaunchMatchesATitleWithoutItsLeadingEmoji(t *testing.T) {
-	for _, typed := range []string{"amx", "AMX", " amx "} {
-		client := &recordingKittyClient{}
-		out, err := runProject(t, "launch", emojiConfig(), client, false, "", typed)
-		if err != nil {
-			t.Fatalf("launch %q: %v", typed, err)
+func TestProjectLaunchSelectsEmojiTitleOnTmux(t *testing.T) {
+	old := projectExecute
+	t.Cleanup(func() { projectExecute = old })
+	var selected config.Session
+	projectExecute = func(_ context.Context, deps actions.Dependencies, request actions.Request) (actions.Result, error) {
+		if deps.Backend != "tmux" || request.Project == nil {
+			t.Fatalf("launch dependencies = %+v, request = %+v", deps, request)
 		}
-		if len(client.launched) != 1 || client.launched[0].Directory != "/tmp/amx" {
-			t.Fatalf("launch %q = %+v, want the 🐱amx project", typed, client.launched)
-		}
-		if want := "Launched 🐱amx (work).\n"; out != want {
-			t.Fatalf("out = %q, want %q", out, want)
-		}
+		selected = *request.Project
+		return actions.Result{Action: actions.Launch, Changed: true, Data: map[string]any{"runtime_session_id": "rs-0123456789abcdef0123456789abcdef"}}, nil
 	}
-	client := &recordingKittyClient{}
-	if _, err := runProject(t, "launch", emojiConfig(), client, false, "codex-work", "coach"); err != nil || len(client.launched) != 1 {
-		t.Fatalf("launch coach = %v, %d tabs; want the 🗣️coach project, variation selector and all", err, len(client.launched))
-	}
-}
-
-func TestProjectLaunchPrefersAnExactTitleOverAnEmojiOne(t *testing.T) {
-	cfg := emojiConfig()
-	cfg.Projects = append(cfg.Projects, config.Session{Title: "amx", Directory: "/tmp/plain-amx", Profile: "work"})
-	client := &recordingKittyClient{}
-	if _, err := runProject(t, "launch", cfg, client, false, "", "amx"); err != nil {
+	out, err := runProject(t, "launch", emojiConfig(), true, "", "amx")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(client.launched) != 1 || client.launched[0].Directory != "/tmp/plain-amx" {
-		t.Fatalf("launched = %+v, want the project titled exactly amx", client.launched)
+	if selected.Title != "🐱amx" || selected.Directory != "/tmp/amx" {
+		t.Fatalf("selected project = %+v", selected)
+	}
+	if !strings.Contains(out, `"backend":"tmux"`) || !strings.Contains(out, `"runtime_session_id":"rs-0123456789abcdef0123456789abcdef"`) {
+		t.Fatalf("launch output = %s", out)
 	}
 }
 
 func TestProjectLaunchRefusesATypedTitleSeveralProjectsShare(t *testing.T) {
-	client := &recordingKittyClient{}
-	out, err := runProject(t, "launch", emojiConfig(), client, true, "", "pets")
-	if err == nil || len(client.launched) != 0 {
-		t.Fatalf("err = %v, launched %d; want a refusal and no tab", err, len(client.launched))
+	out, err := runProject(t, "launch", emojiConfig(), true, "", "pets")
+	if err == nil {
+		t.Fatalf("err = %v; want a refusal", err)
 	}
 	want := `{"schema_version":1,"error":{"code":"ambiguous_project","message":"2 configured projects match title \"pets\"; give the exact title",` +
 		`"candidates":[{"id":"work/🐱pets","display_name":"🐱pets","canonical_path":"/tmp/cats"},{"id":"work/🐶Pets","display_name":"🐶Pets","canonical_path":"/tmp/dogs"}]}}`
@@ -662,7 +548,7 @@ func TestProjectLaunchRefusesATypedTitleSeveralProjectsShare(t *testing.T) {
 // A typed title that reaches one title under several profiles is the ordinary
 // shared-title case: --profile, not a longer title, tells them apart.
 func TestProjectLaunchTypedSharedTitleAsksForProfile(t *testing.T) {
-	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "api")
+	_, err := runProject(t, "launch", testConfig(), false, "", "api")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -674,7 +560,7 @@ func TestProjectLaunchTypedSharedTitleAsksForProfile(t *testing.T) {
 }
 
 func TestProjectLaunchNotFoundOffersOnlyTitlesContainingTheQuery(t *testing.T) {
-	_, err := runProject(t, "launch", emojiConfig(), &recordingKittyClient{}, false, "", "dot")
+	_, err := runProject(t, "launch", emojiConfig(), false, "", "dot")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -684,24 +570,10 @@ func TestProjectLaunchNotFoundOffersOnlyTitlesContainingTheQuery(t *testing.T) {
 	}
 }
 
-func TestProjectLaunchTakesThePositionalTitle(t *testing.T) {
-	client := &recordingKittyClient{}
-	if _, err := runProjectArgs(t, "launch", emojiConfig(), client, false, "", "", []string{"amx"}); err != nil {
-		t.Fatal(err)
-	}
-	if len(client.launched) != 1 || client.launched[0].Directory != "/tmp/amx" {
-		t.Fatalf("launched = %+v, want the 🐱amx project", client.launched)
-	}
-	if _, err := runProjectArgs(t, "launch", emojiConfig(), client, false, "", "amx", []string{"amx"}); err != nil {
-		t.Fatalf("the same title as argument and flag: %v", err)
-	}
-}
-
 func TestProjectLaunchRefusesTwoDifferentTitles(t *testing.T) {
-	client := &recordingKittyClient{}
-	out, err := runProjectArgs(t, "launch", emojiConfig(), client, true, "", "dotfiles", []string{"amx"})
-	if err == nil || len(client.launched) != 0 {
-		t.Fatalf("err = %v, launched %d; want a refusal and no tab", err, len(client.launched))
+	out, err := runProjectArgs(t, "launch", emojiConfig(), true, "", "dotfiles", []string{"amx"})
+	if err == nil {
+		t.Fatalf("err = %v; want a refusal", err)
 	}
 	if !strings.Contains(out, `"code":"invalid_arguments"`) {
 		t.Fatalf("json = %s, want invalid_arguments", out)
@@ -715,7 +587,7 @@ func listedProjects(t *testing.T, profiles, harnesses, groups []string) []string
 	stubProjectDirectories(t)
 	t.Cleanup(func() { projectListProfiles, projectListHarnesses, projectListGroups = nil, nil, nil })
 	projectListProfiles, projectListHarnesses, projectListGroups = profiles, harnesses, groups
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+	out, err := runProject(t, "list", testConfig(), true, "", "")
 	if err != nil {
 		t.Fatalf("project list: %v\n%s", err, out)
 	}
@@ -768,7 +640,7 @@ func TestProjectListRefusesAnUnknownFilterName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Cleanup(func() { projectListProfiles, projectListHarnesses, projectListGroups = nil, nil, nil })
 			projectListProfiles, projectListHarnesses, projectListGroups = tc.profiles, tc.harnesses, tc.groups
-			out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, true, "", "")
+			out, err := runProject(t, "list", testConfig(), true, "", "")
 			if err == nil {
 				t.Fatalf("want a refusal, got %s", out)
 			}
@@ -783,7 +655,7 @@ func TestProjectListSaysWhenNoProjectMatchesTheFilters(t *testing.T) {
 	stubProjectDirectories(t)
 	t.Cleanup(func() { projectListProfiles, projectListGroups = nil, nil })
 	projectListProfiles, projectListGroups = []string{"codex-work"}, []string{"backend"}
-	out, err := runProject(t, "list", testConfig(), &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", testConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -797,7 +669,7 @@ func TestProjectListSaysWhenNoProjectMatchesTheFilters(t *testing.T) {
 // still be refused rather than offering a failure without warning.
 func TestProjectLaunchNotFoundMarksUnusableCandidates(t *testing.T) {
 	stubProjectDirectories(t, "/tmp/web")
-	_, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "webb")
+	_, err := runProject(t, "launch", testConfig(), false, "", "webb")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -805,7 +677,7 @@ func TestProjectLaunchNotFoundMarksUnusableCandidates(t *testing.T) {
 		t.Fatalf("text error lacks %q:\n%s", want, err)
 	}
 
-	out, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, true, "", "webb")
+	out, err := runProject(t, "launch", testConfig(), true, "", "webb")
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -815,23 +687,6 @@ func TestProjectLaunchNotFoundMarksUnusableCandidates(t *testing.T) {
 }
 
 // A candidate an error printed, profile/title, launches when passed back.
-func TestProjectLaunchAcceptsTheProfileTitlePairCandidatesPrint(t *testing.T) {
-	client := &recordingKittyClient{}
-	out, err := runProject(t, "launch", testConfig(), client, true, "", "codex-work/API")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(client.launched) != 1 || !strings.Contains(out, `"profile":"codex-work"`) {
-		t.Fatalf("launched = %+v, out = %s; want the codex-work API project", client.launched, out)
-	}
-	// An unknown profile prefix is just a title that matches nothing.
-	if _, err := runProject(t, "launch", testConfig(), &recordingKittyClient{}, false, "", "nobody/API"); err == nil || !strings.Contains(err.Error(), "no configured project matches") {
-		t.Fatalf("err = %v, want a plain miss", err)
-	}
-}
-
-// archivedTestConfig is testConfig plus an archived project whose checkout is
-// gone, as a project kept for later commonly is.
 func archivedTestConfig() *config.Config {
 	cfg := testConfig()
 	cfg.Projects = append(cfg.Projects, config.Session{Title: "🦄Old", Directory: "/tmp/old", Profile: "work", Archived: true})
@@ -850,7 +705,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 		return ""
 	}
 
-	out, err := runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	out, err := runProject(t, "list", archivedTestConfig(), false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -862,7 +717,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 	}
 	allArchived := archivedTestConfig()
 	allArchived.Projects = allArchived.Projects[len(allArchived.Projects)-1:]
-	out, err = runProject(t, "list", allArchived, &recordingKittyClient{}, false, "", "")
+	out, err = runProject(t, "list", allArchived, false, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +725,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 		t.Fatalf("list of only archived projects = %q", out)
 	}
 	projectListProfiles = []string{"codex-work"}
-	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	out, err = runProject(t, "list", archivedTestConfig(), false, "", "")
 	projectListProfiles = nil
 	if err != nil {
 		t.Fatal(err)
@@ -879,7 +734,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 		t.Fatalf("a filter the archived project fails still counts it:\n%s", out)
 	}
 	projectListMissing = true
-	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	out, err = runProject(t, "list", archivedTestConfig(), false, "", "")
 	projectListMissing = false
 	if err != nil {
 		t.Fatal(err)
@@ -889,7 +744,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 	}
 
 	projectListArchived = true
-	out, err = runProject(t, "list", archivedTestConfig(), &recordingKittyClient{}, true, "", "")
+	out, err = runProject(t, "list", archivedTestConfig(), true, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -898,7 +753,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 		t.Fatalf("--archived json = %s\nwant          %s", got, want)
 	}
 
-	out, _ = runProject(t, "launch", archivedTestConfig(), &recordingKittyClient{}, false, "", "")
+	out, _ = runProject(t, "launch", archivedTestConfig(), false, "", "")
 	if strings.Contains(out, "Old") {
 		t.Fatalf("bare launch offers the archived project:\n%s", out)
 	}
@@ -908,8 +763,7 @@ func TestProjectListLeavesOutArchivedProjects(t *testing.T) {
 // by the title without its emoji, and by the profile/title pair.
 func TestProjectLaunchRefusesAnArchivedProject(t *testing.T) {
 	for _, title := range []string{"🦄Old", "old", "work/🦄Old"} {
-		client := &recordingKittyClient{}
-		out, err := runProject(t, "launch", archivedTestConfig(), client, true, "", title)
+		out, err := runProject(t, "launch", archivedTestConfig(), true, "", title)
 		if err == nil {
 			t.Fatalf("%q: want an error", title)
 		}
@@ -920,51 +774,14 @@ func TestProjectLaunchRefusesAnArchivedProject(t *testing.T) {
 		if envelope.Error.Code != "project_archived" || !strings.Contains(envelope.Error.Message, "archived = true") {
 			t.Fatalf("%q: error = %+v; want project_archived naming the key", title, envelope.Error)
 		}
-		if len(client.launched) != 0 {
-			t.Fatalf("%q: launched %+v", title, client.launched)
-		}
-	}
-}
-
-func TestProjectLaunchWithAnotherProfileKeepsSourceTemplateAndConfiguration(t *testing.T) {
-	cfg := testConfig()
-	cfg.Projects = cfg.Projects[2:] // Web exists only under work.
-	cfg.Projects[0].Args = []string{"--source-project-arg"}
-	projectLaunchAs = "CODEX-WORK"
-	projectLaunchDir = t.TempDir()
-	t.Cleanup(func() { projectLaunchAs, projectLaunchDir = "", "" })
-	client := &recordingKittyClient{}
-	out, err := runProject(t, "launch", cfg, client, true, "work", "Web")
-	if err != nil {
-		t.Fatalf("launch: %v\n%s", err, out)
-	}
-	if len(client.launched) != 1 {
-		t.Fatalf("launched = %+v", client.launched)
-	}
-	launch := client.launched[0]
-	if launch.Directory != projectLaunchDir || launch.UserVars["amx_profile"] != "codex-work" || launch.UserVars["amx_harness"] != "codex" || !strings.Contains(strings.Join(launch.Cmdline, " "), "--source-project-arg") {
-		t.Fatalf("wrong launch: %+v", launch)
-	}
-	var envelope struct {
-		Data projectLaunchData `json:"data"`
-	}
-	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
-		t.Fatal(err)
-	}
-	if envelope.Data.Project.Profile != "codex-work" || envelope.Data.Project.Directory != projectLaunchDir || envelope.Data.Project.Title != "Web" {
-		t.Fatalf("wrong result: %+v", envelope.Data)
-	}
-	if cfg.Projects[0].Profile != "work" || cfg.Projects[0].Directory != "/tmp/web" {
-		t.Fatalf("configuration mutated: %+v", cfg.Projects)
 	}
 }
 
 func TestProjectLaunchRefusesUnknownLaunchProfile(t *testing.T) {
 	projectLaunchAs = "missing"
 	t.Cleanup(func() { projectLaunchAs = "" })
-	client := &recordingKittyClient{}
-	out, err := runProject(t, "launch", testConfig(), client, true, "work", "Web")
-	if err == nil || len(client.launched) != 0 || !strings.Contains(out, `"code":"not_found"`) {
-		t.Fatalf("unknown profile: %v %s; launched %+v", err, out, client.launched)
+	out, err := runProject(t, "launch", testConfig(), true, "work", "Web")
+	if err == nil || !strings.Contains(out, `"code":"not_found"`) {
+		t.Fatalf("unknown profile: %v %s", err, out)
 	}
 }

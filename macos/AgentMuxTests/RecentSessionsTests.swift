@@ -70,12 +70,11 @@ final class RecentSessionsTests: XCTestCase {
     }
 
     func testContinueResultDecodesBothOutcomes() {
-        let focused = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.continue","changed":true,"message":"focused live conversation","data":{"continuation":"focused","tab_id":3,"window_id":8}}}"#.utf8), status: 0)
-        XCTAssertEqual(focused, .success(SessionContinueResult(changed: true, message: "focused live conversation", continuation: "focused", tabID: 3, windowID: 8)))
+        let focused = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.continue","changed":true,"message":"focused live conversation","data":{"continuation":"attach","runtime_session_id":"rs-1"}}}"#.utf8), status: 0)
+        XCTAssertEqual(focused, .success(SessionContinueResult(changed: true, message: "focused live conversation", continuation: "attach", runtimeSessionID: "rs-1")))
         let resumed = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.continue","changed":true,"data":{"continuation":"resumed","harness":"codex","session_id":"x"}}}"#.utf8), status: 0)
         XCTAssertEqual(resumed.value?.continuation, "resumed")
-        XCTAssertEqual(resumed.value?.windowID, 0)
-        XCTAssertEqual(resumed.value?.runtimeSessionID, "", "a Kitty resume names no runtime session")
+        XCTAssertEqual(resumed.value?.runtimeSessionID, "")
         let onTmux = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"action":"session.continue","changed":true,"data":{"continuation":"resumed","backend":"tmux","runtime_session_id":"rs-1"}}}"#.utf8), status: 0)
         XCTAssertEqual(onTmux.value?.runtimeSessionID, "rs-1")
         let odd = AMXEnvelope.decode(SessionContinueResult.self, stdout: Data(#"{"schema_version":1,"data":{"changed":true,"data":{"continuation":"resumed","runtime_session_id":7}}}"#.utf8), status: 0)

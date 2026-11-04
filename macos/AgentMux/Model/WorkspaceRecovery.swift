@@ -28,8 +28,6 @@ struct WorkspaceRestoration: Equatable {
     enum Place: Equatable {
         /// A session the workspace embeds.
         case session(runtimeSessionID: String)
-        /// A session that is a Kitty window.
-        case kitty(socket: String, windowID: Int)
         /// The Dashboard or the Overview. An opened shell, editor, or pager
         /// is a program that ended with the app and is not brought back.
         case view(id: String)
@@ -38,7 +36,6 @@ struct WorkspaceRestoration: Equatable {
         var encoded: String {
             switch self {
             case let .session(id): return "session:\(id)"
-            case let .kitty(socket, windowID): return "kitty:\(windowID):\(socket)"
             case let .view(id): return "view:\(id)"
             }
         }
@@ -52,10 +49,6 @@ struct WorkspaceRestoration: Equatable {
             case "session":
                 guard WorkspaceUtilityView.isRuntimeSessionID(rest) else { return nil }
                 self = .session(runtimeSessionID: rest)
-            case "kitty":
-                let parts = rest.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-                guard parts.count == 2, let windowID = Int(parts[0]), windowID > 0 else { return nil }
-                self = .kitty(socket: String(parts[1]), windowID: windowID)
             case "view":
                 guard rest == WorkspaceUtilityView.dashboard.id || rest == WorkspaceUtilityView.overview.id else { return nil }
                 self = .view(id: rest)
@@ -68,7 +61,6 @@ struct WorkspaceRestoration: Equatable {
         var sessionKey: AttentionCycler.Key? {
             switch self {
             case let .session(id): return .embedded(id)
-            case let .kitty(socket, windowID): return AttentionCycler.Key(socket: socket, windowID: windowID)
             case .view: return nil
             }
         }

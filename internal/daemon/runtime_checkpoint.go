@@ -20,25 +20,19 @@ import (
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
-// This file is the backend-neutral reducer checkpoint. A Kitty window's
-// reducer state persists in the window's own amx_state user var, which Kitty
-// keeps across a daemon restart; nothing like it exists for a tmux pane, so
-// the daemon checkpoints every runtime-session slot to one file instead:
+// This file checkpoints every runtime-session reducer slot to one file:
 //
 //   - every slot bound to a runtime session is recorded with the session's
 //     target, which is what lets a restarted daemon route the session's next
 //     event to the restored state rather than adopt an empty slot;
-//   - a non-Kitty slot also records its amx_state payload, in exactly the
-//     schema the Kitty user var carries, so one codec restores both;
-//   - a Kitty slot records no payload: amx_state stays its durable record, and
-//     the existing Kitty restore keeps reading it.
+//   - each slot records its reducer payload so a restart restores its facts.
 //
 // The checkpoint is derived state, not a source artifact. A corrupt one is
 // quarantined and the next flush starts it over; a session the registry no
 // longer lists as live, or lists at another target, is dropped on restore
 // rather than resurrected; and restored state never overwrites in-process
 // state a fresh event created first — it can only add the disjoint facts the
-// accepted state does not hold, the same merge the Kitty restore performs.
+// accepted state does not hold.
 
 // runtimeCheckpointSchemaVersion versions the checkpoint file.
 const runtimeCheckpointSchemaVersion = 1
@@ -67,8 +61,7 @@ type runtimeCheckpointEntry struct {
 	Instance         string `json:"instance"`
 	Generation       string `json:"generation"`
 	Pane             string `json:"pane"`
-	// State is the slot's amx_state payload. A Kitty slot has none: Kitty
-	// persists its state in the window's own user var.
+	// State is the slot's reducer payload.
 	State string `json:"state,omitempty"`
 }
 
@@ -87,7 +80,7 @@ func (e runtimeCheckpointEntry) target() (runtimeTarget, bool) {
 type runtimeRestoreOutcome string
 
 const (
-	// runtimeRestoreRestored: the slot was rebuilt (or, for Kitty, rebound).
+	// runtimeRestoreRestored: the slot was rebuilt.
 	runtimeRestoreRestored runtimeRestoreOutcome = "restored"
 	// runtimeRestoreMerged: a fresh event had already created the slot's
 	// state; it stayed authoritative and only disjoint facts were added.
@@ -155,7 +148,6 @@ func loadRuntimeCheckpoint(path string) ([]runtimeCheckpointEntry, error) {
 
 // restoreRuntimeCheckpoint restores every checkpointed runtime-session slot
 // the registry still lists live at the same target. It runs once at startup,
-// after the Kitty restore so a Kitty slot's restored reducer can be rebound,
 // and reads the registry without stateMu.
 func (h *Handler) restoreRuntimeCheckpoint(now time.Time) runtimeRestoreReport {
 	report := runtimeRestoreReport{Outcomes: map[string]runtimeRestoreOutcome{}}
@@ -267,15 +259,6 @@ func (h *Handler) applyRuntimeEntryLocked(e runtimeCheckpointEntry, target runti
 	if b, ok := h.runtimeRoutes.binding(slot); ok && b.target != target {
 		return runtimeRestoreConflict
 	}
-	if target.backend == string(runtimesession.BackendKitty) {
-		// Kitty's own restore owns the state; the checkpoint contributes only
-		// whom the slot belongs to.
-		h.runtimeRoutes.bind(slot, runtimeBinding{runtime: e.RuntimeSessionID, target: target})
-		if st, ok := h.windowStateLocked(slot); ok && st.Reducer != nil {
-			st.Reducer.BindRuntimeSession(e.RuntimeSessionID)
-		}
-		return runtimeRestoreRestored
-	}
 	outcome := runtimeRestoreRestored
 	if st, ok := h.windowStateLocked(slot); ok {
 		if strings.TrimSpace(e.State) != "" {
@@ -330,14 +313,12 @@ func (h *Handler) runtimeCheckpointEntriesLocked() []runtimeCheckpointEntry {
 			Generation:       b.target.generation,
 			Pane:             b.target.pane,
 		}
-		if isRuntimeSyntheticSlot(slot) {
-			if st, ok := h.windowStateLocked(slot); ok {
-				payload, err := st.MarshalUserVar()
-				if err != nil {
-					slog.Warn("daemon: runtime checkpoint could not encode slot state", "runtime_session_id", b.runtime, "err", err)
-				} else {
-					e.State = payload
-				}
+		if st, ok := h.windowStateLocked(slot); ok {
+			payload, err := st.MarshalStatePayload()
+			if err != nil {
+				slog.Warn("daemon: runtime checkpoint could not encode slot state", "runtime_session_id", b.runtime, "err", err)
+			} else {
+				e.State = payload
 			}
 		}
 		present[b.runtime] = true
@@ -397,23 +378,15 @@ func (h *Handler) writeRuntimeCheckpoint(entries []runtimeCheckpointEntry) error
 	return nil
 }
 
-// A Kitty window's state is durable once it is written to the window, and
-// that write is what ends its dirty stretch. A slot of another backend has no
-// window to write to: its state is durable once the runtime checkpoint holds
-// it, and it is presented by whoever reads the daemon (a companion snapshot),
-// not by a tab title. So the checkpoint is what settles such a slot. Without
-// this it would stay dirty for as long as it lived, and doctor would report
-// every tmux session as a renderer that fell behind.
+// A runtime slot's state is durable once the checkpoint holds it. The
+// checkpoint settles its dirty generation so doctor can identify drift.
 
-// runtimeSlotGenerationsLocked is the generation of every slot of another
-// backend with unsettled state, as the checkpoint being built captures it.
+// runtimeSlotGenerationsLocked is the generation of every runtime slot with
+// unsettled state, as the checkpoint being built captures it.
 // Callers hold stateMu.
 func (h *Handler) runtimeSlotGenerationsLocked() map[int]uint64 {
 	var captured map[int]uint64
 	for slot := range h.runtimeRoutes.bySlot {
-		if !isRuntimeSyntheticSlot(slot) {
-			continue
-		}
 		st, ok := h.windowStateLocked(slot)
 		if !ok || (!st.Dirty && st.RenderedGen >= st.Seq) {
 			continue
@@ -465,7 +438,7 @@ func (h *Handler) settleRuntimeSlots(captured map[int]uint64, capturedAt time.Ti
 // lists as live, retry deferred restores, adopt the live sessions no hook has
 // claimed a slot for, checkpoint what is left, and render the settled state
 // into the sessions' terminals. It
-// needs no Kitty listing, so it runs whether or not Kitty answered.
+// runs independently of terminal visibility.
 func (h *Handler) maintainRuntimeSessions(now time.Time) {
 	h.reconcileRuntimeSessions(now)
 	h.retireEndedRuntimeSessions(now)

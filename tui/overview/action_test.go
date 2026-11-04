@@ -2,8 +2,7 @@
 // actions behind them, and the undo the grid offers after a close.
 //
 // They are written against the same recorder the lifecycle tests use, for the
-// same reason: the Kitty client is nil, so anything that reached Kitty outside a
-// seam would panic rather than pass, and every seam RECORDS and answers nothing,
+// same reason: every effect runs through a seam that RECORDS and answers nothing,
 // so the only messages this package consumes are the ones a test chose to send.
 // That is what lets "a refresh landed while the menu was open" and "a completion
 // arrived after the operator cancelled" be ordinary sequences.
@@ -616,7 +615,7 @@ func TestCompletionRoutingMapsEachOutcomeToItsDestination(t *testing.T) {
 		m, _ := actionModel(t, sessions, 1, hostTabElsewhere)
 		m = openMenu(t, m)
 		m = press(t, m, "enter")
-		if _, cmd := send(t, m, commands.FocusDoneMsg{}); !quits(t, cmd) {
+		if _, cmd := send(t, m, commands.AttachDoneMsg{Switched: true}); !quits(t, cmd) {
 			t.Fatal("a confirmed focus did not leave for its destination")
 		}
 	})
@@ -625,7 +624,7 @@ func TestCompletionRoutingMapsEachOutcomeToItsDestination(t *testing.T) {
 		m, _ := actionModel(t, sessions, 1, hostTabElsewhere)
 		m = openMenu(t, m)
 		m = press(t, m, "enter")
-		m, cmd := send(t, m, commands.FocusDoneMsg{Err: errors.New("no matching tab")})
+		m, cmd := send(t, m, commands.AttachDoneMsg{Err: errors.New("no matching tab")})
 		if quits(t, cmd) {
 			t.Fatal("a failed focus left the overview")
 		}
@@ -635,12 +634,12 @@ func TestCompletionRoutingMapsEachOutcomeToItsDestination(t *testing.T) {
 	})
 
 	for _, name := range []string{"o", "O"} {
-		t.Run("an opened "+name+" leaves", func(t *testing.T) {
+		t.Run("an opened "+name+" returns", func(t *testing.T) {
 			m, _ := actionModel(t, sessions, 1, hostTabElsewhere)
 			m = openMenu(t, m)
 			m = press(t, m, name)
-			if _, cmd := send(t, m, commands.PickerOpenDoneMsg{}); !quits(t, cmd) {
-				t.Fatal("a shell or editor that opened did not leave for its destination")
+			if _, cmd := send(t, m, commands.PickerOpenDoneMsg{}); quits(t, cmd) {
+				t.Fatal("a shell or editor that returned closed the overview")
 			}
 		})
 	}
@@ -703,7 +702,7 @@ func TestCompletionRoutingMapsEachOutcomeToItsDestination(t *testing.T) {
 		m = press(t, m, "r")
 		m = press(t, m, "y")
 		d, _ := r.lastDispatch()
-		m, cmd := send(t, m, commands.ActionDoneMsg{Request: uint64(d.Request), Err: errors.New("kitten @ close-tab: no match")})
+		m, cmd := send(t, m, commands.ActionDoneMsg{Request: uint64(d.Request), Err: errors.New("tmux kill-session: no match")})
 		if quits(t, cmd) {
 			t.Fatal("a failed action left the overview")
 		}

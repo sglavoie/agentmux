@@ -19,7 +19,7 @@ type ItemKind int
 
 const (
 	// ItemSession is a live session leaf: exactly one running session. It is the
-	// only kind that resolves to a session, and therefore the only kind a Kitty
+	// only kind that resolves to a session, and therefore the only kind a terminal
 	// or daemon mutation may target.
 	ItemSession ItemKind = iota
 	// ItemFamilySummary stands for a whole multi-session family rather than for

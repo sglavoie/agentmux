@@ -1,7 +1,7 @@
 package aslbridge
 
-// The redirect and recovery payloads contract asl-amx-1.85ec3041b9f03f47 added
-// to protocol 2: a correction's receipt, a plan's durable redirect standing,
+// Redirect and recovery payloads in protocol 2: a correction's receipt,
+// a plan's durable redirect standing,
 // and the manual recovery a pause is waiting on. Shape and closed vocabularies
 // only. Like a question, a correction's words never ride along: an operation
 // is identified by its digest and byte count, and strict decoding refuses a

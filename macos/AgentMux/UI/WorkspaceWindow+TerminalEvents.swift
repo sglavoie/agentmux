@@ -389,7 +389,7 @@ extension WorkspaceWindowController {
 
     static func describe(_ key: AttentionCycler.Key?) -> String {
         guard let key else { return "none" }
-        return key.runtimeSessionID.isEmpty ? "kitty window \(key.windowID)" : key.runtimeSessionID
+        return key.runtimeSessionID
     }
 }
 

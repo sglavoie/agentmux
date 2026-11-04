@@ -128,14 +128,14 @@ final class WorkspaceNavigationPolishTests: XCTestCase {
     }
 
     func testLaunchSummaryNamesAllDestinationsSourcesAndUnknownState() {
-        let rows = LaunchBackendPreference.workspace.destinationRows(cliBackend: "kitty", cliSource: "compatibility default")
-        XCTAssertEqual(rows.map(\.destination), ["Workspace (tmux)", "Kitty", "Workspace (tmux)"])
+        let rows = LaunchBackendPreference.workspace.destinationRows(cliBackend: "unsupported", cliSource: "compatibility default")
+        XCTAssertEqual(rows.map(\.destination), ["Workspace (tmux)", "Unknown — check backend status", "Workspace (tmux)"])
         XCTAssertEqual(rows[0].source, "App preference")
         XCTAssertTrue(rows[1].source.contains("compatibility default"))
-        XCTAssertTrue(LaunchBackendPreference.workspace.differsFromCLI("kitty"))
-        XCTAssertFalse(LaunchBackendPreference.followCLI.differsFromCLI("kitty"))
+        XCTAssertFalse(LaunchBackendPreference.workspace.differsFromCLI("unsupported"))
+        XCTAssertFalse(LaunchBackendPreference.followCLI.differsFromCLI("unsupported"))
         XCTAssertFalse(LaunchBackendPreference.workspace.differsFromCLI(nil))
-        XCTAssertEqual(LaunchBackendPreference.followCLI.destinationRows(cliBackend: "kitty", cliSource: "config.toml")[0].destination, "Kitty")
+        XCTAssertEqual(LaunchBackendPreference.followCLI.destinationRows(cliBackend: "unsupported", cliSource: "config.toml")[0].destination, "Checking CLI destination")
         XCTAssertTrue(LaunchBackendPreference.followCLI.destinationRows(cliBackend: nil, cliSource: nil)[1].destination.contains("Unknown"))
     }
 

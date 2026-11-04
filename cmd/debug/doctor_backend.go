@@ -1,11 +1,9 @@
 package debug
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -76,26 +74,6 @@ var (
 		return cli.CollectBackendStatus(cfg, err, cli.BackendProbe{})
 	}
 	doctorLoadBackendConfig = cli.LoadRunnableConfig
-	// doctorKittyVersion asks the kitty on PATH for its release; empty when
-	// there is none or it does not answer.
-	doctorKittyVersion = func() string {
-		path, err := doctorLookPath("kitty")
-		if err != nil {
-			return ""
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		out, err := exec.CommandContext(ctx, path, "--version").Output() // #nosec G204 -- kitty from PATH, fixed argument.
-		if err != nil {
-			return ""
-		}
-		// "kitty 0.43.1 created by Kovid Goyal"
-		fields := strings.Fields(string(out))
-		if len(fields) < 2 || fields[0] != "kitty" {
-			return ""
-		}
-		return fields[1]
-	}
 )
 
 // doctorVersions is every release this installation depends on, in one place.
@@ -109,7 +87,6 @@ type doctorVersions struct {
 	Tmux       string `json:"tmux,omitempty"`
 	TmuxSource string `json:"tmux_source,omitempty"`
 	TmuxMin    string `json:"tmux_min"`
-	Kitty      string `json:"kitty,omitempty"`
 	// Notifier is the native notification backend, with its release.
 	Notifier        string `json:"notifier,omitempty"`
 	NotifierVersion string `json:"notifier_version,omitempty"`
@@ -124,7 +101,6 @@ func collectDoctorVersions(cliBuild buildinfo.Info, health ipc.Health, backend c
 		Tmux:       backend.Tmux.Version,
 		TmuxSource: backend.Tmux.Source,
 		TmuxMin:    backend.Tmux.MinVersion,
-		Kitty:      doctorKittyVersion(),
 	}
 	if health.Build != nil {
 		versions.Daemon = health.Build.Version
@@ -155,11 +131,6 @@ func (v doctorVersions) summary() string {
 		tmux = "tmux " + v.Tmux
 	}
 	parts = append(parts, fmt.Sprintf("%s (needs %s or newer)", tmux, v.TmuxMin))
-	if v.Kitty != "" {
-		parts = append(parts, "kitty "+v.Kitty)
-	} else {
-		parts = append(parts, "kitty not found")
-	}
 	if v.Notifier != "" {
 		parts = append(parts, strings.TrimSpace(v.Notifier+" "+v.NotifierVersion))
 	}
@@ -202,32 +173,13 @@ func backendSummary(status cli.BackendStatus) string {
 	return fmt.Sprintf("launches go to %s; %s; %s", status.LaunchBackend, tmux, server)
 }
 
-// kittyInUse reports whether Kitty is part of this installation as it runs
-// now: launches go to it, this process is in one of its windows, or the
-// daemon holds a current topology of one. Doctor's Kitty findings (`kitty`,
-// `kitty_snapshot_stale`, `renderer_drift`) are raised only then. Where
-// launches go to tmux and nothing names a live Kitty, a Kitty that does not
-// answer, a topology that aged after Kitty quit, and tabs nobody renders are
-// how the installation looks, not faults in it.
-func kittyInUse(status cli.BackendStatus, snapshot *protocol.KittySnapshot) bool {
-	if status.LaunchBackend != config.LaunchBackendTmux || strings.TrimSpace(doctorGetenv("KITTY_LISTEN_ON")) != "" {
-		return true
-	}
-	return snapshot != nil && snapshot.Ready && !snapshot.Stale
-}
-
 // backendFindingSeverity maps a backend problem onto doctor's severities.
-// A problem that stops tmux launches is a failure only where the operator
-// launches on tmux or has agents there; for someone who launches in Kitty and
-// has no server, a missing tmux is how the machine is set up, and is a note.
-func backendFindingSeverity(status cli.BackendStatus, problem cli.BackendProblem) string {
+// A problem that stops tmux launches is a failure.
+func backendFindingSeverity(problem cli.BackendProblem) string {
 	switch problem.Severity {
 	case "error":
 		return severityFailure
 	case "warning":
-		if problem.Code == "tmux_unavailable" && !status.Server.Running {
-			return severityInfo
-		}
 		return severityWarning
 	default:
 		return severityInfo
@@ -248,7 +200,7 @@ func writeDoctorBackend(out io.Writer, status cli.BackendStatus, addFinding func
 		if problem.Hint != "" {
 			message += " " + problem.Hint
 		}
-		addFinding(backendFindingSeverity(status, problem), checkBackendPrefix+problem.Code, "%s", message)
+		addFinding(backendFindingSeverity(problem), checkBackendPrefix+problem.Code, "%s", message)
 	}
 	return nil
 }

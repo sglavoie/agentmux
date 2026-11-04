@@ -27,7 +27,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
@@ -64,7 +63,7 @@ func (m model) recoverySnapshot(rs session.RunningSession) (sessionactions.Snaps
 	identity, _ := conversation.New(rs.Harness, rs.HarnessSessionID)
 	return sessionactions.Snapshot{
 		Conversation: identity,
-		Backend:      rs.Backend,
+		Backend:      rs.BackendKind(),
 		Session:      session.SessionFromRunning(rs),
 		Account:      account,
 		Label:        dashboard.SessionDisplayTitle(rs),
@@ -188,7 +187,7 @@ func (m model) handleRecoveryDone(msg recoveryDoneMsg) (tea.Model, tea.Cmd) {
 // relaunchCmd is the default relaunch seam. Like actionCommand it is a package
 // function over the configuration and the client, so nothing it does can depend
 // on where the cursor has moved since the close.
-func relaunchCmd(cfg *config.Config, client kitty.KittyClient, request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd {
+func relaunchCmd(cfg *config.Config, client any, request sessionactions.RequestID, snapshot sessionactions.Snapshot) tea.Cmd {
 	label := snapshot.Label
 	return func() (msg tea.Msg) {
 		defer func() {
@@ -196,7 +195,7 @@ func relaunchCmd(cfg *config.Config, client kitty.KittyClient, request sessionac
 				msg = recoveryDoneMsg{request: request, label: label, err: fmt.Errorf("restore panicked: %v", r)}
 			}
 		}()
-		err := commands.RecoverClosed(context.Background(), commands.TerminalDependencies(client, cfg), snapshot.Session, snapshot.Conversation, snapshot.Backend)
+		err := commands.RecoverClosed(context.Background(), commands.TerminalDependencies(cfg), snapshot.Session, snapshot.Conversation, snapshot.Backend)
 		return recoveryDoneMsg{request: request, label: label, err: err}
 	}
 }

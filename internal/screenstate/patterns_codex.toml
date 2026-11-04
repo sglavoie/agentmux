@@ -25,7 +25,7 @@ harness = "codex"
 # regex; the "equal exactly" half is the end anchor this pattern used to carry
 # inline, and it is Go's.
 #
-# Codex renders the empty composer with a dim placeholder. Kitty's get-text
+# Codex renders the empty composer with a dim placeholder. Tmux capture
 # output intentionally drops styling, so the placeholder is indistinguishable
 # from ordinary text and must be recognized explicitly. A composer holding
 # queued input has text after the chevron that is not a known placeholder and

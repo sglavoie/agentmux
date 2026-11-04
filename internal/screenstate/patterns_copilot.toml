@@ -1,7 +1,7 @@
 # Default GitHub Copilot CLI screen patterns.
 #
-# Every clause below was written from byte-for-byte `kitten @ get-text
-# --extent=screen` captures of live GitHub Copilot CLI 1.0.82 panes, committed
+# Every clause below was written from byte-for-byte captures of live GitHub
+# Copilot CLI 1.0.82 panes, committed
 # under testdata/ as copilot_*.txt and asserted per capture in
 # copilot_adapter_test.go. Nothing here is guessed. The set this file replaced
 # was explicitly provisional, and all three of its central guesses turned out to

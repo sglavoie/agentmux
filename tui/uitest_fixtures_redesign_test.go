@@ -51,7 +51,7 @@ func sessionsByTitle(d *uitestDriver, title string) []session.RunningSession {
 func TestDuplicateNamesFixturePosesEachRungOfTheLadder(t *testing.T) {
 	t.Parallel()
 
-	d, _ := newUITestFixtureDriver(mustFixture(t, "duplicate_names"), UITestSize{})
+	d := newUITestFixtureDriver(mustFixture(t, "duplicate_names"), UITestSize{})
 	cleanupUITestDriver(t, d)
 
 	api := sessionsByTitle(d, "api")
@@ -102,7 +102,7 @@ func TestPausedOutputFixtureOverflowsThePane(t *testing.T) {
 	t.Parallel()
 
 	fx := mustFixture(t, "paused_output")
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 
 	lines := strings.Split(strings.TrimRight(fx.Text, "\n"), "\n")
@@ -153,7 +153,7 @@ func TestHealthStatesFixtureSaysSomethingTheDefaultCannot(t *testing.T) {
 		t.Fatal("hook summary reports healthy, so nothing degrades")
 	}
 
-	d, _ := newUITestFixtureDriver(fx, UITestSize{})
+	d := newUITestFixtureDriver(fx, UITestSize{})
 	cleanupUITestDriver(t, d)
 
 	// Health is refreshed from the tick handler alone, so an untouched model has
@@ -184,7 +184,7 @@ func TestHealthStatesFixtureSaysSomethingTheDefaultCannot(t *testing.T) {
 func TestAttentionOverlapFixtureCarriesMoreThanOneReasonPerRow(t *testing.T) {
 	t.Parallel()
 
-	d, _ := newUITestFixtureDriver(mustFixture(t, "attention_overlap"), UITestSize{})
+	d := newUITestFixtureDriver(mustFixture(t, "attention_overlap"), UITestSize{})
 	cleanupUITestDriver(t, d)
 
 	blocked := sessionByTitle(t, d, "blocked")
@@ -236,7 +236,7 @@ func TestRedesignFixturesAreReachableByCommandAction(t *testing.T) {
 
 	for _, name := range []string{"duplicate_names", "paused_output", "health_states", "attention_overlap"} {
 		t.Run(name, func(t *testing.T) {
-			d, _ := newUITestFixtureDriver(mustFixture(t, name), UITestSize{})
+			d := newUITestFixtureDriver(mustFixture(t, name), UITestSize{})
 			cleanupUITestDriver(t, d)
 			if err := d.Command(commands.SearchPlans); err != nil {
 				t.Fatalf("reach Plans by name: %v", err)

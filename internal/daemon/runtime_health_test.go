@@ -385,11 +385,9 @@ func TestRuntimeReconcileBacksOffWhileItFails(t *testing.T) {
 	}
 }
 
-// A tmux session has no Kitty tab to write its state to. Its state is durable
-// once the runtime checkpoint holds it, which is what ends its dirty stretch:
-// it is never queued for the Kitty writer, and doctor's renderer invariant
-// (dirty for longer than two intervals) is never tripped by it.
-func TestRuntimeSlotsSettleThroughTheCheckpointNotTheKittyWriter(t *testing.T) {
+// A tmux session is durable once the runtime checkpoint holds its state.
+// That ends its dirty stretch and satisfies the renderer invariant.
+func TestRuntimeSlotsSettleThroughTheCheckpoint(t *testing.T) {
 	w := newRuntimeFaultWorld(t)
 	agent := w.launch("api")
 	start := time.Now()
@@ -405,9 +403,6 @@ func TestRuntimeSlotsSettleThroughTheCheckpointNotTheKittyWriter(t *testing.T) {
 			t.Fatalf("no metadata exported for slot %d", slot)
 		}
 		return meta.Renderer
-	}
-	if !h.renderQueue.Empty() {
-		t.Fatal("a tmux slot was queued for the Kitty writer")
 	}
 	before := rendererOf()
 	if before.DirtySince == 0 || before.QueuedGen == 0 || before.RenderedGen >= before.QueuedGen {

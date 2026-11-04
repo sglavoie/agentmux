@@ -10,11 +10,11 @@ import (
 	"testing"
 
 	"github.com/sglavoie/agentmux/internal/actions"
+	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/cli"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
 	"github.com/spf13/cobra"
@@ -24,13 +24,12 @@ func TestSessionForkCLIUsesPortableCopilotHandoff(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Copilot)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Copilot}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "tmux"}, Accounts: []config.Account{{Name: "work", Harness: harness.Copilot}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{harness.Copilot: sessionCommandReader{harness: harness.Copilot}}
 	}
-	sessionCommandsNewKitty = func() kitty.KittyClient { return &sessionCommandKitty{} }
 	runner := &sessionCommandHandoff{result: handoff.Result{
 		Artifact:      handoff.Artifact{ID: "handoff-1", Path: "/tmp/handoff-1.md", Status: handoff.StatusFinal},
 		TargetProfile: "work", TargetHarness: harness.Copilot, Launched: true, Label: "Portable fork",
@@ -70,17 +69,17 @@ func TestSessionForkCLIUsesPortableCopilotHandoff(t *testing.T) {
 }
 
 func TestSessionForkWorktreeCLIRequiresConfirmationAndPassesDirtyOverride(t *testing.T) {
-	resetSessionCommandsTestState(t)
+	fixture := resetSessionCommandsTestState(t)
+	recorder := &recordingTmux{TargetLauncher: fixture.Backend}
+	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return recorder, nil }
 	meta, indexPath := sessionCommandMeta(t, harness.Codex)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "tmux"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}, Projects: []config.Session{{Title: "api", Directory: meta.CWD, Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{harness.Codex: sessionCommandReader{harness: harness.Codex}}
 	}
-	client := &sessionCommandKitty{}
-	sessionCommandsNewKitty = func() kitty.KittyClient { return client }
 	managed := &sessionCommandWorktree{result: worktree.Result{ProjectLabel: "api", Path: t.TempDir(), Branch: "amx/api/source-1", BaseRef: "HEAD", SourceRoot: meta.CWD}}
 	sessionCommandsNewWorktree = func() worktree.Runner { return managed }
 	var out bytes.Buffer
@@ -103,8 +102,8 @@ func TestSessionForkWorktreeCLIRequiresConfirmationAndPassesDirtyOverride(t *tes
 	if len(managed.requests) != 1 || !managed.requests[0].AllowDirty {
 		t.Fatalf("worktree requests = %+v, want confirmed dirty override", managed.requests)
 	}
-	if len(client.launched) != 1 || client.launched[0].Directory != managed.result.Path {
-		t.Fatalf("launches = %+v, want isolated directory %q", client.launched, managed.result.Path)
+	if len(recorder.launches) != 1 || recorder.launches[0].Directory != managed.result.Path {
+		t.Fatalf("launches = %+v, want isolated directory %q", recorder.launches, managed.result.Path)
 	}
 	if got := out.String(); got != "forked indexed conversation in isolated worktree\n" {
 		t.Fatalf("text output = %q", got)
@@ -132,7 +131,7 @@ func TestSessionHandoffCLICreateOnlyAndPartialJSON(t *testing.T) {
 	resetSessionCommandsTestState(t)
 	meta, indexPath := sessionCommandMeta(t, harness.Claude)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "tmux"}, Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -181,7 +180,7 @@ func TestSessionHandoffCLICreateOnlyAndPartialJSON(t *testing.T) {
 		t.Fatalf("text output = %q", got)
 	}
 
-	runner.err = &handoff.PartialLaunchError{Err: errors.New("Kitty unavailable")}
+	runner.err = &handoff.PartialLaunchError{Err: errors.New("tmux unavailable")}
 	runner.result.Launched = false
 	if err := sessionHandoffCmd.Flags().Set("no-launch", "false"); err != nil {
 		t.Fatal(err)
@@ -235,7 +234,7 @@ func TestSessionCLIRejectsHiddenMissingAndInvalidSelectors(t *testing.T) {
 	meta.HiddenFromIndex = true
 	writeSessionCommandIndex(t, indexPath, meta)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "tmux"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
@@ -319,7 +318,7 @@ func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
 	meta, indexPath := sessionCommandMeta(t, harness.Codex)
 	writeSessionCommandIndex(t, indexPath, meta)
 	sessionCommandsLoadConfig = func() (*config.Config, error) {
-		return &config.Config{Defaults: config.Defaults{LaunchBackend: "kitty"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}},
+		return &config.Config{Defaults: config.Defaults{LaunchBackend: "tmux"}, Accounts: []config.Account{{Name: "work", Harness: harness.Codex}},
 			Projects: []config.Session{{Title: "🐱amx", Profile: "work"}}}, nil
 	}
 	sessionCommandsSessionIndexPath = func() string { return indexPath }
@@ -336,7 +335,7 @@ func TestSessionCLIPointsAWordSelectorAtSearch(t *testing.T) {
 		selector string
 		want     string
 	}{
-		{"kitty", "was not found; to find a conversation by what was said in it, run `amx session search kitty`"},
+		{"unsupported", "was not found; to find a conversation by what was said in it, run `amx session search unsupported`"},
 		{"tab title", "`amx session search 'tab title'`"},
 		{"deadbeef", "run `amx session list` to see the indexed conversations"},
 		{"abc", "a session ID prefix needs at least 4 characters"},

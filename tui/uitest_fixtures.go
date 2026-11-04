@@ -2,8 +2,7 @@
 
 // This file is the fixture catalog: the named, deterministic worlds a scenario
 // can be driven against. It holds the session, plan, transcript, ASL run, and
-// worktree data each fixture publishes, the stub services that serve it, and
-// the recording Kitty client that captures what the driver asked Kitty to do.
+// worktree data each fixture publishes and the stub services that serve it.
 
 package tui
 
@@ -13,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +22,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/flightlog"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/overrides"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -42,12 +41,10 @@ import (
 // them by name.
 //
 // The builder map below is the whole inventory; the fixtures the redesign added
-// live beside it in uitest_fixtures_redesign.go. The recording Kitty client they
-// are all served through is at the bottom of this file.
+// live beside it in uitest_fixtures_redesign.go.
 
 // uitestFixture is a deterministic, self-contained data source for a harness
-// run: a prepared config plus the Kitty windows a no-op client should report,
-// and a default terminal size. Building a driver from a fixture never reads the
+// run: a prepared config, tmux panes, and a default terminal size. Building a driver from a fixture never reads the
 // operator's real config and never launches a subprocess.
 type uitestFixture struct {
 	FlightEvents []flightlog.Event
@@ -56,17 +53,12 @@ type uitestFixture struct {
 	Description  string
 	Size         UITestSize
 	Config       *config.Config
-	Windows      []kitty.OSWindow
-	// Portable is the sessions a non-Kitty backend hosts, already carrying the
-	// process-local IDs discovery would give them. NoKitty additionally runs
-	// the dashboard with no Kitty client at all, the way it runs in any other
-	// terminal: such a fixture has no Windows, and every Kitty-only command
-	// has to say why it is unavailable instead of reaching for the client.
+	PaneGroups   []fixturePaneGroup
+	// Portable holds prebuilt tmux sessions with stable IDs for scenario assertions.
 	Portable  []session.RunningSession
-	NoKitty   bool
 	Worktrees []actions.WorktreeView
-	// States and Watchdog stand in for one daemon state query, keyed by Kitty
-	// window ID. They carry the state a tab title cannot express — the busy
+	// States and Watchdog stand in for one daemon state query, keyed by
+	// session slot. They carry the state a terminal title cannot express — the busy
 	// anchor above all — so a fixture can pin the dashboard's daemon-owned
 	// columns. A fixture that leaves them nil reproduces an unreachable daemon,
 	// which is the honest default for a fixture with no daemon at all.
@@ -84,7 +76,7 @@ type uitestFixture struct {
 	// so a scenario can exercise a refusal or a consumed receipt without a bridge.
 	ASLActionOutcomes map[string]uitestASLOutcome
 	// Families stands in for what config-aware discovery stamped onto each row,
-	// keyed by Kitty window ID. It exists because the real stamp comes from
+	// keyed by session slot. It exists because the real stamp comes from
 	// projectresolve.NewWithGit, which asks Git about a directory on disk: a
 	// multi-checkout repository family is not expressible in a fixture without
 	// creating real repositories, and their temporary paths would then appear in
@@ -99,21 +91,18 @@ type uitestFixture struct {
 	// discovery's own answer alone, which for a fixture pointing at directories
 	// that do not exist is a singleton family per configured project.
 	Families map[int]uitestFamily
-	// Text is the scrollback every GetText read answers with, standing in for
-	// one `kitten @ get-text` against the previewed window. It is one string
-	// rather than a per-window map because the pane reads exactly one window at
-	// a time, and a fixture that varied by window would be asserting on which
-	// window was asked — which the recording client already captures.
+	// Text is the scrollback returned for the previewed pane. A single string
+	// is enough because the inspector reads one pane at a time.
 	Text string
 	// TextFailures makes the first N reads fail instead of answering with Text,
-	// standing in for a `kitten @ get-text` against a window that is gone or a
-	// socket that is not answering yet. It is a count rather than a flag because
+	// standing in for a pane that is gone or a server that is not answering yet.
+	// It is a count rather than a flag because
 	// the interesting property is recovery: a scenario that only ever failed
 	// could not tell "the pane reports the error" from "the pane is stuck on it",
 	// and the count is what lets a later read in the same run succeed.
 	//
 	// A failure is per read, not per target. Reads are counted in the order they
-	// reach the client, so a fixture wanting the very first paint to fail sets
+	// reach the fixture, so a fixture wanting the very first paint to fail sets
 	// 1 and every read after it — a reopened inspector, a moved cursor, a poll
 	// that landed — answers with Text.
 	TextFailures int
@@ -138,7 +127,7 @@ type uitestFamily struct {
 }
 
 // uitestSessionOverlay is everything a fixture injects onto the session list
-// discovery produced: the daemon-owned state no Kitty title can carry, the
+// discovery produced: the daemon-owned state no terminal title can carry, the
 // watchdog block that goes with it, and the repository-family identity a real
 // Git probe would have stamped.
 //
@@ -264,38 +253,47 @@ func uitestFixtureByName(name string) (uitestFixture, error) {
 	return build(), nil
 }
 
-// uitestTab builds a single managed tab whose one window carries amx user vars,
-// mirroring how a launched session appears in `kitten @ ls`.
-func uitestTab(tabID, winID int, title string, active bool, vars kitty.UserVars) kitty.Tab {
-	return kitty.Tab{
-		ID:       tabID,
-		IsActive: active,
-		Title:    title,
-		Windows: []kitty.Window{{
-			ID:       winID,
-			IsActive: true,
-			CWD:      vars.CWD,
-			UserVars: vars,
-		}},
+// fixturePaneGroup groups panes so existing fixture definitions stay compact.
+type fixturePaneGroup struct{ Panes []backend.Pane }
+
+func uitestTab(tabID, winID int, title string, active bool, vars map[string]string) backend.Pane {
+	return backend.Pane{
+		Ref: backend.PaneID(fmt.Sprint(winID)), Group: backend.GroupID(fmt.Sprint(tabID)),
+		GroupTitle: title, CWD: vars["amx_directory"], Vars: vars,
+		Active: true, GroupActive: active,
 	}
 }
 
-// uitestOSWindow wraps tabs in a single focused OS window.
-func uitestOSWindow(tabs ...kitty.Tab) kitty.OSWindow {
-	return kitty.OSWindow{ID: 1, IsActive: true, IsFocused: true, Tabs: tabs}
+func uitestPaneGroup(panes ...backend.Pane) fixturePaneGroup {
+	return fixturePaneGroup{Panes: panes}
 }
 
-// managedVars builds the user-var block a launched session carries, populating
-// both the CWD and amx_directory so directory-backed actions resolve.
-func managedVars(profile, harness, project, dir string) kitty.UserVars {
-	return kitty.UserVars{
-		Profile:      profile,
-		Harness:      harness,
-		Project:      project,
-		AMXDirectory: dir,
-		CWD:          dir,
-		LaunchID:     "uitest-" + project,
+func managedVars(profile, harness, project, dir string) map[string]string {
+	return map[string]string{
+		"amx_profile": profile, "amx_harness": harness,
+		"amx_project": project, "amx_directory": dir,
+		"amx_launch_id": "uitest-" + project,
 	}
+}
+
+func (fx uitestFixture) panes() []backend.Pane {
+	var panes []backend.Pane
+	for _, window := range fx.PaneGroups {
+		panes = append(panes, window.Panes...)
+	}
+	return panes
+}
+
+func (fx uitestFixture) runningSessions() []session.RunningSession {
+	rows := session.RunningSessionsFromPanes(runtimesession.BackendTmux, fx.panes(), fx.Config)
+	for i := range rows {
+		rows[i].TabID, _ = strconv.Atoi(rows[i].Group.ID)
+		rows[i].WindowID, _ = strconv.Atoi(rows[i].Pane.ID)
+		if fx.Config != nil {
+			rows[i].Base = strings.TrimPrefix(rows[i].Base, fx.Config.HarnessEmojis[rows[i].Harness])
+		}
+	}
+	return rows
 }
 
 // basicFixture is a realistic multi-profile dashboard: a couple of Claude
@@ -315,7 +313,7 @@ func basicFixture() uitestFixture {
 			{Title: "dotfiles", Directory: "~/dotfiles", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 		uitestTab(2, 21, "🦊backend", false, managedVars("work", "claude", "backend", "~/projects/backend")),
 		uitestTab(3, 31, "🤖dotfiles", false, managedVars("personal", "codex", "dotfiles", "~/dotfiles")),
@@ -325,7 +323,7 @@ func basicFixture() uitestFixture {
 		Description: "two Claude work projects plus a Codex personal project",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 	}
 }
 
@@ -346,7 +344,7 @@ func actionsFixture() uitestFixture {
 			{Title: longTitle, Directory: dir, Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🦊"+longTitle, true, managedVars("work", "claude", longTitle, dir)),
 	)}
 	return uitestFixture{
@@ -354,7 +352,7 @@ func actionsFixture() uitestFixture {
 		Description: "single long-titled session for exercising the actions overlay width",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 	}
 }
 
@@ -379,7 +377,7 @@ func aslQuestionFixture() uitestFixture {
 			{Title: "dotfiles", Directory: "~/dotfiles", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "❓🔁🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 		uitestTab(2, 21, "⚡🔁🦊backend", false, managedVars("work", "claude", "backend", "~/projects/backend")),
 		uitestTab(3, 31, "🤖dotfiles", false, managedVars("personal", "codex", "dotfiles", "~/dotfiles")),
@@ -389,7 +387,7 @@ func aslQuestionFixture() uitestFixture {
 		Description: "an ASL supervisor awaiting a human mailbox reply alongside an active looping run",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 	}
 }
 
@@ -410,7 +408,7 @@ func wideProfilesFixture() uitestFixture {
 			{Title: "platform-services-monorepo", Directory: "~/projects/platform-services-monorepo", Profile: "claude-production-primary"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🦊platform-services-monorepo", true,
 			managedVars("claude-production-primary", "claude", "platform-services-monorepo", "~/projects/platform-services-monorepo")),
 	)}
@@ -419,15 +417,12 @@ func wideProfilesFixture() uitestFixture {
 		Description: "long profile names and home dirs for exercising the profile picker width",
 		Size:        UITestSize{Width: 140, Height: 36},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 	}
 }
 
-// portableTmuxFixture is the dashboard as it runs in a stock terminal: no Kitty
-// client, and three sessions hosted by the private tmux server. One needs the
-// operator, one is working, one is at rest, so the queue's buckets, the
-// selection, and the inspector are all exercised against rows no Kitty window
-// stands behind.
+// portableTmuxFixture has three sessions hosted by a private tmux server.
+// One needs the operator, one is working, and one is at rest.
 func portableTmuxFixture() uitestFixture {
 	cfg := &config.Config{
 		Defaults:      config.Defaults{Sort: "alpha", RefreshInterval: 2},
@@ -456,10 +451,9 @@ func portableTmuxFixture() uitestFixture {
 	busySince := uitestFrozenNow.Add(-95 * time.Second).Unix()
 	return uitestFixture{
 		Name:        "portable_tmux",
-		Description: "three tmux-hosted sessions and no Kitty client, as in a stock terminal",
+		Description: "three tmux-hosted sessions in a stock terminal",
 		Size:        UITestSize{Width: 140, Height: 36},
 		Config:      cfg,
-		NoKitty:     true,
 		Portable:    []session.RunningSession{row(0, "api", "work", "claude"), row(1, "web", "work", "claude"), row(2, "docs", "codex-work", "codex")},
 		States: map[int]protocol.WindowStateSnapshot{
 			commands.PortableIDBase:     {IconState: "key"},
@@ -494,7 +488,7 @@ func runTimersFixture() uitestFixture {
 			{Title: "idle", Directory: "~/projects/idle", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊burst", true, managedVars("work", "claude", "burst", "~/projects/burst")),
 		uitestTab(2, 21, "🤖🦊review", false, managedVars("work", "claude", "review", "~/projects/review")),
 		uitestTab(3, 31, "🌀🦊indexer", false, managedVars("work", "claude", "indexer", "~/projects/indexer")),
@@ -511,7 +505,7 @@ func runTimersFixture() uitestFixture {
 		Description: "busy stretches spanning the sub-minute, multi-minute, hours-long, warning, and idle timer bands",
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: busySince(7 * time.Second)},
 			21: {IconState: "subagent", BusySinceAt: busySince(3*time.Minute + 7*time.Second)},
@@ -551,7 +545,7 @@ func unseenStopsFixture() uitestFixture {
 			{Title: "working", Directory: "~/projects/working", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🛑🦊unread", false, managedVars("work", "claude", "unread", "~/projects/unread")),
 		uitestTab(2, 21, "🛑🦊read", false, managedVars("work", "claude", "read", "~/projects/read")),
 		uitestTab(3, 31, "⚡🤖working", true, managedVars("personal", "codex", "working", "~/projects/working")),
@@ -561,7 +555,7 @@ func unseenStopsFixture() uitestFixture {
 		Description: "two identical 🛑 rows the daemon separates by seenness, plus one working row",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "stop", Unseen: true},
 			21: {IconState: "stop"},
@@ -593,7 +587,7 @@ func pinnedSessionsFixture() uitestFixture {
 			{Title: "rested", Directory: "~/projects/rested", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "★🔑🦊pinwait", false, managedVars("work", "claude", "pinwait", "~/projects/pinwait")),
 		uitestTab(2, 21, "★⚡🤖pinwork", false, managedVars("personal", "codex", "pinwork", "~/projects/pinwork")),
 		uitestTab(3, 31, "🔑🦊asks", false, managedVars("work", "claude", "asks", "~/projects/asks")),
@@ -605,7 +599,7 @@ func pinnedSessionsFixture() uitestFixture {
 		Description: "two pinned rows (one waiting, one working) above an unpinned waiting, working, and rested row",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "key"},
 			21: {IconState: "bolt", BusySinceAt: uitestFrozenNow.Add(-90 * time.Second).Unix()},
@@ -658,7 +652,7 @@ func blockedReasonsFixture() uitestFixture {
 			{Title: "working", Directory: "~/projects/working", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🔑🤖approve", false, managedVars("personal", "codex", "approve", "~/projects/approve")),
 		uitestTab(2, 21, "🔑🦊grant", false, managedVars("work", "claude", "grant", "~/projects/grant")),
 		uitestTab(3, 31, "❓🤖choose", false, managedVars("personal", "codex", "choose", "~/projects/choose")),
@@ -670,7 +664,7 @@ func blockedReasonsFixture() uitestFixture {
 		Description: "four identically-iconed blocked rows the daemon explains with different prompt kinds, one of them unlabelled",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "key", Reason: "command_approval"},
 			21: {IconState: "key", Reason: "permission"},
@@ -728,7 +722,7 @@ func worktreeBranchesFixture() uitestFixture {
 			{Title: "notes", Directory: "~/notes", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 		uitestTab(2, 21, "⚡🦊api-feat-x", false, managedVars("work", "claude", "api-feat-x", "~/projects/worktrees/api-feat-x")),
 		uitestTab(3, 31, "⚡🦊api-hotfix", false, managedVars("work", "claude", "api-hotfix", "~/projects/worktrees/api-hotfix")),
@@ -740,7 +734,7 @@ func worktreeBranchesFixture() uitestFixture {
 		Description: "three rows in one repository — a dirty main checkout and two managed worktrees — plus a directory that is not a repository at all",
 		Size:        UITestSize{Width: 100, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: busySince(42 * time.Second), Branch: "main", Dirty: true},
 			21: {IconState: "bolt", BusySinceAt: busySince(3*time.Minute + 7*time.Second), Branch: "amx/feat-x"},
@@ -808,7 +802,7 @@ func projectFamiliesFixture() uitestFixture {
 			{Title: "scratch", Directory: "~/scratch", Profile: "work"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "🔑🦊api", true, managedVars("work", "claude", "api", "~/projects/api")),
 		uitestTab(2, 21, "⚡🦊api-feat-x", false, managedVars("work", "claude", "api-feat-x", "~/projects/worktrees/api-feat-x")),
 		uitestTab(3, 31, "🛑🦊api-hotfix", false, managedVars("work", "claude", "api-hotfix", "~/projects/worktrees/api-hotfix")),
@@ -828,7 +822,7 @@ func projectFamiliesFixture() uitestFixture {
 		Description: "two multi-checkout repository families spanning three urgency buckets, plus a single-checkout family and an unfamilied row",
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "key", Reason: "permission", Branch: "main", Dirty: true},
 			21: {IconState: "bolt", BusySinceAt: busySince(3*time.Minute + 7*time.Second), Branch: "amx/feat-x"},
@@ -887,7 +881,7 @@ func triageIntegrationFixture() uitestFixture {
 			{Title: "spare-parts", Directory: "~/projects/spare-parts", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "❗🦊release-guard", true, managedVars("work", "claude", "release-guard", "~/projects/release-guard")),
 		uitestTab(2, 21, "🔑🦊portal-work", false, managedVars("work", "claude", "portal-work", "~/projects/portal-work")),
 		uitestTab(3, 31, "❓🤖portal-personal", false, managedVars("personal", "codex", "portal-personal", "~/projects/portal-personal")),
@@ -907,7 +901,7 @@ func triageIntegrationFixture() uitestFixture {
 		Description: "all triage ranks and presentation-clock tie cases across a scrollable case-folded project scope set",
 		Size:        UITestSize{Width: 140, Height: 16},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11:  {IconState: "error", PresentationChangedAtMS: changed(1 * time.Second)},
 			21:  {IconState: "key", Reason: "permission", PresentationChangedAtMS: changed(2 * time.Second)},
@@ -1009,7 +1003,7 @@ func familyUnreadFixture() uitestFixture {
 			{Title: "tmp", Directory: "~/tmp", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
+	windows := []fixturePaneGroup{uitestPaneGroup(
 		uitestTab(1, 11, "⚡🦊svc", true, managedVars("work", "claude", "svc", "~/projects/svc")),
 		uitestTab(2, 21, "🛑🦊svc-legacy", false, managedVars("work", "claude", "svc-legacy", "~/projects/worktrees/svc-legacy")),
 		uitestTab(3, 31, "🛑🦊svc-review", false, managedVars("work", "claude", "svc-review", "~/projects/worktrees/svc-review")),
@@ -1023,7 +1017,7 @@ func familyUnreadFixture() uitestFixture {
 		Description: "an unread stop folded inside a three-checkout family, beside a seen sibling, a family with nothing unread, and an unfamilied leaf",
 		Size:        UITestSize{Width: 120, Height: 32},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		States: map[int]protocol.WindowStateSnapshot{
 			11: {IconState: "bolt", BusySinceAt: busySince(1*time.Minute + 12*time.Second), Branch: "main"},
 			21: {IconState: "stop", Branch: "amx/legacy"},
@@ -1141,11 +1135,15 @@ func aslRunsFixture() uitestFixture {
 			{Title: "dotfiles", Directory: root + "/dotfiles", Profile: "personal"},
 		},
 	}
-	windows := []kitty.OSWindow{uitestOSWindow(
-		uitestTab(1, 11, "🦊api", true, managedVars("work", "claude", "api", root+"/api")),
+	apiVars := managedVars("work", "claude", "api", root+"/api")
+	apiVars["amx_asl_run_id"] = "run-reply"
+	dotfilesVars := managedVars("personal", "codex", "dotfiles", root+"/dotfiles")
+	dotfilesVars["amx_asl_run_id"] = "run-active"
+	windows := []fixturePaneGroup{uitestPaneGroup(
+		uitestTab(1, 11, "🦊api", true, apiVars),
 		uitestTab(2, 21, "🦊gateway-a", false, managedVars("work", "claude", "gateway", root+"/gateway")),
 		uitestTab(3, 22, "🦊gateway-b", false, managedVars("work", "claude", "gateway", root+"/gateway")),
-		uitestTab(4, 31, "🤖dotfiles", false, managedVars("personal", "codex", "dotfiles", root+"/dotfiles")),
+		uitestTab(4, 31, "🤖dotfiles", false, dotfilesVars),
 	)}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
 	rows := []aslbridge.Row{
@@ -1154,7 +1152,7 @@ func aslRunsFixture() uitestFixture {
 			RunID: "run-active", SessionID: "sess-dotfiles", PrimaryState: "running",
 			UrgencyRank: 60, UrgencyGroup: "in-progress", ActivityLabel: "working",
 			Phase: "implement", Harness: "codex", WorkspaceRoot: root + "/dotfiles",
-			Window: &aslbridge.Window{KittyWindowID: 31}, RunStartedAt: started,
+			RunStartedAt:   started,
 			LastActivityAt: time.Now().Add(-3 * time.Minute).UTC().Format(time.RFC3339),
 		},
 		{
@@ -1162,8 +1160,8 @@ func aslRunsFixture() uitestFixture {
 			RunID: "run-reply", SessionID: "sess-api", PrimaryState: "paused-for-reply",
 			UrgencyRank: 10, UrgencyGroup: "needs-action", RecommendedAction: "reply",
 			ActivityLabel: "waiting for reply", Phase: "review", Harness: "claude",
-			WorkspaceRoot: root + "/api", Window: &aslbridge.Window{KittyWindowID: 11},
-			RunStartedAt: started, LastActivityAt: time.Now().Add(-1 * time.Minute).UTC().Format(time.RFC3339),
+			WorkspaceRoot: root + "/api",
+			RunStartedAt:  started, LastActivityAt: time.Now().Add(-1 * time.Minute).UTC().Format(time.RFC3339),
 			PauseReason: "awaiting an answer to the migration question",
 			Question: &aslbridge.Question{
 				ContextKind: "live-wait", QuestionID: "q-api-1", UnansweredCount: 2,
@@ -1220,7 +1218,7 @@ func aslRunsFixture() uitestFixture {
 		Description: "agent-session-loop runs spanning exact, ambiguous, and unmatched focus targets",
 		Size:        UITestSize{Width: 132, Height: 34},
 		Config:      cfg,
-		Windows:     windows,
+		PaneGroups:  windows,
 		ASLRows:     rows,
 		ASLStatus: aslbridge.Status{
 			Mode: string(aslbridge.ModeAuto), Available: true, MutationsEnabled: true,

@@ -12,8 +12,8 @@ import (
 // of the three, for a reason that is a design decision rather than an omission.
 //
 // THE COPY IS CAPTURE-DERIVED. patterns_copilot.toml's wording was rewritten
-// from `kitten @ get-text --extent=screen` captures of GitHub Copilot CLI
-// 1.0.82, committed byte-for-byte under testdata/ and each named in a
+// from live captures of GitHub Copilot CLI 1.0.82, committed byte-for-byte
+// under testdata/ and each named in a
 // copilot_adapter_test.go row. It replaced provisional copy written by analogy
 // to Claude and Codex, which was wrong in kind rather than mis-tuned in all
 // three clauses — see the header of that test file for what each placeholder

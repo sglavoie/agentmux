@@ -14,7 +14,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/hooks"
-	"github.com/sglavoie/agentmux/internal/kitty"
 )
 
 const (
@@ -30,10 +29,6 @@ type DaemonHealthClient interface {
 	Health() ipc.Health
 }
 
-type KittyWindowLister interface {
-	ListWindows() ([]kitty.OSWindow, error)
-}
-
 type StatusOptions struct {
 	Config      *config.Config
 	ConfigError error
@@ -41,7 +36,6 @@ type StatusOptions struct {
 	PathsError  error
 	Journal     *diagnostics.Journal
 	Daemon      DaemonHealthClient
-	Kitty       KittyWindowLister
 	AMXBin      string
 	CLIBuild    buildinfo.Info
 	Now         time.Time
@@ -62,18 +56,6 @@ type DaemonReport struct {
 	Build          *buildinfo.Info `json:"build,omitempty"`
 	CLIBuild       buildinfo.Info  `json:"cli_build"`
 	BuildMatches   *bool           `json:"build_matches,omitempty"`
-	// KittySnapshot is the daemon's cached Kitty topology as health reports it:
-	// readiness, staleness, generation, capture time, age, and the per-socket
-	// list-coordinator counters. Its Windows field is always empty — health is a
-	// probe, and the tree belongs to the state query — so this carries status
-	// only however large the daemon's window tree is.
-	//
-	// Nil means the daemon predates the block, which is an unknown rather than a
-	// cold cache. It is reported and not judged: `amx doctor` owns the
-	// kitty_snapshot_stale finding, and status stays a description so a stale
-	// Kitty read cannot change this report's verdict out from under a consumer
-	// that has always branched on daemon liveness and build identity.
-	KittySnapshot *protocol.KittySnapshot `json:"kitty_snapshot,omitempty"`
 	// Runtime is the daemon's runtime-session and backend work as health
 	// reports it: reconciliation, attachment, screen reads, and tmux client
 	// activity, all counts, durations, and fixed words. Like the snapshot
@@ -107,7 +89,7 @@ type StatusReport struct {
 	Findings        []Finding                      `json:"findings"`
 }
 
-// CollectStatus assembles offline evidence first and treats daemon/Kitty
+// CollectStatus assembles offline evidence first and treats daemon
 // availability as report data rather than a prerequisite for useful output.
 func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, error) {
 	if ctx == nil {
@@ -137,7 +119,7 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 		Verdict: VerdictHealthy, Alive: health.Alive, Ready: health.Ready,
 		DegradedReason: health.DegradedReason, PID: health.PID,
 		UptimeSeconds: int64(health.Uptime / time.Second), Build: health.Build, CLIBuild: options.CLIBuild,
-		KittySnapshot: health.KittySnapshot, Runtime: health.Runtime,
+		Runtime: health.Runtime,
 	}
 	report.Backend = options.Backend
 	if !health.Alive {
@@ -215,22 +197,7 @@ func CollectStatus(ctx context.Context, options StatusOptions) (StatusReport, er
 			policy = options.Config.Defaults.Diagnostics
 		}
 
-		var windows []kitty.OSWindow
-		kittyAvailable := false
-		if options.Kitty != nil {
-			var err error
-			windows, err = options.Kitty.ListWindows()
-			if err == nil {
-				kittyAvailable = true
-			} else {
-				message := err.Error()
-				if errors.Is(err, kitty.ErrNoKittyTerminal) {
-					message = kitty.UnreachableMessage
-				}
-				report.add(VerdictWarning, "kitty_unavailable", message)
-			}
-		}
-		report.Native = InspectNative(paths, policy, windows, kittyAvailable, options.Selector, options.Now)
+		report.Native = InspectNative(paths, policy, options.Now)
 		if report.Native.Error != "" {
 			report.add(report.Native.Verdict, "native_storage", report.Native.Error)
 		}

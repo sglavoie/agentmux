@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/agentmux/internal/backend"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -250,24 +249,6 @@ func TestRestartWithAccountOnTmuxReplacesProfile(t *testing.T) {
 	after := runningOnTmux(t, f, cfg)
 	if len(after) != 1 || after[0].EffectiveProfile() != "home" || after[0].Harness != harness.Codex || after[0].RuntimeSessionID != replaced.RuntimeSessionID {
 		t.Fatalf("running after replacement = %+v, want one home/codex session", after)
-	}
-}
-
-// TestRestartFollowsRecordedBackend refuses to act on a session through a
-// backend that does not host it, before launching anything.
-func TestRestartFollowsRecordedBackend(t *testing.T) {
-	f := tmuxtest.New(t)
-	cfg, _ := tmuxTestConfig(t)
-	kittySession := RunningSession{TabID: 4, WindowID: 5, Profile: "work", Project: "api", Directory: t.TempDir()}
-	if _, err := RestartOn(tmuxRuntime(f), kittySession, cfg); err == nil || !strings.Contains(err.Error(), "runs on kitty") {
-		t.Fatalf("err = %v, want a backend mismatch", err)
-	}
-	tmuxSession := RunningSession{Backend: runtimesession.BackendTmux, Group: backend.GroupID("$0"), Profile: "work", Project: "api"}
-	if _, err := RestartOn(KittyRuntime(nil), tmuxSession, cfg); err == nil || !strings.Contains(err.Error(), "runs on tmux") {
-		t.Fatalf("err = %v, want a backend mismatch", err)
-	}
-	if n := len(runningOnTmux(t, f, cfg)); n != 0 {
-		t.Fatalf("refused restart launched %d sessions", n)
 	}
 }
 

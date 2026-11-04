@@ -20,7 +20,7 @@ func (r RequestID) Valid() bool { return r != 0 }
 // Outcome is what became of a dispatched action. There are four, and the
 // distinction that matters most is between Refused and Failed: a refusal is the
 // dashboard declining to try, which is a sentence an operator can act on, while
-// a failure is an attempt that reached Kitty or the harness and did not work.
+// a failure is an attempt that reached tmux or the harness and did not work.
 // Collapsing them would leave "nothing happened" as the only report for both.
 type Outcome string
 

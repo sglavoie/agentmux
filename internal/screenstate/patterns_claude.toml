@@ -19,7 +19,7 @@ harness = "claude"
 # composer_line matches Claude's framed empty composer: the ❯ prompt
 # indicator followed by only horizontal whitespace, tolerating the input box's
 # leading and trailing vertical edges (│/┃). Claude 2.1.195 emits a non-breaking
-# space after ❯; Kitty preserves it in get-text output, so it is included
+# space after ❯; tmux capture preserves it, so it is included
 # explicitly. A composer holding queued input has text after ❯ and cannot match,
 # so a user still typing is never read as idle.
 composer_line = '(?m)^[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?\x{276f}[\t \x{00a0}]*(?:[│┃][\t \x{00a0}]*)?$'

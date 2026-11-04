@@ -7,9 +7,6 @@ import UserNotifications
 struct AppNotice: Decodable, Equatable {
     var notificationID = ""
     var windowID = 0
-    /// The Kitty instance `windowID` lives in, as the daemon captured it.
-    /// Window IDs repeat across instances; empty when none was recorded.
-    var kittySocket = ""
     /// Whether a click can focus a pane; profile-wide notices have none.
     var navigable = false
     var title = ""
@@ -20,8 +17,7 @@ struct AppNotice: Decodable, Equatable {
     var sessionID = ""
     /// The runtime session the notice is about, when the daemon names one.
     var runtimeSessionID = ""
-    /// That session's backend; a notice for one other than Kitty has no
-    /// window to focus, and a click shows its terminal in the workspace.
+    /// The backend hosting the runtime session.
     var backend = ""
     /// What the notice offers besides its click: `mute`, `snooze`, `answer`.
     var actions: [String] = []
@@ -29,7 +25,6 @@ struct AppNotice: Decodable, Equatable {
     enum CodingKeys: String, CodingKey {
         case notificationID = "notification_id"
         case windowID = "window_id"
-        case kittySocket = "kitty_socket"
         case navigable, title, subtitle, action
         case runID = "run_id"
         case sessionID = "session_id"
@@ -37,11 +32,10 @@ struct AppNotice: Decodable, Equatable {
         case backend, actions
     }
 
-    init(notificationID: String, windowID: Int = 0, kittySocket: String = "", navigable: Bool = false, title: String = "", subtitle: String = "",
+    init(notificationID: String, windowID: Int = 0, navigable: Bool = false, title: String = "", subtitle: String = "",
          action: String = "", runID: String = "", sessionID: String = "", actions: [String] = []) {
         self.notificationID = notificationID
         self.windowID = windowID
-        self.kittySocket = kittySocket
         self.navigable = navigable
         self.title = title
         self.subtitle = subtitle
@@ -51,17 +45,15 @@ struct AppNotice: Decodable, Equatable {
         self.actions = actions
     }
 
-    /// The runtime session whose terminal a click shows in the workspace;
-    /// empty for a Kitty session, which a click focuses in Kitty.
+    /// The runtime session whose terminal a click shows in the workspace.
     var embeddedRuntimeSessionID: String {
-        backend.isEmpty || backend == CompanionRuntime.kittyBackend ? "" : runtimeSessionID
+        backend == CompanionRuntime.tmuxBackend ? runtimeSessionID : ""
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         notificationID = c.lenient(.notificationID, "")
         windowID = c.lenient(.windowID, 0)
-        kittySocket = c.lenient(.kittySocket, "")
         navigable = c.lenient(.navigable, false)
         title = c.lenient(.title, "")
         subtitle = c.lenient(.subtitle, "")
@@ -329,8 +321,7 @@ enum TerminalOutcome: Equatable {
 /// - `delivered` is reported once `add` succeeds; a failed `add`, a denied
 ///   permission, or app notifications switched off report `failed`, which
 ///   sends the notification through Alerter instead.
-/// - A click reports `clicked` (the daemon focuses a Kitty pane; the app
-///   asks for any other session with `focus_session`), a dismissal
+/// - A click reports `clicked` and the app opens the runtime session; a dismissal
 ///   `dismissed`, and an action `action_*`; the app carries the action out
 ///   through `onAction`.
 /// - `notification_retract` removes the banner, including one still waiting
@@ -348,8 +339,6 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         let notificationID: String
         let disposition: NotificationDisposition
         let windowID: Int
-        /// The captured Kitty socket; empty for a notice that named none.
-        let kittySocket: String
         let navigable: Bool
         let runID: String
         let sessionID: String
@@ -645,7 +634,6 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         if soundedActions.contains(notice.action) { content.sound = .default }
         content.userInfo = [
             UserInfoKey.windowID: notice.windowID,
-            UserInfoKey.kittySocket: notice.kittySocket,
             UserInfoKey.navigable: notice.navigable,
             UserInfoKey.runID: notice.runID,
             UserInfoKey.sessionID: notice.sessionID,
@@ -658,17 +646,14 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     static let soundedActions: Set<String> = ["permission", "elicitation"]
 
     /// The thread a notice is grouped under: its runtime session when the
-    /// daemon names one, else its Kitty window (window IDs repeat across Kitty
-    /// instances, so with the socket), else one thread for profile-wide notices.
+    /// daemon names one, else one thread for profile-wide notices.
     static func threadIdentifier(for notice: AppNotice) -> String {
         if !notice.runtimeSessionID.isEmpty { return "runtime:\(notice.runtimeSessionID)" }
-        if notice.windowID > 0 { return "kitty:\(notice.kittySocket)#\(notice.windowID)" }
         return "amx"
     }
 
     enum UserInfoKey {
         static let windowID = "amx_window_id"
-        static let kittySocket = "amx_kitty_socket"
         static let navigable = "amx_navigable"
         static let runID = "amx_run_id"
         static let sessionID = "amx_session_id"
@@ -688,7 +673,6 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
             notificationID: notificationID,
             disposition: disposition,
             windowID: userInfo[UserInfoKey.windowID] as? Int ?? 0,
-            kittySocket: userInfo[UserInfoKey.kittySocket] as? String ?? "",
             navigable: userInfo[UserInfoKey.navigable] as? Bool ?? false,
             runID: userInfo[UserInfoKey.runID] as? String ?? "",
             sessionID: userInfo[UserInfoKey.sessionID] as? String ?? "",

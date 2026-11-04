@@ -8,7 +8,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
@@ -18,7 +17,7 @@ import (
 // emojiTitleFixture is the canonical project-icon set the Sessions 1-7
 // migration locked in: a mix of 2-cell pictographs (🐱, 🧠, 🧬, 🧰, ⚡)
 // which fill the 2-cell title-icon column unchanged, the 🗣 pictograph whose
-// terminal width is overridden to match Kitty's emoji presentation, and the
+// terminal width is overridden to match terminal emoji presentation, and the
 // narrow `•` marker which is intentionally not promoted to the icon column.
 // PlainAscii gives a no-padding baseline. Every cross-mode assertion below
 // walks this exact set.
@@ -113,8 +112,7 @@ func TestCrossModeDashboardListWidthAcrossFixture(t *testing.T) {
 		HarnessEmojis: map[string]string{harness.Claude: "🦊"},
 		Accounts:      []config.Account{{Name: "work", Color: "blue", Harness: harness.Claude}},
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 
 	// The widths straddle both band boundaries in both directions — 79/80 and
 	// 119/120 — so a row that only overflows in one preset cannot hide behind a
@@ -156,8 +154,7 @@ func TestCrossModePickerWidthAcrossFixture(t *testing.T) {
 			Account:   "work",
 		})
 	}
-	runner := kitty.NewMockRunner(nil)
-	client := kitty.NewClientWithSocket(runner, "")
+	var client any
 
 	for _, width := range []int{100, 120, 160} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {

@@ -144,7 +144,7 @@ build_libevent() {
 }
 
 # Terminal descriptions come from the system's terminfo database, which has
-# had tmux-256color since macOS 14; a client's own (xterm-ghostty, xterm-kitty)
+# had tmux-256color since macOS 14; the client's xterm-ghostty entry
 # arrives through the TERMINFO its terminal sets.
 build_ncurses() {
 	cd "$work/ncurses"

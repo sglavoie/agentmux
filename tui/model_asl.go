@@ -1,7 +1,6 @@
 // This file is what the root model does about agent-session-loop: navigating
 // the Runs list, driving the response form from open to submitted, issuing the
-// control commands a run permits, and rediscovering the active runs the
-// dashboard marks its rows with.
+// control commands a run permits. The daemon supplies session loop markers.
 
 package tui
 
@@ -11,10 +10,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/sglavoie/agentmux/internal/agentloop"
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/daemon/ipc"
-	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
@@ -210,7 +207,7 @@ func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // focusSelectedASLRun shows the live session running the selected plan through
-// commands.Focus: a Kitty window is focused, a tmux session is attached in
+// commands.Focus: a tmux session is attached in
 // this terminal (or shown by whatever hosts the surface). An exact projected
 // binding wins outright. Without one it falls back to live sessions whose
 // canonical workspace and harness both match: exactly one focuses, several
@@ -223,7 +220,7 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 	}
 	if bound, found := asl.ExactBinding(row, m.sessions); found {
 		m.aslErr = nil
-		return m, commands.Focus(m.client, bound.TabID)
+		return m, commands.Focus(bound.TabID)
 	}
 	candidates := asl.FallbackCandidates(row, m.sessions)
 	switch len(candidates) {
@@ -232,7 +229,7 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 		return m, nil
 	case 1:
 		m.aslErr = nil
-		return m, commands.Focus(m.client, candidates[0].TabID)
+		return m, commands.Focus(candidates[0].TabID)
 	default:
 		m.aslErr = nil
 		m.aslFocusTarget = row.RowID
@@ -819,16 +816,4 @@ func (m *Model) recordASLOperationState(operationID, state string) {
 // replayed, or resubmitted.
 func (m *Model) applyASLReceipts(receipts []aslbridge.Operation) {
 	asl.ApplyReceipts(m.aslOperations, receipts)
-}
-
-func (m Model) activeLoopsForSession(s session.RunningSession) []agentloop.Candidate {
-	matches, err := agentloop.MatchingWorkspace(
-		m.activeLoopCandidates,
-		agentloop.WorkspaceTarget{CWD: s.Directory, Harness: s.Harness, WindowID: s.WindowID},
-		commands.ActiveLoopWorkspaceTargets(m.sessions),
-	)
-	if err != nil {
-		return nil
-	}
-	return matches
 }

@@ -8,7 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/sglavoie/agentmux/internal/kitty/kittytest"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/sessionactions"
@@ -157,36 +156,6 @@ func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
 	// an effect would reserve a second undo for one session. Completing every
 	// request the dashboard actually minted is what makes the count meaningful:
 	// with the guard there is one to complete, without it there were two.
-	t.Run("no duplicate close recovery", func(t *testing.T) {
-		row := sessionActionRow()
-		m := sessionActionModel(false, row)
-
-		m, first := beginLifecycleVia(t, m, "menu", commands.CloseSession, row)
-		drainMsgs(t, first)
-		m, second := beginLifecycleVia(t, m, "palette", commands.CloseSession, row)
-		drainMsgs(t, second)
-
-		// The recovery is asserted before anything else this subtest could fail
-		// on, because the duplicate undo is what the duplicate dispatch COSTS:
-		// two entries for one session, and an operator who pressed u twice would
-		// relaunch it twice.
-		for _, dispatch := range m.sessionActions.InFlight() {
-			updated, _ := m.Update(commands.ActionDoneMsg{Request: uint64(dispatch.Request)})
-			m = updated.(Model)
-		}
-		if got := m.activeUndoEntries(); len(got) != 1 {
-			t.Fatalf("undo entries = %d, want exactly one recovery for one closed session", len(got))
-		}
-		client := m.client.(*kittytest.Client)
-		if calls := client.CallsFor("CloseTab"); len(calls) != 1 {
-			t.Fatalf("CloseTab calls = %+v, want exactly one close to have reached Kitty", calls)
-		}
-		warnings := warningToasts(m)
-		if len(warnings) == 0 || !strings.Contains(warnings[0].Text, sessionactions.ReasonLifecycleInFlight) {
-			t.Fatalf("toasts = %+v, want a warning explaining the refused second close", m.toasts)
-		}
-	})
-
 	// Control: independent targets stay usable. Serializing every lifecycle
 	// action across the whole dashboard would be a worse regression than the
 	// double dispatch.
@@ -249,12 +218,12 @@ func TestReviewLifecycleDispatchSingleFlight(t *testing.T) {
 	})
 
 	// The guard is released by the completion, not by success: a close that
-	// failed must leave the row closable again, or one Kitty error would lock a
+	// failed must leave the row closable again, or one terminal error would lock a
 	// session out of every lifecycle action until the dashboard was restarted.
 	t.Run("a reported completion frees the row", func(t *testing.T) {
 		for name, done := range map[string]commands.ActionDoneMsg{
 			"succeeded":   {},
-			"failed":      {Err: errors.New("kitty refused")},
+			"failed":      {Err: errors.New("tmux refused")},
 			"unconfirmed": {Unconfirmed: true},
 		} {
 			t.Run(name, func(t *testing.T) {
@@ -539,7 +508,7 @@ func TestReviewLifecycleGuardSurvivesCorrelationPressure(t *testing.T) {
 	t.Run("a reported completion frees the row", func(t *testing.T) {
 		for name, done := range map[string]commands.ActionDoneMsg{
 			"succeeded":   {},
-			"failed":      {Err: errors.New("kitty refused")},
+			"failed":      {Err: errors.New("tmux refused")},
 			"unconfirmed": {Unconfirmed: true},
 		} {
 			t.Run(name, func(t *testing.T) {

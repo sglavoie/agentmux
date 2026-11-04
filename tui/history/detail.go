@@ -33,10 +33,9 @@ type DetailInput struct {
 	LastActivity  map[int]time.Time
 	IdleThreshold time.Duration
 
-	// Location names the session when it is no longer listed: its Kitty
-	// window, its backend and runtime session, or nothing when neither is
-	// known. The root resolves it, since only the root can tell a
-	// process-local portable ID from a Kitty window ID.
+	// Location names a session that is no longer listed by backend and runtime
+	// session ID. The root resolves it, since only the root can tell a
+	// process-local portable ID from a process-local window ID.
 	Location string
 
 	Err     error

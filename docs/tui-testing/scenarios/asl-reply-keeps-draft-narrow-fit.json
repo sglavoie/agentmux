@@ -45,11 +45,6 @@
       "text": "after the cutover"
     },
     {
-      "type": "kitty_calls",
-      "op": "FocusTab",
-      "count": 0
-    },
-    {
       "type": "no_layout_issues"
     }
   ]

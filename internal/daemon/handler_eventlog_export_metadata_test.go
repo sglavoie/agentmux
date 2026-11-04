@@ -63,7 +63,7 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 	t.Parallel()
 
 	h := newTestHandler()
-	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "failure", KittyListenOn: "unix:/tmp/kitty-7"})
+	h.Handle(protocol.Request{Type: protocol.TypeStateUpdate, WindowID: 7, Action: "failure"})
 	// The legacy failure guard refuses the permission (logged as guard_blocked),
 	// but the reducer applies it: key outranks warning in the icon precedence,
 	// so the authoritative visible icon is the key.
@@ -72,7 +72,7 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 	h.stateMu.Lock()
 	st := h.store[7]
 	st.RenderFailures = 3
-	st.LastRenderError = "set user vars: kitty unavailable"
+	st.LastRenderError = "status write unavailable"
 	h.syncRendererMetadataLocked(7)
 	h.stateMu.Unlock()
 
@@ -82,8 +82,7 @@ func TestHandler_EventsExportIncludesRendererFailuresAndSuppressionReasons(t *te
 	}
 	meta := resp.WindowMetadata[7]
 	if meta.Renderer.DesiredIcon != "key" || !meta.Renderer.StateSet || meta.Renderer.RenderFailures != 3 ||
-		meta.Renderer.LastRenderError != "set user vars: kitty unavailable" ||
-		meta.Renderer.KittyListenOn != "unix:/tmp/kitty-7" {
+		meta.Renderer.LastRenderError != "status write unavailable" {
 		t.Fatalf("renderer metadata = %+v", meta.Renderer)
 	}
 	if got := meta.Stats.SuppressionReasons[suppressionReasonGuardBlocked]; got != 1 {
@@ -311,7 +310,7 @@ func TestHandler_EventsExport_IncludesDurableMetadata(t *testing.T) {
 		PipeMode:     true,
 	})
 	// Simulate a degraded terminal hook where the daemon no longer gets live
-	// Kitty identity strings. The durable snapshot must keep the prior values.
+	// session identity strings. The durable snapshot must keep the prior values.
 	h.Handle(protocol.Request{
 		Type:     protocol.TypeStateUpdate,
 		WindowID: 1,

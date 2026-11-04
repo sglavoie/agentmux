@@ -6,9 +6,7 @@
 // invariant evaluator both run, and `amx daemon audit`, which is a doctor
 // surface wearing a daemon subcommand name.
 //
-// It also owns the export projections (ExportWindowIDs, ExportLiveMetadata,
-// ASLStatusLine) that doctor and the cmd/daemon command family must agree on,
-// so a doctor cannot report drift that `daemon export-events` does not see.
+// It also owns the export projections used by doctor and daemon diagnostics.
 package debug
 
 import (
@@ -37,7 +35,6 @@ var (
 	debugLookPath    = exec.LookPath
 	debugNow         = time.Now
 	debugDaemon      = func() debugger.DaemonHealthClient { return ipc.NewClient() }
-	debugKitty       = func() debugger.KittyWindowLister { return cli.NewKittyClient() }
 	debugProbeClient = func() debugger.ProbeClient { return ipc.NewClient() }
 	debugNewJournal  = diagnostics.NewJournal
 )
@@ -68,7 +65,7 @@ var (
 		"hook.delivery", "hook.failure", "hook.ipc_attempt", "hook.rejection", "hook.validation",
 		"hook.window_resolution", "hook.runtime_session", "hook.acknowledgement",
 		"daemon.decision", "daemon.lifecycle", "daemon.process_lifecycle", "daemon.renderer.rendered",
-		"daemon.renderer.failed", "daemon.runtime_reconcile", "daemon.kitty_snapshot",
+		"daemon.renderer.failed", "daemon.runtime_reconcile",
 		"session.launch", "asl.lifecycle.delivered", "maintenance.contention", "snapshot.consumer",
 	}
 	debugOutcomeNames = []string{
@@ -88,16 +85,11 @@ const debugRuntimeSessionFlag = "runtime-session"
 
 func addDebugRuntimeSessionFlag(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&debugRuntimeSession, debugRuntimeSessionFlag, "",
-		"select a runtime session ID (default: $"+runtimesession.EnvVar+" when set, else the Kitty window of --window or $KITTY_WINDOW_ID)")
+		"select a runtime session ID (default: $"+runtimesession.EnvVar+" when set)")
 }
 
 // debugSessionTarget is the one live session probe and capture act on: the
-// runtime session or the Kitty window that was named, and otherwise the
-// session the command is typed in — its runtime session when it has one, else
-// its Kitty window, the rule `daemon export-events --current-window` follows.
-// A pane of a tmux session started from a Kitty window inherits that window's
-// ID, so the Kitty variable is believed only when no runtime session is named.
-// Both results are zero when nothing names a session.
+// named runtime session or the one in the current managed tmux pane.
 func debugSessionTarget(windowID int) (int, string, error) {
 	named := strings.TrimSpace(debugRuntimeSession)
 	if named != "" && windowID != 0 {
@@ -111,7 +103,7 @@ func debugSessionTarget(windowID int) (int, string, error) {
 		named, source = strings.TrimSpace(debugGetenv(runtimesession.EnvVar)), runtimesession.EnvVar
 	}
 	if named == "" {
-		return cli.WindowIDFromEnv(), "", nil
+		return 0, "", nil
 	}
 	id, err := runtimesession.ParseID(named)
 	if err != nil {
@@ -125,7 +117,6 @@ var debugTailJSON bool
 var debugTailFollow bool
 var debugTailLimit int
 var debugProbeJSON bool
-var debugProbeKittySocket string
 var debugExplainJSON bool
 var debugExplainLast int
 var debugExplainGraphDepth int
@@ -144,7 +135,7 @@ var debugCmd = &cobra.Command{
 Agent Mux keeps a private causal journal and native harness logs. tail and
 explain read them without the daemon; status asks the daemon for its health
 without starting it; probe sends one side-effect-free diagnostic request.
-Nothing here changes a session, the reducer, or Kitty. bundle packs the
+Nothing here changes a session or the reducer. bundle packs the
 evidence into a redacted archive and replay recomputes it offline.
 
 The commands that read records take the same selectors (--harness, --trace,
@@ -192,13 +183,12 @@ var debugProbeCmd = &cobra.Command{
 	Short: "Probe Agent Mux transport and routing without changing session state",
 	Long: `Send one diagnostic request through the daemon the way a hook would, and
 report each stage it passed, the route it took, and whether it succeeded. The
-target is --runtime-session, or --window with --kitty-socket outside that
-Kitty, and otherwise the session this is typed in. Nothing is delivered to the
+target is --runtime-session or the managed session this is typed in.
+Nothing is delivered to the
 session. --harness, --trace, and --request label the request; the selectors
 that search recorded ones are refused. It exits 2 when the probe fails.`,
 	Example: `  amx debug probe
-  amx debug probe --runtime-session rs-0123456789abcdef0123456789abcdef
-  amx debug probe --window 12 --kitty-socket unix:/tmp/kitty-1234`,
+  amx debug probe --runtime-session rs-0123456789abcdef0123456789abcdef`,
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE:         debugJSONFailures(&debugProbeJSON, "probe_failed", runDebugProbe),
@@ -227,7 +217,7 @@ func init() {
 	flags := debugCmd.PersistentFlags()
 	flags.StringVar(&debugSelectorFlags.harness, "harness", "", "select a producer harness")
 	flags.StringVar(&debugSelectorFlags.profile, "profile", "", "select a configured profile")
-	flags.IntVar(&debugSelectorFlags.windowID, "window", 0, "select a Kitty window ID")
+	flags.IntVar(&debugSelectorFlags.windowID, "window", 0, "select a daemon slot ID in recorded diagnostics")
 	flags.StringVar(&debugSelectorFlags.sessionID, "session", "", "select a native harness session ID")
 	flags.StringVar(&debugSelectorFlags.aslRunID, "asl-run", "", "select an ASL run ID")
 	flags.StringVar(&debugSelectorFlags.event, "event", "", "select a harness event")
@@ -248,7 +238,6 @@ func init() {
 	debugTailCmd.Flags().BoolVarP(&debugTailFollow, "follow", "f", false, "continue following new persisted records")
 	debugTailCmd.Flags().IntVarP(&debugTailLimit, "last", "n", 50, "show the last N matching records (0 means all)")
 	cli.AddReportJSONFlag(debugProbeCmd, &debugProbeJSON, "the report")
-	debugProbeCmd.Flags().StringVar(&debugProbeKittySocket, "kitty-socket", "", "Kitty socket for --window (defaults to KITTY_LISTEN_ON)")
 	addDebugRuntimeSessionFlag(debugProbeCmd)
 	cli.AddReportJSONFlag(debugExplainCmd, &debugExplainJSON, "the complete evidence graph")
 	debugExplainCmd.Flags().IntVarP(&debugExplainLast, "last", "n", 10, "explain the last N matching causal histories")
@@ -360,7 +349,7 @@ func runDebugStatus(cmd *cobra.Command, _ []string) error {
 	}
 	report, err := debugger.CollectStatus(cmd.Context(), debugger.StatusOptions{
 		Config: cfg, ConfigError: configErr, Paths: paths, PathsError: pathsErr,
-		Daemon: debugDaemon(), Kitty: debugKitty(), AMXBin: bin,
+		Daemon: debugDaemon(), AMXBin: bin,
 		CLIBuild: buildinfo.Current(), Now: now, Selector: selector,
 		Backend: doctorBackendStatus(),
 	})
@@ -386,14 +375,6 @@ func writeDebugStatusText(out io.Writer, report debugger.StatusReport) error {
 	}
 	if report.Daemon.Build != nil {
 		if _, err := fmt.Fprintf(out, "daemon build: %s (matches CLI=%t)\n", report.Daemon.Build.String(), report.Daemon.BuildMatches != nil && *report.Daemon.BuildMatches); err != nil {
-			return err
-		}
-	}
-	// Only a daemon that answered has a snapshot to report. An offline daemon
-	// already printed why it could not be asked, and adding "unreported" under
-	// that would read as an old daemon rather than as no daemon.
-	if report.Daemon.Alive {
-		if err := writeKittySnapshot(out, report.Daemon.KittySnapshot, true, false); err != nil {
 			return err
 		}
 	}

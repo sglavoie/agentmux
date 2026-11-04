@@ -1,7 +1,7 @@
 // Package backendtest is the shared contract every backend.Backend must pass.
 // An adapter's own test package calls Run with a factory that builds a fresh,
-// isolated backend per subtest: a scripted fake for Kitty, a private server
-// for tmux. The contract speaks only through the backend interface, so a
+// isolated backend per subtest on a private tmux server. The contract speaks
+// only through the backend interface, so a
 // behavior that passes here is one domain services can rely on regardless of
 // which terminal hosts the agent.
 package backendtest
@@ -32,8 +32,7 @@ type Harness struct {
 }
 
 // launchVar is the metadata key the contract tags launches with. It is one of
-// the keys AgentMux defines, so backends that report only those keys (Kitty)
-// still return it.
+// the keys AgentMux defines, so it is present across backend adapters.
 const launchVar = "amx_launch_id"
 
 // metadataVar is the key the metadata cases write and clear.

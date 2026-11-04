@@ -41,12 +41,7 @@ func (f *runtimeExportClient) ExportRuntimeSessionEvents(id string) (protocol.Ev
 func runRuntimeExport(t *testing.T, client *runtimeExportClient) (protocol.ExportEventsPayload, error) {
 	t.Helper()
 	newDaemonExportClient = func() cli.DaemonExportClient { return client }
-	// The slot is the daemon's alone and no Kitty window: Kitty is not asked
-	// about it, and the session's pane on tmux is what says how it looks now.
-	newDaemonExportKitty = func() cli.KittyWindowLister {
-		t.Error("an export of a tmux session asked Kitty for its windows")
-		return fakeKittyWindowLister{}
-	}
+	// The session's tmux pane supplies its live metadata.
 	newDaemonExportRuntime = func() ([]session.RunningSession, error) {
 		return []session.RunningSession{
 			{RuntimeSessionID: "rs-ffffffffffffffffffffffffffffffff", Backend: runtimesession.BackendTmux, Project: "other"},
@@ -97,12 +92,10 @@ func requireRuntimeWindow(t *testing.T, payload protocol.ExportEventsPayload, cl
 	}
 }
 
-// In a tmux session --current-window is the session itself. The Kitty window
-// the pane inherited from the terminal that launched it is not believed.
+// In a tmux session --current-window selects the managed runtime session.
 func TestDaemonExportEventsCommand_CurrentWindowResolvesRuntimeSession(t *testing.T) {
 	resetDaemonExportTestState(t)
 	t.Setenv(runtimesession.EnvVar, exportRuntimeID)
-	t.Setenv("KITTY_WINDOW_ID", "77")
 	daemonExportEventsCurrentWindow = true
 
 	client := newRuntimeExportClient()
@@ -115,7 +108,6 @@ func TestDaemonExportEventsCommand_CurrentWindowResolvesRuntimeSession(t *testin
 
 func TestDaemonExportEventsCommand_RuntimeSessionFlag(t *testing.T) {
 	resetDaemonExportTestState(t)
-	t.Setenv("KITTY_WINDOW_ID", "")
 	daemonExportEventsCurrentWindow = false
 	daemonExportEventsRuntime = exportRuntimeID
 
@@ -145,7 +137,6 @@ func TestDaemonExportEventsCommand_RuntimeSessionRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetDaemonExportTestState(t)
 			t.Setenv(runtimesession.EnvVar, tc.env)
-			t.Setenv("KITTY_WINDOW_ID", "")
 			daemonExportEventsCurrentWindow = tc.current
 			daemonExportEventsRuntime = tc.flag
 

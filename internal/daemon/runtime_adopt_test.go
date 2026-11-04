@@ -17,7 +17,6 @@ func runtimeCompanionSessions(t *testing.T, h *Handler) map[string]protocol.Comp
 	h.stateMu.Lock()
 	in := h.copyCompanionStateLocked(time.Now())
 	h.stateMu.Unlock()
-	in.SnapshotVersion = protocol.CompanionSnapshotVersionRuntime
 	out := map[string]protocol.CompanionSession{}
 	for _, s := range companion.Project(in).Sessions {
 		if s.Runtime != nil {
@@ -36,15 +35,15 @@ func TestALiveTmuxSessionIsListedBeforeItsFirstHook(t *testing.T) {
 	t.Parallel()
 
 	h, directory := newRuntimeTestHandler(t)
-	quiet, kittyOnly, pending := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
+	quiet, unsupported, pending := newRuntimeID(t), newRuntimeID(t), newRuntimeID(t)
 	directory.put(quiet, runtimesession.StateLive, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%7")
-	directory.put(kittyOnly, runtimesession.StateLive, runtimesession.BackendKitty, kittyA, "kitty-a-1", "7")
+	directory.put(unsupported, runtimesession.StateLive, runtimesession.BackendKind("unsupported"), tmuxT, "other-1", "%7")
 	directory.put(pending, runtimesession.StatePending, runtimesession.BackendTmux, tmuxT, "tmux-t-1", "%8")
 	h.SetRuntimeSessionLabeler(func(runtimesession.Record) (RuntimeSessionLabel, error) {
 		return RuntimeSessionLabel{Project: "LogScanner", Profile: "work-codex", Harness: "codex"}, nil
 	})
 	h.SetRuntimeSessionReconciler(func(time.Time) (tmux.Report, error) {
-		return tmux.Report{Mutes: []tmux.Muted{{ID: quiet}, {ID: kittyOnly}, {ID: pending}, {ID: newRuntimeID(t)}}}, nil
+		return tmux.Report{Mutes: []tmux.Muted{{ID: quiet}, {ID: unsupported}, {ID: pending}, {ID: newRuntimeID(t)}}}, nil
 	})
 
 	now := time.Now()

@@ -15,7 +15,7 @@ func TestDaemonSettingsIgnoreLauncherEditsAndCompareEffectiveValues(t *testing.T
 		changed    []string
 	}{
 		{"comments", "# edited\n[defaults]\nlaunch_backend='tmux'\n", []string{}},
-		{"launcher", "[defaults]\nlaunch_backend='kitty'\neditor='vim'\nargs=['--verbose']\n[[projects]]\ntitle='new'\ndirectory='/tmp/new'\n", []string{}},
+		{"launcher", "[defaults]\nlaunch_backend='unsupported'\neditor='vim'\nargs=['--verbose']\n[[projects]]\ntitle='new'\ndirectory='/tmp/new'\n", []string{}},
 		{"explicit defaults", "[defaults]\ngit_probe=true\ngit_probe_ttl=10\ngit_probe_timeout=2\n[defaults.notifications]\nelicitation=false\n", []string{}},
 		{"notifications", "[defaults.notifications]\nstop=true\n", []string{"Notifications"}},
 		{"watchdog", "[defaults.watchdog]\nactive=1200\n", []string{"Activity detection"}},

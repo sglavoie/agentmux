@@ -2,7 +2,6 @@ package session
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -18,7 +17,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
+	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
 	"github.com/sglavoie/agentmux/internal/tmux"
 )
@@ -28,11 +27,9 @@ import (
 const RuntimeSessionVar = "amx_runtime_session_id"
 
 // ColorVar is the metadata key holding the color an operator picked for one
-// session (`amx color-picker`). On Kitty the pick is drawn by the tab bar and
-// this key is only its record; a session on another backend has no tab bar,
-// and the key is what its rows are drawn from (RunningSession.Color). A tmux
-// launch starts it at the profile's color, which is what a new Kitty tab is
-// painted in.
+// session (`amx color-picker`). Session lists and terminal frames draw their
+// color from this metadata (RunningSession.Color). A launch starts with its
+// profile color.
 const ColorVar = "cc_color"
 
 // NameVar is the metadata key holding the name an operator gave one session
@@ -60,8 +57,6 @@ func CleanName(name string) string {
 // registering and committing. Launches finish in seconds.
 const pendingLaunchTimeout = 2 * time.Minute
 
-var errNoKittyClient = errors.New("launching session: no Kitty client")
-
 // ErrAgentMayBeRunning marks a failed launch whose agent could not be
 // stopped: the launch is reported as failed, yet its process may still be
 // running in whatever directory it was given. A caller that would clean up
@@ -69,38 +64,23 @@ var errNoKittyClient = errors.New("launching session: no Kitty client")
 // for it with errors.Is and keep what the agent may be using.
 var ErrAgentMayBeRunning = errors.New("the agent may still be running")
 
-// Runtime selects the terminal backend new agents launch on. Kitty stays the
-// default; a Runtime with Tmux set launches on the private tmux server and
-// records every launch as a runtime session in Registry.
+// Runtime launches agents on the private tmux server and records each launch
+// as a runtime session in Registry.
 type Runtime struct {
-	// Kitty is the Kitty client, the backend when Tmux is nil.
-	Kitty kitty.KittyClient
-	// Tmux is the private tmux server. Setting it selects tmux.
+	// Tmux is the private tmux server.
 	Tmux backend.TargetLauncher
 	// Registry records tmux launches. Nil means the default registry file.
 	Registry *runtimesession.Store
 }
 
-// KittyRuntime is the Kitty backend over client.
-func KittyRuntime(client kitty.KittyClient) Runtime { return Runtime{Kitty: client} }
-
 // Kind reports the selected backend.
 func (r Runtime) Kind() runtimesession.BackendKind {
-	if r.Tmux != nil {
-		return runtimesession.BackendTmux
-	}
-	return runtimesession.BackendKitty
+	return runtimesession.BackendTmux
 }
 
 // Terminal is the selected backend's terminal seam, or nil when none is set.
 func (r Runtime) Terminal() backend.Backend {
-	if r.Tmux != nil {
-		return r.Tmux
-	}
-	if r.Kitty == nil {
-		return nil
-	}
-	return kitty.NewBackend(r.Kitty)
+	return r.Tmux
 }
 
 // Owns reports whether running is hosted by the selected backend. Actions on
@@ -121,7 +101,7 @@ func (r Runtime) registry() (*runtimesession.Store, error) {
 
 // LaunchResult is what one launch did.
 type LaunchResult struct {
-	// LaunchID identifies a Kitty invocation before its conversation is reported.
+	// LaunchID identifies an invocation before its conversation is reported.
 	LaunchID string
 	Backend  runtimesession.BackendKind
 	// Deduplicated is true when the project/profile key was already running
@@ -192,6 +172,9 @@ func psStartToken(pid int) (string, error) {
 // closed again (and its record ended only once the close succeeded).
 func launchTmux(rt Runtime, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, build func() (harness.Invocation, error), policy LaunchPolicy, lin lineage) (LaunchResult, error) {
 	result := LaunchResult{Backend: runtimesession.BackendTmux}
+	if rt.Tmux == nil {
+		return result, errors.New("launching session: no tmux server")
+	}
 	store, err := rt.registry()
 	if err != nil {
 		return result, fmt.Errorf("launching session %q: %w", formattedTitle, err)
@@ -263,9 +246,7 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 	env[runtimesession.EnvVar] = string(id)
 	vars := buildLaunchUserVars(sess, acc, cfg.Defaults, invocation)
 	vars[RuntimeSessionVar] = string(id)
-	// Kitty paints a new tab in its profile's color. A tmux session has no
-	// tab, so the color is recorded where the picker records a pick, and
-	// whatever lists or frames the session draws it from there.
+	// Record the profile color for session lists and terminal frames.
 	if acc.Color != "" {
 		vars[ColorVar] = acc.Color
 	}
@@ -351,9 +332,8 @@ func activePaneLaunchIDs(panes []backend.Pane) map[string]struct{} {
 	return active
 }
 
-// RunningSessionsFromPanes converts the panes of a kind backend (not Kitty,
-// whose tab topology Discover flattens) into
-// running sessions. Only panes AgentMux launched (those carrying a profile)
+// RunningSessionsFromPanes converts discovered tmux panes into running
+// sessions. Only panes AgentMux launched (those carrying a profile)
 // whose program is still running count; an exited pane holds no agent.
 func RunningSessionsFromPanes(kind runtimesession.BackendKind, panes []backend.Pane, cfg *config.Config) []RunningSession {
 	ctx := newProjectMatchContext(cfg)
@@ -362,22 +342,65 @@ func RunningSessionsFromPanes(kind runtimesession.BackendKind, panes []backend.P
 		if pane.Exit != nil || len(pane.Vars) == 0 {
 			continue
 		}
-		data, err := json.Marshal(pane.Vars)
-		if err != nil {
+		vars := pane.Vars
+		profile := vars["amx_profile"]
+		if profile == "" {
+			profile = vars["cc_account"]
+		}
+		if profile == "" {
 			continue
 		}
-		var vars kitty.UserVars
-		if err := json.Unmarshal(data, &vars); err != nil || vars.EffectiveProfile() == "" {
-			continue
+		parts := palette.ParseTitleParts(pane.GroupTitle)
+		project := vars["amx_project"]
+		if project == "" {
+			project = projectNameForProfile(parts.Base, profile)
 		}
-		window := kitty.Window{UserVars: vars, CWD: pane.CWD}
-		rs := runningSessionFromWindow(kitty.Tab{Title: pane.GroupTitle, Windows: []kitty.Window{window}}, window)
+		directory := vars["amx_directory"]
+		if directory == "" {
+			directory = vars["cc_cwd"]
+		}
+		if directory == "" {
+			directory = pane.CWD
+		}
+		args := vars["amx_args"]
+		if args == "" {
+			args = vars["cc_flags"]
+		}
+		harnessName := ""
+		if vars["amx_harness"] != "" {
+			harnessName = harness.Normalize(vars["amx_harness"])
+		} else if vars["cc_account"] != "" {
+			harnessName = harness.Claude
+		}
+		homeDir := vars["amx_home_dir"]
+		if homeDir == "" {
+			homeDir = vars["cc_config_dir"]
+		}
+		env := vars["amx_env"]
+		if env == "" {
+			env = vars["cc_env"]
+		}
+		groups := vars["amx_groups"]
+		if groups == "" {
+			groups = vars["cc_groups"]
+		}
+		_, explicitFlagsSet := vars["cc_explicit_flags"]
+		rs := RunningSession{
+			Key: SessionKey(profile, project), Title: pane.GroupTitle, Base: parts.Base, State: parts.State,
+			Looping: parts.Looping, Starred: parts.Starred, Locked: vars["amx_locked"] == "true", Muted: parts.Muted || vars["cc_mute"] != "",
+			Project: project, Profile: profile, Account: profile, Harness: harnessName, HomeDir: homeDir, Directory: directory,
+			Args: args, Flags: args, ExplicitFlags: vars["cc_explicit_flags"], ExplicitFlagsSet: explicitFlagsSet,
+			Env: env, Groups: decodeGroups(groups), LaunchID: vars["amx_launch_id"],
+			NativeCoverage: vars["amx_native_coverage"], NativeLogPath: vars["amx_native_log_path"],
+			NativeLogLevel: vars["amx_native_log_level"], NativeOverride: vars["amx_native_override"],
+			HarnessSessionID: vars["amx_harness_session"], ASLRunID: vars["amx_asl_run_id"],
+		}
 		rs.Backend = kind
 		rs.Group, rs.Pane = pane.Group, pane.Ref
-		if id, err := runtimesession.ParseID(pane.Vars[RuntimeSessionVar]); err == nil {
+		if id, err := runtimesession.ParseID(vars[RuntimeSessionVar]); err == nil {
 			rs.RuntimeSessionID = id
 		}
-		rs.Color = pane.Vars[ColorVar]
+		rs.Color = vars[ColorVar]
 		sessions = append(sessions, ctx.stampFamily(rs))
 	}
 	return sessions

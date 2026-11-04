@@ -30,7 +30,7 @@ import (
 // one pane after another, on the same interval. The watchdog judges every
 // slot stale or not, and every profile silent or not, once a second, and
 // starts a Git round over the sessions' directories when their answers have
-// aged out; it needs no Kitty for a tmux session. What these tests measure is
+// aged out; it needs no other terminal backend for a tmux session. What these tests measure is
 // how each grows with the fleet, against a real private tmux server running
 // the production configuration and whatever tmux the runtime resolves (the
 // reliability-stress recipe points it at the packaged runtime when one is
@@ -68,10 +68,10 @@ import (
 // nothing else does. The server's memory is its panes' history: about 24 MiB
 // for each pane that has printed its 50,000 lines.
 //
-// The recorded run is docs/acceptance/ghostty-desktop/session-18/fleet-budgets.log.
+// The fleet budget is exercised against the fixture below.
 //
 // The watchdog's share, measured 2026-10-13 on the same machine and tmux, in
-// a daemon with no Kitty snapshot and every session active in a repository of
+// a daemon with no terminal snapshot and every session active in a repository of
 // its own; p95 over 30 ticks, and the slowest of 5 Git rounds with nothing
 // cached:
 //
@@ -369,15 +369,12 @@ func measureFleet(t *testing.T, sessions int, workload string) fleetMeasurement 
 }
 
 // measureFleetWatchdog times the watchdog over the fleet's slots, in a daemon
-// that has no Kitty snapshot: every session is made active, so each tick
+// that has no terminal snapshot: every session is made active, so each tick
 // advances a slot's and a fact's idle time for all of them, its profile is
 // judged for silence, and its directory is a repository the Git round reads.
 // It runs after the measured window, whose client CPU is tmux's alone.
 func measureFleetWatchdog(t *testing.T, h *Handler, agents []faultAgent, m *fleetMeasurement) {
 	t.Helper()
-	if _, _, ready := h.cachedSnapshot(); ready {
-		t.Fatal("the fleet's daemon has a Kitty snapshot; the watchdog is measured without one")
-	}
 	h.SetStaleThresholds(map[string]time.Duration{"active": time.Hour, "subagent": time.Hour, "compact": time.Hour}, nil)
 	h.SetHookSilenceThresholds(time.Hour, nil)
 	base := time.Now()
@@ -441,7 +438,7 @@ func measureFleetWatchdog(t *testing.T, h *Handler, agents []faultAgent, m *flee
 		// A new cache has no answers, so every directory is probed.
 		h.SetGitProbe(true, 0, 0)
 		roundStarted := time.Now()
-		h.runGitStateRefresh(nil)
+		h.runGitStateRefresh()
 		rounds[i] = time.Since(roundStarted)
 	}
 	for slot, directory := range directories {

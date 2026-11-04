@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
+	"github.com/sglavoie/agentmux/internal/runtimesession"
 )
 
 type fakeDaemonClient struct {
@@ -22,7 +23,6 @@ func (f *fakeDaemonClient) SendWithAutoStart(req protocol.Request, _ string) (pr
 }
 
 func TestRunWithDeps_DropsUnavailableDaemonEventWithinBudget(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{err: errors.New("daemon unavailable")}
 
 	started := time.Now()
@@ -35,73 +35,35 @@ func TestRunWithDeps_DropsUnavailableDaemonEventWithinBudget(t *testing.T) {
 	if client.calls != 1 {
 		t.Fatalf("daemon calls = %d, want 1", client.calls)
 	}
-	if got := client.reqs[0]; got.Type != protocol.TypeHookEvent || got.WindowID != 42 || got.Event != "Stop" || got.Harness != "claude" || got.PayloadJSON != `{"reason":"end_turn"}` || !got.PipeMode {
+	if got := client.reqs[0]; got.Type != protocol.TypeHookEvent || got.RuntimeSessionID != testRuntimeSession || got.WindowID != 0 || got.Event != "Stop" || got.Harness != "claude" || got.PayloadJSON != `{"reason":"end_turn"}` || !got.PipeMode {
 		t.Fatalf("hook request = %+v, want TypeHookEvent with raw payload", got)
 	}
 }
 
-func TestRunWithDeps_ForwardsNormalizedFDAddress(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "fd:34")
-	t.Setenv("KITTY_PID", "4242")
-	client := &fakeDaemonClient{}
-
-	if err := runWithDeps("Stop", 42, "", "/tmp/amx", `{}`, false, client); err != nil {
-		t.Fatalf("runWithDeps() error = %v, want nil", err)
-	}
-	if client.calls != 1 {
-		t.Fatalf("daemon calls = %d, want 1", client.calls)
-	}
-	if got := client.reqs[0].KittyListenOn; got != "unix:/tmp/kitty-4242" {
-		t.Fatalf("forwarded KittyListenOn = %q, want normalized unix:/tmp/kitty-4242", got)
-	}
-}
-
-func TestRunWithDeps_ForwardsEmptyWhenFDUnresolvable(t *testing.T) {
-	// Inside Kitty (raw KITTY_LISTEN_ON set) but the fd: cannot be normalized
-	// without a PID: still contact the daemon, forwarding an empty address so
-	// the daemon falls back to its own established client.
-	t.Setenv("KITTY_LISTEN_ON", "fd:34")
-	t.Setenv("KITTY_PID", "")
-	client := &fakeDaemonClient{}
-
-	if err := runWithDeps("Stop", 42, "", "/tmp/amx", `{}`, false, client); err != nil {
-		t.Fatalf("runWithDeps() error = %v, want nil", err)
-	}
-	if client.calls != 1 {
-		t.Fatalf("daemon calls = %d, want 1 (fd: is still inside Kitty)", client.calls)
-	}
-	if got := client.reqs[0].KittyListenOn; got != "" {
-		t.Fatalf("forwarded KittyListenOn = %q, want empty for unresolvable fd:", got)
-	}
-}
-
-func TestRunWithDeps_OutsideKittyDoesNotContactDaemon(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "")
+func TestRunWithDeps_WithoutRuntimeDoesNotContactDaemon(t *testing.T) {
+	t.Setenv(runtimesession.EnvVar, "")
 	client := &fakeDaemonClient{}
 
 	if err := runWithDeps("Stop", 42, "", "/tmp/amx", `{}`, false, client); err != nil {
 		t.Fatalf("runWithDeps() error = %v, want nil", err)
 	}
 	if client.calls != 0 {
-		t.Fatalf("daemon calls = %d, want 0 outside Kitty", client.calls)
+		t.Fatalf("daemon calls = %d, want 0 without a runtime session", client.calls)
 	}
 }
 
-func TestRunWithDeps_InvalidWindowExitsZero(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
-	t.Setenv("KITTY_WINDOW_ID", "not-a-number")
+func TestRunWithDeps_ManagedHookIgnoresInvalidWindow(t *testing.T) {
 	client := &fakeDaemonClient{}
 
 	if err := runWithDeps("Stop", 0, "", "/tmp/amx", `{}`, false, client); err != nil {
 		t.Fatalf("runWithDeps() error = %v, want nil", err)
 	}
-	if client.calls != 0 {
-		t.Fatalf("daemon calls = %d, want 0 for invalid Kitty window", client.calls)
+	if client.calls != 1 || client.reqs[0].WindowID != 0 {
+		t.Fatalf("managed hook must use runtime identity: calls=%d requests=%+v", client.calls, client.reqs)
 	}
 }
 
 func TestRunWithDeps_AttachesRequestID(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{}
 
 	if err := runWithDeps("Stop", 42, "", "/tmp/amx", `{}`, false, client); err != nil {
@@ -116,7 +78,6 @@ func TestRunWithDeps_AttachesRequestID(t *testing.T) {
 }
 
 func TestRunWithDeps_NormalizesKnownProducerHarness(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{}
 
 	if err := runWithDeps("Stop", 42, " Codex ", "/tmp/amx", `{}`, false, client); err != nil {
@@ -128,7 +89,6 @@ func TestRunWithDeps_NormalizesKnownProducerHarness(t *testing.T) {
 }
 
 func TestRunWithDeps_ForwardsUnsupportedProducerAsUnknown(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{}
 
 	if err := runWithDeps("Stop", 42, "future-harness", "/tmp/amx", `{}`, false, client); err != nil {
@@ -156,7 +116,6 @@ func TestNewRequestID_UniqueAndWellFormed(t *testing.T) {
 }
 
 func TestRunWithDeps_DaemonRejectionStillExitsZero(t *testing.T) {
-	t.Setenv("KITTY_LISTEN_ON", "unix:/tmp/kitty")
 	client := &fakeDaemonClient{resp: protocol.Response{OK: false, Error: "bad event"}}
 
 	if err := runWithDeps("Stop", 42, "", "/tmp/amx", `{}`, false, client); err != nil {

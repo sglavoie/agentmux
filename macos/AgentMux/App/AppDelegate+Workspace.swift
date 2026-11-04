@@ -133,11 +133,6 @@ extension AppDelegate {
         return .success(WorkspaceTerminal(view: surface, close: { surface.close() }, fontSize: { surface.fontSize }))
     }
 
-    func focusExternally(_ row: WorkspaceRow) {
-        guard case let .kitty(socket, windowID) = row.target else { return }
-        focus(MenuSessionRow(title: row.project, windowID: windowID, kittySocket: socket, toolTip: ""))
-    }
-
     /// While the workspace is open the app is a regular one, with a Dock icon
     /// and a menu bar, so its window takes the keyboard like any other; with
     /// it closed the app is the menu bar accessory again.
@@ -280,7 +275,7 @@ extension AppDelegate {
             mirrored: preferencesModel.preferences.snoozeUntil,
             now: Date()
         )
-        let muted = Self.terminalNoticeMuted(notice.origin, in: store.sessions)
+        let muted = Self.terminalNoticeMuted(notice.origin, in: store.managedSessions)
         let outcome = notifications?.presentTerminal(notice, snoozed: snoozed, muted: muted, onScreen: onScreen) ?? .unavailable
         if outcome != .shown {
             Self.logger.notice("terminal notification from \(notice.source, privacy: .public) not shown: \(String(describing: outcome), privacy: .public)")
@@ -344,18 +339,12 @@ extension AppDelegate {
         }
         let key = row.key
         let arguments: [String]
-        var socket: String?
         switch row.target {
-        case let .kitty(rowSocket, windowID):
-            let named = rowSocket.isEmpty ? store.snapshot?.kitty.socket ?? "" : rowSocket
-            guard !named.isEmpty else { return actionFailed(Self.pinFailedTitle, KittyEndpoint.listenOnMissing, banner: false) }
-            socket = named
-            arguments = PinSessionResult.arguments(windowID: windowID, pinned: pinned)
         case let .embedded(id):
             arguments = PinSessionResult.arguments(runtimeSessionID: id, pinned: pinned)
         }
         store.expectPin(key, pinned: pinned)
-        amxRunner.run({ command.json(PinSessionResult.self, arguments, kittyListenOn: socket) }, onMain: { [weak self] result in
+        amxRunner.run({ command.json(PinSessionResult.self, arguments) }, onMain: { [weak self] result in
             guard let self else { return }
             switch result {
             case let .success(value), let .partial(value, _):
@@ -382,17 +371,10 @@ extension AppDelegate {
     @objc func selectPreviousSession(_ sender: Any?) { followingFocus { $0.selectNeighbor(-1) } }
     @objc func selectNextProjectTab(_ sender: Any?) { followingFocus { $0.selectProjectTab(1) } }
     @objc func selectPreviousProjectTab(_ sender: Any?) { followingFocus { $0.selectProjectTab(-1) } }
-    @objc func showNextSessionInKitty(_ sender: Any?) { followingFocus { $0.selectNeighbor(1, raising: true) } }
-    @objc func showPreviousSessionInKitty(_ sender: Any?) { followingFocus { $0.selectNeighbor(-1, raising: true) } }
     /// ⌘1 to ⌘0: the item's tag is the session's place in the sidebar.
     @objc func goToSession(_ sender: Any?) {
         guard let item = sender as? NSMenuItem else { return }
         followingFocus { $0.selectSession(at: item.tag) }
-    }
-    /// ⌘⇧1 to ⌘⇧0.
-    @objc func showSessionInKitty(_ sender: Any?) {
-        guard let item = sender as? NSMenuItem else { return }
-        followingFocus { $0.selectSession(at: item.tag, raising: true) }
     }
 
     /// A key that moves the pane to another session or terminal reveals
@@ -613,7 +595,7 @@ extension AppDelegate {
         controller.model.onFocus = { [weak self] row in
             guard let self else { return }
             guard self.store.feed == .live,
-                  let session = self.store.sessions.first(where: { $0.aslRunID == row.runID }) else {
+                  let session = self.store.managedSessions.first(where: { $0.aslRunID == row.runID }) else {
                 return self.refuse("No live session is associated with this ASL run in the current session list.")
             }
             self.focus(.focusing(session, title: row.displayLabel))
@@ -632,8 +614,8 @@ extension AppDelegate {
         controller.model.onFocus = { [weak self] entry in
             guard let self else { return }
             guard self.store.feed == .live else { return self.refuse("Waiting for a live session list.") }
-            let live = Self.session(runtimeSessionID: entry.runtimeSessionID, in: self.store.sessions)
-                ?? self.store.sessions.first { entry.conversation != nil && $0.conversation == entry.conversation }
+            let live = Self.session(runtimeSessionID: entry.runtimeSessionID, in: self.store.managedSessions)
+                ?? self.store.managedSessions.first { entry.conversation != nil && $0.conversation == entry.conversation }
             guard let live else { return self.refuse("No live session matches this recorded event. Open its conversation to inspect or resume it.") }
             self.focus(.focusing(live, title: entry.title))
         }
@@ -729,8 +711,8 @@ extension AppDelegate {
         controller.model.onAction = { [weak self] conversation, fork, completion in
             self?.openHistoryConversation(conversation, fork: fork, completion: completion)
         }
-        controller.model.liveConversations = Set(store.feed == .live ? store.sessions.compactMap { $0.conversation?.encoded } : [])
-        controller.model.workingConversations = Set(store.sessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
+        controller.model.liveConversations = Set(store.feed == .live ? store.managedSessions.compactMap { $0.conversation?.encoded } : [])
+        controller.model.workingConversations = Set(store.managedSessions.filter(\.isWorking).compactMap { $0.conversation?.encoded })
         historyWindow = controller
         controller.model.searchEntryNote = searchNote
         if conversation != nil {
@@ -743,7 +725,7 @@ extension AppDelegate {
     }
 
     func openHistoryConversation(_ conversation: RecentConversation, fork: Bool, completion: @escaping (String?) -> Void) {
-        if !fork, store.feed == .live, let live = store.sessions.first(where: { $0.conversation == conversation.identity }) {
+        if !fork, store.feed == .live, let live = store.managedSessions.first(where: { $0.conversation == conversation.identity }) {
             focus(.focusing(live, title: conversation.displayName))
             completion(nil)
             return
@@ -794,7 +776,7 @@ extension AppDelegate {
             entry(.dashboard, "Open Dashboard", "⌘D"),
             entry(.overview, "Open Overview", "⌘O"),
             entry(.pastSessions, "Find or Resume a Conversation", "⌘Y"),
-            entry(.nextWaiting, AttentionCycler.commandTitle, "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.sessions).isEmpty ? "No sessions are waiting" : nil)),
+            entry(.nextWaiting, AttentionCycler.commandTitle, "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.managedSessions).isEmpty ? "No sessions are waiting" : nil)),
             entry(.settings, "Settings…", "⌘,"),
         ]
         entries += (workspace?.state.rows ?? []).filter { $0.embeddedRuntimeSessionID != nil }.map { row in
@@ -806,7 +788,7 @@ extension AppDelegate {
                   reason: gate.unavailableReason(.project) ?? (projects.missingDirectories.contains(project.directory) ? "Project directory is missing" : nil))
         }
         entries += (recent.state.value ?? []).map { conversation in
-            let live = store.feed == .live && store.sessions.contains { $0.conversation == conversation.identity }
+            let live = store.feed == .live && store.managedSessions.contains { $0.conversation == conversation.identity }
             return entry(.resume(conversation), "\(live ? "Focus" : "Resume") \(conversation.displayName)",
                          "\(conversation.harness) · \(conversation.snippet)", reason: gate.unavailableReason(.sessions))
         }

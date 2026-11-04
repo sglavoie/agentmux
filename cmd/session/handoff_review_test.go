@@ -12,7 +12,6 @@ import (
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/handoff"
 	"github.com/sglavoie/agentmux/internal/harness"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/transcript"
 )
 
@@ -24,7 +23,6 @@ func TestHandoffPreviewCLIWithoutTargetOrBackend(t *testing.T) {
 	sessionCommandsSessionReaders = func() map[string]transcript.Reader {
 		return map[string]transcript.Reader{harness.Claude: sessionCommandReader{harness: harness.Claude}}
 	}
-	sessionCommandsNewKitty = func() kitty.KittyClient { t.Fatal("preview contacted Kitty"); return nil }
 	runner := &sessionCommandHandoff{result: handoff.Result{Content: "Reviewed context\n", SourceHarness: meta.Harness, SourceSessionID: meta.ID, Directory: meta.CWD}}
 	sessionCommandsNewHandoff = func() handoff.Runner { return runner }
 	if err := sessionHandoffCmd.ParseFlags([]string{"--preview", "--json", "--", meta.Harness + ":" + meta.ID}); err != nil {

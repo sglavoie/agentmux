@@ -115,7 +115,7 @@ final class WorkspaceDailyPolishTests: XCTestCase {
         preferences.proseSize = 21; preferences.fontSize = 17
         let restored = WorkspaceReadingPreferences(defaults: defaults)
         XCTAssertEqual(restored.effectiveProseSize, 21); XCTAssertEqual(restored.effectiveFontSize, 17)
-        let row = WorkspaceWaitingRow(key: .init(socket: "socket", windowID: 1), title: "Question", detail: "Waiting", glyph: "?", toolTip: "")
+        let row = WorkspaceWaitingRow(key: .embedded(WorkspaceFixture.runtimeID(1)), title: "Question", detail: "Waiting", glyph: "?", toolTip: "", answer: .asl(ASLAnswerTarget(runID: "r")))
         let view = WorkspaceWaitingRowView(row)
         view.configureReading(preferences: restored, height: 300)
         XCTAssertEqual(view.contextLabel.font?.pointSize, 21)

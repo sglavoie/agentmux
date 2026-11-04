@@ -297,8 +297,8 @@ func TestFuzzReducerDuplicateRedeliveryIsIdempotent(t *testing.T) {
 }
 
 // TestFuzzReducerRestartEquivalenceEveryPrefix snapshots after every prefix of
-// each trace through the REAL amx_state wire schema (MarshalUserVar →
-// UnmarshalUserVar → SetConfig, the same calls the daemon's restore path makes)
+// each trace through the REAL amx_state wire schema (MarshalStatePayload →
+// UnmarshalStatePayload → SetConfig, the same calls the daemon's restore path makes)
 // and replays the remaining suffix. The restored run must be indistinguishable
 // from the uninterrupted one.
 func TestFuzzReducerRestartEquivalenceEveryPrefix(t *testing.T) {
@@ -323,13 +323,13 @@ func TestFuzzReducerRestartEquivalenceEveryPrefix(t *testing.T) {
 				encoded, err := WindowState{
 					Reducer:   pre,
 					Effective: pre.Reduce(now),
-				}.MarshalUserVar()
+				}.MarshalStatePayload()
 				if err != nil {
-					t.Fatalf("cfg=%s seed=%d prefix=%d: MarshalUserVar: %v", cfgName, seed, k, err)
+					t.Fatalf("cfg=%s seed=%d prefix=%d: MarshalStatePayload: %v", cfgName, seed, k, err)
 				}
 				var restored WindowState
-				if err := restored.UnmarshalUserVar(encoded); err != nil {
-					t.Fatalf("cfg=%s seed=%d prefix=%d: UnmarshalUserVar: %v", cfgName, seed, k, err)
+				if err := restored.UnmarshalStatePayload(encoded); err != nil {
+					t.Fatalf("cfg=%s seed=%d prefix=%d: UnmarshalStatePayload: %v", cfgName, seed, k, err)
 				}
 				r := restored.Reducer
 				if r == nil {

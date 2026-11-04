@@ -8,7 +8,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/actions"
 	"github.com/sglavoie/agentmux/internal/config"
-	"github.com/sglavoie/agentmux/internal/kitty"
 	"github.com/sglavoie/agentmux/internal/session"
 )
 
@@ -100,36 +99,34 @@ func SessionWithProfile(sess config.Session, profileName string) config.Session 
 	return out
 }
 
-// OpenDirectory opens a config session's directory in a plain shell tab, or,
-// outside Kitty, in a shell view: the desktop workspace's when one hosts this
-// surface, and otherwise a shell in this terminal.
+// OpenDirectory opens a config session's directory in a shell view: the
+// desktop workspace's when one hosts this surface, or this terminal.
 // Emits PickerOpenDoneMsg so the model can quit on success or surface the
 // error in the dashboard otherwise.
-func OpenDirectory(client kitty.KittyClient, cfg *config.Config, cs config.Session) tea.Cmd {
-	return openProject(client, cfg, cs, actions.OpenDirectory)
+func OpenDirectory(cfg *config.Config, cs config.Session) tea.Cmd {
+	return openProject(cfg, cs, actions.OpenDirectory)
 }
 
-// OpenInEditor opens a config session's directory in a new Kitty tab running
-// the configured editor (defaults.editor → $VISUAL → $EDITOR → vi); outside
-// Kitty the editor runs in an editor view, as OpenDirectory's shell does.
+// OpenInEditor opens a config session's directory in an editor view using
+// the configured editor (defaults.editor → $VISUAL → $EDITOR → vi).
 // Emits PickerOpenDoneMsg so the model can quit on success or surface the
 // error in the dashboard otherwise.
-func OpenInEditor(client kitty.KittyClient, cfg *config.Config, cs config.Session) tea.Cmd {
-	return openProject(client, cfg, cs, actions.OpenEditor)
+func OpenInEditor(cfg *config.Config, cs config.Session) tea.Cmd {
+	return openProject(cfg, cs, actions.OpenEditor)
 }
 
 // openProject runs one of the two open actions. The action decides where the
 // view goes; one it leaves to this terminal is run here, and nothing that
-// opened outside Kitty takes the operator away from this surface.
-func openProject(client kitty.KittyClient, cfg *config.Config, cs config.Session, id actions.ID) tea.Cmd {
+// opened in the workspace takes the operator away from this surface.
+func openProject(cfg *config.Config, cs config.Session, id actions.ID) tea.Cmd {
 	return func() tea.Msg {
-		result, err := Registry.Execute(context.Background(), TerminalDependencies(client, cfg), id, actions.Request{Project: &cs})
+		result, err := Registry.Execute(context.Background(), TerminalDependencies(cfg), id, actions.Request{Project: &cs})
 		if err != nil {
-			return PickerOpenDoneMsg{Err: err, Stay: client == nil}
+			return PickerOpenDoneMsg{Err: err}
 		}
 		if view, here := actions.UtilityHere(result); here {
 			return OpenHere(cfg, view, openedHere)()
 		}
-		return PickerOpenDoneMsg{Stay: client == nil}
+		return PickerOpenDoneMsg{}
 	}
 }

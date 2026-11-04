@@ -83,7 +83,7 @@ func redactedNativeExcerpts(paths diagnostics.Paths, sessions []NativeSession, s
 			candidates[path] = struct{}{}
 		}
 	}
-	// Offline bundles may not have Kitty metadata. The managed native root is
+	// Offline bundles may not have terminal metadata. The managed native root is
 	// still owned by Agent Mux, so an unscoped request may inspect it safely.
 	if len(candidates) == 0 && selector.WindowID == 0 && selector.SessionID == "" && selector.ASLRunID == "" && selector.Harness == "" && selector.Profile == "" {
 		candidates[paths.NativeDir] = struct{}{}

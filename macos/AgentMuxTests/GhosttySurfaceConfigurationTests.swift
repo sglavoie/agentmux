@@ -40,7 +40,7 @@ final class GhosttySurfaceConfigurationTests: XCTestCase {
         let configuration = Ghostty.SurfaceConfiguration(environment: [
             "TERM": "dumb",
             "COLORTERM": "no",
-            "TERM_PROGRAM": "kitty",
+            "TERM_PROGRAM": "unsupported",
             "TERMINFO": "/nowhere",
             "": "empty-name",
             "A=B": "assignment",
