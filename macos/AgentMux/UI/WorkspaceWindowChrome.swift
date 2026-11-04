@@ -44,6 +44,7 @@ enum WorkspaceWindowChrome {
 
     static func sidebar(
         table: WorkspaceSidebarView,
+        groupFilter: WorkspaceGroupFilter,
         feedLabel: NSTextField,
         feedButton: NSButton
     ) -> NSViewController {
@@ -79,7 +80,7 @@ enum WorkspaceWindowChrome {
         feedButton.isHidden = true
         feedButton.translatesAutoresizingMaskIntoConstraints = false
 
-        let stack = NSStackView(views: [scroll, feedLabel, feedButton])
+        let stack = NSStackView(views: [groupFilter, scroll, feedLabel, feedButton])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 4
@@ -87,6 +88,7 @@ enum WorkspaceWindowChrome {
         let controller = NSViewController()
         controller.view = stack
         NSLayoutConstraint.activate([
+            groupFilter.widthAnchor.constraint(equalTo: stack.widthAnchor),
             scroll.widthAnchor.constraint(equalTo: stack.widthAnchor),
             feedLabel.leadingAnchor.constraint(equalTo: stack.leadingAnchor, constant: 10),
             // The notice wraps to the sidebar's width; its full text is in

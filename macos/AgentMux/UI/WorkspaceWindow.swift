@@ -113,6 +113,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private(set) var isOpen = false
 
     let sidebar = WorkspaceSidebarView()
+    let groupFilter = WorkspaceGroupFilter()
+    /// nil is All; a literal group named All remains a separate choice.
+    var selectedGroup: String?
     private(set) var compactSidebar = false
 
     func setCompactSidebar(_ compact: Bool) {
@@ -630,7 +633,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let minimumSize = NSSize(width: 640, height: 360)
 
     private func makeWindow() -> NSWindow {
-        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, feedLabel: feedLabel, feedButton: feedButton)
+        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton)
+        groupFilter.onSelect = { [weak self] group in self?.selectGroup(group) }
         let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
         sidebarZoomView.zoom = sidebarZoom
         sidebarZoomView.opaqueInLight = true

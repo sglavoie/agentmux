@@ -102,6 +102,10 @@ extension WorkspaceConsistencyPolishTests {
     func testSidebarVisualReferencesInBothAppearances() async throws {
         guard #available(macOS 14.4, *) else { throw XCTSkip("Own-window capture requires macOS 14.4") }
         let app = FakeWorkspaceApp()
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api-service", groups: ["work", "tradition"]),
+            ProjectEntry(profile: "personal", title: "offline", groups: ["personal"]),
+        ]
         let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
         defer { workspace.window.close() }
         app.store.onChange = { [weak workspace] in workspace?.refresh() }
@@ -109,6 +113,7 @@ extension WorkspaceConsistencyPolishTests {
         var sessions = (1...3).map { WorkspaceFixture.tmux($0, project: "api-service", icon: $0 == 1 ? "question" : $0 == 2 ? "bolt" : "stop", attention: $0 != 2) }
         for i in sessions.indices { sessions[i].branch = "main"; sessions[i].tabColor = ["#a9c5ff", "#f5d678", "#c4a9eb"][i] }
         app.store.apply(snapshot: WorkspaceFixture.snapshot(sessions))
+        workspace.groupFilter.pills.first { $0.group == "tradition" }?.performClick(nil)
         workspace.select(.embedded(WorkspaceFixture.runtimeID(2)))
         workspace.window.setContentSize(NSSize(width: 1000, height: 640))
         workspace.window.orderFront(nil)

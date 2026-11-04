@@ -129,6 +129,22 @@ struct ProjectLaunchResult: Decodable, Equatable {
 /// ten seconds and when a menu opens on an older list, so config edits reach
 /// an already-open workspace without relaunching it.
 struct ProjectCatalog: Equatable {
+    /// All configured tags, including those with no live sessions.
+    static func groups(_ projects: [ProjectEntry]) -> [String] {
+        Set(projects.flatMap(\.groups)).sorted()
+    }
+
+    /// Honor explicit project/profile entries. A session launched with a
+    /// different profile still inherits its project's configured tags.
+    static func rows(_ rows: [WorkspaceRow], in group: String?, projects: [ProjectEntry]) -> [WorkspaceRow] {
+        guard let group else { return rows }
+        return rows.filter { row in
+            let project = projects.filter { $0.title == row.project }
+            let profile = project.filter { $0.profile == row.profile }
+            return (profile.isEmpty ? project : profile).contains { $0.groups.contains(group) }
+        }
+    }
+
     static func guidance(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> String {
         if let unavailable { return unavailable }
         if state.errorCode == "config_missing" { return "Welcome to Agent Mux. Set Up First Project guides you through your agent profile, project directory, hooks, and launch destination." }

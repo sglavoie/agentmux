@@ -51,6 +51,8 @@ struct WorkspaceRow: Equatable {
     var harnessIcon = ""
     /// The session's harness, which orders rows of one profile.
     var harness = ""
+    /// The configured profile, before the display label's harness fallback.
+    var profile = ""
     /// Whether the session is pinned (the ★ in its title, which the dashboard
     /// reads too): it is then listed under `WorkspaceSidebar.pinnedSection`,
     /// above every project, instead of under its own, unless promoted for
@@ -457,6 +459,7 @@ enum WorkspaceSidebar {
             name: session.name,
             harnessIcon: session.harnessIcon,
             harness: session.harness,
+            profile: session.profile,
             pinned: session.pinned,
             needsAttention: session.needsAttention,
             conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil },

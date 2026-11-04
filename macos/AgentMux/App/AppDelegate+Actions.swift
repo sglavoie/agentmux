@@ -178,6 +178,7 @@ extension AppDelegate {
                 self.showWorkspace()
             }
             self.updateWorkspaceProjectMenu()
+            self.workspace?.reloadSidebar(allowReorder: true)
             self.workspace?.refreshCommands()
             self.statusItem?.refreshSubmenus()
         })

@@ -6,7 +6,30 @@ import os
 extension WorkspaceWindowController {
     // MARK: Sidebar
 
+    /// Filtering is a presentation of the complete state. Hidden sessions
+    /// still own their terminals, selection, and saved ordering.
+    var scopedSidebar: WorkspaceState {
+        guard selectedGroup != nil else { return state }
+        var scoped = WorkspaceState()
+        let rows = ProjectCatalog.rows(state.rows, in: selectedGroup, projects: delegate?.workspaceProjects ?? [])
+        scoped.apply(WorkspaceSidebar.groups(rows, order: order))
+        return scoped
+    }
+
+    private func refreshGroupFilter() {
+        let groups = ProjectCatalog.groups(delegate?.workspaceProjects ?? [])
+        if let selectedGroup, !groups.contains(selectedGroup) { self.selectedGroup = nil }
+        groupFilter.show(groups: groups, selected: selectedGroup)
+    }
+
+    func selectGroup(_ group: String?) {
+        selectedGroup = selectedGroup == group ? nil : group
+        reloadSidebar(allowReorder: true)
+    }
+
     func reloadSidebar(force: Bool = false, allowReorder: Bool = false) {
+        refreshGroupFilter()
+        let scoped = scopedSidebar
         // A session's terminals follow its row and are closed with it by refresh.
         let listed = state.embeddedRuntimeSessionIDs
         for row in state.rows {
@@ -18,10 +41,10 @@ extension WorkspaceWindowController {
         let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
-        let counts = state.sectionCounts
+        let counts = scoped.sectionCounts
         var wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
             + (counts.isEmpty ? [] : [Item.overview(counts)])
-            + state.listedGroups.flatMap { group in
+            + scoped.listedGroups.flatMap { group in
                 // A collapsed project lists its header only, which still
                 // counts what waits under it; so does a state section.
                 [Item.group(group)] + (group.collapsed ? [] : group.rows).flatMap { row in
@@ -45,7 +68,7 @@ extension WorkspaceWindowController {
         // the physical rows, using current values and omitting ended sessions.
         // Collapsed sessions remain reachable after the visible ones, without
         // leaving gaps in the digits displayed on screen.
-        let liveRows = state.rows
+        let liveRows = scoped.rows
         let byKey = Dictionary(liveRows.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
         let visible = wanted.compactMap { item -> WorkspaceRow? in
             guard case let .row(row) = item else { return nil }
@@ -179,6 +202,10 @@ extension WorkspaceWindowController {
     /// False when the list has no line for it.
     @discardableResult
     func revealInSidebar() -> Bool {
+        if let key = shownSessionKey, state.row(key) != nil, scopedSidebar.row(key) == nil {
+            selectedGroup = nil
+            reloadSidebar(allowReorder: true)
+        }
         if isSidebarCollapsed {
             setSidebarCollapsed(false)
             window.layoutIfNeeded()
@@ -394,13 +421,14 @@ extension WorkspaceWindowController {
         case .section, .overview, .group:
             return false
         case let .row(row):
-            guard let group = group(of: row.key), !group.needsAttention else { return false }
+            guard let group = scopedSidebar.groups.first(where: { $0.rows.contains { $0.key == row.key } }),
+                  !group.needsAttention else { return false }
             var keys = group.rows.map(\.key).filter { $0 != row.key }
             var at = keys.count
             if slot < items.count, case let .row(next) = items[slot] { at = keys.firstIndex(of: next.key) ?? at }
             keys.insert(row.key, at: at)
             // Keep the saved places of siblings temporarily in Needs
-            // attention, and of the project's sessions in other states.
+            // attention, and of sessions in other states or group scopes.
             let base = row.pinned
                 ? WorkspaceSidebar.groups(state.rows, order: order, prioritizeAttention: false).first(where: \.pinned)?.rows
                 : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order)

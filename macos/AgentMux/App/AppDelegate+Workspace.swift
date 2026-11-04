@@ -814,6 +814,8 @@ extension AppDelegate {
         ProjectCatalog.guidance(projects.state, unavailable: gate.unavailableReason(.project))
     }
 
+    var workspaceProjects: [ProjectEntry] { projects.state.value ?? [] }
+
     func workspaceLaunchProjects(from view: NSView) {
         refreshProjects()
         let menu = NSMenu(title: "Launch Project")

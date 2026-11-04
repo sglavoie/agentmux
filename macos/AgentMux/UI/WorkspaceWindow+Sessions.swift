@@ -542,7 +542,7 @@ extension WorkspaceWindowController {
     /// sidebar order, including pinned, promoted, and collapsed sessions.
     func selectProjectTab(_ offset: Int) {
         guard let project = tabProject else { return }
-        let stops = state.rows.filter { $0.project == project }.flatMap { row in
+        let stops = scopedSidebar.rows.filter { $0.project == project }.flatMap { row in
             [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
         }
         guard let here = stops.firstIndex(where: { item in
@@ -598,7 +598,7 @@ extension WorkspaceWindowController {
             case .row: return [item]
             case let .view(view): return !skipping && view.besideRuntimeSessionID.map(listed.contains) ?? false ? [item] : []
             case let .group(group) where group.collapsed:
-                return state.rows(under: group).filter { row in
+                return scopedSidebar.rows(under: group).filter { row in
                     if let beside { return row.embeddedRuntimeSessionID == beside }
                     return viewSelection == nil && row.key == state.selection
                 }.map(Item.row)

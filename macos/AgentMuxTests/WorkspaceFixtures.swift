@@ -74,6 +74,7 @@ final class FocusableView: NSView {
 @MainActor
 final class FakeWorkspaceApp: WorkspaceDelegate {
     let store = SessionStore()
+    var workspaceProjects: [ProjectEntry] = []
     var handoffRequests: [WorkspaceRow] = []
     func workspaceHandoff(from row: WorkspaceRow) { handoffRequests.append(row) }
     var handoffSource: ConversationIdentity?

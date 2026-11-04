@@ -88,6 +88,7 @@ protocol WorkspaceDelegate: AnyObject {
     var workspaceCommands: [WorkspaceSwitcher.Entry] { get }
     var workspaceLaunchDescription: String { get }
     var workspaceProjectGuidance: String { get }
+    var workspaceProjects: [ProjectEntry] { get }
     var workspaceOffersSetup: Bool { get }
     func workspaceSetupFinished()
     func workspaceLaunchProjects(from view: NSView)
@@ -111,6 +112,7 @@ protocol WorkspaceDelegate: AnyObject {
 
 extension WorkspaceDelegate {
     var workspaceCommands: [WorkspaceSwitcher.Entry] { [] }
+    var workspaceProjects: [ProjectEntry] { [] }
     var workspaceLaunchDescription: String { "Launch in Workspace (tmux)" }
     var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
     var workspaceOffersSetup: Bool { false }

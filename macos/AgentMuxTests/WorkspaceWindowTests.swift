@@ -38,6 +38,192 @@ final class WorkspaceWindowTests: XCTestCase {
         try XCTUnwrap(workspace.state.rows.first { $0.project == project && $0.label == label })
     }
 
+    private func chooseGroup(at index: Int) {
+        workspace.groupFilter.pills[index].performClick(nil)
+    }
+
+    func testGroupScopeIncludesSessionsLaunchedWithAnotherProfileOrHarness() {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "personal-codex", title: "Garden", harness: "codex", groups: ["personal", "workflow"]),
+        ]
+        let live = [
+            F.tmux(1, project: "Garden", profile: "personal-claude", harness: "claude"),
+            F.tmux(2, project: "Garden", profile: "personal-codex", harness: "codex"),
+            F.tmux(3, project: "Unconfigured", profile: "personal-claude", harness: "claude"),
+        ]
+        app.store.apply(snapshot: F.snapshot(live))
+        workspace.select(.embedded(F.runtimeID(1)))
+        for index in [1, 2] {
+            chooseGroup(at: index)
+            XCTAssertEqual(Set(workspace.sessionShortcutRows.map(\.key)), [.embedded(F.runtimeID(1)), .embedded(F.runtimeID(2))])
+            XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+            XCTAssertEqual(workspace.scopedSidebar.sectionCounts.map(\.count), [2])
+        }
+        app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 2, "cached rows keep their project membership")
+        XCTAssertEqual(workspace.selectedGroup, "workflow")
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 2)
+
+        // An explicitly configured profile still owns its own tags, even
+        // when another profile of the same project declares different ones.
+        app.workspaceProjects.append(ProjectEntry(profile: "personal-claude", title: "Garden", groups: ["personal"]))
+        workspace.reloadSidebar(allowReorder: true)
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(2))])
+        chooseGroup(at: 1)
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 2)
+    }
+
+    func testGroupPillsMatchEveryTagRegardlessOfItsPositionAndToggleOff() {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api", groups: ["work", "tradition"]),
+            ProjectEntry(profile: "personal", title: "api"),
+            ProjectEntry(profile: "work", title: "web", groups: ["tradition", "work"]),
+        ]
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "tradition", "work"])
+        for index in [2, 1, 2, 1] {
+            chooseGroup(at: index)
+            XCTAssertEqual(Set(workspace.sessionShortcutRows.map(\.key)), [.embedded(F.runtimeID(1)), .embedded(F.runtimeID(4))])
+            XCTAssertEqual(workspace.groupFilter.pills.map(\.state), (0...2).map { $0 == index ? .on : .off })
+            workspace.reloadSidebar()
+            XCTAssertEqual(workspace.selectedGroup, workspace.groupFilter.pills[index].group)
+        }
+        chooseGroup(at: 1)
+        XCTAssertNil(workspace.selectedGroup, "clicking the active pill clears the scope")
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 3)
+        XCTAssertEqual(workspace.groupFilter.pills.map(\.state), [.on, .off, .off])
+        chooseGroup(at: 2)
+        chooseGroup(at: 0)
+        XCTAssertNil(workspace.selectedGroup)
+    }
+
+    func testGroupPillsWrapAndKeepTheSelectionWhenTheSidebarResizes() {
+        let filter = WorkspaceGroupFilter()
+        filter.show(groups: ["personal", "tradition", "work", String(repeating: "long", count: 20)], selected: "tradition")
+        for width: CGFloat in [200, 120, 400] {
+            filter.setFrameSize(NSSize(width: width, height: 300))
+            filter.layoutSubtreeIfNeeded()
+            XCTAssertGreaterThan(filter.pills.last!.frame.minY, filter.pills.first!.frame.minY)
+            for pill in filter.pills {
+                XCTAssertGreaterThanOrEqual(pill.frame.minX, 0)
+                XCTAssertLessThanOrEqual(pill.frame.maxX, width)
+                XCTAssertLessThanOrEqual(pill.frame.maxY, filter.intrinsicContentSize.height)
+            }
+            for (previous, next) in zip(filter.pills, filter.pills.dropFirst()) {
+                XCTAssertFalse(previous.frame.intersects(next.frame))
+            }
+            XCTAssertEqual(filter.pills.filter { $0.state == .on }.map(\.group), ["tradition"])
+        }
+    }
+
+    func testGroupScopeUsesConfiguredTagsAndPreservesHiddenTerminals() throws {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api", groups: ["work"]),
+            ProjectEntry(profile: "personal", title: "api", groups: ["personal", "shared"]),
+            ProjectEntry(profile: "work", title: "web", groups: ["shared"]),
+            ProjectEntry(profile: "work", title: "offline", groups: ["empty", "personal"]),
+        ]
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "empty", "personal", "shared", "work"])
+        let hidden = try row("api", "work")
+        workspace.select(hidden.key)
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        let terminal = try XCTUnwrap(workspace.views.terminals(beside: hidden.embeddedRuntimeSessionID).first)
+        workspace.select(hidden.key)
+        let made = app.made
+
+        chooseGroup(at: 2)
+        XCTAssertEqual(workspace.selectedGroup, "personal")
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(2))])
+        XCTAssertEqual(workspace.scopedSidebar.sectionCounts.map(\.count), [1])
+        XCTAssertFalse(workspace.items.contains(.view(terminal)))
+        XCTAssertEqual(workspace.state.selection, hidden.key)
+        XCTAssertNotNil(workspace.terminals[F.runtimeID(1)])
+        XCTAssertNotNil(workspace.views.view(terminal.id))
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(app.made, made)
+        XCTAssertTrue(app.closed.isEmpty)
+        XCTAssertEqual(workspace.state.rows.count, 3)
+        XCTAssertEqual(workspace.selectedGroup, "personal")
+
+        chooseGroup(at: 3)
+        XCTAssertEqual(Set(workspace.sessionShortcutRows.map(\.key)), [.embedded(F.runtimeID(2)), .embedded(F.runtimeID(4))])
+        chooseGroup(at: 1)
+        XCTAssertTrue(workspace.sessionShortcutRows.isEmpty, "a configured group can have no running sessions")
+        XCTAssertTrue(workspace.scopedSidebar.listedGroups.isEmpty)
+        chooseGroup(at: 0)
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 3)
+        XCTAssertTrue(workspace.items.contains(.view(terminal)))
+    }
+
+    func testGroupScopeRefreshAndLiteralAllGroup() {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api", groups: ["All", "personal", "personal"]),
+            ProjectEntry(profile: "personal", title: "api"),
+        ]
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "All", "personal"])
+        chooseGroup(at: 1)
+        XCTAssertEqual(workspace.selectedGroup, "All")
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(1))])
+
+        app.workspaceProjects.append(ProjectEntry(profile: "work", title: "web", groups: ["All", "new"]))
+        workspace.reloadSidebar(allowReorder: true)
+        XCTAssertEqual(workspace.selectedGroup, "All")
+        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All", "All", "new", "personal"])
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 2)
+        app.workspaceProjects = []
+        workspace.reloadSidebar(allowReorder: true)
+        XCTAssertNil(workspace.selectedGroup)
+        XCTAssertEqual(workspace.groupFilter.pills.map(\.title), ["All"])
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 3)
+    }
+
+    func testGroupScopeIncludesPinnedAndAttentionRowsAndRevealsOutsideScope() {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api", groups: ["personal"]),
+            ProjectEntry(profile: "personal", title: "api"),
+        ]
+        var live = sessions
+        live[0].pinned = true
+        live[1].iconState = "question"
+        app.store.apply(snapshot: F.snapshot(live))
+        chooseGroup(at: 1)
+        XCTAssertEqual(workspace.scopedSidebar.groups.first?.pinned, true)
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(1))])
+        workspace.selectSession(at: 0)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        workspace.selectNeighbor(1)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        workspace.select(.embedded(F.runtimeID(2)))
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertNil(workspace.selectedGroup)
+        XCTAssertEqual(workspace.groupFilter.pills.first?.state, .on)
+        XCTAssertEqual(workspace.sessionShortcutRows.count, 3)
+    }
+
+    func testDraggingWithinGroupScopePreservesHiddenSiblingOrder() throws {
+        app.workspaceProjects = [
+            ProjectEntry(profile: "work", title: "api", groups: ["personal"]),
+            ProjectEntry(profile: "other", title: "api"),
+        ]
+        let live = [
+            F.tmux(1, project: "api", profile: "work"),
+            F.tmux(2, project: "api", profile: "other"),
+            F.tmux(3, project: "api", profile: "work"),
+        ]
+        workspace.order.set((1...3).map { .embedded(F.runtimeID($0)) }, for: "api")
+        app.store.apply(snapshot: F.snapshot(live))
+        chooseGroup(at: 1)
+        let first = try index(of: .embedded(F.runtimeID(1)))
+        let last = try index(of: .embedded(F.runtimeID(3)))
+        XCTAssertTrue(workspace.moveItem(at: last, to: first))
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(3)), .embedded(F.runtimeID(1))])
+        chooseGroup(at: 0)
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(3)), .embedded(F.runtimeID(2)), .embedded(F.runtimeID(1))])
+    }
+
     /// A refusal is said at the top of the pane for a moment, where the
     /// operator is looking; a failure is an alert that offers the fix.
     func testNoticesShowInThePaneAndErrorsOfferAFix() {

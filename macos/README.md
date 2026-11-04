@@ -392,6 +392,20 @@ ASL answer panel work the same either way.
   The daemon sends v2 snapshots with each tmux session's runtime identity
   (`CompanionSession.runtime`). The runtime-session ID identifies a session in
   the sidebar and attention cycle.
+- **Group scope.** The group pills at the top of the left sidebar offer
+  **All**, then every group declared by configured projects, alphabetically,
+  including groups with no live sessions. Pills wrap to fit the sidebar.
+  Click a group to show only its projects' sessions and their attached
+  terminals. Projects can belong to
+  several groups and appear under each of their tags. Click the selected pill
+  again, or **All**, to clear the filter. Counts and session shortcuts follow
+  the filtered list; the current terminal keeps running and stays open even
+  if its row is hidden.
+  Sessions launched with a different profile inherit their project's tags
+  unless that project/profile pair has its own explicit config entry.
+  Config edits refresh the choices automatically; removing the selected group
+  returns to **All**. Revealing a session outside the scope (for example with
+  ⌘J or the global attention shortcut) returns to **All** to show its row.
 - **Sidebar.** `Model/WorkspaceSidebar.swift` builds it as data: one group per
   project, sorted by name, and under it one row per session labeled with its
   profile, sorted by profile. A row shows the state glyph, harness, branch,
