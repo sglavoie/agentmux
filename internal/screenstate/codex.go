@@ -237,6 +237,8 @@ func (a codexAdapter) Classify(screen string) Observation {
 	clauses := codexClausesFor(patterns)
 	lower := strings.ToLower(screen)
 	kind, statusLine := clauses.latestStatusLine(screen)
+	activityText := clauses.currentActivityText(screen)
+	activityLower := strings.ToLower(activityText)
 
 	var vetoes Veto
 	if kind == codexStatusWorking {
@@ -245,7 +247,7 @@ func (a codexAdapter) Classify(screen string) Observation {
 	// Unlike Claude, Codex still renders this hint on every live turn, so it is
 	// genuinely useful here rather than a legacy backstop. It remains a one-way
 	// veto: its absence is not evidence a turn ended.
-	if patterns.Match(codexClauseInterruptHint, screen, lower) {
+	if patterns.Match(codexClauseInterruptHint, activityText, activityLower) {
 		vetoes |= VetoInterruptHint
 	}
 	// Independent of every other signal on this screen, and deliberately so. A
@@ -254,7 +256,7 @@ func (a codexAdapter) Classify(screen string) Observation {
 	// so the marker, the absence of a live status line and the empty composer all
 	// agree, and nothing else here would refuse. The footer is the only evidence
 	// that work the pane started is still going.
-	if patterns.Match(codexClauseBackgroundFooter, screen, lower) {
+	if patterns.Match(codexClauseBackgroundFooter, activityText, activityLower) {
 		vetoes |= VetoBackgroundTask
 	}
 	// The adapter's own pattern set and its already-folded screen, rather than

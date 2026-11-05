@@ -1,12 +1,70 @@
 package daemon
 
 import (
+	"strings"
 	"testing"
 	"testing/synctest"
 	"time"
 
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 )
+
+// A transcript can quote the same background count the live footer displays.
+// Once that footer disappears, the historical quote must neither extend a
+// native Stop's deadline nor prevent recovery when its hook was lost.
+func TestCodexBackgroundCompletionIgnoresHistoricalActivity(t *testing.T) {
+	const footer = "  1 background terminal running · /ps to view · /stop to close\n"
+	done := "• The old screen said: 1 background terminal running · /ps to view · /stop to close\n" +
+		"• Press Esc to interrupt the command.\n" + tmuxCapture(t, "codex_idle_completed_t0.txt")
+	running := strings.Replace(done, "› Ask Codex to do anything", footer+"\n› Ask Codex to do anything", 1)
+	for _, nativeStop := range []bool{true, false} {
+		name := "lost stop hook"
+		if nativeStop {
+			name = "native stop hook"
+		}
+		t.Run(name, func(t *testing.T) {
+			eachProbedTmuxOf(t, probedCodex, func(t *testing.T, s *probedSession) {
+				s.show(running)
+				s.startTurn()
+				if nativeStop {
+					s.stopHeld()
+				}
+				for elapsed := time.Duration(0); elapsed < 4*terminalHoldTestTimeout; elapsed += 2 * time.Second {
+					s.tick(time.Now())
+					time.Sleep(2 * time.Second)
+					synctest.Wait()
+					if icon := s.icon(); icon != "bolt" {
+						t.Fatalf("icon with a live background terminal = %q; want bolt", icon)
+					}
+				}
+				if got := s.rec.len(); got != 0 {
+					t.Fatalf("notifications while background work runs = %d; want 0", got)
+				}
+
+				s.show(done)
+				for range 2 {
+					s.tick(time.Now())
+					time.Sleep(2 * time.Second)
+					synctest.Wait()
+				}
+				if icon := s.icon(); icon != "stop" {
+					t.Fatalf("icon after the background footer disappears = %q; want stop after two reads", icon)
+				}
+				if nativeStop {
+					ev := lastStopEvent(t, s.h, s.slot)
+					if ev.StopHoldOutcome != protocol.StopHoldOutcomeConfirmed || ev.StopConfirmedBy != protocol.StopConfirmedByCodexScreen {
+						t.Fatalf("released stop = %q by %q; want confirmed by the Codex screen", ev.StopHoldOutcome, ev.StopConfirmedBy)
+					}
+				}
+				time.Sleep(5 * time.Second)
+				synctest.Wait()
+				if got := s.rec.len(); got != 1 {
+					t.Fatalf("notifications after completion = %d; want 1", got)
+				}
+			})
+		})
+	}
+}
 
 // A Claude turn that ends with a background shell still running sends an honest
 // Stop, but there is nothing to answer yet: the mode line still counts the

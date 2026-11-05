@@ -86,6 +86,8 @@ working_status_line = '(?i)^[^\p{L}\p{N}]*working\b'
 # Codex's request_user_input footer also contains it, but that screen is
 # rejected by the prompt classifier before this veto is consulted, so the
 # overlap is free.
+# Go applies this clause from the latest terminal marker onward, excluding
+# superseded hints or instructions in the transcript above it.
 interrupt_hint = '(?i)\bto (?:interrupt|cancel)\b'
 
 # live_elapsed_status_line is the word-independent twin of working_status_line:
@@ -103,6 +105,8 @@ live_elapsed_status_line = '^[^\p{L}\p{N}]*\p{L}[\p{L}\p{M}]*\s*\(\s*\d+[hms]\b'
 # line under a finished or interrupted turn — the second shape is the one that
 # matters, because there the model's turn really is over while a detached
 # process it started is not.
+# Like interrupt_hint, Go reads this only from the latest terminal marker
+# onward, so a quoted old count above a newer completion cannot keep it busy.
 #
 # THE COUNT IS THE ANCHOR, and it must be non-zero. Codex's own transcript prose
 # says things like "• Stopping all background terminals." (a real line in

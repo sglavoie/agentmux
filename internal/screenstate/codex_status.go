@@ -49,6 +49,22 @@ func (c codexClauses) screenHasComposerLine(screen string) bool {
 	return false
 }
 
+// currentActivityText excludes history superseded by the latest terminal
+// marker. Codex renders its live interrupt hint and background-terminal count
+// below that marker (or on a later working line). Searching older transcript
+// output as well would let a quoted footer keep a completed turn busy forever.
+// With no terminal marker, retain the whole screen so live work still vetoes.
+func (c codexClauses) currentActivityText(screen string) string {
+	lines := strings.Split(screen, "\n")
+	start := 0
+	for i := range lines {
+		if c.terminalMarkerAt(lines, i) {
+			start = i
+		}
+	}
+	return strings.Join(lines[start:], "\n")
+}
+
 // latestStatusLine scans every line and returns the LAST recognized status
 // line's kind and text, mirroring the classifiers' latest-status-line-wins scan
 // below. It exists for the veto and for Observation.StatusLine; the settle

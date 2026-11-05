@@ -143,6 +143,13 @@ the held stop rather than painting it. `amx daemon export-events` records each
 hold as a `TerminalStopHold` event with its `stop_hold_outcome`, and a released
 stop carries `stop_hold_waited_ms` plus the `stop_confirmed_by` evidence.
 
+Running background work keeps ⚡ and extends the held stop's deadline while
+the screen still reports it. For Codex, background counts and interrupt hints
+above the latest completion or interruption marker are historical output;
+only the current status below that marker can keep the turn busy. Once the
+live background footer disappears, two stable completed-screen readings can
+confirm 🛑 without waiting for the timeout.
+
 ## Screen classifier patterns
 
 The idle probe that confirms a held stop reads the pane's screen and decides
