@@ -303,6 +303,8 @@ extension WorkspaceWindowController {
     /// `focus`, keyboard focus moves into its terminal when it has one.
     @discardableResult
     func select(_ key: AttentionCycler.Key?, focus: Bool = false) -> Bool {
+        let interval = WorkspaceResponsiveness.begin("Session switch")
+        defer { WorkspaceResponsiveness.end("Session switch", interval) }
         if let key, otherPlace == .session(key) { return focusOtherPane() }
         guard state.select(key) else { return false }
         reviewSelected = false
@@ -348,6 +350,8 @@ extension WorkspaceWindowController {
     /// ⌘P: lists every session and view to go to by name, or puts the list
     /// away when it is up. It goes only where a click on the sidebar would.
     func toggleSwitcher(actions: Bool = false) {
+        let interval = WorkspaceResponsiveness.begin("Command palette")
+        defer { WorkspaceResponsiveness.end("Command palette", interval) }
         guard isOpen else { return }
         if isSwitching {
             if actions { switcher.enter("> "); return }

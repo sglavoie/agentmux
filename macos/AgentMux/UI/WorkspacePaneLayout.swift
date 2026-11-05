@@ -7,12 +7,25 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
     static let minimumPaneWidth: CGFloat = 470
     final class Host: NSView {
         let body: NSView
-        let heading = NSButton(title: "", target: nil, action: nil)
+        let heading = WorkspacePaneHeadingButton(title: "", target: nil, action: nil)
+        let sessionContext = WorkspaceSessionContextView()
         var onFocus: (() -> Void)?
         private var headerHeight: NSLayoutConstraint!
+        private var splitHeading = false
         func showHeading(_ show: Bool) {
-            heading.isHidden = !show
-            headerHeight.constant = show ? 28 : 0
+            splitHeading = show
+            updateHeaderHeight()
+        }
+
+        func showContext(_ context: WorkspaceSessionContext?, canAnswer: Bool) {
+            sessionContext.show(context, canAnswer: canAnswer)
+            updateHeaderHeight()
+        }
+
+        private func updateHeaderHeight() {
+            let hasContext = sessionContext.context != nil
+            heading.isHidden = !splitHeading && !hasContext
+            headerHeight.constant = hasContext ? 56 : splitHeading ? 28 : 0
         }
 
         init(body: NSView) {
@@ -20,22 +33,28 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
             super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 700))
             heading.bezelStyle = .inline
             heading.alignment = .left
-            heading.cell?.lineBreakMode = .byTruncatingTail
+            heading.cell?.lineBreakMode = .byTruncatingMiddle
             heading.target = self
             heading.action = #selector(focusPane)
             heading.setAccessibilityLabel("Focus pane")
             body.frame = bounds
             body.translatesAutoresizingMaskIntoConstraints = false
             heading.translatesAutoresizingMaskIntoConstraints = false
+            sessionContext.translatesAutoresizingMaskIntoConstraints = false
             addSubview(body)
             addSubview(heading)
-            headerHeight = heading.heightAnchor.constraint(equalToConstant: 28)
+            addSubview(sessionContext)
+            headerHeight = body.topAnchor.constraint(equalTo: topAnchor)
             NSLayoutConstraint.activate([
                 heading.topAnchor.constraint(equalTo: topAnchor),
                 heading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
                 heading.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+                heading.heightAnchor.constraint(equalToConstant: 28),
+                sessionContext.topAnchor.constraint(equalTo: heading.bottomAnchor),
+                sessionContext.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+                sessionContext.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+                sessionContext.heightAnchor.constraint(equalToConstant: 24),
                 headerHeight,
-                body.topAnchor.constraint(equalTo: heading.bottomAnchor),
                 body.leadingAnchor.constraint(equalTo: leadingAnchor),
                 body.trailingAnchor.constraint(equalTo: trailingAnchor),
                 body.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -101,9 +120,35 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
     }
 
     func titles(active title: String, other otherTitle: String) {
-        active.heading.title = "●  \(title)"
+        active.heading.title = headingTitle(title, context: active.sessionContext.context, active: true)
+        active.heading.toolTip = active.heading.title
         active.heading.contentTintColor = .controlAccentColor
-        other.heading.title = "○  \(otherTitle) — click to focus"
+        other.heading.title = headingTitle(otherTitle, context: other.sessionContext.context, active: false)
+        other.heading.toolTip = other.heading.title
         other.heading.contentTintColor = .secondaryLabelColor
+    }
+
+    private func headingTitle(_ fallback: String, context: WorkspaceSessionContext?, active: Bool) -> String {
+        let title = context.map { $0.title + ($0.location.isEmpty ? "" : " · " + $0.location) } ?? fallback
+        return (active ? "●  " : "○  ") + title
+    }
+}
+
+/// The pane title remains readable when the workspace is not the key window.
+/// The whole title still acts as the native, keyboard-accessible focus button.
+final class WorkspacePaneHeadingButton: NSButton {
+    override func draw(_ dirtyRect: NSRect) {
+        if isHighlighted {
+            NSColor.controlAccentColor.withAlphaComponent(0.08).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+        }
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingMiddle
+        let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        let text = NSAttributedString(string: title, attributes: [
+            .font: font, .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph,
+        ])
+        text.draw(in: NSRect(x: 4, y: (bounds.height - font.boundingRectForFont.height) / 2,
+                            width: max(0, bounds.width - 8), height: font.boundingRectForFont.height))
     }
 }

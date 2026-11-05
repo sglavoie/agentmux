@@ -89,7 +89,9 @@ final class WorkspaceRecapModel: ObservableObject {
         if cached { args.append("--cached") }
         if force { args.append("--refresh") }
         args += ["--", identity.encoded]
+        let interval = WorkspaceResponsiveness.begin("Recap read")
         runner.run({ command.json(ConversationRecapReport.self, args, timeout: cached ? 30 : 125) }) { [weak self] result in
+            defer { WorkspaceResponsiveness.end("Recap read", interval) }
             guard let self, self.sequence == generation, self.conversation == identity else { return }
             self.loading = false
             switch result {

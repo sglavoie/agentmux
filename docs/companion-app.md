@@ -220,6 +220,27 @@ a distinguishing branch or short runtime identity, also used by the switcher,
 Waiting, the inspector, and session dialogs. Long duplicate names truncate in the
 middle to retain their distinguishing suffix.
 
+Only section headers carry state colors: green for Done, blue for Working, gray
+for Idle, amber for Waiting and Needs attention, and purple for Pinned. The rounded
+header backgrounds adapt to light and dark mode. Project headers and session rows
+stay neutral, with profile colors confined to a narrow marker.
+Session flashes use their displayed section's same background color and opacity,
+including when revealing a session with ⌘J. A session in Pinned or Needs attention
+uses that section's color, even if its underlying state differs.
+
+Each session pane has a compact context strip with its name, project/branch, and
+current status. Its height stays fixed as status changes. **View question** opens
+the existing answer panel for that session, including from the other split pane,
+without changing the active terminal. Disconnected status is labeled **Last known**
+and question actions are unavailable until the feed returns.
+
+**Last outcome** opens a saved conversation recap in a popover. Opening or refreshing
+it only reads saved data; it never generates a recap. Its saved time, excerpt
+coverage, stale results, and failures remain visible. Supporting-message links open
+History. Switching to another session closes the popover so an old outcome cannot
+be mistaken for the new session's. Generate recaps through the Session inspector
+or the existing conversation readers.
+
 ### Dashboard and utility views
 
 Above the projects the sidebar lists the workspace's own views. They are

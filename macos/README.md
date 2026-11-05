@@ -425,8 +425,9 @@ ASL answer panel work the same either way.
   the waiting status, the session returns to its saved position. Its terminal,
   selection, pin, and dragged order are preserved. The temporary section
   always stays expanded, names each session's project, and cannot be dragged.
-  A session's line flashes green when its state changes, using the same pulse
-  as ⌘J's accent-colored reveal, with each pulse lasting twice as long:
+  A session's line flashes with its displayed section header's background color
+  when its state changes. ⌘J uses the same section color to reveal a session;
+  state-change pulses last twice as long as reveal pulses:
   1.6 seconds total, or one 0.8-second pulse with Reduce Motion.
   These flashes leave focus, scrolling, and collapsed groups alone; first
   sightings and updates to names or ages do not flash.
@@ -1239,6 +1240,27 @@ palette. Fixtures use injected services and never read real conversations or
 operate a real run. PNGs are attached to the XCTest result and written to
 `/tmp/agentmux-polish-previews`; older macOS versions skip only these capture
 tests. The XCTest result contains the reviewed reference images.
+
+`WorkspaceSessionContextTests` checks the session header's fixed height, split-pane
+identity, stale question actions, and offline wording. It writes light/dark/narrow
+workspace previews and `responsiveness.json` to `/tmp/agentmux-context-previews`.
+The timing fixture warms 30 synthetic terminal views and samples 100 session
+switches and palette openings, including layout. `WorkspaceStreamTests` also
+writes `ghostty-responsiveness.json` for 100 switches among four real Ghostty
+surfaces running isolated shell stand-ins. Both report median, p95, and maximum;
+these are navigation measurements, not agent startup or GPU presentation times.
+Run `just mac-test Release` for timings from optimized code, and avoid concurrent
+builds when collecting comparison measurements. Timings are observations rather
+than machine-dependent pass/fail thresholds.
+
+For a live trace, select Agent Mux in Instruments and record Points of Interest
+from `io.github.sglavoie.agentmux`, category `Responsiveness`. `Session switch` and
+`Command palette` measure controller work through focus assignment, excluding
+deferred layout and GPU presentation. `History search` covers background work and
+result application; its 120 ms typing debounce is additional. `Recap read` covers
+background work and result application, including generation for surfaces that
+request it. The context strip requests only saved recaps. Interval metadata never
+includes queries, paths, session IDs, or conversation text.
 
 ### Native agent handoff
 

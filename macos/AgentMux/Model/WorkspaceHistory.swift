@@ -171,6 +171,12 @@ final class WorkspaceHistoryModel: ObservableObject {
     private var scrollSequence = 0
     private var loadedQuery = ""
     private var pendingSearch: DispatchWorkItem?
+    /// Coalesce ordinary typing without adding a quarter-second pause to
+    /// every search. Cancellation and generation checks still reject old reads.
+    static let searchDelay: TimeInterval = 0.12
+    var scheduleSearchWork: (TimeInterval, DispatchWorkItem) -> Void = { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
     private let reviewState: WorkspaceReviewState
     private(set) var visibleMessage: Int?
 
@@ -269,9 +275,13 @@ final class WorkspaceHistoryModel: ObservableObject {
         transcriptGeneration += 1
         reading = false
         loading = true
-        let pending = DispatchWorkItem { [weak self] in self?.search() }
+        let generation = searchGeneration
+        let pending = DispatchWorkItem { [weak self] in
+            guard let self, self.searchGeneration == generation else { return }
+            self.search()
+        }
         pendingSearch = pending
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: pending)
+        scheduleSearchWork(Self.searchDelay, pending)
     }
 
     static func arguments(query: String, project: String?, includeAutomated: Bool, conversation: String? = nil,
@@ -337,7 +347,9 @@ final class WorkspaceHistoryModel: ObservableObject {
                                   includeAutomated: includeAutomated, conversation: wanted?.encoded, offset: offset, limit: limit)
         let cancellation = ProcessCancellation()
         searchCancellation = cancellation
+        let interval = WorkspaceResponsiveness.begin("History search")
         runner.run({ command.json(WorkspaceHistorySearch.self, args, timeout: 30, cancellation: cancellation).result }) { [weak self] result in
+            defer { WorkspaceResponsiveness.end("History search", interval) }
             guard let self, generation == self.searchGeneration else { return }
             self.loading = false; self.loadingMore = false
             switch result {

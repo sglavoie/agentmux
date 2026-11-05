@@ -290,6 +290,7 @@ extension WorkspaceWindowController {
             window.contentView?.layoutSubtreeIfNeeded()
             paneLayout.restoreFraction(fraction)
         }
+        updateSessionContexts()
         paneLayout.titles(active: title(for: place), other: title(for: otherPlace))
         installPaneClickMonitor()
         window.title = windowTitle
@@ -312,6 +313,35 @@ extension WorkspaceWindowController {
     }
 
     static let resumeTitle = "Resume Conversation…"
+
+    private func updateSessionContexts() {
+        let answers = state.current ? WorkspaceInspector.waiting(delegate?.store.sessions ?? [],
+            asl: delegate?.store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order) : []
+        for (host, target, content) in [(paneLayout.active, place, content), (paneLayout.other, otherPlace, otherContent)] {
+            guard case let .session(key)? = target else {
+                host.showContext(nil, canAnswer: false)
+                continue
+            }
+            let row = state.row(key)
+            let session = delegate?.store.sessions.first { AttentionCycler.key($0) == key }
+            let context = WorkspaceSessionContext(key: key, row: row, session: session, content: content, current: state.current)
+            host.sessionContext.recap.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
+            host.sessionContext.recap.onEvidence = { [weak self] identity, message in
+                self?.delegate?.workspaceRecapEvidence(identity, message: message)
+            }
+            host.sessionContext.onQuestion = { [weak self] in
+                guard let self, let answer = self.contextAnswer(for: key) else { return }
+                self.delegate?.workspaceAnswer(answer)
+            }
+            host.showContext(context, canAnswer: answers.first { $0.key == key }?.answer != nil)
+        }
+    }
+
+    private func contextAnswer(for key: AttentionCycler.Key) -> WorkspaceWaitingAnswer? {
+        guard state.current, state.row(key) != nil, let store = delegate?.store else { return nil }
+        return WorkspaceInspector.waiting(store.sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order)
+            .first { $0.key == key }?.answer
+    }
 
     static let startDaemonTitle = WorkspaceSidebar.DaemonAction.start.title
 

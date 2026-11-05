@@ -502,6 +502,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard isOpen else { return }
         inspector.recap.close()
         inspector.threads.close()
+        paneLayout.active.showContext(nil, canAnswer: false)
+        paneLayout.other.showContext(nil, canAnswer: false)
         reportLayout()
         pendingLayout = nil
         layoutGeneration += 1

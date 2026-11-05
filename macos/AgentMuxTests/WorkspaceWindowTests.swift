@@ -1208,8 +1208,11 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(app.sidebarCollapses, [true, false, true, false])
     }
 
-    func testStateChangesFlashGreenForChangedSessionsAfterReordering() throws {
+    func testStateChangesFlashWithTheirSectionColorAfterReordering() throws {
         var live = sessions
+        var pinned = F.tmux(6, project: "api", icon: "stop")
+        pinned.pinned = true
+        live += [pinned, F.tmux(7, project: "web", icon: "key", attention: true)]
         app.store.apply(snapshot: F.snapshot(live))
         let keys = workspace.state.rows.map(\.key)
         func rowView(_ key: AttentionCycler.Key) throws -> WorkspaceRowView {
@@ -1232,10 +1235,12 @@ final class WorkspaceWindowTests: XCTestCase {
         // Both sessions move from Done to Working.
         live[0].iconState = "bolt"
         live[2].iconState = "bolt"
+        live[3].iconState = "bolt" // Still in Pinned: purple, not Working blue.
+        live[4].iconState = "question" // Still in Needs attention: amber.
         app.store.apply(snapshot: F.snapshot(live))
         for row in workspace.state.rows {
             let view = try rowView(row.key)
-            let changed = row.key == .embedded(F.runtimeID(1)) || row.key == .embedded(F.runtimeID(4))
+            let changed = [1, 4, 6, 7].contains { row.key == .embedded(F.runtimeID($0)) }
             XCTAssertEqual(view.isFlashing, changed)
             if changed {
                 let layer = try XCTUnwrap(view.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
@@ -1243,8 +1248,10 @@ final class WorkspaceWindowTests: XCTestCase {
                 let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
                 XCTAssertEqual(animation.duration, 0.8 * Double(pulses), accuracy: 0.001)
                 XCTAssertEqual(animation.values?.count, 1 + 2 * pulses)
+                let band: WorkspaceSidebarBand = row.key == .embedded(F.runtimeID(6)) ? .pinned
+                    : row.key == .embedded(F.runtimeID(7)) ? .attention : .running
                 view.effectiveAppearance.performAsCurrentDrawingAppearance {
-                    XCTAssertEqual(layer.backgroundColor, NSColor.systemGreen.withAlphaComponent(0.35).cgColor)
+                    XCTAssertEqual(layer.backgroundColor, band.color.cgColor)
                 }
             }
         }
@@ -1293,7 +1300,7 @@ final class WorkspaceWindowTests: XCTestCase {
         let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
         XCTAssertEqual(animation.duration, 0.4 * Double(pulses), accuracy: 0.001)
         rowView.effectiveAppearance.performAsCurrentDrawingAppearance {
-            XCTAssertEqual(flashLayer.backgroundColor, NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor)
+            XCTAssertEqual(flashLayer.backgroundColor, WorkspaceSidebarBand.stopped.color.cgColor)
         }
         XCTAssertTrue(workspace.window.firstResponder === terminal, "revealing does not take the keyboard")
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))
@@ -1482,7 +1489,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertNil(workspace.feedLabel.toolTip)
     }
 
-    func testNeedsAttentionAndPinnedSectionsAreTintedThroughTheirLastLine() throws {
+    func testNeedsAttentionAndPinnedTintOnlyTheirHeaders() throws {
         typealias Item = WorkspaceWindowController.Item
         let view = WorkspaceUtilityView(kind: .shell, target: "/repo", title: "Shell")
         let items: [Item] = [
@@ -1493,12 +1500,12 @@ final class WorkspaceWindowTests: XCTestCase {
             .group(WorkspaceGroup(project: WorkspaceSidebar.attentionSection, rows: [], needsAttention: true)),
         ]
         let bands = Item.bands(in: items)
-        XCTAssertEqual(bands.map(\.lines), [2..<5, 5..<7, 9..<10])
+        XCTAssertEqual(bands.map(\.lines), [2..<3, 5..<6, 9..<10])
         XCTAssertEqual(bands.map(\.band), [.pinned, .attention, .attention])
         XCTAssertTrue(Item.bands(in: [.section("Views"), .group(WorkspaceGroup(project: "api", rows: []))]).isEmpty)
     }
 
-    func testSessionsUnderAProjectAreTintedByStateButNotInsideATintedSection() throws {
+    func testStateHeaderColorsLeaveProjectsSessionsAndTerminalsNeutral() throws {
         typealias Item = WorkspaceWindowController.Item
         func row(_ id: String, _ state: String) -> WorkspaceRow {
             var row = WorkspaceRow(key: .embedded(id), target: .embedded(runtimeSessionID: id), project: "api", label: "work",
@@ -1513,10 +1520,14 @@ final class WorkspaceWindowTests: XCTestCase {
             .row(row("rs-1", "stop")), .view(beside),
             .row(row("rs-2", "bolt")), .row(row("rs-3", "subagent")), .row(row("rs-4", "compact")),
             .row(row("rs-5", "")), .row(row("rs-6", "key")), .row(row("rs-7", "question")),
+            .group(WorkspaceGroup(project: "Waiting", rows: [], stateSection: .waiting, isSectionHeading: true)),
+            .group(WorkspaceGroup(project: "Done", rows: [], stateSection: .done, isSectionHeading: true)),
+            .group(WorkspaceGroup(project: "Working", rows: [], stateSection: .working, isSectionHeading: true)),
+            .group(WorkspaceGroup(project: "Idle", rows: [], collapsed: true, stateSection: .idle, isSectionHeading: true)),
         ]
         let bands = Item.bands(in: items)
-        XCTAssertEqual(bands.map(\.lines), [0..<2, 3..<5, 5..<6, 6..<7, 7..<8, 8..<9, 9..<10, 10..<11])
-        XCTAssertEqual(bands.map(\.band), [.pinned, .stopped, .running, .running, .running, .idle, .attention, .attention])
+        XCTAssertEqual(bands.map(\.lines), [0..<1, 11..<12, 12..<13, 13..<14, 14..<15])
+        XCTAssertEqual(bands.map(\.band), [.pinned, .attention, .stopped, .running, .idle])
         XCTAssertEqual(WorkspaceSidebarBand(state: "warning"), .attention)
         XCTAssertEqual(WorkspaceSidebarBand(state: "error"), .attention)
     }
@@ -2479,6 +2490,36 @@ final class WorkspaceStreamTests: XCTestCase {
     }
 
     private func alive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 }
+
+    func testWarmSessionSwitchResponsivenessWithGhostty() throws {
+        app.factory = { [unowned self] id in self.terminal(id) }
+        workspace.openForTesting()
+        app.store.apply(snapshot: F.snapshot((1...4).map { F.tmux($0, project: "fixture", icon: "bolt") }))
+        var processes: [pid_t] = []
+        for n in 1...4 {
+            let id = F.runtimeID(n)
+            workspace.select(.embedded(id), focus: true)
+            processes.append(try XCTUnwrap(pid(id)))
+        }
+        var samples: [Double] = []
+        for n in 0..<100 {
+            let id = F.runtimeID(n % 4 + 1)
+            let start = ProcessInfo.processInfo.systemUptime
+            workspace.select(.embedded(id), focus: true)
+            workspace.window.contentView?.layoutSubtreeIfNeeded()
+            samples.append((ProcessInfo.processInfo.systemUptime - start) * 1000)
+            XCTAssertTrue(workspace.window.firstResponder === workspace.terminalView(for: id))
+        }
+        XCTAssertEqual(app.made.count, 4, "switching reuses each live terminal")
+        XCTAssertTrue(processes.allSatisfy(alive))
+        samples.sort()
+        let report = ["median_ms": samples[50], "p95_ms": samples[94], "max_ms": samples[99]]
+        let directory = URL(fileURLWithPath: "/tmp/agentmux-context-previews", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
+            .write(to: directory.appendingPathComponent("ghostty-responsiveness.json"))
+        print("Warm Ghostty switch (4 terminals, 100 samples, controller + layout, excluding GPU presentation): \(report)")
+    }
 
     func testSidebarAndTerminalsStayConsistentAcrossAReconnect() throws {
         let sessions = [

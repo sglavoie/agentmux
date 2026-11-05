@@ -9,6 +9,30 @@ private final class HistoryWorkRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceHistoryTests: XCTestCase {
+    func testTypingCoalescesAndClosingInvalidatesScheduledSearch() {
+        let runner = HistoryWorkRunner()
+        var scheduled: [(TimeInterval, DispatchWorkItem)] = []
+        var queries: [String] = []
+        let amx = command { args in
+            queries.append(args.last ?? "")
+            return #"{"schema_version":1,"data":{"results":[]}}"#
+        }
+        let model = WorkspaceHistoryModel(command: { amx }, runner: runner)
+        model.scheduleSearchWork = { scheduled.append(($0, $1)) }
+        model.query = "o"; model.scheduleSearch()
+        model.query = "oa"; model.scheduleSearch()
+        model.query = "oauth"; model.scheduleSearch()
+        XCTAssertEqual(scheduled.map(\.0), [0.12, 0.12, 0.12])
+        for (_, work) in scheduled { work.perform() }
+        XCTAssertEqual(runner.pending.count, 1)
+        runner.release()
+        XCTAssertEqual(queries, ["oauth"])
+        model.query = "later"; model.scheduleSearch()
+        model.close()
+        scheduled.last?.1.perform()
+        XCTAssertTrue(runner.pending.isEmpty)
+    }
+
     private func command(_ response: @escaping ([String]) -> String) -> AMXCommand {
         var command = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/h", path: "/bin"))
         command.runner = { _, args, _, _ in

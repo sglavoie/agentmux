@@ -138,8 +138,15 @@ extension WorkspaceWindowController {
         let states = Dictionary(previous.map { ($0.key, $0.iconState) }, uniquingKeysWith: { first, _ in first })
         for (index, item) in items.enumerated() {
             guard case let .row(row) = item, let before = states[row.key], before != row.iconState else { continue }
-            (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: .systemGreen, pulseDuration: 0.8)
+            (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index), pulseDuration: 0.8)
         }
+    }
+
+    /// Follow the displayed section, including Pinned and Needs attention.
+    /// While reordering is held, that section may differ from the new state.
+    private func sidebarFlashColor(at index: Int) -> NSColor {
+        Item.bands(in: items).last { $0.lines.lowerBound <= index }?.band.color
+            ?? NSColor.controlAccentColor.withAlphaComponent(0.35)
     }
 
     /// What a line draws that its item does not carry: a session's ⌘ digit,
@@ -238,7 +245,7 @@ extension WorkspaceWindowController {
         guard let index = shownLine else { return false }
         syncSidebarSelection()
         sidebar.scrollRowToVisible(index)
-        (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash()
+        (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index))
         if !isInspectorCollapsed, let key = shownSessionKey { inspector.revealWaiting(key) }
         return true
     }
