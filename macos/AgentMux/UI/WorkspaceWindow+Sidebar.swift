@@ -400,10 +400,10 @@ extension WorkspaceWindowController {
     /// Session and child-terminal rows carry a small profile-color marker.
     /// Every selection uses the same system accent.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        if items[row] == .navigation { return WorkspaceNavigationRowView() }
+        if items[row] == .navigation { return WorkspaceUnhighlightedRowView() }
         if compactSidebar, case let .view(utility) = items[row],
            utility.kind == .terminal, utility.besideRuntimeSessionID != nil {
-            return NSTableRowView()
+            return WorkspaceUnhighlightedRowView()
         }
         let view: WorkspaceRowView
         if case let .view(utility) = items[row], utility.kind == .terminal {

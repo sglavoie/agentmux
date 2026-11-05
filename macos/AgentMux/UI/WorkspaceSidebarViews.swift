@@ -111,9 +111,10 @@ final class WorkspaceSidebarView: NSTableView {
     }
 }
 
-/// Each control draws its own selection; the shared row has no full-width pill.
+/// Navigation buttons and compact terminal tabs draw their own selection.
+/// Their backing rows must not draw an additional full-width highlight.
 @MainActor
-final class WorkspaceNavigationRowView: NSTableRowView {
+final class WorkspaceUnhighlightedRowView: NSTableRowView {
     override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
         get { .none }
         set { super.selectionHighlightStyle = .none }
@@ -1095,8 +1096,8 @@ final class WorkspaceCompactTerminalButton: NSView {
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
-        layer?.borderWidth = isCurrent ? 2 : 0.5
-        layer?.borderColor = (isCurrent ? NSColor.controlAccentColor : .separatorColor).cgColor
+        layer?.borderWidth = 1.5
+        layer?.borderColor = (isCurrent ? NSColor.controlAccentColor : .secondaryLabelColor).cgColor
         layer?.backgroundColor = (isCurrent ? NSColor.controlAccentColor.withAlphaComponent(0.15) : NSColor.clear).cgColor
     }
 
