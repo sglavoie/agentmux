@@ -4,6 +4,8 @@ import AppKit
 /// current label and decoration, so a changed state can update a row in place.
 enum WorkspaceSidebarItem: Equatable {
     case section(String)
+    /// Dashboard and Overview share a line when both labels fit.
+    case navigation
     /// The line above the sessions that counts each section's.
     case overview([WorkspaceSectionCount])
     case view(WorkspaceUtilityView)
@@ -13,7 +15,7 @@ enum WorkspaceSidebarItem: Equatable {
     func isSameLine(as other: Self) -> Bool {
         switch (self, other) {
         case let (.section(a), .section(b)): return a == b
-        case (.overview, .overview): return true
+        case (.navigation, .navigation), (.overview, .overview): return true
         case let (.view(a), .view(b)): return a.id == b.id
         case let (.group(a), .group(b)):
             return a.project == b.project && a.pinned == b.pinned && a.needsAttention == b.needsAttention
@@ -44,7 +46,7 @@ enum WorkspaceSidebarItem: Equatable {
                 return !old.contains { if case let .row(previous) = $0 { return previous.key == row.key }; return false }
             case let .view(view):
                 return !old.contains { if case let .view(previous) = $0 { return previous.id == view.id }; return false }
-            case .section, .overview, .group: return false
+            case .navigation, .section, .overview, .group: return false
             }
         }
     }
@@ -66,7 +68,7 @@ enum WorkspaceSidebarItem: Equatable {
     static func dropSlots(forItemAt index: Int, in items: [Self]) -> [Int] {
         guard items.indices.contains(index) else { return [] }
         switch items[index] {
-        case .section, .overview, .group:
+        case .navigation, .section, .overview, .group:
             return []
         case let .row(row):
             // Attention is a temporary position, not a saved drag order.
@@ -75,7 +77,7 @@ enum WorkspaceSidebarItem: Equatable {
             else { return [] }
             let end = items[(group + 1)...].firstIndex { item in
                 switch item {
-                case .section, .overview, .group: return true
+                case .navigation, .section, .overview, .group: return true
                 case .view, .row: return false
                 }
             } ?? items.count
@@ -110,7 +112,7 @@ enum WorkspaceSidebarItem: Equatable {
         for (index, item) in items.enumerated() {
             let band: WorkspaceSidebarBand?
             switch item {
-            case .section, .overview:
+            case .navigation, .section, .overview:
                 band = nil
                 inSection = false
             case let .group(group):

@@ -662,7 +662,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onPointerChanged = { [weak self] in self?.reloadSidebar() }
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
-        sidebar.onCollapse = { [weak self] collapsed in self?.setSelectedProjectCollapsed(collapsed) }
+        sidebar.onWidthChanged = { [weak self] in self?.refreshWorkspaceNavigationLayout() }
+        sidebar.onCollapse = { [weak self] collapsed in
+            guard let self else { return }
+            if self.sidebar.selectedRow >= 0, self.items[self.sidebar.selectedRow] == .navigation {
+                self.selectWorkspaceNavigation(!collapsed)
+            } else { self.setSelectedProjectCollapsed(collapsed) }
+        }
         sidebar.onStep = { [weak self] offset in self?.stepFromUnlistedPlace(offset) ?? false }
         sidebar.hasMenu = { [weak self] row in !(self?.contextMenuItems(forRow: row).isEmpty ?? true) }
         sidebar.registerForDraggedTypes([Self.dragType])

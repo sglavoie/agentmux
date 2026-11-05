@@ -58,7 +58,10 @@ extension WorkspaceWindowController {
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
         let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
         let counts = scoped.sectionCounts
-        var wanted = [Item.section(Self.viewsSection)] + own.map(Item.view)
+        let paired = pairsWorkspaceNavigation
+        let navigation = paired ? [Item.navigation] : []
+        let separate = own.filter { !paired || ($0.kind != .dashboard && $0.kind != .overview) }
+        var wanted = [Item.section(Self.viewsSection)] + navigation + separate.map(Item.view)
             + (counts.isEmpty ? [] : [Item.overview(counts)])
             + scoped.listedGroups.flatMap { group in
                 // A collapsed project lists its header only, which still
@@ -146,12 +149,15 @@ extension WorkspaceWindowController {
         switch item {
         case let .row(row): label = sessionKey(of: row.key)
         case let .view(view): label = view.aboutRuntimeSessionID.flatMap { sessionNames[$0] }
-        case .section, .overview, .group: label = nil
+        case .navigation, .section, .overview, .group: label = nil
         }
         return LineDecoration(label: label, profileColor: profileColor(of: item))
     }
 
     func syncSidebarSelection() {
+        for (index, item) in items.enumerated() where item == .navigation {
+            (sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceNavigationCellView)?.select(viewSelection)
+        }
         syncCompactTerminalTabs()
         let wanted = shownLine.map { IndexSet(integer: $0) } ?? IndexSet()
         guard sidebar.selectedRowIndexes != wanted else { return }
@@ -202,6 +208,7 @@ extension WorkspaceWindowController {
             switch item {
             case let .view(view): return view.id == viewSelection
             case let .row(row): return viewSelection == nil && row.key == state.selection
+            case .navigation: return viewSelection == WorkspaceUtilityView.dashboard.id || viewSelection == WorkspaceUtilityView.overview.id
             case .section, .overview, .group: return false
             }
         }
@@ -246,17 +253,30 @@ extension WorkspaceWindowController {
 
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }
 
+    var pairsWorkspaceNavigation: Bool {
+        (sidebar.tableColumns.first?.width ?? sidebar.bounds.width) >= WorkspaceNavigationCellView.minimumWidth
+    }
+
+    func refreshWorkspaceNavigationLayout() {
+        guard sidebar.dataSource != nil, pairsWorkspaceNavigation != items.contains(.navigation) else { return }
+        reloadSidebar(force: true, allowReorder: true)
+    }
+
+    func selectWorkspaceNavigation(_ overview: Bool, focus: Bool = false) {
+        showView(overview ? WorkspaceUtilityView.overview.id : WorkspaceUtilityView.dashboard.id, focus: focus)
+    }
+
     func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
         switch items[row] {
         case .section, .group: return true
-        case .overview, .view, .row: return false
+        case .navigation, .overview, .view, .row: return false
         }
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
         switch items[row] {
         case .section, .overview, .group: return false
-        case .view, .row: return true
+        case .navigation, .view, .row: return true
         }
     }
 
@@ -282,7 +302,7 @@ extension WorkspaceWindowController {
         switch item {
         case let .row(row): return row.displayName
         case let .view(view): return view.displayName
-        case .section, .overview, .group: return nil
+        case .navigation, .section, .overview, .group: return nil
         }
     }
 
@@ -294,12 +314,28 @@ extension WorkspaceWindowController {
         case let .view(view) where compactSidebar && view.kind == .terminal && view.besideRuntimeSessionID != nil:
             return 1
         case let .row(row) where !row.name.isEmpty: return 54
-        case .view, .row: return 38
+        case .navigation, .view, .row: return 38
         }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row line: Int) -> NSView? {
         switch items[line] {
+        case .navigation:
+            let cell = tableView.makeView(withIdentifier: WorkspaceNavigationCellView.identifier, owner: nil) as? WorkspaceNavigationCellView
+                ?? WorkspaceNavigationCellView()
+            cell.select(viewSelection)
+            for button in cell.buttons {
+                button.show(program: programTitles[button.view.id], bell: ringingViews.contains(button.view.id),
+                            progress: progresses[button.view.id])
+            }
+            cell.onSelect = { [weak self] id in _ = self?.showView(id) }
+            cell.onMenu = { [weak self] view in
+                guard let self else { return nil }
+                let menu = NSMenu()
+                for item in self.utilityMenuItems(view) { menu.addItem(item) }
+                return menu.items.isEmpty ? nil : menu
+            }
+            return cell
         case let .section(title):
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
                 ?? WorkspaceGroupCellView()
@@ -357,6 +393,7 @@ extension WorkspaceWindowController {
     /// Session and child-terminal rows carry a small profile-color marker.
     /// Every selection uses the same system accent.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        if items[row] == .navigation { return WorkspaceNavigationRowView() }
         if compactSidebar, case let .view(utility) = items[row],
            utility.kind == .terminal, utility.besideRuntimeSessionID != nil {
             return NSTableRowView()
@@ -407,6 +444,8 @@ extension WorkspaceWindowController {
         switch items[index] {
         case let .row(row): select(row.key)
         case let .view(view): showView(view.id, focus: false)
+        case .navigation:
+            selectWorkspaceNavigation(viewSelection == WorkspaceUtilityView.overview.id)
         case .section, .overview, .group: select(nil)
         }
     }
@@ -436,7 +475,7 @@ extension WorkspaceWindowController {
     func moveItem(at index: Int, to proposed: Int) -> Bool {
         guard let slot = dropSlot(forItemAt: index, proposed: proposed) else { return false }
         switch items[index] {
-        case .section, .overview, .group:
+        case .navigation, .section, .overview, .group:
             return false
         case let .row(row):
             guard let group = scopedSidebar.groups.first(where: { $0.rows.contains { $0.key == row.key } }),
@@ -479,7 +518,7 @@ extension WorkspaceWindowController {
             switch item {
             case let .row(row): return dragged == .session(row.key)
             case let .view(view): return dragged == .view(view.id)
-            case .section, .overview, .group: return false
+            case .navigation, .section, .overview, .group: return false
             }
         }
     }
@@ -498,7 +537,7 @@ extension WorkspaceWindowController {
         switch items[index] {
         case let .row(row): dragged = .session(row.key)
         case let .view(view): dragged = .view(view.id)
-        case .section, .overview, .group: break
+        case .navigation, .section, .overview, .group: break
         }
     }
 

@@ -5,6 +5,16 @@ import AppKit
 /// project — and nothing typed here reaches a program.
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
+    var onWidthChanged: (() -> Void)?
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let changed = newSize.width != frame.width
+        super.setFrameSize(newSize)
+        if changed {
+            // Wait until AppKit has also resized the table column.
+            DispatchQueue.main.async { [weak self] in self?.onWidthChanged?() }
+        }
+    }
     private(set) var pointerInside = false
     /// The sections drawn on a background of their own, behind their lines.
     var bands: [(lines: Range<Int>, band: WorkspaceSidebarBand)] = [] {
@@ -103,6 +113,116 @@ final class WorkspaceSidebarView: NSTableView {
             return
         }
         super.keyDown(with: event)
+    }
+}
+
+/// Each control draws its own selection; the shared row has no full-width pill.
+@MainActor
+final class WorkspaceNavigationRowView: NSTableRowView {
+    override var selectionHighlightStyle: NSTableView.SelectionHighlightStyle {
+        get { .none }
+        set { super.selectionHighlightStyle = .none }
+    }
+}
+
+@MainActor
+final class WorkspaceNavigationCellView: NSTableCellView {
+    static let identifier = NSUserInterfaceItemIdentifier("workspace.navigation")
+    static let spacing: CGFloat = 8
+    // Include the source list's cell insets when deciding whether both fit.
+    static var minimumWidth: CGFloat {
+        32 + spacing + 2 * max(WorkspaceNavigationButton.width(for: .dashboard), WorkspaceNavigationButton.width(for: .overview))
+    }
+    let buttons = [WorkspaceNavigationButton(view: .dashboard), WorkspaceNavigationButton(view: .overview)]
+    var onSelect: ((String) -> Void)?
+    var onMenu: ((WorkspaceUtilityView) -> NSMenu?)?
+
+    init() {
+        super.init(frame: .zero)
+        identifier = Self.identifier
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("Workspace navigation")
+        for button in buttons {
+            button.target = self
+            button.action = #selector(clicked(_:))
+            button.onMenu = { [weak self, view = button.view] in self?.onMenu?(view) }
+            addSubview(button)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    func select(_ id: String?) {
+        for button in buttons {
+            button.state = button.view.id == id ? .on : .off
+            button.needsDisplay = true
+        }
+    }
+
+    override func layout() {
+        let width = max(0, (bounds.width - Self.spacing) / 2)
+        for (index, button) in buttons.enumerated() {
+            button.frame = NSRect(x: CGFloat(index) * (width + Self.spacing), y: 0, width: width, height: bounds.height)
+        }
+        super.layout()
+    }
+
+    @objc private func clicked(_ sender: WorkspaceNavigationButton) { onSelect?(sender.view.id) }
+}
+
+@MainActor
+final class WorkspaceNavigationButton: NSButton {
+    static let titleFont = NSFont.systemFont(ofSize: 13, weight: .bold)
+    static let detailFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .bold)
+    let view: WorkspaceUtilityView
+    let content = WorkspaceRowCellView()
+    var onMenu: (() -> NSMenu?)?
+
+    static func width(for view: WorkspaceUtilityView) -> CGFloat {
+        48 + ceil(max((view.displayName as NSString).size(withAttributes: [.font: titleFont]).width,
+                      (view.detail as NSString).size(withAttributes: [.font: detailFont]).width))
+    }
+
+    init(view: WorkspaceUtilityView) {
+        self.view = view
+        super.init(frame: NSRect(x: 0, y: 0, width: Self.width(for: view), height: 38))
+        title = view.displayName
+        isBordered = false
+        setButtonType(.pushOnPushOff)
+        content.frame = bounds.insetBy(dx: 8, dy: 0)
+        addSubview(content)
+        content.setAccessibilityElement(false)
+        show()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    override var isFlipped: Bool { true }
+    override func menu(for event: NSEvent) -> NSMenu? { onMenu?() }
+
+    func show(program: String? = nil, bell: Bool = false, progress: Ghostty.Progress? = nil) {
+        content.show(view, program: program, bell: bell, progress: progress)
+        toolTip = content.toolTip
+        setAccessibilityLabel(content.accessibilityLabel())
+    }
+
+    override func layout() {
+        content.frame = bounds.insetBy(dx: 8, dy: 0)
+        super.layout()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { super.hitTest(point) == nil ? nil : self }
+
+    override func draw(_ dirtyRect: NSRect) {
+        if state == .on || isHighlighted {
+            let pill = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 10, yRadius: 10)
+            NSColor.controlAccentColor.withAlphaComponent(0.12).setFill()
+            pill.fill()
+            if state == .on {
+                NSColor.controlAccentColor.setStroke()
+                pill.lineWidth = 2
+                pill.stroke()
+            }
+        }
     }
 }
 

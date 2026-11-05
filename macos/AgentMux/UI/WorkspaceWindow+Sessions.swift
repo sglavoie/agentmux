@@ -124,36 +124,39 @@ extension WorkspaceWindowController {
         guard index < items.count else { return [] }
         switch items[index] {
         case let .row(row): return state.row(row.key).map(sessionMenuItems) ?? []
-        case let .view(view):
-            // The Dashboard and the Overview have nothing to close until their
-            // program runs.
-            guard !view.isPermanent || viewTerminals[view.id] != nil else { return [] }
-            let close = NSMenuItem(title: Self.closeTitle, action: #selector(closeClickedView(_:)), keyEquivalent: "")
-            close.representedObject = view.id
-            close.target = self
-            var items: [NSMenuItem] = []
-            if view.canName {
-                let name = NSMenuItem(title: Self.nameTerminalTitle, action: #selector(nameClickedTerminal(_:)), keyEquivalent: "")
-                name.representedObject = view.id
-                name.target = self
-                items.append(name)
-            }
-            if compactSidebar, view.kind == .terminal, let beside = view.besideRuntimeSessionID {
-                let terminals = views.terminals(beside: beside)
-                if let position = terminals.firstIndex(where: { $0.id == view.id }), terminals.count > 1 {
-                    for (title, offset) in [("Move Terminal Left", -1), ("Move Terminal Right", 1)] {
-                        let move = NSMenuItem(title: title, action: #selector(moveClickedTerminal(_:)), keyEquivalent: "")
-                        move.representedObject = [view.id, offset] as [Any]
-                        move.target = self
-                        move.isEnabled = terminals.indices.contains(position + offset)
-                        items.append(move)
-                    }
+        case let .view(view): return utilityMenuItems(view)
+        case let .group(group): return groupMenuItems(group)
+        case .navigation, .section, .overview: return []
+        }
+    }
+
+    func utilityMenuItems(_ view: WorkspaceUtilityView) -> [NSMenuItem] {
+        // The Dashboard and the Overview have nothing to close until their
+        // program runs.
+        guard !view.isPermanent || viewTerminals[view.id] != nil else { return [] }
+        let close = NSMenuItem(title: Self.closeTitle, action: #selector(closeClickedView(_:)), keyEquivalent: "")
+        close.representedObject = view.id
+        close.target = self
+        var items: [NSMenuItem] = []
+        if view.canName {
+            let name = NSMenuItem(title: Self.nameTerminalTitle, action: #selector(nameClickedTerminal(_:)), keyEquivalent: "")
+            name.representedObject = view.id
+            name.target = self
+            items.append(name)
+        }
+        if compactSidebar, view.kind == .terminal, let beside = view.besideRuntimeSessionID {
+            let terminals = views.terminals(beside: beside)
+            if let position = terminals.firstIndex(where: { $0.id == view.id }), terminals.count > 1 {
+                for (title, offset) in [("Move Terminal Left", -1), ("Move Terminal Right", 1)] {
+                    let move = NSMenuItem(title: title, action: #selector(moveClickedTerminal(_:)), keyEquivalent: "")
+                    move.representedObject = [view.id, offset] as [Any]
+                    move.target = self
+                    move.isEnabled = terminals.indices.contains(position + offset)
+                    items.append(move)
                 }
             }
-            return items + [close]
-        case let .group(group): return groupMenuItems(group)
-        case .section, .overview: return []
         }
+        return items + [close]
     }
 
     @objc private func nameClickedTerminal(_ sender: Any?) {
@@ -521,7 +524,7 @@ extension WorkspaceWindowController {
         switch neighborStop(offset, skipping: raising || sessionsOnly) {
         case let .row(row)?: go(to: row, raising: raising)
         case let .view(view)?: showView(view.id, focus: true)
-        case .section?, .overview?, .group?, nil: break
+        case .navigation?, .section?, .overview?, .group?, nil: break
         }
     }
 
@@ -549,7 +552,7 @@ extension WorkspaceWindowController {
             switch item {
             case let .row(row): return viewSelection == nil && row.key == state.selection
             case let .view(view): return view.id == viewSelection
-            case .section, .overview, .group: return false
+            case .navigation, .section, .overview, .group: return false
             }
         }) else { return }
         let next = stops[((here + offset) % stops.count + stops.count) % stops.count]
@@ -557,13 +560,13 @@ extension WorkspaceWindowController {
         switch next {
         case let .row(row): key = row.key
         case let .view(view): key = view.besideRuntimeSessionID.map { .embedded($0) }
-        case .section, .overview, .group: return
+        case .navigation, .section, .overview, .group: return
         }
         expandGroups(of: key)
         switch next {
         case let .row(row): go(to: row, raising: false)
         case let .view(view): showView(view.id, focus: true)
-        case .section, .overview, .group: break
+        case .navigation, .section, .overview, .group: break
         }
     }
 
@@ -577,7 +580,7 @@ extension WorkspaceWindowController {
         switch neighborStop(offset, skipping: false) {
         case let .row(row)?: select(row.key)
         case let .view(view)?: showView(view.id, focus: false)
-        case .section?, .overview?, .group?, nil: return false
+        case .navigation?, .section?, .overview?, .group?, nil: return false
         }
         return true
     }
@@ -602,7 +605,7 @@ extension WorkspaceWindowController {
                     if let beside { return row.embeddedRuntimeSessionID == beside }
                     return viewSelection == nil && row.key == state.selection
                 }.map(Item.row)
-            case .section, .overview, .group: return []
+            case .navigation, .section, .overview, .group: return []
             }
         }
         guard !stops.isEmpty else { return nil }
@@ -612,7 +615,7 @@ extension WorkspaceWindowController {
                 if let beside { return row.embeddedRuntimeSessionID == beside }
                 return viewSelection == nil && row.key == state.selection
             case let .view(view): return view.id == viewSelection
-            case .section, .overview, .group: return false
+            case .navigation, .section, .overview, .group: return false
             }
         }
         // Up from a terminal, the nearest session is its own.

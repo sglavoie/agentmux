@@ -42,6 +42,55 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.groupFilter.pills[index].performClick(nil)
     }
 
+    func testWorkspaceNavigationSharesALineAndRestacksWithZoomAndResize() async throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.window.setContentSize(NSSize(width: 1500, height: 900))
+        let split = try XCTUnwrap(workspace.window.contentViewController as? NSSplitViewController)
+
+        func settleLayout() async throws {
+            workspace.window.contentView?.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(50))
+            workspace.window.contentView?.layoutSubtreeIfNeeded()
+        }
+
+        split.splitView.setPosition(600, ofDividerAt: 0)
+        try await settleLayout()
+        let line = try XCTUnwrap(workspace.items.firstIndex(of: .navigation))
+        XCTAssertFalse(workspace.items.contains(.view(.dashboard)))
+        XCTAssertFalse(workspace.items.contains(.view(.overview)))
+        let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: line, makeIfNecessary: true) as? WorkspaceNavigationCellView)
+        cell.layoutSubtreeIfNeeded()
+        XCTAssertEqual(cell.buttons[0].frame.minY, cell.buttons[1].frame.minY)
+        XCTAssertLessThan(cell.buttons[0].frame.maxX, cell.buttons[1].frame.minX)
+        for button in cell.buttons {
+            XCTAssertGreaterThanOrEqual(button.bounds.width, WorkspaceNavigationButton.width(for: button.view))
+        }
+        cell.buttons[1].performClick(nil)
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.overview.id)
+        XCTAssertEqual(workspace.sidebar.selectedRow, line)
+        XCTAssertEqual(cell.buttons.map(\.state), [.off, .on])
+        workspace.sidebar.keyDown(with: TestKey.left.event())
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.dashboard.id)
+        XCTAssertEqual(cell.buttons.map(\.state), [.on, .off])
+        workspace.sidebar.keyDown(with: TestKey.function(NSRightArrowFunctionKey, keyCode: 124).event())
+        workspace.focusSelectedItem()
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.overview.id)
+
+        workspace.setSidebarZoom(percent: 200)
+        try await settleLayout()
+        XCTAssertFalse(workspace.items.contains(.navigation))
+        XCTAssertEqual(workspace.items[workspace.sidebar.selectedRow], .view(.overview))
+        workspace.setSidebarZoom(percent: 100)
+        try await settleLayout()
+        XCTAssertEqual(workspace.items[workspace.sidebar.selectedRow], .navigation)
+
+        split.splitView.setPosition(240, ofDividerAt: 0)
+        try await settleLayout()
+        XCTAssertFalse(workspace.items.contains(.navigation))
+        XCTAssertTrue(workspace.items.contains(.view(.dashboard)))
+        XCTAssertEqual(workspace.items[workspace.sidebar.selectedRow], .view(.overview))
+    }
+
     func testGroupScopeIncludesSessionsLaunchedWithAnotherProfileOrHarness() {
         app.workspaceProjects = [
             ProjectEntry(profile: "personal-codex", title: "Garden", harness: "codex", groups: ["personal", "workflow"]),
@@ -447,7 +496,7 @@ final class WorkspaceWindowTests: XCTestCase {
             case .overview:
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceOverviewCellView)
                 XCTAssertFalse(cell.chips.isEmpty)
-            case .view: break
+            case .navigation, .view: break
             }
         }
     }
@@ -912,7 +961,7 @@ final class WorkspaceWindowTests: XCTestCase {
                 switch item {
                 case let .group(group): return "[\(group.project)]"
                 case let .row(row): return "\(row.project)/\(row.label)"
-                case .section, .overview, .view: return nil
+                case .navigation, .section, .overview, .view: return nil
                 }
             }
         }
@@ -1871,7 +1920,7 @@ final class WorkspaceWindowTests: XCTestCase {
                 switch item {
                 case let .group(group): return group.collapsed ? "[\(group.project)]+" : "[\(group.project)]"
                 case let .row(row): return "\(row.project)/\(row.label)"
-                case .section, .overview, .view: return nil
+                case .navigation, .section, .overview, .view: return nil
                 }
             }
         }
@@ -2345,7 +2394,7 @@ final class WorkspaceWindowTests: XCTestCase {
             switch item {
             case let .row(row): XCTAssertEqual(string, row.displayName)
             case let .view(view): XCTAssertEqual(string, view.title)
-            case .section, .overview, .group: XCTAssertNil(string)
+            case .navigation, .section, .overview, .group: XCTAssertNil(string)
             }
         }
         XCTAssertTrue(strings.contains("Dashboard"))
