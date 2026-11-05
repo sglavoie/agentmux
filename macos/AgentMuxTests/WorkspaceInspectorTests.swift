@@ -128,6 +128,47 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertTrue(app.answers.isEmpty)
     }
 
+    func testRevealingSessionFlashesItsWaitingRowAndKeepsTerminalFocus() throws {
+        loadGroupedSessions()
+        let key = AttentionCycler.Key.embedded(F.runtimeID(4))
+        workspace.activate(try XCTUnwrap(workspace.state.row(key)))
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(4)))
+        workspace.window.makeFirstResponder(terminal)
+
+        // Next Waiting Session and Cmd+J use this same reveal path.
+        XCTAssertTrue(workspace.revealInSidebar())
+        let rows = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
+        XCTAssertEqual(rows.filter(\.isFlashing).map { $0.row.key }, [key])
+        XCTAssertTrue(workspace.window.firstResponder === terminal)
+        let row = try XCTUnwrap(rows.first { $0.row.key == key })
+        let flash = try XCTUnwrap(row.contentView?.subviews.first { $0 is WorkspaceRowFlashView })
+        XCTAssertNil(flash.hitTest(.zero), "the pulse must not intercept the row's buttons")
+        let animation = try XCTUnwrap(flash.layer?.animation(forKey: WorkspaceRowView.flashKey))
+        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
+        XCTAssertEqual(animation.duration, 0.4 * Double(pulses), accuracy: 0.001)
+    }
+
+    func testRevealingSessionRespectsHiddenInspectorTabAndWaitingFilter() throws {
+        loadGroupedSessions()
+        let key = AttentionCycler.Key.embedded(F.runtimeID(4))
+        workspace.activate(try XCTUnwrap(workspace.state.row(key)))
+        workspace.setInspectorCollapsed(true)
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertTrue(workspace.isInspectorCollapsed)
+        XCTAssertFalse(workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.contains(where: \.isFlashing))
+
+        workspace.setInspectorCollapsed(false)
+        workspace.setInspectorTab(.session)
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertEqual(workspace.inspector.model.tab, .session)
+
+        workspace.setInspectorTab(.waiting)
+        workspace.inspector.setWaitingFilter(.completed, oldestFirst: true)
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertEqual(workspace.inspector.visibleWaiting.map(\.key), [.embedded(F.runtimeID(2))])
+        XCTAssertFalse(workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.contains(where: \.isFlashing))
+    }
+
     func testRecapTracksOnlyTheVisibleSessionAndWaitsForItsWorkingTurn() {
         var session = F.tmux(1, project: "api", icon: "bolt", conversation: "one")
         app.store.apply(snapshot: F.snapshot([session]))

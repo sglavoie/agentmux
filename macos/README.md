@@ -613,6 +613,9 @@ ASL answer panel work the same either way.
   `amx send --look` before it enables a key, and `amx send` refuses a session
   with a supervisor question open. The button refuses first responder, so
   the terminal keeps the keyboard.
+  Revealing a session with ⌘J or Next Waiting Session (⌘⇧A) also scrolls to
+  and flashes its Waiting row when the inspector is open and the row is
+  listed under its current tab and filters.
 - **Session names.** ⌘R and the sidebar's right-click menu
   (`menuNeedsUpdate`, `contextMenuItems(forRow:)`) ask for a name in a sheet
   and run `amx name-session --runtime-session <id> --json -- <name>`, which writes

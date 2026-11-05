@@ -190,7 +190,7 @@ class WorkspaceRowView: NSTableRowView {
     }
 
     /// The accent drawn over the line while it flashes, under its border.
-    private let flashView: NSView = {
+    private let flashView: WorkspaceRowFlashView = {
         let view = WorkspaceRowFlashView()
         view.wantsLayer = true
         view.layer?.opacity = 0
@@ -205,14 +205,7 @@ class WorkspaceRowView: NSTableRowView {
     func flash(color: NSColor = .controlAccentColor, pulseDuration: TimeInterval = 0.4) {
         if flashView.superview !== self { addSubview(flashView, positioned: .below, relativeTo: selectionBorder) }
         flashView.frame = pillRect(verticalInset: 1)
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            flashView.layer?.backgroundColor = color.withAlphaComponent(0.35).cgColor
-        }
-        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
-        let animation = CAKeyframeAnimation(keyPath: "opacity")
-        animation.values = [0] + Array(repeating: [1, 0], count: pulses).flatMap { $0 }
-        animation.duration = pulseDuration * Double(pulses)
-        flashView.layer?.add(animation, forKey: Self.flashKey)
+        flashView.flash(color: color, pulseDuration: pulseDuration)
     }
 
     /// Whether the line is flashing now.
@@ -236,8 +229,21 @@ class WorkspaceRowView: NSTableRowView {
 /// The flash remains installed after its layer fades; it must never cover
 /// the row's terminal tabs or close buttons for mouse hit testing.
 @MainActor
-private final class WorkspaceRowFlashView: NSView {
+final class WorkspaceRowFlashView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    func flash(color: NSColor = .controlAccentColor, pulseDuration: TimeInterval = 0.4) {
+        wantsLayer = true
+        layer?.opacity = 0
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = color.withAlphaComponent(0.35).cgColor
+        }
+        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
+        let animation = CAKeyframeAnimation(keyPath: "opacity")
+        animation.values = [0] + Array(repeating: [1, 0], count: pulses).flatMap { $0 }
+        animation.duration = pulseDuration * Double(pulses)
+        layer?.add(animation, forKey: WorkspaceRowView.flashKey)
+    }
 }
 
 /// Session state sits to the left of the selected row's outline.

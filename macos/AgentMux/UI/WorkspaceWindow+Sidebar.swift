@@ -232,6 +232,7 @@ extension WorkspaceWindowController {
         syncSidebarSelection()
         sidebar.scrollRowToVisible(index)
         (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash()
+        if !isInspectorCollapsed, let key = shownSessionKey { inspector.revealWaiting(key) }
         return true
     }
 

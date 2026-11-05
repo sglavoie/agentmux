@@ -475,6 +475,15 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         onWaiting?(rows[next].key)
     }
 
+    /// Finds a waiting row without changing the tab, filters, or keyboard focus.
+    func revealWaiting(_ key: AttentionCycler.Key) {
+        guard model.tab == .waiting,
+              let row = lines.compactMap({ $0 as? WorkspaceWaitingRowView }).first(where: { $0.row.key == key }) else { return }
+        layoutSubtreeIfNeeded()
+        stack.scrollToVisible(row.frame)
+        row.flash()
+    }
+
     /// Explicit keyboard entry; ordinary inspector clicks still preserve terminal focus.
     func focusReader() {
         guard model.tab == .waiting else { return }
@@ -706,6 +715,21 @@ final class WorkspaceInspectorStack: NSStackView {
 @MainActor
 final class WorkspaceWaitingRowView: NSBox {
     static let answerTitle = "Answer…"
+
+    private let flashView = WorkspaceRowFlashView()
+
+    func flash() {
+        guard let contentView else { return }
+        if flashView.superview !== contentView {
+            flashView.frame = contentView.bounds
+            flashView.autoresizingMask = [.width, .height]
+            contentView.addSubview(flashView, positioned: .above, relativeTo: nil)
+        }
+        flashView.flash()
+        flashView.layer?.cornerRadius = cornerRadius
+    }
+
+    var isFlashing: Bool { flashView.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }
 
     private(set) var row: WorkspaceWaitingRow
     var onPress: (() -> Void)?
