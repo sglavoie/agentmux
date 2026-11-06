@@ -36,9 +36,8 @@ final class WorkspaceSidebarView: NSTableView {
         enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
     }
 
-    /// How wide a band's strip is; a line with a profile color fills its
-    /// stretch of it with that color.
-    static let stripWidth: CGFloat = 3
+    /// Width of the profile-color strip along the leading edge of a row.
+    static let stripWidth: CGFloat = 6
 
     override func drawBackground(inClipRect clipRect: NSRect) {
         super.drawBackground(inClipRect: clipRect)
