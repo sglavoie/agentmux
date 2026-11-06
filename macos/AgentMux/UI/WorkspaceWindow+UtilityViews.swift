@@ -20,11 +20,15 @@ extension WorkspaceWindowController {
               let row = state.row(.embedded(pending.runtimeSessionID)) else { return }
         newSessionBelow = nil
         guard let parent = state.row(pending.parent), parent.project == row.project else { return }
-        var keys = WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order, includePinned: sidebarGrouping == .projectThenState).map(\.key).filter { $0 != row.key }
+        let manualRows = sidebarGrouping == .compact
+            ? WorkspaceSidebar.groups(state.rows, order: order, grouping: .compact).flatMap(\.rows)
+            : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order, includePinned: sidebarGrouping != .stateThenProject)
+        var keys = manualRows.map(\.key).filter { $0 != row.key }
         guard let index = keys.firstIndex(of: parent.key) else { return }
         keys.insert(row.key, at: index + 1)
-        order.set(keys, for: row.project)
-        state.arrange(order, grouping: sidebarGrouping)
+        if sidebarGrouping == .compact { order.setFlat(keys) }
+        else { order.set(keys, for: row.project) }
+        state.arrange(order, grouping: sidebarGrouping, sorting: sidebarSort)
         delegate?.workspaceOrderChanged(order)
     }
 

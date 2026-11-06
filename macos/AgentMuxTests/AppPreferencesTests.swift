@@ -53,6 +53,18 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertNil(preferences.defaultFontSize)
     }
 
+    func testSidebarSortingPersistsSeparatelyFromGrouping() {
+        let defaults = freshDefaults()
+        var preferences = AppPreferences()
+        preferences.sidebarGrouping = .projectThenBranch
+        preferences.sidebarSort = .recentlyVisited
+        preferences.save(to: defaults)
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarGrouping, .projectThenBranch)
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarSort, .recentlyVisited)
+        defaults.set("unknown", forKey: AppPreferences.Key.sidebarSort)
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarSort, .manual)
+    }
+
     func testWorkspacePreferencesRoundTripAndRejectUnknownValues() {
         let defaults = freshDefaults()
         var preferences = AppPreferences()
@@ -83,7 +95,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
+            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
         ])
     }
 

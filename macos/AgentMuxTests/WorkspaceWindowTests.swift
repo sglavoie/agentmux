@@ -1,5 +1,6 @@
 import AppKit
 import GhosttyKit
+import ScreenCaptureKit
 import XCTest
 @testable import AgentMux
 
@@ -62,6 +63,192 @@ final class WorkspaceWindowTests: XCTestCase {
         let running = try index(of: .embedded(F.runtimeID(3)))
         XCTAssertFalse(workspace.moveItem(at: moved, to: running), "dragging cannot move a session into a different state")
         XCTAssertEqual(workspace.state.groups.map(\.title), ["api", "Waiting", "Working"])
+    }
+
+    func testProjectsDragAcrossStatesAndKeepSelectedTerminalOnStateChanges() throws {
+        workspace.setSidebarGrouping(.project)
+        var live = sessions
+        live[1].pinned = true
+        live[0].iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot(live))
+        let selected = try row("api", "work")
+        workspace.activate(selected)
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        XCTAssertTrue(workspace.moveItem(at: try index(of: selected.key), to: try index(of: .embedded(F.runtimeID(2)))))
+        XCTAssertEqual(workspace.order.projects["api"], [1, 2].map(F.runtimeID))
+        live[0].iconState = "key"
+        live[0].attention = true
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertEqual(workspace.state.rows.map(\.key), [1, 2, 4].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(workspace.state.selection, selected.key)
+        XCTAssertTrue(workspace.terminalView(for: F.runtimeID(1)) === terminal)
+        let group = try XCTUnwrap(workspace.state.groups.first)
+        let cell = WorkspaceGroupCellView()
+        cell.show(group)
+        XCTAssertEqual(cell.countLabel.stringValue, "2")
+        XCTAssertTrue(cell.accessibilityLabel()?.contains("2 waiting") == true)
+    }
+
+    func testBranchesRevealExpandsParentAndBranchAndDragsOnlySiblings() throws {
+        workspace.setSidebarGrouping(.projectThenBranch)
+        var live = sessions
+        live[0].branch = "feature"
+        live[1].branch = "main"
+        live.append(F.tmux(5, project: "api", profile: "other"))
+        live[3].branch = "feature"
+        app.store.apply(snapshot: F.snapshot(live))
+        let selected = try row("api", "work")
+        workspace.activate(selected)
+        let feature = try XCTUnwrap(workspace.state.groups.first { $0.branch == "feature" })
+        workspace.setCollapsed(feature, true)
+        workspace.setCollapsed(project: "api", pinned: false, true)
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertEqual(workspace.sidebar.selectedRow, try index(of: selected.key))
+        XCTAssertTrue(workspace.moveItem(at: try index(of: selected.key), to: try index(of: .embedded(F.runtimeID(5)))))
+        XCTAssertFalse(workspace.moveItem(at: try index(of: selected.key), to: try index(of: .embedded(F.runtimeID(2)))))
+        XCTAssertEqual(workspace.state.rows.filter { $0.branch == "feature" }.map(\.key), [1, 5].map { .embedded(F.runtimeID($0)) })
+        workspace.setSidebarGrouping(.project)
+        XCTAssertEqual(workspace.state.selection, selected.key)
+    }
+
+    func testFlatListLabelsProjectsAndPreservesHiddenRowsWhenDraggingFilteredList() throws {
+        workspace.setSidebarGrouping(.compact)
+        var live = sessions
+        live[0].name = "Build API"
+        live[2].pinned = true
+        app.store.apply(snapshot: F.snapshot(live))
+        workspace.select(.embedded(F.runtimeID(1)))
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        let pin = try index(of: .embedded(F.runtimeID(4)))
+        let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: pin, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(cell.titleLabel.stringValue, "★ web — work")
+        XCTAssertFalse(cell.detailLabel.stringValue.contains("web"))
+        let named = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(of: .embedded(F.runtimeID(1))), makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(named.nameLabel.stringValue, "api — Build API")
+        XCTAssertEqual(named.titleLabel.stringValue, "work")
+        XCTAssertFalse(named.detailLabel.stringValue.contains("api"))
+        workspace.groupFilter.waitingOnlyButton.performClick(nil)
+        XCTAssertTrue(workspace.sidebarWaitingOnly)
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [2, 4].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(workspace.state.rows.count, 3)
+        XCTAssertTrue(workspace.terminalView(for: F.runtimeID(1)) === terminal)
+        XCTAssertTrue(workspace.moveItem(at: try index(of: .embedded(F.runtimeID(4))), to: try index(of: .embedded(F.runtimeID(2)))))
+        XCTAssertEqual(workspace.order.flat, [4, 1, 2].map(F.runtimeID))
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertFalse(workspace.sidebarWaitingOnly)
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [4, 1, 2].map { .embedded(F.runtimeID($0)) })
+        workspace.setSidebarWaitingOnly(true)
+        live[1].attention = false
+        live[2].attention = false
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertTrue(workspace.items.contains(.section("No waiting sessions")))
+        XCTAssertEqual(workspace.state.rows.count, 3)
+    }
+
+    func testRecentSortTracksVisitsAndRestoresManualOrder() throws {
+        workspace.setSidebarGrouping(.compact)
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(4)))
+        workspace.select(.embedded(F.runtimeID(1)))
+        workspace.setSidebarSort(.recentlyVisited)
+        XCTAssertEqual(workspace.state.rows.map(\.key), [1, 4, 2].map { .embedded(F.runtimeID($0)) })
+        XCTAssertTrue(workspace.dropSlots(forItemAt: try index(of: .embedded(F.runtimeID(4)))).isEmpty)
+        workspace.select(.embedded(F.runtimeID(2)))
+        XCTAssertEqual(workspace.state.rows.map(\.key), [2, 1, 4].map { .embedded(F.runtimeID($0)) })
+        app.store.apply(snapshot: F.snapshot(sessions))
+        XCTAssertEqual(workspace.state.rows.map(\.key), [2, 1, 4].map { .embedded(F.runtimeID($0)) })
+        workspace.select(.embedded(F.runtimeID(4)))
+        XCTAssertEqual(workspace.state.rows.map(\.key), [4, 2, 1].map { .embedded(F.runtimeID($0)) })
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        let attached = try XCTUnwrap(workspace.viewSelection)
+        workspace.select(.embedded(F.runtimeID(1)))
+        XCTAssertTrue(workspace.showView(attached))
+        XCTAssertEqual(workspace.state.rows.first?.key, .embedded(F.runtimeID(4)), "opening an attached terminal visits its session")
+        workspace.setSidebarSort(.manual)
+        XCTAssertEqual(workspace.state.rows.map(\.key), [2, 1, 4].map { .embedded(F.runtimeID($0)) })
+        XCTAssertFalse(workspace.dropSlots(forItemAt: try index(of: .embedded(F.runtimeID(1)))).isEmpty)
+    }
+
+    func testWaitingFilterCombinesWithProjectScopeInEveryLayoutAndKeepsOfflineRows() throws {
+        app.workspaceProjects = [ProjectEntry(profile: "work", title: "api", harness: "claude", groups: ["backend"])]
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.selectGroup("backend")
+        for grouping in WorkspaceSidebarGrouping.allCases {
+            workspace.setSidebarGrouping(grouping)
+            for sorting in WorkspaceSidebarSort.allCases {
+                workspace.setSidebarSort(sorting)
+                workspace.setSidebarWaitingOnly(true)
+                XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(2))])
+                XCTAssertEqual(workspace.state.rows.count, 3)
+            }
+        }
+        app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
+        XCTAssertFalse(workspace.scopedSidebar.current)
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [.embedded(F.runtimeID(2))])
+        workspace.setSidebarWaitingOnly(false)
+        XCTAssertEqual(Set(workspace.sessionShortcutRows.map(\.key)), Set([1, 2].map { .embedded(F.runtimeID($0)) }))
+        XCTAssertEqual(workspace.selectedGroup, "backend")
+    }
+
+    func testNewSessionBelowInRecentFlatListPreservesManualOrder() {
+        workspace.setSidebarGrouping(.compact)
+        workspace.setSidebarSort(.recentlyVisited)
+        workspace.order.setFlat([4, 2, 1].map { .embedded(F.runtimeID($0)) })
+        app.store.apply(snapshot: F.snapshot(sessions))
+        workspace.select(.embedded(F.runtimeID(1)))
+        workspace.openNewSession(F.runtimeID(5), below: .embedded(F.runtimeID(2)))
+        app.store.apply(snapshot: F.snapshot(sessions + [F.tmux(5, project: "api")]))
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(5)))
+        XCTAssertEqual(workspace.order.flat, [4, 2, 5, 1].map(F.runtimeID))
+        workspace.setSidebarSort(.manual)
+        XCTAssertEqual(workspace.state.rows.map(\.key), [4, 2, 5, 1].map { .embedded(F.runtimeID($0)) })
+    }
+
+    func testSidebarLayoutsInLightDarkAndNarrowWindows() async throws {
+        guard #available(macOS 14.4, *) else { throw XCTSkip("Window captures require macOS 14.4") }
+        var live = [F.tmux(1, project: "Agent Mux", profile: "work", icon: "bolt"),
+                    F.tmux(2, project: "Agent Mux", profile: "review", icon: "key", attention: true),
+                    F.tmux(3, project: "Docs", icon: "stop", attention: true)]
+        live[0].name = "Sidebar layouts"
+        live[0].branch = "feature/sidebar"
+        live[1].branch = "main"
+        live[1].pinned = true
+        live[2].branch = "main"
+        app.store.apply(snapshot: F.snapshot(live))
+        workspace.select(.embedded(F.runtimeID(1)))
+        workspace.setInspectorCollapsed(true)
+        let directory = URL(fileURLWithPath: "/tmp/agentmux-sidebar-previews", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for grouping in [WorkspaceSidebarGrouping.project, .compact, .projectThenBranch] {
+            workspace.setSidebarGrouping(grouping)
+            for (appearance, width) in [(NSAppearance.Name.aqua, CGFloat(1100)), (.darkAqua, 700)] {
+                workspace.window.appearance = NSAppearance(named: appearance)
+                workspace.window.setContentSize(NSSize(width: width, height: 760))
+                workspace.window.makeKeyAndOrderFront(nil)
+                workspace.window.contentView?.layoutSubtreeIfNeeded()
+                workspace.window.displayIfNeeded()
+                try await Task.sleep(for: .milliseconds(300))
+                XCTAssertEqual(Set(workspace.sessionShortcutRows.map(\.key)).count, 3)
+                let waiting = workspace.groupFilter.waitingOnlyButton
+                XCTAssertTrue(workspace.groupFilter.bounds.contains(waiting.frame))
+                XCTAssertGreaterThan(waiting.frame.width, 100)
+                let content = try await SCShareableContent.currentProcess
+                let target = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(workspace.window.windowNumber) })
+                let filter = SCContentFilter(desktopIndependentWindow: target)
+                let configuration = SCStreamConfiguration()
+                configuration.width = Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))
+                configuration.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
+                configuration.showsCursor = false
+                let capture = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+                let png = try XCTUnwrap(NSBitmapImageRep(cgImage: capture).representation(using: .png, properties: [:]))
+                let name = "\(grouping.rawValue)-\(appearance == .aqua ? "light" : "dark-narrow")"
+                try png.write(to: directory.appendingPathComponent(name + ".png"))
+                let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+                attachment.name = name
+                attachment.lifetime = .keepAlways
+                add(attachment)
+            }
+        }
     }
 
     func testProjectGroupingChangesLiveAndPreservesSelectionRevealAndDragging() throws {
@@ -690,8 +877,9 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertTrue(workspace.contextMenuItems(forRow: 3).isEmpty, "the overview has no menu")
         XCTAssertTrue(workspace.contextMenuItems(forRow: 4).isEmpty)
         XCTAssertEqual(workspace.dropSlots(forItemAt: try index(of: waiting)), [])
+        let ordersBeforeClick = app.orders
         workspace.focusItem(at: 4)
-        XCTAssertTrue(app.orders.isEmpty, "attention cannot be collapsed")
+        XCTAssertEqual(app.orders, ordersBeforeClick, "attention cannot be collapsed")
 
         live[1].unseen = false
         live[2].unseen = false

@@ -432,11 +432,29 @@ ASL answer panel work the same either way.
   These flashes leave focus, scrolling, and collapsed groups alone; first
   sightings and updates to names or ages do not flash.
   Preferences › Appearance › Group sessions by selects **State → Project**
-  (the default) or **Project → State**. Project-first keeps every session,
+  (the default), **Project → State**, **Projects**, **Compact list**, or
+  **Projects → Branches**. Project-first keeps every session,
   including pinned and attention-needed sessions, inside its project, with
   collapsible Waiting, Done, Working, and Idle sections underneath. Changes
   apply immediately and persist across launches; each project's state sections
   collapse independently.
+  **Projects** omits state headings and keeps sessions in their saved positions
+  as states change. **Projects → Branches** adds collapsible branch headings
+  only for projects with multiple branches; sessions without a reported branch
+  appear under **No branch**. Both keep pinned and waiting sessions in their
+  project, show pins on rows, and count waiting sessions on project headings.
+  **Compact list** uses one flat list with project names on every row and its
+  own saved drag order across projects. The state chips above these lists still
+  jump to sessions without moving them out of their project.
+  **Sort sessions by** is independent of grouping: **Manual order** uses saved
+  drag positions, while **Recently visited** sorts within each group by when
+  you opened a session or one of its attached terminals. Agent output does not
+  change visit order. Returning to Manual order restores the saved arrangement.
+  **Waiting only** below the group pills filters the sidebar to sessions waiting
+  on you, including completed turns awaiting review. It combines with group
+  scope and every grouping/sort option, without closing hidden terminals or
+  changing the active pane. Reveal (⌘J) clears the filter if needed to show the
+  selected session. The filter is temporary and starts off in a new window.
   Preferences › Appearance › Compact sidebar places attached terminals as
   tabs beside their session, saving a row for each terminal. The setting is
   kept for the next launch; the regular layout remains the default. Each tab
@@ -450,8 +468,10 @@ ASL answer panel work the same either way.
   (`WorkspaceViews.moveTerminal`); its tab's right-click menu offers Move Left
   and Move Right in compact mode. Terminal order lasts for as long as the app
   runs. `dropSlots(forItemAt:)` is the whole rule:
-  nothing leaves its project or its session, and the project lines and the
-  **Workspace** section do not move.
+  sessions stay within their current project, state, or branch group; Compact
+  list permits ordering across projects. Filtered-out sessions keep their saved
+  positions. Session dragging is available in Manual order; attached terminals
+  can still be reordered in either sort. Headings never move.
 - **Pinning.** **Pin to Top** in a session's right-click menu, or **Session ›
   Pin or Unpin Session** (⌘.) for the one the pane is on, moves the session out of
   its project into a **Pinned** group listed above every project
@@ -1209,6 +1229,8 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxReadingProseSize` | 13 | Prose size in History, Activity and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 | `amxSidebarZoomPercent` | 100 | Zoom of the workspace's sidebar and inspector in percent (70–200, in 10% steps from ⌥+ and ⌥−). Changes apply to the open window at once; out-of-range stored values read as 100. |
+| `amxSidebarGrouping` | `stateThenProject` | `stateThenProject`, `projectThenState`, `project`, `compact`, or `projectThenBranch`; changes apply immediately. |
+| `amxSidebarSort` | `manual` | `manual` or `recentlyVisited`, independent of grouping. Flat drag order and visit history use `amxWorkspaceFlatSessionOrder` and `amxWorkspaceVisitedSessions`; existing per-project drag order is preserved. |
 | `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |
 
 Preferences › Workspace also shows the backend setup, read from

@@ -246,6 +246,95 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceInspector.waiting(sessions, grouping: .projectThenState).map(\.key), Array(keys.prefix(3)))
     }
 
+    func testStableProjectsKeepPinsAndWaitingRowsInTheirSavedPlaces() throws {
+        var sessions = [F.tmux(1, project: "api", profile: "a", icon: "bolt"),
+                        F.tmux(2, project: "api", profile: "b", icon: "key", attention: true),
+                        F.tmux(3, project: "web", icon: "stop", attention: true)]
+        sessions[1].pinned = true
+        var order = WorkspaceOrder()
+        order.set([2, 1].map { .embedded(F.runtimeID($0)) }, for: "api")
+        order.setCollapsed(project: "api", pinned: false, true)
+        var state = WorkspaceState()
+        state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .project))
+        XCTAssertEqual(state.groups.map(\.title), ["api", "web"])
+        XCTAssertEqual(state.rows.map(\.key), [2, 1, 3].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(state.groups.first?.attention, 1)
+        XCTAssertEqual(state.groups.first?.collapsed, true)
+        XCTAssertEqual(state.sectionCounts.map(\.count), [1, 1, 1])
+        XCTAssertEqual(Set(state.rows.map(\.key)).count, sessions.count)
+        let keys = state.rows.map(\.key)
+        sessions[0].iconState = "error"
+        sessions[0].attention = true
+        sessions[1].iconState = "stop"
+        sessions[1].pinned = false
+        state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .project))
+        XCTAssertEqual(state.rows.map(\.key), keys, "state and pin changes do not move sessions")
+        XCTAssertEqual(state.groups.first?.attention, 2)
+    }
+
+    func testBranchesOmitRedundantNestingAndScopeCollapseToTheirProject() throws {
+        var sessions = [F.tmux(1, project: "api"), F.tmux(2, project: "api", icon: "key", attention: true),
+                        F.tmux(3, project: "api"), F.tmux(4, project: "web"), F.tmux(5, project: "web")]
+        sessions[0].branch = "main"
+        sessions[1].branch = "feature/login"
+        sessions[3].branch = "main"
+        sessions[4].branch = "main"
+        var order = WorkspaceOrder()
+        var state = WorkspaceState()
+        state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .projectThenBranch))
+        XCTAssertEqual(state.groups.map(\.title), ["api", "No branch", "feature/login", "main", "web"])
+        XCTAssertEqual(state.groups.last?.rows.count, 2, "single-branch projects have no branch heading")
+        XCTAssertEqual(state.groups.first?.attention, 1)
+        XCTAssertEqual(state.rows(under: state.groups[0]).count, 3)
+        let branch = try XCTUnwrap(state.groups.first { $0.branch == "main" })
+        order.setCollapsed(branch, true)
+        order.setCollapsed(project: "api", pinned: false, true)
+        state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .projectThenBranch))
+        XCTAssertEqual(state.listedGroups.map(\.title), ["api", "web"])
+        XCTAssertEqual(state.rows.count, 5)
+        XCTAssertFalse(try XCTUnwrap(state.groups.last).collapsed)
+        XCTAssertNotEqual(WorkspaceOrder.groupToken(branch), WorkspaceOrder.groupToken(WorkspaceGroup(project: "web", rows: [], branch: "main")))
+        XCTAssertNotEqual(WorkspaceOrder.groupToken(WorkspaceGroup(project: "a:b", rows: [], branch: "c")),
+                          WorkspaceOrder.groupToken(WorkspaceGroup(project: "a", rows: [], branch: "b:c")))
+        sessions[0].branch = "feature/login"
+        sessions[2].branch = "feature/login"
+        state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .projectThenBranch))
+        XCTAssertEqual(state.groups.map(\.title), ["api", "web"])
+        XCTAssertEqual(state.groups[0].rows.count, 3, "rows survive the removal of a redundant branch level")
+    }
+
+    func testFlatOrderAndVisitOrderPersistIndependentlyAndForgetEndedSessions() throws {
+        let sessions = [F.tmux(1, project: "api", icon: "key", attention: true),
+                        F.tmux(2, project: "web", icon: "key", attention: true), F.tmux(3, project: "api")]
+        var order = WorkspaceOrder()
+        let keys = [2, 3, 1].map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
+        order.setFlat(keys)
+        order.visit(keys[1])
+        order.visit(keys[2])
+        order.visit(keys[1])
+        order.setCollapsed(project: "api", pinned: false, true)
+        let suite = "SidebarOrder-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        order.save(to: defaults)
+        XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
+        var state = WorkspaceState()
+        state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .compact))
+        XCTAssertEqual(state.groups.count, 1)
+        XCTAssertFalse(state.groups[0].canCollapse)
+        XCTAssertEqual(state.rows.map(\.key), keys)
+        state.arrange(order, grouping: .compact, sorting: .recentlyVisited)
+        XCTAssertEqual(state.rows.map(\.key), [keys[1], keys[2], keys[0]])
+        XCTAssertEqual(WorkspaceInspector.waiting(sessions, order: order, grouping: .compact, sorting: .recentlyVisited).map(\.key), [keys[2], keys[0]])
+        var cycle = AttentionCycler()
+        XCTAssertEqual(cycle.advance(in: sessions, order: order, grouping: .compact, sorting: .recentlyVisited).map(AttentionCycler.key), keys[2])
+        state.arrange(order, grouping: .compact)
+        XCTAssertEqual(state.rows.map(\.key), keys)
+        order.forget(notAmong: Array(state.rows.prefix(1)))
+        XCTAssertEqual(order.flat, [F.runtimeID(2)])
+        XCTAssertTrue(order.visited.isEmpty)
+    }
+
     func testProjectFirstKeepsPinsAndAttentionTogetherAndScopesCollapse() throws {
         var sessions = [
             F.tmux(1, project: "web", icon: "key", attention: true),

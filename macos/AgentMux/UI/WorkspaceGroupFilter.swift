@@ -4,6 +4,8 @@ import AppKit
 @MainActor
 final class WorkspaceGroupFilter: NSView {
     var onSelect: ((String?) -> Void)?
+    var onWaitingOnly: ((Bool) -> Void)?
+    let waitingOnlyButton = NSButton(checkboxWithTitle: "Waiting only", target: nil, action: nil)
     private(set) var pills: [WorkspaceGroupPill] = []
     private var groups: [String] = []
 
@@ -14,6 +16,11 @@ final class WorkspaceGroupFilter: NSView {
         setContentCompressionResistancePriority(.required, for: .vertical)
         setAccessibilityRole(.group)
         setAccessibilityLabel("Group scope")
+        waitingOnlyButton.target = self
+        waitingOnlyButton.action = #selector(waitingOnlyChanged(_:))
+        waitingOnlyButton.font = WorkspaceGroupPill.labelFont
+        waitingOnlyButton.toolTip = "Show only sessions waiting on you, including completed turns awaiting review."
+        addSubview(waitingOnlyButton)
         show(groups: [], selected: nil)
     }
 
@@ -45,6 +52,10 @@ final class WorkspaceGroupFilter: NSView {
 
     @objc private func clicked(_ sender: WorkspaceGroupPill) { onSelect?(sender.group) }
 
+    func showWaitingOnly(_ enabled: Bool) { waitingOnlyButton.state = enabled ? .on : .off }
+
+    @objc private func waitingOnlyChanged(_ sender: NSButton) { onWaitingOnly?(sender.state == .on) }
+
     private func frames(width: CGFloat) -> [NSRect] {
         let available = max(0, width - 20)
         var x: CGFloat = 0, y: CGFloat = 6
@@ -59,7 +70,7 @@ final class WorkspaceGroupFilter: NSView {
     }
 
     override var intrinsicContentSize: NSSize {
-        NSSize(width: NSView.noIntrinsicMetric, height: (frames(width: bounds.width).last?.maxY ?? 30) + 6)
+        NSSize(width: NSView.noIntrinsicMetric, height: (frames(width: bounds.width).last?.maxY ?? 30) + 34)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -71,6 +82,8 @@ final class WorkspaceGroupFilter: NSView {
     override func layout() {
         super.layout()
         for (pill, frame) in zip(pills, frames(width: bounds.width)) { pill.frame = frame }
+        waitingOnlyButton.frame = NSRect(x: 10, y: (frames(width: bounds.width).last?.maxY ?? 30) + 6,
+                                        width: max(0, bounds.width - 20), height: 22)
     }
 }
 

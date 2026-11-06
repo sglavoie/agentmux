@@ -114,10 +114,36 @@ enum WorkspaceStateSection: String, CaseIterable, Equatable {
 enum WorkspaceSidebarGrouping: String, CaseIterable {
     case stateThenProject
     case projectThenState
+    case project
+    case compact
+    case projectThenBranch
 
     var title: String {
-        self == .stateThenProject ? "State → Project" : "Project → State"
+        switch self {
+        case .stateThenProject: return "State → Project"
+        case .projectThenState: return "Project → State"
+        case .project: return "Projects"
+        case .compact: return "Compact list"
+        case .projectThenBranch: return "Projects → Branches"
+        }
     }
+
+    var detail: String {
+        switch self {
+        case .stateThenProject: return "Groups sessions by state, then project, with pinned and attention sessions above them."
+        case .projectThenState: return "Keeps all sessions together by project, including pinned and waiting sessions."
+        case .project: return "Keeps sessions in a stable order within each project as their states change."
+        case .compact: return "Lists sessions without project headings. Each row names its project."
+        case .projectThenBranch: return "Groups each project's sessions by branch. Single-branch projects omit the extra heading."
+        }
+    }
+}
+
+enum WorkspaceSidebarSort: String, CaseIterable {
+    case manual
+    case recentlyVisited
+
+    var title: String { self == .manual ? "Manual order" : "Recently visited" }
 }
 
 /// The sessions of one project in one state section, the pinned ones of
@@ -126,7 +152,7 @@ struct WorkspaceGroup: Equatable {
     /// The project's name; `WorkspaceSidebar.pinnedSection` for the pinned,
     /// and the section's title for a state section's heading.
     let project: String
-    let rows: [WorkspaceRow]
+    var rows: [WorkspaceRow]
     /// True for the group of pinned sessions, whose rows keep the project
     /// they belong to.
     var pinned = false
@@ -143,15 +169,26 @@ struct WorkspaceGroup: Equatable {
     var isSectionHeading = false
     /// How many sessions a state or project heading stands for.
     var sessions = 0
-    /// A project heading above its state groups; it owns no rows itself.
+    /// A project heading above its state or branch groups; it owns no rows itself.
     var isProjectHeading = false
     /// A state group nested inside a project, owning that state's rows.
     var isNestedState = false
+    /// A branch nested under its project. Empty means no branch was reported.
+    var branch: String?
+    /// The single, non-collapsible container for a flat session list.
+    var isFlat = false
+    /// Waiting count for a project heading whose rows live in child groups.
+    var waitingCount = 0
 
-    var title: String { isNestedState ? stateSection?.rawValue ?? project : project }
+    var title: String {
+        if let branch { return branch.isEmpty ? "No branch" : branch }
+        return isNestedState ? stateSection?.rawValue ?? project : project
+    }
+    var isNested: Bool { isNestedState || branch != nil }
+    var canCollapse: Bool { !needsAttention && !isFlat }
 
     /// How many of the project's sessions wait on a human.
-    var attention: Int { rows.filter(\.attention).count }
+    var attention: Int { waitingCount + rows.filter(\.attention).count }
 }
 
 /// Where the operator put sessions: the order they dragged the sessions of
@@ -169,6 +206,8 @@ struct WorkspaceOrder: Equatable {
     /// have been written to the sessions' titles.
     static let pinsSharedDefaultsKey = "amxWorkspacePinsShared"
     static let collapsedDefaultsKey = "amxWorkspaceCollapsedProjects"
+    static let flatDefaultsKey = "amxWorkspaceFlatSessionOrder"
+    static let visitedDefaultsKey = "amxWorkspaceVisitedSessions"
 
     /// The sessions of each project that was dragged in, first to last.
     private(set) var projects: [String: [String]] = [:]
@@ -177,6 +216,8 @@ struct WorkspaceOrder: Equatable {
     /// elsewhere follows these, and one named here that is no longer pinned
     /// is not listed as pinned.
     private(set) var pinned: [String] = []
+    private(set) var flat: [String] = []
+    private(set) var visited: [String] = []
     /// The groups the operator collapsed (`groupToken`). A project with no
     /// session listed stays collapsed: projects are few, and one launched
     /// into again comes back the way it was left.
@@ -190,6 +231,34 @@ struct WorkspaceOrder: Equatable {
     /// Records the order of a project's sessions, replacing the one it had.
     mutating func set(_ keys: [AttentionCycler.Key], for project: String) {
         projects[project] = keys.map(Self.token)
+    }
+
+    mutating func setFlat(_ keys: [AttentionCycler.Key]) {
+        flat = keys.map(Self.token)
+    }
+
+    mutating func visit(_ key: AttentionCycler.Key) {
+        let token = Self.token(key)
+        visited.removeAll { $0 == token }
+        visited.insert(token, at: 0)
+    }
+
+    func recentlyVisited(_ rows: [WorkspaceRow]) -> [WorkspaceRow] {
+        let rank = Dictionary(visited.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return rows.enumerated().sorted {
+            let a = rank[Self.token($0.element.key)] ?? Int.max
+            let b = rank[Self.token($1.element.key)] ?? Int.max
+            return a != b ? a < b : $0.offset < $1.offset
+        }.map(\.element)
+    }
+
+    func arrangedFlat(_ rows: [WorkspaceRow]) -> [WorkspaceRow] {
+        let rank = Dictionary(flat.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return rows.enumerated().sorted {
+            let a = rank[Self.token($0.element.key)] ?? Int.max
+            let b = rank[Self.token($1.element.key)] ?? Int.max
+            return a != b ? a < b : $0.offset < $1.offset
+        }.map(\.element)
     }
 
     /// A project's rows in the order they were dragged into.
@@ -239,6 +308,8 @@ struct WorkspaceOrder: Equatable {
     mutating func forget(notAmong listed: [WorkspaceRow]) {
         forgetPins(notAmong: listed.map(\.key))
         let tokens = Set(listed.map { Self.token($0.key) })
+        flat.removeAll { !tokens.contains($0) }
+        visited.removeAll { !tokens.contains($0) }
         let names = Set(listed.map(\.project))
         projects = projects.reduce(into: [:]) { kept, entry in
             guard names.contains(entry.key) else { return }
@@ -262,6 +333,10 @@ struct WorkspaceOrder: Equatable {
     /// groups in every state section share one: collapsing it in one
     /// collapses it in all, so a session changing state never opens it.
     static func groupToken(_ group: WorkspaceGroup) -> String {
+        if group.isFlat { return "flat" }
+        if let branch = group.branch {
+            return "project-branch:\(group.project.utf8.count):\(group.project):\(branch)"
+        }
         if group.isNestedState, let section = group.stateSection {
             return "project-state:\(group.project.utf8.count):\(group.project):\(section.rawValue)"
         }
@@ -308,6 +383,8 @@ struct WorkspaceOrder: Equatable {
         WorkspaceOrder(
             projects: defaults.dictionary(forKey: defaultsKey) as? [String: [String]] ?? [:],
             pinned: defaults.stringArray(forKey: pinnedDefaultsKey) ?? [],
+            flat: defaults.stringArray(forKey: flatDefaultsKey) ?? [],
+            visited: defaults.stringArray(forKey: visitedDefaultsKey) ?? [],
             collapsed: Set(defaults.stringArray(forKey: collapsedDefaultsKey) ?? [])
         )
     }
@@ -315,6 +392,8 @@ struct WorkspaceOrder: Equatable {
     func save(to defaults: UserDefaults = .standard) {
         defaults.set(projects, forKey: Self.defaultsKey)
         defaults.set(pinned, forKey: Self.pinnedDefaultsKey)
+        defaults.set(flat, forKey: Self.flatDefaultsKey)
+        defaults.set(visited, forKey: Self.visitedDefaultsKey)
         defaults.set(collapsed.sorted(), forKey: Self.collapsedDefaultsKey)
     }
 }
@@ -336,11 +415,12 @@ struct WorkspaceSectionCount: Equatable {
 }
 
 /// The sidebar as data, built from a snapshot so it can be tested without
-/// AppKit: sessions grouped by state, then by project, each labeled with its
-/// profile.
+/// AppKit: session rows organized by the selected hierarchy, each labeled
+/// with its profile and current state.
 ///
 /// State-first is the default; project-first keeps every row inside its
-/// project, with states nested below it. In state-first mode:
+/// project, optionally nesting states or branches. Compact uses one list.
+/// In state-first mode:
 /// Pinned sessions lead the list, waiting ones included while the group is
 /// open. Other sessions needing attention temporarily follow them, above every
 /// state section. The sections follow in `WorkspaceStateSection` order, each
@@ -361,9 +441,10 @@ enum WorkspaceSidebar {
         now: Date = Date(),
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) -> [WorkspaceGroup] {
-        groups(rows(sessions, now: now, glyphs: glyphs), order: order, grouping: grouping)
+        groups(rows(sessions, now: now, glyphs: glyphs), order: order, grouping: grouping, sorting: sorting)
     }
 
     /// Use the complete snapshot, including collapsed and non-waiting sessions,
@@ -399,8 +480,29 @@ enum WorkspaceSidebar {
     /// places of temporarily promoted siblings. It needs no snapshot, so
     /// held rows can be grouped again.
     static func groups(_ rows: [WorkspaceRow], order: WorkspaceOrder, prioritizeAttention: Bool = true,
-                       grouping: WorkspaceSidebarGrouping = .stateThenProject) -> [WorkspaceGroup] {
+                       grouping: WorkspaceSidebarGrouping = .stateThenProject,
+                       sorting: WorkspaceSidebarSort = .manual) -> [WorkspaceGroup] {
+        let groups = manuallyGrouped(rows, order: order, prioritizeAttention: prioritizeAttention, grouping: grouping)
+        guard sorting == .recentlyVisited else { return groups }
+        return groups.map { group in
+            var sorted = group
+            sorted.rows = order.recentlyVisited(group.rows)
+            return sorted
+        }
+    }
+
+    private static func manuallyGrouped(_ rows: [WorkspaceRow], order: WorkspaceOrder, prioritizeAttention: Bool,
+                                        grouping: WorkspaceSidebarGrouping) -> [WorkspaceGroup] {
         if grouping == .projectThenState { return projectGroups(rows, order: order) }
+        if grouping == .project || grouping == .projectThenBranch {
+            return stableProjectGroups(rows, order: order, branches: grouping == .projectThenBranch)
+        }
+        if grouping == .compact {
+            let arranged = Set(rows.map(\.project)).sorted(by: projectOrder).flatMap {
+                projectRows(rows, in: $0, order: order, includePinned: true)
+            }
+            return rows.isEmpty ? [] : [WorkspaceGroup(project: "Sessions", rows: order.arrangedFlat(arranged), isFlat: true)]
+        }
         let pinnedCollapsed = order.isCollapsed(project: pinnedSection, pinned: true)
         // An open Pinned group keeps its waiting rows: it already leads.
         func promoted(_ row: WorkspaceRow) -> Bool {
@@ -458,8 +560,28 @@ enum WorkspaceSidebar {
         }
     }
 
+    /// State and attention updates never move rows in these hierarchies.
+    private static func stableProjectGroups(_ rows: [WorkspaceRow], order: WorkspaceOrder, branches: Bool) -> [WorkspaceGroup] {
+        Set(rows.map(\.project)).sorted(by: projectOrder).flatMap { project in
+            let arranged = projectRows(rows, in: project, order: order, includePinned: true)
+            let names = Set(arranged.map(\.branch)).sorted(by: nameOrder)
+            let collapsed = order.isCollapsed(project: project, pinned: false)
+            guard branches, names.count > 1 else {
+                return [WorkspaceGroup(project: project, rows: arranged, collapsed: collapsed)]
+            }
+            let heading = WorkspaceGroup(project: project, rows: [], collapsed: collapsed,
+                                         sessions: arranged.count, isProjectHeading: true,
+                                         waitingCount: arranged.filter(\.attention).count)
+            return [heading] + names.map { branch in
+                var group = WorkspaceGroup(project: project, rows: arranged.filter { $0.branch == branch }, branch: branch)
+                group.collapsed = order.collapsed.contains(WorkspaceOrder.groupToken(group))
+                return group
+            }
+        }
+    }
+
     /// A project's sessions in saved drag order, across all states. Include
-    /// pins when they live inside the project in project-first mode.
+    /// pins when they live inside the project in any of the other modes.
     static func projectRows(_ rows: [WorkspaceRow], in project: String, order: WorkspaceOrder, includePinned: Bool = false) -> [WorkspaceRow] {
         order.arranged(rows.filter { (includePinned || !$0.pinned) && $0.project == project }.sorted(by: rowOrder), in: project)
     }
@@ -469,13 +591,14 @@ enum WorkspaceSidebar {
     static func ordered(
         _ sessions: [CompanionSession],
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) -> [CompanionSession] {
         let byKey = Dictionary(
             sessions.map { (AttentionCycler.key($0), $0) },
             uniquingKeysWith: { first, _ in first }
         )
-        return groups(sessions, order: order, grouping: grouping).flatMap(\.rows).compactMap { byKey[$0.key] }
+        return groups(sessions, order: order, grouping: grouping, sorting: sorting).flatMap(\.rows).compactMap { byKey[$0.key] }
     }
 
     static func row(_ session: CompanionSession, now: Date, glyphs: Glyphs) -> WorkspaceRow {
@@ -629,7 +752,7 @@ struct WorkspaceState: Equatable {
         let foldedProjects = Set(groups.filter { $0.isProjectHeading && $0.collapsed }.map(\.project))
         let folded = Set(groups.filter { $0.isSectionHeading && !$0.isNestedState && $0.collapsed }.compactMap(\.stateSection))
         return groups.filter {
-            if $0.isNestedState { return !foldedProjects.contains($0.project) }
+            if $0.isNested { return !foldedProjects.contains($0.project) }
             return $0.isSectionHeading || $0.stateSection.map { !folded.contains($0) } ?? true
         }
     }
@@ -638,7 +761,7 @@ struct WorkspaceState: Equatable {
     /// project in a state section for its heading.
     func rows(under group: WorkspaceGroup) -> [WorkspaceRow] {
         if group.isProjectHeading {
-            return groups.filter { $0.isNestedState && $0.project == group.project }.flatMap(\.rows)
+            return groups.filter { $0.isNested && $0.project == group.project }.flatMap(\.rows)
         }
         guard group.isSectionHeading && !group.isNestedState else { return group.rows }
         return groups.filter { !$0.isSectionHeading && $0.stateSection == group.stateSection }.flatMap(\.rows)
@@ -647,7 +770,7 @@ struct WorkspaceState: Equatable {
     /// The sections the sidebar lists, in its order, each with how many
     /// sessions it holds: what the overview line above them counts.
     var sectionCounts: [WorkspaceSectionCount] {
-        if groups.contains(where: \.isProjectHeading) {
+        if !groups.contains(where: { $0.pinned || $0.needsAttention || ($0.isSectionHeading && !$0.isNested) }) {
             return WorkspaceStateSection.allCases.compactMap { section in
                 let members = rows.filter { WorkspaceStateSection(iconState: $0.iconState) == section }
                 guard let first = members.first else { return nil }
@@ -694,8 +817,8 @@ struct WorkspaceState: Equatable {
 
     /// Puts the listed rows where they were dragged or pinned. It lists
     /// nothing new, so it works on held rows too.
-    mutating func arrange(_ order: WorkspaceOrder, grouping: WorkspaceSidebarGrouping = .stateThenProject) {
-        groups = WorkspaceSidebar.groups(rows, order: order, grouping: grouping)
+    mutating func arrange(_ order: WorkspaceOrder, grouping: WorkspaceSidebarGrouping = .stateThenProject, sorting: WorkspaceSidebarSort = .manual) {
+        groups = WorkspaceSidebar.groups(rows, order: order, grouping: grouping, sorting: sorting)
     }
 
     /// Selects a listed session, or nothing; false when `key` is not listed.

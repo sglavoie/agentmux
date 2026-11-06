@@ -40,9 +40,10 @@ struct AttentionCycler {
     static func ordered(
         _ sessions: [CompanionSession],
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) -> [CompanionSession] {
-        WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping).filter(\.attention)
+        WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping, sorting: sorting).filter(\.attention)
     }
 
     /// The first waiting session listed after the one the last press focused,
@@ -58,9 +59,10 @@ struct AttentionCycler {
     func next(
         in sessions: [CompanionSession],
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) -> CompanionSession? {
-        let listed = WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping)
+        let listed = WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping, sorting: sorting)
         let waiting = listed.filter(\.attention)
         guard let last, !waiting.isEmpty else { return waiting.first }
         let known = Set(last.following + [last.key])
@@ -76,10 +78,11 @@ struct AttentionCycler {
         _ session: CompanionSession,
         in sessions: [CompanionSession],
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) {
         let key = Self.key(session)
-        let listed = WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping)
+        let listed = WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping, sorting: sorting)
         last = (key, Self.following(key, in: listed.map { Self.key($0) }) ?? [])
     }
 
@@ -87,10 +90,11 @@ struct AttentionCycler {
     mutating func advance(
         in sessions: [CompanionSession],
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) -> CompanionSession? {
-        guard let session = next(in: sessions, order: order, grouping: grouping) else { return nil }
-        focused(session, in: sessions, order: order, grouping: grouping)
+        guard let session = next(in: sessions, order: order, grouping: grouping, sorting: sorting) else { return nil }
+        focused(session, in: sessions, order: order, grouping: grouping, sorting: sorting)
         return session
     }
 

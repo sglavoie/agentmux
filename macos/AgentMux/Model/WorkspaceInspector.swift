@@ -143,11 +143,12 @@ enum WorkspaceInspector {
         now: Date = Date(),
         glyphs: Glyphs = .bundled,
         order: WorkspaceOrder = WorkspaceOrder(),
-        grouping: WorkspaceSidebarGrouping = .stateThenProject
+        grouping: WorkspaceSidebarGrouping = .stateThenProject,
+        sorting: WorkspaceSidebarSort = .manual
     ) -> [WorkspaceWaitingRow] {
         let runs = MenuBuilder.waitingBySession(asl, sessions: sessions).bySession
         let rows = WorkspaceSidebar.rows(sessions, now: now, glyphs: glyphs)
-        return AttentionCycler.ordered(sessions, order: order, grouping: grouping).map { session in
+        return AttentionCycler.ordered(sessions, order: order, grouping: grouping, sorting: sorting).map { session in
             let key = AttentionCycler.key(session)
             let row = rows.first { $0.key == key } ?? WorkspaceSidebar.row(session, now: now, glyphs: glyphs)
             var answer: WorkspaceWaitingAnswer?

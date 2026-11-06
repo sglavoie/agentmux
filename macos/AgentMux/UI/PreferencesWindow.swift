@@ -745,7 +745,11 @@ struct PreferencesView: View {
                 Picker("Group sessions by", selection: $model.preferences.sidebarGrouping) {
                     ForEach(WorkspaceSidebarGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                note("Project → State keeps all sessions together by project, including pinned and waiting sessions.")
+                note(model.preferences.sidebarGrouping.detail)
+                Picker("Sort sessions by", selection: $model.preferences.sidebarSort) {
+                    ForEach(WorkspaceSidebarSort.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                note("Recently visited sorts sessions within each group by when you opened them. Choose Manual order to drag sessions into place.")
                 Toggle("Compact sidebar", isOn: $model.preferences.compactSidebar)
                 note("Shows terminals beside their session, like tabs, to fit more sessions in the sidebar.")
                 LabeledContent("Sidebar zoom") {

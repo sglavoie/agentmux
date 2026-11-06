@@ -98,6 +98,8 @@ enum MenuBuilder {
         /// The workspace sidebar's arrangement, which orders Needs attention
         /// the way the next-attention shortcut visits it.
         var order = WorkspaceOrder()
+        var grouping: WorkspaceSidebarGrouping = .stateThenProject
+        var sorting: WorkspaceSidebarSort = .manual
         /// What the daemon start or restart under way is doing; nil when none
         /// is. Start Daemon and Restart Daemon are greyed out meanwhile.
         var daemonBusy: String?
@@ -120,6 +122,8 @@ enum MenuBuilder {
         var waiting = 0
         var projects = FetchState<[ProjectEntry]>()
         var projectGroup: String?
+        var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
+        var sidebarSort: WorkspaceSidebarSort = .manual
         /// Project directories the last survey found missing on disk.
         var missingProjectDirectories: Set<String> = []
         var recent = FetchState<[RecentConversation]>()
@@ -169,7 +173,7 @@ enum MenuBuilder {
 
 
         // The order the next-attention shortcut visits them in.
-        let attention = AttentionCycler.ordered(input.sessions, order: input.order)
+        let attention = AttentionCycler.ordered(input.sessions, order: input.order, grouping: input.grouping, sorting: input.sorting)
         let working = input.sessions.filter { !$0.attention && $0.isWorking }
         let idle = input.sessions.filter { !$0.attention && !$0.isWorking }
 

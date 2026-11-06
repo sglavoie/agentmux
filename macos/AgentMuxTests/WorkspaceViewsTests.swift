@@ -299,17 +299,18 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertNil(workspace.tableView(workspace.sidebar, pasteboardWriterForRow: top + 6),
                      "a project's only session has nowhere to go")
 
+        let ordersBeforeDragging = app.orders
         XCTAssertFalse(workspace.moveItem(at: top, to: top - 1), "not above its project")
         XCTAssertFalse(workspace.moveItem(at: top, to: top + 2), "among its own terminals is where it is")
         XCTAssertFalse(workspace.moveItem(at: top, to: top + 5), "not into another project")
-        XCTAssertTrue(app.orders.isEmpty)
+        XCTAssertEqual(app.orders, ordersBeforeDragging)
 
         XCTAssertTrue(workspace.moveItem(at: top, to: top + 4))
         XCTAssertEqual(workspace.state.rows.map(\.embeddedRuntimeSessionID), [work, personal, F.runtimeID(4)])
         XCTAssertEqual(try sessionIndex(work), top)
         XCTAssertEqual(try index(ofView: first), top + 2, "a session takes its terminals with it")
         XCTAssertEqual(try index(ofView: second), top + 3)
-        XCTAssertEqual(app.orders, [workspace.order])
+        XCTAssertEqual(app.orders, ordersBeforeDragging + [workspace.order])
         XCTAssertEqual(workspace.viewSelection, second, "the pane stays where it was")
         XCTAssertEqual(workspace.sidebar.selectedRow, top + 3)
 
@@ -323,7 +324,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
         XCTAssertEqual(try index(ofView: second), top + 2)
         XCTAssertTrue(workspace.moveItem(at: top + 2, to: top + 4))
         XCTAssertEqual(workspace.views.terminals(beside: personal).map(\.id), [first, second])
-        XCTAssertEqual(app.orders.count, 1, "moving a terminal changes no session order")
+        XCTAssertEqual(app.orders.count, ordersBeforeDragging.count + 1, "moving a terminal changes no session order")
     }
 
     func testTheDashboardIsATerminalOfItsOwnStartedWhenShown() throws {

@@ -209,8 +209,10 @@ extension WorkspaceWindowController {
     static let reattachTitle = "Reattach"
 
     private func groupMenuItems(_ group: WorkspaceGroup) -> [NSMenuItem] {
-        guard !group.needsAttention else { return [] }
-        let title = group.isSectionHeading
+        guard group.canCollapse else { return [] }
+        let title = group.branch != nil
+            ? (group.collapsed ? "Expand Branch" : "Collapse Branch")
+            : group.isSectionHeading
             ? (group.collapsed ? Self.expandSectionTitle : Self.collapseSectionTitle)
             : group.pinned
             ? (group.collapsed ? Self.expandPinnedTitle : Self.collapsePinnedTitle)
@@ -223,7 +225,7 @@ extension WorkspaceWindowController {
 
     @objc private func toggleClickedGroup(_ sender: Any?) {
         guard let token = (sender as? NSMenuItem)?.representedObject as? String,
-              let group = state.groups.first(where: { !$0.needsAttention && WorkspaceOrder.groupToken($0) == token })
+              let group = state.groups.first(where: { $0.canCollapse && WorkspaceOrder.groupToken($0) == token })
         else { return }
         setCollapsed(group, !group.collapsed)
     }
@@ -239,13 +241,14 @@ extension WorkspaceWindowController {
     /// Collapses or expands a listed group: a project's, the pinned one, or
     /// a state section.
     func setCollapsed(_ group: WorkspaceGroup, _ collapsed: Bool) {
+        guard group.canCollapse else { return }
         changeCollapsed { $0.setCollapsed(group, collapsed) }
     }
 
     /// Expands what keeps a session's line off the list: its project's
     /// group, the pinned one, and the state section it is in.
     func expandGroups(of key: AttentionCycler.Key?) {
-        guard let group = group(of: key), !group.needsAttention else { return }
+        guard let group = group(of: key), group.canCollapse else { return }
         changeCollapsed { order in
             order.setCollapsed(group, false)
             order.setCollapsed(project: group.project, pinned: group.pinned, false)
@@ -258,7 +261,7 @@ extension WorkspaceWindowController {
         change(&changed)
         guard changed != order else { return }
         order = changed
-        state.arrange(order, grouping: sidebarGrouping)
+        state.arrange(order, grouping: sidebarGrouping, sorting: sidebarSort)
         delegate?.workspaceOrderChanged(order)
         reloadSidebar(allowReorder: true)
     }
@@ -276,7 +279,8 @@ extension WorkspaceWindowController {
             item.target = self
             return item
         }
-        let pin = NSMenuItem(title: row.pinned ? Self.unpinSessionTitle : Self.pinSessionTitle,
+        let pinTitle = sidebarGrouping == .stateThenProject ? Self.pinSessionTitle : Self.pinShownSessionTitle
+        let pin = NSMenuItem(title: row.pinned ? Self.unpinSessionTitle : pinTitle,
                              action: #selector(pinClickedSession(_:)), keyEquivalent: "")
         pin.representedObject = row.key
         pin.target = self
@@ -440,6 +444,20 @@ extension WorkspaceWindowController {
         guard let here = place, here != recent.here else { return }
         if case let .view(id) = here, views.view(id)?.isOverlay == true { return }
         recent = (here, recent.here)
+        let key: AttentionCycler.Key?
+        switch here {
+        case let .session(session): key = session
+        case let .view(id): key = views.view(id)?.besideRuntimeSessionID.map(AttentionCycler.Key.embedded)
+        case .review: key = nil
+        }
+        if let key, state.row(key) != nil, order.visited.first != WorkspaceOrder.token(key) {
+            order.visit(key)
+            delegate?.workspaceOrderChanged(order)
+            if sidebarSort == .recentlyVisited {
+                state.arrange(order, grouping: sidebarGrouping, sorting: sidebarSort)
+                reloadSidebar()
+            }
+        }
     }
 
     /// ⌘L: goes back to where the pane was before it came here, so that

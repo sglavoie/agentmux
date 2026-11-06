@@ -9,10 +9,12 @@ extension WorkspaceWindowController {
     /// Filtering is a presentation of the complete state. Hidden sessions
     /// still own their terminals and saved ordering.
     var scopedSidebar: WorkspaceState {
-        guard selectedGroup != nil else { return state }
+        guard selectedGroup != nil || sidebarWaitingOnly else { return state }
         var scoped = WorkspaceState()
         let rows = ProjectCatalog.rows(state.rows, in: selectedGroup, projects: delegate?.workspaceProjects ?? [])
-        scoped.apply(WorkspaceSidebar.groups(rows, order: order, grouping: sidebarGrouping))
+            .filter { !sidebarWaitingOnly || $0.attention }
+        scoped.apply(WorkspaceSidebar.groups(rows, order: order, grouping: sidebarGrouping, sorting: sidebarSort))
+        if !state.current { scoped.apply(nil) }
         return scoped
     }
 
@@ -70,6 +72,9 @@ extension WorkspaceWindowController {
                     [Item.row(row)] + views.terminals(beside: row.embeddedRuntimeSessionID).map(Item.view)
                 }
             }
+        if sidebarWaitingOnly, scoped.rows.isEmpty {
+            wanted.append(.section(state.current ? "No waiting sessions" : "No cached waiting sessions"))
+        }
         let holdingHover = sidebar.pointerInside && !Self.hasNewSidebarTargets(wanted, comparedTo: items)
         if !allowReorder, !items.isEmpty, holdingHover || sidebarMenuOpen || dragged != nil {
             if holdingHover, wanted != items, hoverReorderTask == nil {
@@ -233,6 +238,9 @@ extension WorkspaceWindowController {
     /// False when the list has no line for it.
     @discardableResult
     func revealInSidebar() -> Bool {
+        if let key = shownSessionKey, let row = state.row(key), sidebarWaitingOnly, !row.attention {
+            setSidebarWaitingOnly(false)
+        }
         if let key = shownSessionKey, state.row(key) != nil, scopedSidebar.row(key) == nil {
             selectedGroup = nil
             reloadSidebar(allowReorder: true)
@@ -370,7 +378,7 @@ extension WorkspaceWindowController {
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
                 ?? WorkspaceGroupCellView()
             cell.show(group)
-            cell.onToggle = group.needsAttention ? nil : { [weak self] in
+            cell.onToggle = !group.canCollapse ? nil : { [weak self] in
                 self?.setCollapsed(group, !group.collapsed)
             }
             return cell
@@ -379,7 +387,7 @@ extension WorkspaceWindowController {
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
                       sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false,
-                      away: Item.isAway(at: line, in: items))
+                      away: Item.isAway(at: line, in: items), projectFirstLine: sidebarGrouping == .compact)
             if compactSidebar {
                 configureCompactTabs(in: cell, for: row)
             } else {
@@ -466,14 +474,16 @@ extension WorkspaceWindowController {
     /// among the sessions of its project and a terminal among the ones
     /// beside its session; no other line moves.
     func dropSlots(forItemAt index: Int) -> [Int] {
-        Item.dropSlots(forItemAt: index, in: items)
+        if sidebarSort != .manual, items.indices.contains(index), case .row = items[index] { return [] }
+        return Item.dropSlots(forItemAt: index, in: items)
     }
 
     /// The slot a line dragged from `index` takes when it is let go over
     /// `proposed`: the first one at or below it. Nil outside the line's
     /// project or session, and where it would land back where it is.
     func dropSlot(forItemAt index: Int, proposed: Int) -> Int? {
-        Item.dropSlot(forItemAt: index, proposed: proposed, in: items)
+        guard !dropSlots(forItemAt: index).isEmpty else { return nil }
+        return Item.dropSlot(forItemAt: index, proposed: proposed, in: items)
     }
 
     /// Moves the line at `index` to above the line at `proposed`; false when
@@ -496,16 +506,19 @@ extension WorkspaceWindowController {
             let separatePin = row.pinned && sidebarGrouping == .stateThenProject
             let base = separatePin
                 ? WorkspaceSidebar.groups(state.rows, order: order, prioritizeAttention: false).first(where: \.pinned)?.rows
-                : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order, includePinned: sidebarGrouping == .projectThenState)
+                : sidebarGrouping == .compact ? state.rows
+                : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order, includePinned: sidebarGrouping != .stateThenProject)
             let moved = Set(keys)
             var next = keys.makeIterator()
             let saved = (base?.map(\.key) ?? keys).map { moved.contains($0) ? next.next() ?? $0 : $0 }
             if separatePin {
                 order.setPinned(saved)
+            } else if sidebarGrouping == .compact {
+                order.setFlat(saved)
             } else {
                 order.set(saved, for: row.project)
             }
-            state.arrange(order, grouping: sidebarGrouping)
+            state.arrange(order, grouping: sidebarGrouping, sorting: sidebarSort)
             delegate?.workspaceOrderChanged(order)
         case let .view(view):
             var next: String?

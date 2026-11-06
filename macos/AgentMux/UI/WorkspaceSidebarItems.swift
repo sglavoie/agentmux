@@ -21,6 +21,7 @@ enum WorkspaceSidebarItem: Equatable {
             return a.project == b.project && a.pinned == b.pinned && a.needsAttention == b.needsAttention
                 && a.stateSection == b.stateSection && a.isSectionHeading == b.isSectionHeading
                 && a.isProjectHeading == b.isProjectHeading && a.isNestedState == b.isNestedState
+                && a.branch == b.branch && a.isFlat == b.isFlat
         case let (.row(a), .row(b)): return a.key == b.key && a.name.isEmpty == b.name.isEmpty
         default: return false
         }
@@ -61,7 +62,7 @@ enum WorkspaceSidebarItem: Equatable {
               let group = items[..<index].last(where: { if case .group = $0 { return true } else { return false } }),
               case let .group(group) = group
         else { return false }
-        return group.pinned || group.needsAttention
+        return group.pinned || group.needsAttention || group.isFlat
     }
 
     /// A session can move only among its project's sessions; a utility view
@@ -71,10 +72,10 @@ enum WorkspaceSidebarItem: Equatable {
         switch items[index] {
         case .navigation, .section, .overview, .group:
             return []
-        case let .row(row):
+        case .row:
             guard let group = items[..<index].lastIndex(where: { if case .group = $0 { return true } else { return false } }),
                   case let .group(parent) = items[group],
-                  !row.needsAttention || parent.isNestedState else { return [] }
+                  !parent.needsAttention else { return [] }
             let end = items[(group + 1)...].firstIndex { item in
                 switch item {
                 case .navigation, .section, .overview, .group: return true

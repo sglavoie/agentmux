@@ -207,6 +207,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             notice: store.notice,
             gate: actions?.gate ?? ActionGate(),
             order: delegate?.attentionOrder ?? WorkspaceOrder(),
+            grouping: actions?.sidebarGrouping ?? .stateThenProject,
+            sorting: actions?.sidebarSort ?? .manual,
             daemonBusy: actions?.daemonBusy
         )
     }

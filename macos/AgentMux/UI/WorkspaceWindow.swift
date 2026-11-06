@@ -135,11 +135,29 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var choosingGroupPlace = false
     var showingEmptyGroup = false
     private(set) var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
+    private(set) var sidebarSort: WorkspaceSidebarSort = .manual
+    private(set) var sidebarWaitingOnly = false
+
+    func setSidebarSort(_ sorting: WorkspaceSidebarSort) {
+        guard sidebarSort != sorting else { return }
+        sidebarSort = sorting
+        state.arrange(order, grouping: sidebarGrouping, sorting: sorting)
+        guard sidebar.dataSource != nil else { return }
+        reloadSidebar(allowReorder: true)
+    }
+
+    func setSidebarWaitingOnly(_ waitingOnly: Bool) {
+        guard sidebarWaitingOnly != waitingOnly else { return }
+        sidebarWaitingOnly = waitingOnly
+        groupFilter.showWaitingOnly(waitingOnly)
+        guard sidebar.dataSource != nil else { return }
+        reloadSidebar(allowReorder: true)
+    }
 
     func setSidebarGrouping(_ grouping: WorkspaceSidebarGrouping) {
         guard sidebarGrouping != grouping else { return }
         sidebarGrouping = grouping
-        state.arrange(order, grouping: grouping)
+        state.arrange(order, grouping: grouping, sorting: sidebarSort)
         guard sidebar.dataSource != nil else { return }
         reloadSidebar(allowReorder: true)
     }
@@ -604,7 +622,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard let store = delegate?.store else { return }
         var live: [WorkspaceGroup]?
         if store.feed == .live, store.snapshot != nil {
-            live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping)
+            live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping, sorting: sidebarSort)
         }
         let wasCurrent = state.current
         let previousRows = state.rows
@@ -683,6 +701,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     private func makeWindow() -> NSWindow {
         let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton, welcome: welcomeView)
         groupFilter.onSelect = { [weak self] group in self?.selectGroup(group) }
+        groupFilter.onWaitingOnly = { [weak self] waitingOnly in self?.setSidebarWaitingOnly(waitingOnly) }
         let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
         sidebarZoomView.zoom = sidebarZoom
         welcomeView.zoom = sidebarZoom

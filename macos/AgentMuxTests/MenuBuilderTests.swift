@@ -106,6 +106,28 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertEqual(presses, listed, "⌃⌥⌘N visits them in the order the menu lists them")
     }
 
+    func testWaitingMenuFollowsRecentSortInEveryGrouping() {
+        let sessions = [session(1, "key", attention: true, project: "web"),
+                        session(2, "key", attention: true, project: "api"),
+                        session(3, "key", attention: true, project: "api")]
+        var order = WorkspaceOrder()
+        order.visit(.embedded(WorkspaceFixture.runtimeID(3)))
+        order.visit(.embedded(WorkspaceFixture.runtimeID(1)))
+        for grouping in WorkspaceSidebarGrouping.allCases {
+            var menuInput = input(sessions)
+            menuInput.order = order
+            menuInput.grouping = grouping
+            menuInput.sorting = .recentlyVisited
+            let entries = MenuBuilder.entries(menuInput)
+            guard let start = entries.firstIndex(of: .header("Needs attention")) else { return XCTFail("no Needs attention") }
+            let listed = entries[(start + 1)...].prefix { if case .session = $0 { return true }; return false }
+                .compactMap { if case let .session(row) = $0 { return row.testID }; return nil }
+            let cycle = AttentionCycler.ordered(sessions, order: order, grouping: grouping, sorting: .recentlyVisited).map(\.testID)
+            XCTAssertEqual(listed, cycle)
+            XCTAssertEqual(listed, grouping == .compact || grouping == .stateThenProject ? [1, 3, 2] : [3, 2, 1])
+        }
+    }
+
     func testManyIdleRowsCollapseIntoASubmenu() {
         let ten = (1...10).map { session($0, "") }
         XCTAssertTrue(MenuBuilder.entries(input(ten)).contains(.header("Idle")))

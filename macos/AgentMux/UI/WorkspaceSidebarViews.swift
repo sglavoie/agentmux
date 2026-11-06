@@ -506,12 +506,19 @@ final class WorkspaceGroupCellView: NSTableCellView {
     }
 
     func show(_ group: WorkspaceGroup) {
-        labelLeading.constant = group.isNestedState ? 14 : 2
+        labelLeading.constant = group.isNested ? 14 : 2
         if group.needsAttention {
             show(section: group.title)
             countLabel.stringValue = String(group.rows.count)
             countLabel.toolTip = "\(group.rows.count) waiting on you"
             setAccessibilityLabel("\(group.title), \(group.rows.count) waiting")
+            return
+        }
+        if group.isFlat {
+            show(section: group.title)
+            countLabel.stringValue = String(group.rows.count)
+            countLabel.toolTip = "\(group.rows.count) sessions"
+            setAccessibilityLabel("\(group.title), \(group.rows.count) sessions")
             return
         }
         var label: String
@@ -521,6 +528,11 @@ final class WorkspaceGroupCellView: NSTableCellView {
             countLabel.stringValue = String(group.sessions)
             countLabel.toolTip = group.sessions == 1 ? "1 session" : "\(group.sessions) sessions"
             label = "\(group.title), \(countLabel.toolTip ?? "")"
+            if group.isProjectHeading, group.attention > 0 {
+                countLabel.stringValue += " · \(group.attention) waiting"
+                countLabel.toolTip = "\(group.sessions) sessions, \(group.attention) waiting on you"
+                label = "\(group.title), \(countLabel.toolTip ?? "")"
+            }
         } else {
             nameLabel.stringValue = group.title
             let waiting = group.attention
@@ -931,15 +943,16 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// `away` says the line is listed under Pinned or Needs attention rather
     /// than its project; nil reads it from the row, as where it would be listed.
     func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil, bell: Bool = false,
-              away: Bool? = nil) {
+              away: Bool? = nil, projectFirstLine: Bool = false) {
         nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
-        nameLabel.stringValue = row.namedLabel
+        nameLabel.stringValue = projectFirstLine && !row.name.isEmpty ? "\(row.project) — \(row.namedLabel)" : row.namedLabel
         nameLabel.isHidden = row.name.isEmpty
         glyphLabel.stringValue = row.glyph
         // A pinned or promoted session names the project it is away from.
-        let place = away ?? (row.pinned || row.needsAttention) ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
-        let badge = row.pinned && away == false ? "★ " : ""
+        let namesProject = projectFirstLine ? row.name.isEmpty : (away ?? (row.pinned || row.needsAttention))
+        let place = namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
+        let badge = row.pinned ? "★ " : ""
         let label = badge + (row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)")
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted

@@ -88,7 +88,8 @@ extension AppDelegate {
             (runtimeSessionID != nil && $0.embeddedRuntimeSessionID == runtimeSessionID)
                 || (runID?.isEmpty == false && $0.aslRunID == runID)
         }) {
-            cycler.focused(session, in: store.managedSessions, order: attentionOrder)
+            cycler.focused(session, in: store.managedSessions, order: attentionOrder,
+                           grouping: preferencesModel.preferences.sidebarGrouping, sorting: preferencesModel.preferences.sidebarSort)
         }
         guard let workspace, workspace.isOpen else { return }
         workspace.welcome.answerSent()
@@ -128,6 +129,8 @@ extension AppDelegate {
             waiting: live ? AttentionCycler.ordered(store.managedSessions).count : 0,
             projects: projects.state,
             projectGroup: workspace?.selectedGroup,
+            sidebarGrouping: prefs.sidebarGrouping,
+            sidebarSort: prefs.sidebarSort,
             missingProjectDirectories: projects.missingDirectories,
             recent: recent.state,
             recentDays: prefs.recentDays,

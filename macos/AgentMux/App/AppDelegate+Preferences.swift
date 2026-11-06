@@ -41,6 +41,10 @@ extension AppDelegate {
             cycler = AttentionCycler()
             workspace?.setSidebarGrouping(new.sidebarGrouping)
         }
+        if old.sidebarSort != new.sidebarSort {
+            cycler = AttentionCycler()
+            workspace?.setSidebarSort(new.sidebarSort)
+        }
         if old.compactSidebar != new.compactSidebar { workspace?.setCompactSidebar(new.compactSidebar) }
         if old.confirmationPolicy != new.confirmationPolicy {
             do { try workspaceConfirmationFile.write(new.confirmationPolicy) }
@@ -172,7 +176,7 @@ extension AppDelegate {
             refuse(DaemonPhrase.notConnected + ".")
             return
         }
-        guard let session = cycler.advance(in: store.managedSessions, order: attentionOrder, grouping: preferencesModel.preferences.sidebarGrouping) else {
+        guard let session = cycler.advance(in: store.managedSessions, order: attentionOrder, grouping: preferencesModel.preferences.sidebarGrouping, sorting: preferencesModel.preferences.sidebarSort) else {
             Self.logger.notice("next attention: nothing is waiting")
             NSSound.beep()
             return

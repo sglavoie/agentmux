@@ -81,7 +81,7 @@ extension WorkspaceWindowController {
             if let current = state.row(row.key) { activate(current, reattaching: true) }
         case let .view(view): showView(view.id, focus: true)
         case let .group(group):
-            if !group.needsAttention { setCollapsed(group, !group.collapsed) }
+            if group.canCollapse { setCollapsed(group, !group.collapsed) }
         case .navigation: selectWorkspaceNavigation(viewSelection == WorkspaceUtilityView.overview.id, focus: true)
         case .section, .overview: break
         }
@@ -102,7 +102,7 @@ extension WorkspaceWindowController {
         } else if let beside = views.view(viewSelection)?.besideRuntimeSessionID {
             key = .embedded(beside)
         }
-        guard let group = group(of: key), !group.needsAttention else { return }
+        guard let group = group(of: key), group.canCollapse else { return }
         setCollapsed(project: group.project, pinned: group.pinned, collapsed)
     }
 }
