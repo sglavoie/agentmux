@@ -45,32 +45,36 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.groupFilter.pills[index].performClick(nil)
     }
 
-    func testProjectFirstDragsPinnedAndWaitingRowsWithinTheirState() throws {
+    func testPinsDragAcrossProjectsInEveryLayoutAndKeepTheirOrderWhenSwitching() throws {
         var live = [
             F.tmux(1, project: "api", profile: "a", icon: "key", attention: true),
             F.tmux(2, project: "api", profile: "b", icon: "key", attention: true),
-            F.tmux(3, project: "api", profile: "c", icon: "bolt"),
+            F.tmux(3, project: "web", profile: "c", icon: "bolt"),
         ]
         live[1].pinned = true
-        workspace.setSidebarGrouping(.projectThenState)
+        live[2].pinned = true
         app.store.apply(snapshot: F.snapshot(live))
-        let pinned = try index(of: .embedded(F.runtimeID(2)))
-        let first = try index(of: .embedded(F.runtimeID(1)))
-        let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: pinned, makeIfNecessary: true) as? WorkspaceRowCellView)
-        XCTAssertTrue(cell.titleLabel.stringValue.hasPrefix("★ "))
-        XCTAssertTrue(workspace.moveItem(at: pinned, to: first))
-        XCTAssertEqual(workspace.state.rows.map(\.key), [2, 1, 3].map { .embedded(F.runtimeID($0)) })
-        XCTAssertEqual(workspace.order.projects["api"], [2, 1, 3].map { F.runtimeID($0) })
-        let moved = try index(of: .embedded(F.runtimeID(2)))
-        let running = try index(of: .embedded(F.runtimeID(3)))
-        XCTAssertFalse(workspace.moveItem(at: moved, to: running), "dragging cannot move a session into a different state")
-        XCTAssertEqual(workspace.state.groups.map(\.title), ["api", "Waiting", "Working"])
+        var expected = [2, 3, 1].map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
+        for grouping in WorkspaceSidebarGrouping.allCases {
+            workspace.setSidebarGrouping(grouping)
+            XCTAssertEqual(workspace.state.rows.map(\.key), expected)
+            let first = try index(of: expected[0])
+            let second = try index(of: expected[1])
+            let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: first, makeIfNecessary: true) as? WorkspaceRowCellView)
+            XCTAssertTrue(cell.titleLabel.stringValue.hasPrefix("★ "))
+            XCTAssertTrue(workspace.moveItem(at: second, to: first), "\(grouping)")
+            expected.swapAt(0, 1)
+            XCTAssertEqual(workspace.state.rows.map(\.key), expected)
+            XCTAssertEqual(workspace.order.pinned, expected.prefix(2).map(WorkspaceOrder.token))
+            XCTAssertTrue(workspace.order.projects.isEmpty)
+            XCTAssertTrue(workspace.order.flat.isEmpty)
+            XCTAssertFalse(workspace.moveItem(at: try index(of: expected[0]), to: try index(of: expected[2])), "pins stay above unpinned rows")
+        }
     }
 
     func testProjectsDragAcrossStatesAndKeepSelectedTerminalOnStateChanges() throws {
         workspace.setSidebarGrouping(.project)
         var live = sessions
-        live[1].pinned = true
         live[0].iconState = "bolt"
         app.store.apply(snapshot: F.snapshot(live))
         let selected = try row("api", "work")
@@ -113,7 +117,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(workspace.state.selection, selected.key)
     }
 
-    func testFlatListLabelsProjectsAndPreservesHiddenRowsWhenDraggingFilteredList() throws {
+    func testFlatListLabelsProjectsAndKeepsPinsFirstWhenFiltered() throws {
         workspace.setSidebarGrouping(.compact)
         var live = sessions
         live[0].name = "Build API"
@@ -131,14 +135,14 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertFalse(named.detailLabel.stringValue.contains("api"))
         workspace.groupFilter.waitingOnlyButton.performClick(nil)
         XCTAssertTrue(workspace.sidebarWaitingOnly)
-        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [2, 4].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [4, 2].map { .embedded(F.runtimeID($0)) })
         XCTAssertEqual(workspace.state.rows.count, 3)
         XCTAssertTrue(workspace.terminalView(for: F.runtimeID(1)) === terminal)
-        XCTAssertTrue(workspace.moveItem(at: try index(of: .embedded(F.runtimeID(4))), to: try index(of: .embedded(F.runtimeID(2)))))
-        XCTAssertEqual(workspace.order.flat, [4, 1, 2].map(F.runtimeID))
+        XCTAssertFalse(workspace.moveItem(at: try index(of: .embedded(F.runtimeID(4))), to: try index(of: .embedded(F.runtimeID(2)))), "pins cannot be dragged below unpinned rows")
+        XCTAssertTrue(workspace.order.flat.isEmpty)
         XCTAssertTrue(workspace.revealInSidebar())
         XCTAssertFalse(workspace.sidebarWaitingOnly)
-        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [4, 1, 2].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), [4, 2, 1].map { .embedded(F.runtimeID($0)) })
         workspace.setSidebarWaitingOnly(true)
         live[1].attention = false
         live[2].attention = false

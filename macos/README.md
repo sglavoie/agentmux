@@ -433,19 +433,20 @@ ASL answer panel work the same either way.
   sightings and updates to names or ages do not flash.
   Preferences › Appearance › Group sessions by selects **State → Project**
   (the default), **Project → State**, **Projects**, **Compact list**, or
-  **Projects → Branches**. Project-first keeps every session,
-  including pinned and attention-needed sessions, inside its project, with
-  collapsible Waiting, Done, Working, and Idle sections underneath. Changes
+  **Projects → Branches**. Pinned sessions lead every layout. Project-first
+  keeps unpinned sessions, including those needing attention, inside their
+  project, with collapsible Waiting, Done, Working, and Idle sections underneath. Changes
   apply immediately and persist across launches; each project's state sections
   collapse independently.
   **Projects** omits state headings and keeps sessions in their saved positions
   as states change. **Projects → Branches** adds collapsible branch headings
   only for projects with multiple branches; sessions without a reported branch
-  appear under **No branch**. Both keep pinned and waiting sessions in their
-  project, show pins on rows, and count waiting sessions on project headings.
+  appear under **No branch**. Both list pins above projects and keep unpinned
+  waiting sessions in their project, counting them on project headings.
   **Compact list** uses one flat list with project names on every row and its
-  own saved drag order across projects. The state chips above these lists still
-  jump to sessions without moving them out of their project.
+  own saved drag order across projects below the pinned sessions. The state
+  chips above these lists still jump to sessions without moving them out of
+  their project.
   **Sort sessions by** is independent of grouping: **Manual order** uses saved
   drag positions, while **Recently visited** sorts within each group by when
   you opened a session or one of its attached terminals. Agent output does not
@@ -478,11 +479,12 @@ ASL answer panel work the same either way.
   can still be reordered in either sort. Headings never move.
 - **Pinning.** **Pin to Top** in a session's right-click menu, or **Session ›
   Pin or Unpin Session** (⌘.) for the one the pane is on, moves the session out of
-  its project into a **Pinned** group listed above every project
+  its project into a **Pinned** group listed above every project in all layouts
+  (Compact list keeps pins first without project headings)
   (`WorkspaceSidebar.groups(_:order:)`, `setPinned(_:_:)`); its line then
   names its project. A pinned session needing attention stays in **Pinned**,
-  which already leads the list; only while that group is collapsed does it
-  appear in **Needs attention**, keeping its pin. Pinned sessions keep the order
+  which already leads the list; in State → Project, while that group is collapsed,
+  it appears in **Needs attention**, keeping its pin. Pinned sessions keep the order
   they were pinned in until they are dragged among themselves, and **Unpin**
   puts one back under its project. A pin is the session's own: the `★` in
   front of its title, written by `amx pin-session` and reported in the

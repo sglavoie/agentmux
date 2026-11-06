@@ -246,7 +246,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(WorkspaceInspector.waiting(sessions, grouping: .projectThenState).map(\.key), Array(keys.prefix(3)))
     }
 
-    func testStableProjectsKeepPinsAndWaitingRowsInTheirSavedPlaces() throws {
+    func testStableProjectsLiftPinsAndRestoreTheirSavedPlacesOnUnpin() throws {
         var sessions = [F.tmux(1, project: "api", profile: "a", icon: "bolt"),
                         F.tmux(2, project: "api", profile: "b", icon: "key", attention: true),
                         F.tmux(3, project: "web", icon: "stop", attention: true)]
@@ -256,10 +256,11 @@ final class WorkspaceSidebarTests: XCTestCase {
         order.setCollapsed(project: "api", pinned: false, true)
         var state = WorkspaceState()
         state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .project))
-        XCTAssertEqual(state.groups.map(\.title), ["api", "web"])
+        XCTAssertEqual(state.groups.map(\.title), ["Pinned", "api", "web"])
         XCTAssertEqual(state.rows.map(\.key), [2, 1, 3].map { .embedded(F.runtimeID($0)) })
         XCTAssertEqual(state.groups.first?.attention, 1)
-        XCTAssertEqual(state.groups.first?.collapsed, true)
+        XCTAssertEqual(state.groups.first?.collapsed, false)
+        XCTAssertEqual(state.groups[1].collapsed, true)
         XCTAssertEqual(state.sectionCounts.map(\.count), [1, 1, 1])
         XCTAssertEqual(Set(state.rows.map(\.key)).count, sessions.count)
         let keys = state.rows.map(\.key)
@@ -268,8 +269,47 @@ final class WorkspaceSidebarTests: XCTestCase {
         sessions[1].iconState = "stop"
         sessions[1].pinned = false
         state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: .project))
-        XCTAssertEqual(state.rows.map(\.key), keys, "state and pin changes do not move sessions")
+        XCTAssertEqual(state.rows.map(\.key), keys, "unpinning restores the saved project order")
         XCTAssertEqual(state.groups.first?.attention, 2)
+    }
+
+    func testPinsLeadEveryLayoutAndSortAndUnpinRestoresManualOrder() throws {
+        var sessions = [F.tmux(1, project: "api", icon: "key", attention: true),
+                        F.tmux(2, project: "api", icon: "bolt"),
+                        F.tmux(3, project: "web", icon: "stop"),
+                        F.tmux(4, project: "web", icon: "key", attention: true)]
+        sessions[1].branch = "feature"
+        sessions[2].branch = "main"
+        var order = WorkspaceOrder()
+        let keys = (1...4).map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
+        order.set([keys[0], keys[1]], for: "api")
+        order.set([keys[3], keys[2]], for: "web")
+        order.setFlat([keys[0], keys[3], keys[1], keys[2]])
+        order.setPinned([keys[2], keys[1]])
+        order.visit(keys[1])
+        order.visit(keys[0])
+        order.visit(keys[3])
+        for grouping in WorkspaceSidebarGrouping.allCases {
+            let original = WorkspaceSidebar.groups(sessions, order: order, grouping: grouping).flatMap(\.rows).map(\.key)
+            var pinned = sessions
+            pinned[1].pinned = true
+            pinned[2].pinned = true
+            for sorting in WorkspaceSidebarSort.allCases {
+                var state = WorkspaceState()
+                state.apply(WorkspaceSidebar.groups(pinned, order: order, grouping: grouping, sorting: sorting))
+                let expectedPins = sorting == .manual ? [keys[2], keys[1]] : [keys[1], keys[2]]
+                XCTAssertEqual(Array(state.rows.prefix(2)).map(\.key), expectedPins, "\(grouping) / \(sorting)")
+                XCTAssertEqual(Set(state.rows.map(\.key)), Set(keys))
+                XCTAssertEqual(state.rows.count, keys.count, "pins must not be duplicated in projects")
+                XCTAssertEqual(state.sectionCounts.reduce(0) { $0 + $1.count }, keys.count)
+                XCTAssertEqual(WorkspaceSidebar.ordered(pinned, order: order, grouping: grouping, sorting: sorting).map(AttentionCycler.key), state.rows.map(\.key))
+                if grouping == .compact {
+                    XCTAssertTrue(state.groups.allSatisfy { $0.isFlat && !$0.canCollapse })
+                }
+                state.apply(WorkspaceSidebar.groups(sessions, order: order, grouping: grouping))
+                XCTAssertEqual(state.rows.map(\.key), original, "unpin restores \(grouping)'s order")
+            }
+        }
     }
 
     func testBranchesOmitRedundantNestingAndScopeCollapseToTheirProject() throws {
@@ -335,7 +375,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertTrue(order.visited.isEmpty)
     }
 
-    func testProjectFirstKeepsPinsAndAttentionTogetherAndScopesCollapse() throws {
+    func testProjectFirstLiftsPinsAndScopesCollapse() throws {
         var sessions = [
             F.tmux(1, project: "web", icon: "key", attention: true),
             F.tmux(2, project: "api", icon: "bolt"),
@@ -350,20 +390,21 @@ final class WorkspaceSidebarTests: XCTestCase {
             WorkspaceSidebar.groups(sessions, order: order, grouping: .projectThenState)
         }
         state.apply(built())
-        XCTAssertEqual(state.groups.map(\.title), ["api", "Done", "Working", "web", "Waiting", "Working", "Working", "Idle"])
+        XCTAssertEqual(state.groups.map(\.title), ["Pinned", "api", "Working", "web", "Waiting", "Working", "Working", "Idle"])
         XCTAssertEqual(state.rows.map(\.key), [3, 2, 1, 4, 5].map { .embedded(F.runtimeID($0)) })
         XCTAssertEqual(Set(state.rows.map(\.key)).count, sessions.count)
-        XCTAssertFalse(state.groups.contains { $0.pinned || $0.needsAttention })
+        XCTAssertTrue(state.groups[0].pinned)
+        XCTAssertFalse(state.groups.contains { $0.needsAttention })
         XCTAssertEqual(state.sectionCounts.map(\.count), [1, 1, 2, 1])
-        let api = try XCTUnwrap(state.groups.first)
-        XCTAssertEqual(state.rows(under: api).count, 2)
+        let api = try XCTUnwrap(state.groups.first { $0.isProjectHeading && $0.project == "api" })
+        XCTAssertEqual(state.rows(under: api).count, 1)
         let working = try XCTUnwrap(state.groups.first { $0.isNestedState && $0.project == "api" && $0.stateSection == .working })
         order.setCollapsed(working, true)
         state.apply(built())
         XCTAssertEqual(state.groups.filter { $0.isNestedState && $0.stateSection == .working }.map(\.collapsed), [true, false])
         order.setCollapsed(api, true)
         state.apply(built())
-        XCTAssertEqual(state.listedGroups.map(\.title), ["api", "web", "Waiting", "Working", "Working", "Idle"])
+        XCTAssertEqual(state.listedGroups.map(\.title), ["Pinned", "api", "web", "Waiting", "Working", "Working", "Idle"])
         XCTAssertEqual(state.rows.count, sessions.count)
         XCTAssertEqual(state.rows(under: working).map(\.key), [.embedded(F.runtimeID(2))])
         XCTAssertTrue(state.select(.embedded(F.runtimeID(2))))
