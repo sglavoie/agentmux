@@ -96,6 +96,7 @@ extension AppDelegate {
         )))
         controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
         controller.onLateResult = { [weak self] notice in self?.finishAnswer(notice) }
+        controller.flow.onAnswerSent = { [weak self] target in self?.workspaceAnswerSent(runtimeSessionID: target.runtimeSessionID) }
         promptPanel = controller
         Self.logger.notice("prompt panel: session \(target.runtimeSessionID, privacy: .public)")
         controller.show(target)

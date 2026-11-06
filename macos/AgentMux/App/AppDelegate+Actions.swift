@@ -58,6 +58,7 @@ extension AppDelegate {
     /// Answer… on a menu row or a banner: opens the answer panel on that run.
     func answer(_ target: ASLAnswerTarget) {
         let controller = aslPanel ?? ASLQuestionPanelController()
+        controller.flow.onAnswerSent = { [weak self] run in self?.workspaceAnswerSent(runID: run) }
         if aslPanel == nil {
             controller.onFinish = { [weak self] notice in self?.finishAnswer(notice) }
             controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
@@ -80,6 +81,18 @@ extension AppDelegate {
     func finishAnswer(_ notice: String?) {
         if let notice { store.show(notice: notice) }
         statusItem?.rebuildMenu()
+    }
+
+    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil) {
+        if let session = store.managedSessions.first(where: {
+            (runtimeSessionID != nil && $0.embeddedRuntimeSessionID == runtimeSessionID)
+                || (runID?.isEmpty == false && $0.aslRunID == runID)
+        }) {
+            cycler.focused(session, in: store.managedSessions, order: attentionOrder)
+        }
+        guard let workspace, workspace.isOpen else { return }
+        workspace.welcome.answerSent()
+        workspace.showNotice("Answer sent")
     }
 
     // MARK: Actions

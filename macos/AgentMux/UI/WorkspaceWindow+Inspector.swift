@@ -18,11 +18,7 @@ extension WorkspaceWindowController {
 
     func setInspectorCollapsed(_ collapsed: Bool, animated: Bool = false) {
         guard collapsed != isInspectorCollapsed, let inspectorItem else { return }
-        if animated, !AppDelegate.isRunningTests {
-            inspectorItem.animator().isCollapsed = collapsed
-        } else {
-            inspectorItem.isCollapsed = collapsed
-        }
+        WorkspaceMotion.collapse(inspectorItem, to: collapsed, animated: animated)
     }
 
     /// Turns the inspector to a tab. It stays hidden if it is.

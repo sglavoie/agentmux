@@ -22,7 +22,7 @@ extension WorkspaceWindowController {
             pane.addSubview(noticeBanner, positioned: .above, relativeTo: nil)
         }
         noticeBanner.text = message
-        noticeBanner.isHidden = false
+        WorkspaceMotion.reveal(noticeBanner)
         NSAccessibility.post(element: window, notification: .announcementRequested,
                              userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.high.rawValue])
         noticeEnd?.cancel()

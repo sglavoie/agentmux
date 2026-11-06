@@ -8,7 +8,7 @@ import AppKit
 /// dismissed. It lists and reports; the window controller goes there.
 @MainActor
 final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSource, NSTableViewDelegate {
-    static let rowHeight: CGFloat = 36
+    static let rowHeight: CGFloat = 42
     /// The most places shown without scrolling.
     static let visibleRows = 8
 
@@ -16,6 +16,8 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
 
     let field = NSTextField()
     let table = NSTableView()
+    let keyboardHint = NSTextField(labelWithString: "↑↓ Navigate   ↩ Open   esc Close")
+    let modeHint = NSTextField(labelWithString: "> Actions")
     /// Said in place of the list when nothing matches what is typed.
     let noMatchLabel = NSTextField(labelWithString: WorkspaceSwitcherView.noMatches)
     /// The places that match what is typed, in the order they are listed.
@@ -33,11 +35,16 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         super.init(frame: .zero)
         boxType = .custom
         titlePosition = .noTitle
-        cornerRadius = 8
+        cornerRadius = 12
         borderWidth = 1
         borderColor = .separatorColor
         fillColor = .windowBackgroundColor
         contentViewMargins = .zero
+        wantsLayer = true
+        shadow = NSShadow()
+        shadow?.shadowColor = NSColor.black.withAlphaComponent(0.16)
+        shadow?.shadowBlurRadius = 18
+        shadow?.shadowOffset = NSSize(width: 0, height: -4)
         isHidden = true
         translatesAutoresizingMaskIntoConstraints = false
 
@@ -76,7 +83,17 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         noMatchLabel.textColor = .secondaryLabelColor
         noMatchLabel.isHidden = true
 
-        let stack = NSStackView(views: [field, noMatchLabel, scroll])
+        for hint in [keyboardHint, modeHint] {
+            hint.font = .systemFont(ofSize: 11)
+            hint.textColor = .secondaryLabelColor
+            hint.lineBreakMode = .byTruncatingTail
+        }
+        keyboardHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let footer = NSStackView(views: [keyboardHint, NSView(), modeHint])
+        footer.spacing = 8
+        let separator = NSBox()
+        separator.boxType = .separator
+        let stack = NSStackView(views: [field, noMatchLabel, scroll, separator, footer])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 6
@@ -97,6 +114,8 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             field.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
             scroll.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24),
+            separator.widthAnchor.constraint(equalTo: scroll.widthAnchor),
+            footer.widthAnchor.constraint(equalTo: scroll.widthAnchor),
             height,
         ])
     }
@@ -194,6 +213,10 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     func cancel() { onCancel?() }
 
     private func filter(keeping place: WorkspaceSwitcher.Entry.Place?) {
+        let actions = field.stringValue.trimmingCharacters(in: .whitespaces).hasPrefix(">")
+        keyboardHint.stringValue = "↑↓ Navigate   ↩ \(actions ? "Run" : "Open")   esc Close"
+        modeHint.stringValue = actions ? "Actions" : "> Actions"
+        table.setAccessibilityLabel(actions ? "Actions" : "Places")
         shown = WorkspaceSwitcher.matches(field.stringValue, in: entries)
         table.reloadData()
         listHeight?.constant = CGFloat(min(shown.count, Self.visibleRows)) * (Self.rowHeight + table.intercellSpacing.height)
@@ -276,12 +299,18 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
     let glyphLabel = NSTextField(labelWithString: "")
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
+    let shortcutLabel = NSTextField(labelWithString: "")
 
     init() {
         super.init(frame: .zero)
         identifier = Self.identifier
         glyphLabel.alignment = .center
         titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        shortcutLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        shortcutLabel.textColor = .secondaryLabelColor
+        shortcutLabel.alignment = .right
+        shortcutLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
@@ -290,7 +319,7 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
-        let stack = NSStackView(views: [glyphLabel, text])
+        let stack = NSStackView(views: [glyphLabel, text, NSView(), shortcutLabel])
         stack.orientation = .horizontal
         stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -301,7 +330,7 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
         NSLayoutConstraint.activate([
             glyphLabel.widthAnchor.constraint(equalToConstant: 20),
             stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -4),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             stack.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
@@ -318,7 +347,10 @@ final class WorkspaceSwitcherCellView: NSTableCellView {
                                  .underlineStyle: NSUnderlineStyle.single.rawValue], range: range)
         }
         titleLabel.attributedStringValue = title
-        detailLabel.stringValue = entry.unavailableReason ?? entry.detail
+        let shortcut = entry.isAction && entry.detail.first.map({ "⌘⌥⌃⇧".contains($0) }) == true ? entry.detail : ""
+        shortcutLabel.stringValue = shortcut
+        shortcutLabel.isHidden = shortcut.isEmpty
+        detailLabel.stringValue = entry.unavailableReason ?? (shortcut.isEmpty ? entry.detail : "")
         detailLabel.isHidden = detailLabel.stringValue.isEmpty
         titleLabel.textColor = entry.unavailableReason == nil ? .labelColor : .secondaryLabelColor
         toolTip = entry.unavailableReason ?? entry.detail

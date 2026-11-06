@@ -250,6 +250,24 @@ final class PromptAnswerTests: XCTestCase {
 
     // MARK: Flow
 
+    func testAnswerReceiptOnlyFollowsSuccessfulSubmissionAndKeepsExactTarget() {
+        let service = FakePromptService()
+        service.looks = [.success(asking)]
+        service.presses = [.success(PromptSent(delivery: "accepted")), .failure(refusal("confirmation_required")),
+                           .success(PromptSent(delivery: "accepted"))]
+        let (flow, _) = flow(service)
+        var receipts: [PromptAnswerTarget] = []
+        flow.onAnswerSent = { receipts.append($0) }
+        flow.open(target)
+        flow.press(PromptKey.navigation[0])
+        XCTAssertTrue(receipts.isEmpty, "Moving the prompt selection is not an answer")
+        flow.press(two)
+        XCTAssertTrue(receipts.isEmpty, "A refused write is not a receipt")
+        flow.press(two)
+        XCTAssertEqual(receipts, [target])
+        XCTAssertTrue(flow.state?.look.asking == true, "Sending does not imply the prompt cleared")
+    }
+
     func testFlowLooksThenPressesThenLooksAgainAfterSettling() {
         let service = FakePromptService()
         service.looks = [.success(asking), .success(PromptLook(project: "api", screen: "working", lines: ["⏺"]))]

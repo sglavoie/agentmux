@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import os
 
 /// The workspace window: a native sidebar of the live sessions, grouped by
@@ -114,6 +115,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     let sidebar = WorkspaceSidebarView()
     let groupFilter = WorkspaceGroupFilter()
+    lazy var welcome = WorkspaceWelcomeModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
+    lazy var welcomeView = NSHostingView(rootView: WorkspaceWelcomeView(model: welcome))
     /// nil is All; a literal group named All remains a separate choice.
     var selectedGroup: String? {
         didSet {
@@ -415,6 +418,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         self.glyphs = glyphs
         self.now = now
         super.init()
+        welcome.onReceipt = { [weak self] receipt in
+            guard let self, self.isOpen, receipt.title == "All caught up" else { return }
+            WorkspaceCopyNotice.announce(receipt.title + ". " + receipt.detail, from: self.window)
+        }
+        welcome.onAction = { [weak self] command in self?.delegate?.workspacePerform(command) }
         inspector.onSource = { [weak self] identity in self?.delegate?.workspaceOpenHandoffSource(identity) }
         inspector.threads.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
         inspector.recap.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
@@ -447,6 +455,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         refresh()
+        welcome.returned(at: now())
     }
 
     /// Opens the window without activating the app or ordering it in, for
@@ -500,6 +509,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
+        welcome.close()
         inspector.recap.close()
         inspector.threads.close()
         paneLayout.active.showContext(nil, canAnswer: false)
@@ -612,6 +622,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         arrangeNewSessionBelow()
         reloadSidebar()
         if state.current { flashStateChanges(from: previousRows) }
+        welcome.observe(waiting: AttentionCycler.ordered(store.managedSessions).count,
+                        working: state.rows.filter(\.working).count,
+                        live: state.current, celebrate: isOpen && NSApp.isActive)
         let notice = WorkspaceSidebar.feedNotice(store.feed)
         feedLabel.stringValue = notice ?? ""
         feedLabel.isHidden = notice == nil
@@ -651,7 +664,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let minimumSize = NSSize(width: 640, height: 360)
 
     private func makeWindow() -> NSWindow {
-        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton)
+        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton, welcome: welcomeView)
         groupFilter.onSelect = { [weak self] group in self?.selectGroup(group) }
         let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
         sidebarZoomView.zoom = sidebarZoom

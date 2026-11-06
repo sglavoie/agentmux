@@ -234,9 +234,11 @@ the existing answer panel for that session, including from the other split pane,
 without changing the active terminal. Disconnected status is labeled **Last known**
 and question actions are unavailable until the feed returns.
 
-**Last outcome** opens a saved conversation recap in a popover. Opening or refreshing
-it only reads saved data; it never generates a recap. Its saved time, excerpt
-coverage, stale results, and failures remain visible. Supporting-message links open
+After you pause on a session, **Last outcome** previews its saved outcome in the
+context strip. Rapid switching cancels pending reads. Hover for the saved time,
+or click for the full recap and supporting messages. These reads use only saved
+data; they never generate a recap. The popover shows the saved time, excerpt
+coverage, stale results, and failures. Supporting-message links open
 History. Switching to another session closes the popover so an old outcome cannot
 be mistaken for the new session's. Generate recaps through the Session inspector
 or the existing conversation readers.
@@ -478,9 +480,30 @@ is committed.
 
 ## Native workflow views
 
+### Returning to work
+
+A compact **Welcome back** card below the session list shows unread recorded
+updates from the past seven days and the live attention count. It appears when
+opening the workspace or returning after at least a minute away. **Activity** and
+**Briefing** open the existing review windows; **Next waiting** focuses a waiting
+session. Dismissing the card does not mark any activity read. Incomplete history
+is labeled “At least”; unavailable reads and disconnected waiting status are
+shown explicitly.
+
+Successful prompt submissions and accepted supervisor answers show **Answer sent**.
+The waiting count follows the live feed, not the submission receipt. When a live
+waiting count reaches zero while the app is active, **All caught up** briefly
+shows how many agents are still working. New attention clears that acknowledgement.
+These updates never move keyboard focus or automatically navigate to another agent.
+
+Palette entrances, hover feedback, and sidebar/inspector disclosure use short,
+consistent transitions that respect Reduce Motion. Session state changes use one
+brief highlight. Terminal input and session navigation do not wait for animation.
+
 ### Command palette and launch
 
-**⌘⇧P** opens the command palette. In **⌘P**, type `>` to search actions.
+**⌘⇧P** opens the command palette. Shortcuts align in a separate column, and the
+footer shows navigation keys and the current mode. In **⌘P**, type `>` to search actions.
 Abbreviations such as `swcc` match Split with Checkout Changes; aliases include
 `diff`, `preferences`, and `terminal`. Exact names rank first, then available
 actions relevant to the current pane. Matching title characters are highlighted,

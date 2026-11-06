@@ -50,6 +50,7 @@ final class ASLQuestionFlow: ObservableObject {
     /// The form closed itself: its last answer was accepted, or the run
     /// resumed. The notice says so.
     var onClose: (_ notice: String?) -> Void = { _ in }
+    var onAnswerSent: (String) -> Void = { _ in }
     /// A submission sent before the operator closed the form, or opened
     /// another run, has answered; the notice says how it went.
     var onLateResult: (_ notice: String) -> Void = { _ in }
@@ -263,6 +264,9 @@ final class ASLQuestionFlow: ObservableObject {
                         Self.logger.notice("asl_action \(params.operationID, privacy: .public): \(error.description, privacy: .public)")
                     }
                     guard let self else { return }
+                    if case let .success(operation) = result, ASLResponse.answered(operation.status) {
+                        self.onAnswerSent(params.runID)
+                    }
                     guard open == self.openSeq else {
                         self.lateResult(params, label: label, result)
                         return

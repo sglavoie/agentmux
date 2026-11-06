@@ -427,8 +427,8 @@ ASL answer panel work the same either way.
   always stays expanded, names each session's project, and cannot be dragged.
   A session's line flashes with its displayed section header's background color
   when its state changes. ⌘J uses the same section color to reveal a session;
-  state-change pulses last twice as long as reveal pulses:
-  1.6 seconds total, or one 0.8-second pulse with Reduce Motion.
+  state changes use one 350 ms opacity highlight. Explicit reveal keeps its
+  two orientation pulses (one with Reduce Motion).
   These flashes leave focus, scrolling, and collapsed groups alone; first
   sightings and updates to names or ages do not flash.
   Preferences › Appearance › Compact sidebar places attached terminals as

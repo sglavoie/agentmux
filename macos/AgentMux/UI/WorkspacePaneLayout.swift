@@ -145,9 +145,17 @@ final class WorkspacePaneHeadingButton: NSButton {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingMiddle
         let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        let text = NSAttributedString(string: title, attributes: [
+        let text = NSMutableAttributedString(string: title, attributes: [
             .font: font, .foregroundColor: NSColor.labelColor, .paragraphStyle: paragraph,
         ])
+        if !title.isEmpty {
+            text.addAttribute(.foregroundColor, value: contentTintColor ?? NSColor.secondaryLabelColor,
+                              range: NSRange(location: 0, length: 1))
+        }
+        if let location = title.range(of: " · ") {
+            text.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor,
+                              range: NSRange(location.lowerBound..<title.endIndex, in: title))
+        }
         text.draw(in: NSRect(x: 4, y: (bounds.height - font.boundingRectForFont.height) / 2,
                             width: max(0, bounds.width - 8), height: font.boundingRectForFont.height))
     }

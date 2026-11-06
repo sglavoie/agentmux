@@ -138,7 +138,7 @@ extension WorkspaceWindowController {
         let states = Dictionary(previous.map { ($0.key, $0.iconState) }, uniquingKeysWith: { first, _ in first })
         for (index, item) in items.enumerated() {
             guard case let .row(row) = item, let before = states[row.key], before != row.iconState else { continue }
-            (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index), pulseDuration: 0.8)
+            (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index), pulseDuration: 0.35, pulses: 1)
         }
     }
 
@@ -596,11 +596,7 @@ extension WorkspaceWindowController {
 
     func setSidebarCollapsed(_ collapsed: Bool, animated: Bool = false) {
         guard collapsed != isSidebarCollapsed, let sidebarItem else { return }
-        if animated, !AppDelegate.isRunningTests {
-            sidebarItem.animator().isCollapsed = collapsed
-        } else {
-            sidebarItem.isCollapsed = collapsed
-        }
+        WorkspaceMotion.collapse(sidebarItem, to: collapsed, animated: animated)
     }
 
     /// The sidebar was hidden or shown, by its buttons, the menu, or a drag

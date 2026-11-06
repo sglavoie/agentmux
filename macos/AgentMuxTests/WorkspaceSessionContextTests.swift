@@ -159,6 +159,19 @@ final class WorkspaceSessionContextTests: XCTestCase {
             .write(to: directory.appendingPathComponent("responsiveness.json"))
         print("Workspace responsiveness (synthetic terminals, 30 sessions, 100 samples): \(results)")
 
+        var saved = AMXCommand(binary: URL(fileURLWithPath: "/fixture/amx"), launchEnvironment: LaunchEnvironment(home: "/fixture", path: "/bin"))
+        saved.runner = { _, args, _, _ in
+            let data: [String: Any] = ["schema_version": 1, "data": ["conversation": args.last!, "status": "ready", "recap": [
+                "goal": ["text": "Fix the OAuth callback", "messages": [0]],
+                "latest": ["text": "Added callback validation and regression coverage", "messages": [4]],
+                "outstanding": ["text": "Run the test suite", "messages": [4]],
+                "generated_at": "2026-11-06T10:00:00Z", "profile": "work", "model": "fixture", "partial": false]]]
+            return .finished(.init(status: 0, stdout: try! JSONSerialization.data(withJSONObject: data), stderr: Data()))
+        }
+        app.recapCommand = saved
+        workspace.welcome.schedule = { _, _ in }
+        workspace.welcome.answerSent()
+
         app.store.apply(snapshot: F.snapshot([session(), session(2, icon: "stop"), session(3, icon: "bolt"), session(4, icon: "")]))
         workspace.select(.embedded(F.runtimeID(1)), focus: true)
         guard #available(macOS 14.4, *) else { return }

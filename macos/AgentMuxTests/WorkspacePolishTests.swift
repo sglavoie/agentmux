@@ -230,7 +230,7 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertNil(cell.textField)
         cell.setTabText(nil)
         XCTAssertEqual(cell.titleLabel.textColor, .labelColor)
-        XCTAssertEqual(cell.detailLabel.textColor, WorkspaceRowCellView.detailColor)
+        XCTAssertEqual(cell.detailLabel.textColor, .secondaryLabelColor)
     }
 
     /// The list's grays are too faint on the selected line's opaque pill.

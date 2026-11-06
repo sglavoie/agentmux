@@ -208,7 +208,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         becameActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.notifications?.refreshAuthorization() }
+            MainActor.assumeIsolated {
+                self?.notifications?.refreshAuthorization()
+                if let workspace = self?.workspace, workspace.isOpen { workspace.welcome.returned() }
+            }
         }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -366,6 +369,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     func endChange(_ token: Int) {
         runningChanges[token] = nil
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        workspace?.welcome.leave()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

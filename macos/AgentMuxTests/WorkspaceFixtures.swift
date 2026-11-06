@@ -90,6 +90,8 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     var conversationSearchRequests = 0
     func workspaceSearchConversation() { conversationSearchRequests += 1 }
     var performedCommands: [WorkspaceCommand] = []
+    var recapCommand: AMXCommand?
+    func workspaceRecapCommand() -> AMXCommand? { recapCommand }
     var resumeRequests: [ConversationIdentity] = []
     func workspaceResumeConversation(_ identity: ConversationIdentity) { resumeRequests.append(identity) }
     var workspaceOffersSetup = false

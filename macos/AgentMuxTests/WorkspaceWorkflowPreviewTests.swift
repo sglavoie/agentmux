@@ -12,6 +12,36 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testWelcomeReceiptsAndPaletteInBothAppearances() async throws {
+        for dark in [false, true] {
+            let model = WorkspaceWelcomeModel(command: { nil })
+            model.schedule = { _, _ in }
+            model.observe(waiting: 2, working: 3, live: true, celebrate: false)
+            model.answerSent()
+            let palette = WorkspaceSwitcherView()
+            palette.show([
+                .init(place: .command(.nextWaiting), glyph: "›", title: "Next Waiting Session", detail: "⌘⇧A"),
+                .init(place: .command(.briefing), glyph: "›", title: "Project Briefing", detail: "Recent outcomes and unfinished work"),
+                .init(place: .command(.changes), glyph: "›", title: "Checkout Changes", detail: "⌘⇧C"),
+            ])
+            palette.enter(">")
+            palette.isHidden = false
+            try await render(HStack(alignment: .top, spacing: 20) {
+                VStack { WorkspaceWelcomeView(model: model); Spacer() }.frame(width: 210)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Command palette").font(.headline)
+                    PreviewNativeView(view: palette).frame(height: 230)
+                    Spacer()
+                }
+            }.padding(16), name: "welcome-palette-\(dark)", width: 800, height: 380, dark: dark,
+                expected: ["Answer sent", "Next waiting", "Activity", "Briefing", "Next Waiting Session", "Navigate"])
+            model.observe(waiting: 0, working: 3, live: true, celebrate: true)
+            try await render(VStack { WorkspaceWelcomeView(model: model); Spacer() },
+                name: "welcome-caught-up-\(dark)", width: 210, height: 230, dark: dark,
+                expected: ["All caught up", "still working", "Activity", "Briefing"])
+        }
+    }
+
     func testConversationThreadLinksAtNarrowAndWideSizes() async throws {
         let a = ConversationIdentity(harness: "claude", sessionID: "source")
         let b = ConversationIdentity(harness: "codex", sessionID: "review")

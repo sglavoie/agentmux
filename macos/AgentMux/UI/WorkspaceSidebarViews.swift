@@ -317,10 +317,10 @@ class WorkspaceRowView: NSTableRowView {
 
     /// Pulses the accent over the line twice, so the eye finds it (once with
     /// Reduce Motion), then leaves it as it was.
-    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.4) {
+    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.4, pulses: Int = 2) {
         if flashView.superview !== self { addSubview(flashView, positioned: .below, relativeTo: selectionBorder) }
         flashView.frame = pillRect(verticalInset: 1)
-        flashView.flash(color: color, pulseDuration: pulseDuration)
+        flashView.flash(color: color, pulseDuration: pulseDuration, pulses: pulses)
     }
 
     /// Whether the line is flashing now.
@@ -347,13 +347,13 @@ class WorkspaceRowView: NSTableRowView {
 final class WorkspaceRowFlashView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.4) {
+    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.4, pulses: Int = 2) {
         wantsLayer = true
         layer?.opacity = 0
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = color.cgColor
         }
-        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
+        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : pulses
         let animation = CAKeyframeAnimation(keyPath: "opacity")
         animation.values = [0] + Array(repeating: [1, 0], count: pulses).flatMap { $0 }
         animation.duration = pulseDuration * Double(pulses)
@@ -694,7 +694,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     var onClose: (() -> Void)?
     /// Whether the pointer is over the line; the × is drawn only then.
     var isHovered = false {
-        didSet { closeButton.alphaValue = isHovered ? 1 : 0 }
+        didSet { WorkspaceMotion.fade(closeButton, to: isHovered ? 1 : 0) }
     }
     /// The side of the ×'s target, larger than its glyph.
     static let closeTarget: CGFloat = 18
@@ -716,8 +716,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         super.init(frame: .zero)
         identifier = Self.identifier
         glyphLabel.alignment = .center
-        nameLabel.font = .systemFont(ofSize: 12, weight: .bold)
-        nameLabel.textColor = Self.nameColor
+        nameLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        nameLabel.textColor = .labelColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isHidden = true
         titleLabel.lineBreakMode = .byTruncatingTail
@@ -753,7 +753,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         closeButton.action = #selector(closePressed(_:))
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         addSubview(closeButton)
-        keyLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .bold)
+        keyLabel.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
         keyLabel.textColor = .tertiaryLabelColor
         keyLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         keyLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -860,15 +860,6 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// After the title of a line whose terminal rang the bell unseen.
     static let bellGlyph = "🔔"
 
-    /// A session's name on its color: a dark blue, which reads on every
-    /// color the daemon publishes, as black does.
-    static let nameOnTabColor = NSColor(srgbRed: 0, green: 0.16, blue: 0.55, alpha: 1)
-    /// A session's name on the list's own background: the same dark blue in
-    /// a light appearance, and a blue light enough to read in a dark one.
-    static let nameColor = NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.45, green: 0.68, blue: 1, alpha: 1) : nameOnTabColor
-    }
     /// The detail, key, and × on the selected line's opaque pill: the label
     /// color, a little muted. Built per appearance, because muting
     /// `labelColor` fixes it to whichever appearance was current then,
@@ -881,13 +872,6 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// The detail and key on a chip: a dark gray, where the list's own
     /// grays fade into it.
     static let highlightedDetailColor = NSColor(white: 0.25, alpha: 1)
-    /// The detail and key of a line on no band, such as the Dashboard's and
-    /// the Overview's: #D0D0D0 dark, #333333 light, firmer than the list's
-    /// own grays.
-    static let detailColor = NSColor(name: nil) { appearance in
-        NSColor(white: appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? 0xD0 / 255.0 : 0x33 / 255.0, alpha: 1)
-    }
-
     /// Draws the text in `color`, for a session's color behind it, or as the
     /// list draws it when there is none. On the `selected` line's opaque pill
     /// the list's secondary and tertiary grays are too faint to read, so the
@@ -895,14 +879,14 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// `chip` puts the text on that color, the detail and key dark gray.
     func setTabText(_ color: NSColor?, selected: Bool = false, chip: NSColor? = nil) {
         [glyphLabel, nameLabel, titleLabel, detailLabel, keyLabel].forEach { $0.chip = chip }
-        nameLabel.textColor = color == nil ? Self.nameColor : Self.nameOnTabColor
+        nameLabel.textColor = color ?? .labelColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor
         let muted = color?.withAlphaComponent(0.8) ?? (chip != nil ? Self.highlightedDetailColor : nil)
             ?? (selected ? Self.selectedDetailColor : nil)
-        detailLabel.textColor = muted ?? Self.detailColor
+        detailLabel.textColor = muted ?? .secondaryLabelColor
         closeButton.contentTintColor = muted ?? .tertiaryLabelColor
-        keyLabel.textColor = muted ?? Self.detailColor
+        keyLabel.textColor = muted ?? .secondaryLabelColor
     }
 
     required init?(coder: NSCoder) {
@@ -956,7 +940,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
-        titleLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        titleLabel.font = .systemFont(ofSize: 12, weight: row.name.isEmpty ? .semibold : .regular)
         detailLabel.stringValue = closing ? Self.closingDetail : row.detail
         toolTip = row.displayName + " · " + row.toolTip
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""

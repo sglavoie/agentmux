@@ -1,8 +1,9 @@
 import AppKit
 import SwiftUI
+import Combine
 
 /// Fixed-height chrome: changes to status and saved outcomes never resize
-/// the terminal. A popover reads saved recaps only when explicitly opened.
+/// the terminal. After navigation settles, reads saved recaps only.
 @MainActor
 final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
     let status = NSTextField(labelWithString: "")
@@ -11,6 +12,11 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
     let recap: WorkspaceRecapModel
     private(set) var context: WorkspaceSessionContext?
     private let popover = NSPopover()
+    private var previewObservation: AnyCancellable?
+    private var previewRead: DispatchWorkItem?
+    var schedulePreview: (DispatchWorkItem) -> Void = { work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
+    }
     var onQuestion: (() -> Void)?
 
     init(recap: WorkspaceRecapModel? = nil) {
@@ -30,6 +36,10 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
         }
         question.action = #selector(showQuestion)
         outcome.action = #selector(showOutcome)
+        outcome.cell?.lineBreakMode = .byTruncatingTail
+        outcome.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        outcome.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
+        outcome.widthAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
         outcome.toolTip = "Read the saved conversation outcome"
         let stack = NSStackView(views: [status, outcome, question])
         stack.orientation = .horizontal
@@ -45,11 +55,16 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: WorkspaceSavedOutcomeView(model: self.recap))
         popover.contentSize = NSSize(width: 380, height: 240)
+        previewObservation = self.recap.$report.combineLatest(self.recap.$error).sink { [weak self] report, error in
+            self?.showPreview(report, error: error)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     func show(_ context: WorkspaceSessionContext?, canAnswer: Bool) {
+        let changed = context?.key != self.context?.key || context?.conversation != self.context?.conversation
+            || context?.revision != self.context?.revision
         if context?.key != self.context?.key || context?.conversation != self.context?.conversation {
             popover.close()
             recap.close()
@@ -60,6 +75,17 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
         status.toolTip = context?.status
         question.isHidden = !canAnswer
         outcome.isHidden = context?.conversation == nil
+        if changed {
+            previewRead?.cancel()
+            if let context, context.conversation != nil {
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self, self.context == context else { return }
+                    self.recap.select(context.conversation, revision: context.revision, canGenerate: false)
+                }
+                previewRead = work
+                schedulePreview(work)
+            }
+        }
         if popover.isShown, let context {
             recap.select(context.conversation, revision: context.revision, canGenerate: false)
         }
@@ -69,11 +95,28 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
 
     @objc func showOutcome() {
         guard let context, context.conversation != nil else { return }
+        previewRead?.cancel()
         recap.select(context.conversation, revision: context.revision, canGenerate: false)
         popover.show(relativeTo: outcome.bounds, of: outcome, preferredEdge: .minY)
     }
 
-    func popoverDidClose(_ notification: Notification) { recap.close() }
+    func popoverDidClose(_ notification: Notification) {}
+
+    private func showPreview(_ report: ConversationRecapReport?, error: String?) {
+        guard let saved = report?.recap else {
+            outcome.title = "Last outcome"
+            outcome.toolTip = error ?? "Read the saved conversation outcome"
+            outcome.setAccessibilityLabel("Last outcome")
+            return
+        }
+        let text = saved.latest.text.reveal().components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        let stale = report?.status != "ready" || error != nil
+        outcome.title = "\(stale ? "Earlier" : "Last"): \(text)"
+        let date = WorkspaceActivityEntry.date(saved.generatedAt)?.formatted(date: .abbreviated, time: .shortened) ?? saved.generatedAt
+        let description = "Saved \(date)\(stale ? " · newer messages may not be included" : ""). \(text)"
+        outcome.toolTip = description
+        outcome.setAccessibilityLabel(description + ". Read supporting messages")
+    }
 }
 
 private struct WorkspaceSavedOutcomeView: View {

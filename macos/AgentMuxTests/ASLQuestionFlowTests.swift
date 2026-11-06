@@ -71,6 +71,8 @@ final class ASLQuestionFlowTests: XCTestCase {
         serve([ASLFixtures.pausedRow(), row])
         service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "Run the backfill now?"))
         let flow = flow()
+        var receipts: [String] = []
+        flow.onAnswerSent = { receipts.append($0) }
 
 		flow.open(ASLAnswerTarget(runID: "run-reply"))
         XCTAssertEqual(flow.phase, .open)
@@ -86,6 +88,7 @@ final class ASLQuestionFlowTests: XCTestCase {
         XCTAssertEqual(closes, ["The answer to api migration was accepted"], "the panel closed itself and said so")
         XCTAssertEqual(flow.phase, .idle)
         XCTAssertEqual(flow.state, ASLResponseState(), "the body and draft are cleared")
+        XCTAssertEqual(receipts, ["run-reply"])
     }
 
     func testPausedRunOffersReplyAndResume() {

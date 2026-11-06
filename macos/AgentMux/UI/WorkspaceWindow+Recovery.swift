@@ -360,7 +360,7 @@ extension WorkspaceWindowController {
         switcherReturn = window.firstResponder
         switcher.show(switcherEntries())
         if actions { switcher.enter("> ") }
-        switcher.isHidden = false
+        WorkspaceMotion.reveal(switcher)
         window.makeFirstResponder(switcher.field)
         switcher.placeCaretAtEnd()
     }

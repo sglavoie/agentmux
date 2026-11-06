@@ -801,7 +801,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(cell.nameLabel.stringValue, "billing fix")
         XCTAssertEqual(cell.titleLabel.stringValue, "work", "the profile stays on its own line")
         XCTAssertTrue(cell.nameLabel.font?.fontDescriptor.symbolicTraits.contains(.bold) == true)
-        XCTAssertEqual(cell.nameLabel.textColor, WorkspaceRowCellView.nameColor, "name follows the current appearance")
+        XCTAssertEqual(cell.nameLabel.textColor, .labelColor, "name follows the current appearance")
         XCTAssertTrue((cell.nameLabel.superview as? NSStackView)?.arrangedSubviews.first === cell.nameLabel, "the name is the first line")
         XCTAssertGreaterThan(workspace.sidebar.rect(ofRow: work).height, workspace.sidebar.rect(ofRow: personal).height,
                              "the named line is taller by its first line")
@@ -815,7 +815,7 @@ final class WorkspaceWindowTests: XCTestCase {
         // Selected, the line is on the list's own selection.
         workspace.select(.embedded(F.runtimeID(1)))
         cell = try line(work)
-        XCTAssertEqual(cell.nameLabel.textColor, WorkspaceRowCellView.nameColor)
+        XCTAssertEqual(cell.nameLabel.textColor, .labelColor)
 
         // The name taken back leaves the line as it was.
         named[0].name = ""
@@ -1245,9 +1245,8 @@ final class WorkspaceWindowTests: XCTestCase {
             if changed {
                 let layer = try XCTUnwrap(view.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
                 let animation = try XCTUnwrap(layer.animation(forKey: WorkspaceRowView.flashKey) as? CAKeyframeAnimation)
-                let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
-                XCTAssertEqual(animation.duration, 0.8 * Double(pulses), accuracy: 0.001)
-                XCTAssertEqual(animation.values?.count, 1 + 2 * pulses)
+                XCTAssertEqual(animation.duration, 0.35, accuracy: 0.001)
+                XCTAssertEqual(animation.values?.count, 3, "One brief state-change highlight")
                 let band: WorkspaceSidebarBand = row.key == .embedded(F.runtimeID(6)) ? .pinned
                     : row.key == .embedded(F.runtimeID(7)) ? .attention : .running
                 view.effectiveAppearance.performAsCurrentDrawingAppearance {

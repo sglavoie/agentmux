@@ -50,6 +50,8 @@ final class PromptAnswerFlow: ObservableObject {
     /// A key sent before the operator opened another session has answered;
     /// the notice says how it went.
     var onLateResult: (_ notice: String) -> Void = { _ in }
+    /// A successful submission is a receipt, not evidence that waiting cleared.
+    var onAnswerSent: (PromptAnswerTarget) -> Void = { _ in }
 
     private let service: PromptAnswerService
     /// Looks, including the settle pause after a key: concurrent, so a new
@@ -137,6 +139,11 @@ final class PromptAnswerFlow: ObservableObject {
                     guard let self else { return }
                     if case let .failure(error) = result {
                         Self.logger.notice("press \(target.runtimeSessionID, privacy: .public): \(error.message, privacy: .public)")
+                    }
+                    switch result {
+                    case .success, .partial:
+                        if arguments.count > 3, !["up", "down"].contains(arguments[3]) { self.onAnswerSent(target) }
+                    case .failure: break
                     }
                     guard var current = self.state, current.target == target, current.seq == seq else {
                         // The panel moved to another session or was closed:
