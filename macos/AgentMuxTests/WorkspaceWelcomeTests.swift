@@ -26,28 +26,71 @@ final class WorkspaceWelcomeTests: XCTestCase {
         return ["entries": entries, "since": "2026-10-30T00:00:00Z", "earliest_available": "", "truncated": true, "corrupt_lines": 0, "matched": 8]
     }
 
-    func testReturnSummaryReadsExactUnreadIDsWithoutMarkingOrOpeningTranscripts() {
+    func testWelcomeReadsExactUnreadIDsOnlyOncePerLaunch() {
         let runner = WelcomeRunner()
         var calls: [[String]] = []
         let amx = command { args in calls.append(args); return self.report() }
         let markers = WorkspaceActivityReadStore(load: { .init(read: ["read": Date()]) }, save: { _ in XCTFail("A glance must not acknowledge events") })
         let model = WorkspaceWelcomeModel(command: { amx }, runner: runner, readStore: markers)
-        let start = Date()
-        model.returned(at: start)
+        model.showWelcomeOnce()
+        model.showWelcomeOnce()
+        XCTAssertEqual(runner.pending.count, 1, "Activation during startup must not duplicate the read")
         runner.release()
         XCTAssertEqual(model.summary, "At least 2 unread updates in the past 7 days.")
         XCTAssertEqual(calls, [["session", "activity", "--json", "--days", "7", "--limit", "1000"]])
         model.dismiss()
         XCTAssertFalse(model.visible)
-        model.leave(at: start)
-        model.returned(at: start.addingTimeInterval(20))
-        XCTAssertTrue(runner.pending.isEmpty, "Brief app switches do not resurrect a dismissed summary")
-        model.leave(at: start)
-        model.returned(at: start.addingTimeInterval(61))
-        XCTAssertEqual(runner.pending.count, 1)
+        model.showWelcomeOnce()
+        XCTAssertTrue(runner.pending.isEmpty, "Returning to the app must not resurrect a dismissed summary")
         model.close()
+        model.showWelcomeOnce()
+        XCTAssertTrue(runner.pending.isEmpty, "Reopening the workspace must not repeat the welcome")
+        XCTAssertFalse(model.visible)
+        let relaunched = WorkspaceWelcomeModel(command: { amx }, runner: runner, readStore: markers)
+        relaunched.showWelcomeOnce()
+        XCTAssertEqual(runner.pending.count, 1, "A new app launch can show the welcome again")
+    }
+
+    func testClosingDuringWelcomeReadDiscardsResultWithoutRepeatingOnReopen() {
+        let runner = WelcomeRunner()
+        let amx = command { _ in self.report() }
+        let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+        model.showWelcomeOnce()
+        model.close()
+        model.showWelcomeOnce()
+        XCTAssertEqual(runner.pending.count, 1)
         runner.release()
         XCTAssertNil(model.summary, "A late read must not reopen a closed summary")
+    }
+
+    func testReceiptExpiryDoesNotRestoreWelcomeOrItsPendingRead() {
+        for finishReadFirst in [false, true] {
+            let runner = WelcomeRunner()
+            let amx = command { _ in self.report() }
+            let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+            var expiry: DispatchWorkItem?
+            model.schedule = { _, work in expiry = work }
+            model.showWelcomeOnce()
+            if finishReadFirst { runner.release() }
+            model.dismiss()
+            model.answerSent()
+            if !finishReadFirst { runner.release() }
+            XCTAssertEqual(model.title, "Answer sent")
+            expiry?.perform()
+            XCTAssertNil(model.summary)
+            XCTAssertFalse(model.visible, "Receipt expiry must not bring back Welcome back")
+        }
+    }
+
+    func testWelcomeWaitsForCommandAvailability() {
+        let runner = WelcomeRunner()
+        var amx: AMXCommand?
+        let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+        model.showWelcomeOnce()
+        XCTAssertFalse(model.visible)
+        amx = command { _ in self.report() }
+        model.showWelcomeOnce()
+        XCTAssertEqual(runner.pending.count, 1)
     }
 
     func testSentReceiptDoesNotClearAttentionAndReconnectNeverCelebrates() {
@@ -79,7 +122,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         let amx = command { _ in self.report() }
         let model = WorkspaceWelcomeModel(command: { amx }, runner: runner,
             readStore: .init(load: { throw CocoaError(.fileReadNoPermission) }, save: { _ in XCTFail() }))
-        model.refresh(); runner.release()
+        model.showWelcomeOnce(); runner.release()
         XCTAssertTrue(model.detail.contains("Read status is unavailable"))
     }
 
@@ -88,6 +131,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
         workspace.setSidebarZoom(percent: 130)
         workspace.openForTesting()
+        workspace.setInspectorCollapsed(false)
         workspace.window.makeKeyAndOrderFront(nil)
         defer { workspace.window.close() }
         for zoom in [130, 100, 80] {
@@ -109,7 +153,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
             workspace.window.sendEvent(down)
             try await Task.sleep(for: .milliseconds(100))
             XCTAssertTrue(workspace.welcome.dismissed, "Dismiss must work at \(zoom)% sidebar zoom")
-            XCTAssertLessThanOrEqual(host.frame.height, 1, "Dismissed banner must give its space back to the list")
+            XCTAssertLessThanOrEqual(host.frame.height, 1, "Dismissed banner must give its space back to the inspector")
         }
     }
 
@@ -128,6 +172,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
         app.store.onChange = { [weak workspace] in workspace?.refresh() }
         workspace.openForTesting()
+        workspace.setInspectorCollapsed(false)
         defer { workspace.window.close() }
         var session = WorkspaceFixture.tmux(1, project: "API", icon: "key", attention: true)
         app.store.apply(snapshot: WorkspaceFixture.snapshot([session]))
@@ -135,8 +180,11 @@ final class WorkspaceWelcomeTests: XCTestCase {
         workspace.window.contentView?.layoutSubtreeIfNeeded()
         let terminal = try XCTUnwrap(workspace.terminalView(for: WorkspaceFixture.runtimeID(1)))
         let bounds = terminal.bounds
+        let sessionListBounds = workspace.sidebar.enclosingScrollView?.bounds
         workspace.welcome.answerSent()
         workspace.window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertTrue(workspace.welcomeView.isDescendant(of: workspace.inspector))
+        XCTAssertEqual(workspace.sidebar.enclosingScrollView?.bounds, sessionListBounds)
         XCTAssertEqual(workspace.welcome.waiting, 1)
         XCTAssertEqual(terminal.bounds, bounds)
         XCTAssertTrue(workspace.window.firstResponder === terminal)

@@ -125,7 +125,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
 
-    init(preferences: WorkspaceReadingPreferences? = nil) {
+    init(preferences: WorkspaceReadingPreferences? = nil, welcome: NSView? = nil) {
         let preferences = preferences ?? .shared
         readingPreferences = preferences
         super.init(frame: .zero)
@@ -210,6 +210,15 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         header.translatesAutoresizingMaskIntoConstraints = false
         addSubview(header)
         addSubview(scroll)
+        if let welcome {
+            welcome.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(welcome)
+            NSLayoutConstraint.activate([
+                welcome.leadingAnchor.constraint(equalTo: leadingAnchor),
+                welcome.trailingAnchor.constraint(equalTo: trailingAnchor),
+                welcome.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        }
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.inset),
@@ -219,7 +228,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
             scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 6),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            scroll.bottomAnchor.constraint(equalTo: welcome?.topAnchor ?? bottomAnchor),
             stack.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
             stack.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: scroll.contentView.trailingAnchor),

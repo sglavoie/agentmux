@@ -218,7 +218,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var sidebarItem: NSSplitViewItem?
     var contentItem: NSSplitViewItem?
     private var sidebarObservation: NSKeyValueObservation?
-    let inspector = WorkspaceInspectorView()
+    lazy var inspector = WorkspaceInspectorView(welcome: welcomeView)
     /// Hides the inspector and brings it back, from the title bar.
     let inspectorToggle = WorkspaceWindowChrome.makeInspectorToggle()
     /// The tab the inspector is turned to; the app keeps it across launches.
@@ -490,7 +490,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         NSApp.activate()
         window.makeKeyAndOrderFront(nil)
         refresh()
-        welcome.returned(at: now())
+        welcome.showWelcomeOnce()
     }
 
     /// Opens the window without activating the app or ordering it in, for
@@ -699,7 +699,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let minimumSize = NSSize(width: 640, height: 360)
 
     private func makeWindow() -> NSWindow {
-        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton, welcome: welcomeView)
+        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton)
         groupFilter.onSelect = { [weak self] group in self?.selectGroup(group) }
         groupFilter.onWaitingOnly = { [weak self] waitingOnly in self?.setSidebarWaitingOnly(waitingOnly) }
         let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)

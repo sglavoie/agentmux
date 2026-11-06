@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Lives below the session list, never over terminal output or input.
+/// Lives at the bottom of the right inspector, never over terminal output or input.
 struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
     @ObservedObject var model: WorkspaceWelcomeModel
     var width: CGFloat?

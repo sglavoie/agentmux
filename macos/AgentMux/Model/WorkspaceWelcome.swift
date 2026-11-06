@@ -21,8 +21,7 @@ final class WorkspaceWelcomeModel: ObservableObject {
     private let readStore: WorkspaceActivityReadStore
     private var generation = 0
     private var previousWaiting: Int?
-    private var awayAt: Date?
-    private var hasReturned = false
+    private var hasShownWelcome = false
     private var expiry: DispatchWorkItem?
     var schedule: (TimeInterval, DispatchWorkItem) -> Void = { delay, work in
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
@@ -64,6 +63,8 @@ final class WorkspaceWelcomeModel: ObservableObject {
 
     private func showReceipt(_ title: String, detail: String) {
         expiry?.cancel()
+        generation += 1
+        summary = nil
         let value = Receipt(title: title, detail: detail)
         receipt = value; dismissed = false
         onReceipt(value)
@@ -74,17 +75,14 @@ final class WorkspaceWelcomeModel: ObservableObject {
         expiry = work; schedule(6, work)
     }
 
-    func leave(at date: Date = Date()) { awayAt = date }
-
-    func returned(at date: Date = Date()) {
-        let shouldRead = !hasReturned || awayAt.map { date.timeIntervalSince($0) >= 60 } == true
-        awayAt = nil
-        guard shouldRead, command() != nil else { return }
-        hasReturned = true
+    /// The app retains this model with its workspace controller across closes.
+    func showWelcomeOnce() {
+        guard !hasShownWelcome, command() != nil else { return }
+        hasShownWelcome = true
         refresh()
     }
 
-    func refresh() {
+    private func refresh() {
         generation += 1
         let expected = generation
         guard let command = command() else { return }
@@ -112,5 +110,5 @@ final class WorkspaceWelcomeModel: ObservableObject {
     }
 
     func dismiss() { dismissed = true; receipt = nil; expiry?.cancel() }
-    func close() { generation += 1; expiry?.cancel(); receipt = nil; summary = nil; hasReturned = false }
+    func close() { generation += 1; expiry?.cancel(); receipt = nil; summary = nil }
 }

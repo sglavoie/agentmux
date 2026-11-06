@@ -482,15 +482,15 @@ is committed.
 
 ### Returning to work
 
-A compact **Welcome back** card below the session list shows unread recorded
-updates from the past seven days and the live attention count. It appears when
-opening the workspace or returning after at least a minute away. **Activity** and
+A compact **Welcome back** card at the bottom of the right sidebar shows unread recorded
+updates from the past seven days and the live attention count. It appears only
+once per app launch, when first opening the workspace. **Activity** and
 **Briefing** open the existing review windows; **Next waiting** focuses a waiting
 session. Dismissing the card does not mark any activity read. Incomplete history
 is labeled “At least”; unavailable reads and disconnected waiting status are
 shown explicitly.
 
-Successful prompt submissions and accepted supervisor answers show **Answer sent**.
+Successful prompt submissions and accepted supervisor answers show **Answer sent** in the right sidebar.
 The waiting count follows the live feed, not the submission receipt. When a live
 waiting count reaches zero while the app is active, **All caught up** briefly
 shows how many agents are still working. New attention clears that acknowledgement.
