@@ -37,6 +37,10 @@ extension AppDelegate {
     func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
         workspace?.setSidebarZoom(percent: new.sidebarZoomPercent)
+        if old.sidebarGrouping != new.sidebarGrouping {
+            cycler = AttentionCycler()
+            workspace?.setSidebarGrouping(new.sidebarGrouping)
+        }
         if old.compactSidebar != new.compactSidebar { workspace?.setCompactSidebar(new.compactSidebar) }
         if old.confirmationPolicy != new.confirmationPolicy {
             do { try workspaceConfirmationFile.write(new.confirmationPolicy) }
@@ -168,7 +172,7 @@ extension AppDelegate {
             refuse(DaemonPhrase.notConnected + ".")
             return
         }
-        guard let session = cycler.advance(in: store.managedSessions, order: attentionOrder) else {
+        guard let session = cycler.advance(in: store.managedSessions, order: attentionOrder, grouping: preferencesModel.preferences.sidebarGrouping) else {
             Self.logger.notice("next attention: nothing is waiting")
             NSSound.beep()
             return

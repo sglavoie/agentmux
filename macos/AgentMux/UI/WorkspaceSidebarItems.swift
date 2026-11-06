@@ -20,6 +20,7 @@ enum WorkspaceSidebarItem: Equatable {
         case let (.group(a), .group(b)):
             return a.project == b.project && a.pinned == b.pinned && a.needsAttention == b.needsAttention
                 && a.stateSection == b.stateSection && a.isSectionHeading == b.isSectionHeading
+                && a.isProjectHeading == b.isProjectHeading && a.isNestedState == b.isNestedState
         case let (.row(a), .row(b)): return a.key == b.key && a.name.isEmpty == b.name.isEmpty
         default: return false
         }
@@ -71,10 +72,9 @@ enum WorkspaceSidebarItem: Equatable {
         case .navigation, .section, .overview, .group:
             return []
         case let .row(row):
-            // Attention is a temporary position, not a saved drag order.
-            guard !row.needsAttention else { return [] }
-            guard let group = items[..<index].lastIndex(where: { if case .group = $0 { return true } else { return false } })
-            else { return [] }
+            guard let group = items[..<index].lastIndex(where: { if case .group = $0 { return true } else { return false } }),
+                  case let .group(parent) = items[group],
+                  !row.needsAttention || parent.isNestedState else { return [] }
             let end = items[(group + 1)...].firstIndex { item in
                 switch item {
                 case .navigation, .section, .overview, .group: return true

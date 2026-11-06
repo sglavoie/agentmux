@@ -23,6 +23,7 @@ struct AppPreferences: Equatable {
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
         static let defaultFontSize = "amxDefaultFontSize"
         static let sidebarZoomPercent = "amxSidebarZoomPercent"
+        static let sidebarGrouping = "amxSidebarGrouping"
         static let compactSidebar = "amxCompactSidebar"
         static let dashboardPlace = "amxDashboardPlace"
         static let terminalTheme = "amxTerminalTheme"
@@ -32,7 +33,7 @@ struct AppPreferences: Equatable {
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, environment,
-            launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, dashboardPlace, terminalTheme, workspaceShortcuts,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, dashboardPlace, terminalTheme, workspaceShortcuts,
             confirmBeforeClosing, confirmationPolicy,
         ]
     }
@@ -86,6 +87,7 @@ struct AppPreferences: Equatable {
     var sidebarZoomPercent = 100
     /// Shows attached terminals beside their session instead of below it.
     var compactSidebar = false
+    var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
     /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
     /// `amxTerminalTheme`: the Ghostty theme every terminal uses; nil uses
     /// the Ghostty config's.
@@ -117,6 +119,7 @@ struct AppPreferences: Equatable {
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         preferences.sidebarZoomPercent = int(defaults, Key.sidebarZoomPercent, in: sidebarZoomRange) ?? 100
         preferences.compactSidebar = bool(defaults, Key.compactSidebar) ?? false
+        preferences.sidebarGrouping = defaults.string(forKey: Key.sidebarGrouping).flatMap(WorkspaceSidebarGrouping.init(rawValue:)) ?? .stateThenProject
         // Only a stored string: `defaults.string` would read a stray true as "1".
         preferences.terminalTheme = (defaults.object(forKey: Key.terminalTheme) as? String)
             .flatMap(TerminalTheme.init(configValue:))
@@ -149,6 +152,7 @@ struct AppPreferences: Equatable {
         DefaultFontSize.save(defaultFontSize, to: defaults)
         defaults.set(Self.clamp(sidebarZoomPercent, Self.sidebarZoomRange), forKey: Key.sidebarZoomPercent)
         defaults.set(compactSidebar, forKey: Key.compactSidebar)
+        defaults.set(sidebarGrouping.rawValue, forKey: Key.sidebarGrouping)
         defaults.removeObject(forKey: Key.dashboardPlace)
         if let terminalTheme {
             defaults.set(terminalTheme.configValue, forKey: Key.terminalTheme)

@@ -20,11 +20,11 @@ extension WorkspaceWindowController {
               let row = state.row(.embedded(pending.runtimeSessionID)) else { return }
         newSessionBelow = nil
         guard let parent = state.row(pending.parent), parent.project == row.project else { return }
-        var keys = WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order).map(\.key).filter { $0 != row.key }
+        var keys = WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order, includePinned: sidebarGrouping == .projectThenState).map(\.key).filter { $0 != row.key }
         guard let index = keys.firstIndex(of: parent.key) else { return }
         keys.insert(row.key, at: index + 1)
         order.set(keys, for: row.project)
-        state.arrange(order)
+        state.arrange(order, grouping: sidebarGrouping)
         delegate?.workspaceOrderChanged(order)
     }
 

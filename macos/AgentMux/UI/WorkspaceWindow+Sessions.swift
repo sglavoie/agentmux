@@ -239,10 +239,7 @@ extension WorkspaceWindowController {
     /// Collapses or expands a listed group: a project's, the pinned one, or
     /// a state section.
     func setCollapsed(_ group: WorkspaceGroup, _ collapsed: Bool) {
-        guard group.isSectionHeading, let section = group.stateSection else {
-            return setCollapsed(project: group.project, pinned: group.pinned, collapsed)
-        }
-        changeCollapsed { $0.setCollapsed(section, collapsed) }
+        changeCollapsed { $0.setCollapsed(group, collapsed) }
     }
 
     /// Expands what keeps a session's line off the list: its project's
@@ -250,8 +247,9 @@ extension WorkspaceWindowController {
     func expandGroups(of key: AttentionCycler.Key?) {
         guard let group = group(of: key), !group.needsAttention else { return }
         changeCollapsed { order in
+            order.setCollapsed(group, false)
             order.setCollapsed(project: group.project, pinned: group.pinned, false)
-            if let section = group.stateSection { order.setCollapsed(section, false) }
+            if !group.isNestedState, let section = group.stateSection { order.setCollapsed(section, false) }
         }
     }
 
@@ -260,7 +258,7 @@ extension WorkspaceWindowController {
         change(&changed)
         guard changed != order else { return }
         order = changed
-        state.arrange(order)
+        state.arrange(order, grouping: sidebarGrouping)
         delegate?.workspaceOrderChanged(order)
         reloadSidebar(allowReorder: true)
     }

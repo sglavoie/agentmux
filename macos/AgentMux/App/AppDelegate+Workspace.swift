@@ -34,6 +34,7 @@ extension AppDelegate {
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
         controller.setSidebarZoom(percent: preferencesModel.preferences.sidebarZoomPercent)
         controller.setCompactSidebar(preferencesModel.preferences.compactSidebar)
+        controller.setSidebarGrouping(preferencesModel.preferences.sidebarGrouping)
         controller.onSidebarZoomChanged = { [weak self] percent in
             self?.preferencesModel.preferences.sidebarZoomPercent = percent
         }

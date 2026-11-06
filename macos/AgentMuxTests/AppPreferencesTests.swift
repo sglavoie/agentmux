@@ -19,6 +19,20 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(AppPreferences.load(from: defaults).launchBackend, .followCLI)
     }
 
+    func testSidebarGroupingPersistsAndDefaultsToStateFirst() {
+        let defaults = freshDefaults()
+        defer { defaults.removeObject(forKey: AppPreferences.Key.sidebarGrouping) }
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarGrouping, .stateThenProject)
+        for grouping in WorkspaceSidebarGrouping.allCases {
+            var preferences = AppPreferences()
+            preferences.sidebarGrouping = grouping
+            preferences.save(to: defaults)
+            XCTAssertEqual(AppPreferences.load(from: defaults).sidebarGrouping, grouping)
+        }
+        defaults.set("unknown", forKey: AppPreferences.Key.sidebarGrouping)
+        XCTAssertEqual(AppPreferences.load(from: defaults).sidebarGrouping, .stateThenProject)
+    }
+
     func testDefaults() {
         let preferences = AppPreferences.load(from: freshDefaults())
         XCTAssertEqual(preferences, AppPreferences())
@@ -69,7 +83,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxSidebarZoomPercent", "amxCompactSidebar", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
+            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
         ])
     }
 

@@ -232,6 +232,64 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertFalse(web.attention)
     }
 
+    func testWaitingCycleUsesProjectFirstOrder() {
+        let sessions = [
+            F.tmux(1, project: "web", icon: "key", attention: true),
+            F.tmux(2, project: "api", icon: "stop", attention: true),
+            F.tmux(3, project: "api", icon: "warning", attention: true),
+        ]
+        var cycle = AttentionCycler()
+        let keys = (0..<4).compactMap { _ in
+            cycle.advance(in: sessions, grouping: .projectThenState).map(AttentionCycler.key)
+        }
+        XCTAssertEqual(keys, [3, 2, 1, 3].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(WorkspaceInspector.waiting(sessions, grouping: .projectThenState).map(\.key), Array(keys.prefix(3)))
+    }
+
+    func testProjectFirstKeepsPinsAndAttentionTogetherAndScopesCollapse() throws {
+        var sessions = [
+            F.tmux(1, project: "web", icon: "key", attention: true),
+            F.tmux(2, project: "api", icon: "bolt"),
+            F.tmux(3, project: "api", icon: "stop"),
+            F.tmux(4, project: "web", icon: "bolt"),
+            F.tmux(5, project: "Working"),
+        ]
+        sessions[2].pinned = true
+        var order = WorkspaceOrder()
+        var state = WorkspaceState()
+        func built() -> [WorkspaceGroup] {
+            WorkspaceSidebar.groups(sessions, order: order, grouping: .projectThenState)
+        }
+        state.apply(built())
+        XCTAssertEqual(state.groups.map(\.title), ["api", "Done", "Working", "web", "Waiting", "Working", "Working", "Idle"])
+        XCTAssertEqual(state.rows.map(\.key), [3, 2, 1, 4, 5].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(Set(state.rows.map(\.key)).count, sessions.count)
+        XCTAssertFalse(state.groups.contains { $0.pinned || $0.needsAttention })
+        XCTAssertEqual(state.sectionCounts.map(\.count), [1, 1, 2, 1])
+        let api = try XCTUnwrap(state.groups.first)
+        XCTAssertEqual(state.rows(under: api).count, 2)
+        let working = try XCTUnwrap(state.groups.first { $0.isNestedState && $0.project == "api" && $0.stateSection == .working })
+        order.setCollapsed(working, true)
+        state.apply(built())
+        XCTAssertEqual(state.groups.filter { $0.isNestedState && $0.stateSection == .working }.map(\.collapsed), [true, false])
+        order.setCollapsed(api, true)
+        state.apply(built())
+        XCTAssertEqual(state.listedGroups.map(\.title), ["api", "web", "Waiting", "Working", "Working", "Idle"])
+        XCTAssertEqual(state.rows.count, sessions.count)
+        XCTAssertEqual(state.rows(under: working).map(\.key), [.embedded(F.runtimeID(2))])
+        XCTAssertTrue(state.select(.embedded(F.runtimeID(2))))
+        state.apply(nil)
+        state.arrange(order, grouping: .stateThenProject)
+        XCTAssertFalse(state.current)
+        XCTAssertEqual(state.selection, .embedded(F.runtimeID(2)))
+        state.arrange(order, grouping: .projectThenState)
+        XCTAssertEqual(state.groups, built())
+
+        let defaults = UserDefaults(suiteName: "WorkspaceGrouping-\(UUID().uuidString)")!
+        order.save(to: defaults)
+        XCTAssertEqual(WorkspaceOrder.load(from: defaults), order)
+    }
+
     func testStateSectionsListTheProjectsOfTheirSessionsByName() throws {
         let sessions = [
             F.tmux(1, project: "web", icon: "bolt"),

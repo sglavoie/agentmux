@@ -431,6 +431,12 @@ ASL answer panel work the same either way.
   two orientation pulses (one with Reduce Motion).
   These flashes leave focus, scrolling, and collapsed groups alone; first
   sightings and updates to names or ages do not flash.
+  Preferences › Appearance › Group sessions by selects **State → Project**
+  (the default) or **Project → State**. Project-first keeps every session,
+  including pinned and attention-needed sessions, inside its project, with
+  collapsible Waiting, Done, Working, and Idle sections underneath. Changes
+  apply immediately and persist across launches; each project's state sections
+  collapse independently.
   Preferences › Appearance › Compact sidebar places attached terminals as
   tabs beside their session, saving a row for each terminal. The setting is
   kept for the next launch; the regular layout remains the default. Each tab

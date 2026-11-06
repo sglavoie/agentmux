@@ -128,6 +128,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var onGroupContextsChanged: ([String: WorkspaceRestoration.GroupContext]) -> Void = { _ in }
     var choosingGroupPlace = false
     var showingEmptyGroup = false
+    private(set) var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
+
+    func setSidebarGrouping(_ grouping: WorkspaceSidebarGrouping) {
+        guard sidebarGrouping != grouping else { return }
+        sidebarGrouping = grouping
+        state.arrange(order, grouping: grouping)
+        guard sidebar.dataSource != nil else { return }
+        reloadSidebar(allowReorder: true)
+    }
+
     private(set) var compactSidebar = false
 
     func setCompactSidebar(_ compact: Bool) {
@@ -587,7 +597,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         guard let store = delegate?.store else { return }
         var live: [WorkspaceGroup]?
         if store.feed == .live, store.snapshot != nil {
-            live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order)
+            live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping)
         }
         let wasCurrent = state.current
         let previousRows = state.rows

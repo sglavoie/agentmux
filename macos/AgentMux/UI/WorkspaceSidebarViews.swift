@@ -494,6 +494,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
 
     /// A heading that is not a project: it counts nothing.
     func show(section title: String) {
+        labelLeading.constant = 2
         nameLabel.stringValue = title
         countLabel.stringValue = ""
         countLabel.toolTip = nil
@@ -505,26 +506,27 @@ final class WorkspaceGroupCellView: NSTableCellView {
     }
 
     func show(_ group: WorkspaceGroup) {
+        labelLeading.constant = group.isNestedState ? 14 : 2
         if group.needsAttention {
-            show(section: group.project)
+            show(section: group.title)
             countLabel.stringValue = String(group.rows.count)
             countLabel.toolTip = "\(group.rows.count) waiting on you"
-            setAccessibilityLabel("\(group.project), \(group.rows.count) waiting")
+            setAccessibilityLabel("\(group.title), \(group.rows.count) waiting")
             return
         }
         var label: String
-        if group.isSectionHeading {
-            // A state section counts all the sessions it holds.
-            nameLabel.stringValue = group.project
+        if group.isSectionHeading || group.isProjectHeading {
+            // A heading counts all the sessions it holds.
+            nameLabel.stringValue = group.title
             countLabel.stringValue = String(group.sessions)
             countLabel.toolTip = group.sessions == 1 ? "1 session" : "\(group.sessions) sessions"
-            label = "\(group.project), \(countLabel.toolTip ?? "")"
+            label = "\(group.title), \(countLabel.toolTip ?? "")"
         } else {
-            nameLabel.stringValue = group.project
+            nameLabel.stringValue = group.title
             let waiting = group.attention
             countLabel.stringValue = waiting > 0 ? String(waiting) : ""
             countLabel.toolTip = waiting > 0 ? "\(waiting) waiting on you" : nil
-            label = waiting > 0 ? "\(group.project), \(waiting) waiting" : group.project
+            label = waiting > 0 ? "\(group.title), \(waiting) waiting" : group.title
         }
         disclosureLabel.isHidden = false
         disclosureLabel.stringValue = group.collapsed ? Self.collapsedDisclosure : Self.expandedDisclosure
@@ -937,7 +939,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         glyphLabel.stringValue = row.glyph
         // A pinned or promoted session names the project it is away from.
         let place = away ?? (row.pinned || row.needsAttention) ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
-        let label = row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)"
+        let badge = row.pinned && away == false ? "★ " : ""
+        let label = badge + (row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)")
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
         titleLabel.font = .systemFont(ofSize: 12, weight: row.name.isEmpty ? .semibold : .regular)

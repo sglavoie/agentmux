@@ -39,9 +39,10 @@ struct AttentionCycler {
     /// The attention rows in cycle order.
     static func ordered(
         _ sessions: [CompanionSession],
-        order: WorkspaceOrder = WorkspaceOrder()
+        order: WorkspaceOrder = WorkspaceOrder(),
+        grouping: WorkspaceSidebarGrouping = .stateThenProject
     ) -> [CompanionSession] {
-        WorkspaceSidebar.ordered(sessions, order: order).filter(\.attention)
+        WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping).filter(\.attention)
     }
 
     /// The first waiting session listed after the one the last press focused,
@@ -56,9 +57,10 @@ struct AttentionCycler {
     /// listed only since come after those, in the order listed now.
     func next(
         in sessions: [CompanionSession],
-        order: WorkspaceOrder = WorkspaceOrder()
+        order: WorkspaceOrder = WorkspaceOrder(),
+        grouping: WorkspaceSidebarGrouping = .stateThenProject
     ) -> CompanionSession? {
-        let listed = WorkspaceSidebar.ordered(sessions, order: order)
+        let listed = WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping)
         let waiting = listed.filter(\.attention)
         guard let last, !waiting.isEmpty else { return waiting.first }
         let known = Set(last.following + [last.key])
@@ -73,20 +75,22 @@ struct AttentionCycler {
     mutating func focused(
         _ session: CompanionSession,
         in sessions: [CompanionSession],
-        order: WorkspaceOrder = WorkspaceOrder()
+        order: WorkspaceOrder = WorkspaceOrder(),
+        grouping: WorkspaceSidebarGrouping = .stateThenProject
     ) {
         let key = Self.key(session)
-        let listed = WorkspaceSidebar.ordered(sessions, order: order)
+        let listed = WorkspaceSidebar.ordered(sessions, order: order, grouping: grouping)
         last = (key, Self.following(key, in: listed.map { Self.key($0) }) ?? [])
     }
 
     /// Picks the next session and records it, in one step.
     mutating func advance(
         in sessions: [CompanionSession],
-        order: WorkspaceOrder = WorkspaceOrder()
+        order: WorkspaceOrder = WorkspaceOrder(),
+        grouping: WorkspaceSidebarGrouping = .stateThenProject
     ) -> CompanionSession? {
-        guard let session = next(in: sessions, order: order) else { return nil }
-        focused(session, in: sessions, order: order)
+        guard let session = next(in: sessions, order: order, grouping: grouping) else { return nil }
+        focused(session, in: sessions, order: order, grouping: grouping)
         return session
     }
 

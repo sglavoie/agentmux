@@ -53,7 +53,7 @@ extension WorkspaceWindowController {
         inspector.show(WorkspaceInspectorView.Model(
             tab: inspectorTab,
             waiting: WorkspaceInspector.waiting(
-                waitingSessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order
+                waitingSessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping
             ),
             waitingGroup: selectedGroup,
             showsAllWaitingGroups: showsAllWaitingGroups,

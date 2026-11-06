@@ -316,7 +316,7 @@ extension WorkspaceWindowController {
 
     private func updateSessionContexts() {
         let answers = state.current ? WorkspaceInspector.waiting(delegate?.store.sessions ?? [],
-            asl: delegate?.store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order) : []
+            asl: delegate?.store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping) : []
         for (host, target, content) in [(paneLayout.active, place, content), (paneLayout.other, otherPlace, otherContent)] {
             guard case let .session(key)? = target else {
                 host.showContext(nil, canAnswer: false)
@@ -339,7 +339,7 @@ extension WorkspaceWindowController {
 
     private func contextAnswer(for key: AttentionCycler.Key) -> WorkspaceWaitingAnswer? {
         guard state.current, state.row(key) != nil, let store = delegate?.store else { return nil }
-        return WorkspaceInspector.waiting(store.sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order)
+        return WorkspaceInspector.waiting(store.sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping)
             .first { $0.key == key }?.answer
     }
 

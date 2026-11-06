@@ -42,6 +42,59 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.groupFilter.pills[index].performClick(nil)
     }
 
+    func testProjectFirstDragsPinnedAndWaitingRowsWithinTheirState() throws {
+        var live = [
+            F.tmux(1, project: "api", profile: "a", icon: "key", attention: true),
+            F.tmux(2, project: "api", profile: "b", icon: "key", attention: true),
+            F.tmux(3, project: "api", profile: "c", icon: "bolt"),
+        ]
+        live[1].pinned = true
+        workspace.setSidebarGrouping(.projectThenState)
+        app.store.apply(snapshot: F.snapshot(live))
+        let pinned = try index(of: .embedded(F.runtimeID(2)))
+        let first = try index(of: .embedded(F.runtimeID(1)))
+        let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: pinned, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertTrue(cell.titleLabel.stringValue.hasPrefix("★ "))
+        XCTAssertTrue(workspace.moveItem(at: pinned, to: first))
+        XCTAssertEqual(workspace.state.rows.map(\.key), [2, 1, 3].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(workspace.order.projects["api"], [2, 1, 3].map { F.runtimeID($0) })
+        let moved = try index(of: .embedded(F.runtimeID(2)))
+        let running = try index(of: .embedded(F.runtimeID(3)))
+        XCTAssertFalse(workspace.moveItem(at: moved, to: running), "dragging cannot move a session into a different state")
+        XCTAssertEqual(workspace.state.groups.map(\.title), ["api", "Waiting", "Working"])
+    }
+
+    func testProjectGroupingChangesLiveAndPreservesSelectionRevealAndDragging() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let shown = try row("api", "work")
+        workspace.activate(shown)
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        workspace.setSidebarGrouping(.projectThenState)
+        XCTAssertEqual(workspace.state.selection, shown.key)
+        XCTAssertTrue(workspace.terminalView(for: F.runtimeID(1)) === terminal)
+        XCTAssertEqual(workspace.state.groups.map(\.title), ["api", "Done", "web", "Done"])
+        let nested = try XCTUnwrap(workspace.state.groups.first { $0.isNestedState && $0.project == "api" })
+        workspace.setCollapsed(nested, true)
+        XCTAssertFalse(workspace.items.contains { if case let .row(row) = $0 { return row.key == shown.key }; return false })
+        workspace.setCollapsed(project: "api", pinned: false, true)
+        XCTAssertTrue(workspace.revealInSidebar())
+        XCTAssertEqual(workspace.sidebar.selectedRow, try index(of: shown.key))
+        XCTAssertFalse(try XCTUnwrap(workspace.state.groups.first { $0.isNestedState && $0.project == "api" }).collapsed)
+        let from = try index(of: shown.key)
+        let before = try index(of: .embedded(F.runtimeID(2)))
+        XCTAssertTrue(workspace.moveItem(at: from, to: before))
+        XCTAssertEqual(workspace.state.rows.filter { $0.project == "api" }.map(\.key), [shown.key, .embedded(F.runtimeID(2))])
+        workspace.setSidebarGrouping(.stateThenProject)
+        XCTAssertFalse(workspace.state.groups.contains(where: \.isProjectHeading))
+        XCTAssertEqual(workspace.state.selection, shown.key)
+        workspace.setSidebarGrouping(.projectThenState)
+        var changed = sessions
+        changed[0].iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot(changed))
+        XCTAssertEqual(workspace.state.groups.map(\.title), ["api", "Done", "Working", "web", "Done"])
+        XCTAssertEqual(workspace.state.selection, shown.key)
+    }
+
     func testWorkspaceNavigationSharesALineAndRestacksWithZoomAndResize() async throws {
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.window.setContentSize(NSSize(width: 1500, height: 900))

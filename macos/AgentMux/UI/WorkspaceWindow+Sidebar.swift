@@ -12,7 +12,7 @@ extension WorkspaceWindowController {
         guard selectedGroup != nil else { return state }
         var scoped = WorkspaceState()
         let rows = ProjectCatalog.rows(state.rows, in: selectedGroup, projects: delegate?.workspaceProjects ?? [])
-        scoped.apply(WorkspaceSidebar.groups(rows, order: order))
+        scoped.apply(WorkspaceSidebar.groups(rows, order: order, grouping: sidebarGrouping))
         return scoped
     }
 
@@ -493,18 +493,19 @@ extension WorkspaceWindowController {
             keys.insert(row.key, at: at)
             // Keep the saved places of siblings temporarily in Needs
             // attention, and of sessions in other states or group scopes.
-            let base = row.pinned
+            let separatePin = row.pinned && sidebarGrouping == .stateThenProject
+            let base = separatePin
                 ? WorkspaceSidebar.groups(state.rows, order: order, prioritizeAttention: false).first(where: \.pinned)?.rows
-                : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order)
+                : WorkspaceSidebar.projectRows(state.rows, in: row.project, order: order, includePinned: sidebarGrouping == .projectThenState)
             let moved = Set(keys)
             var next = keys.makeIterator()
             let saved = (base?.map(\.key) ?? keys).map { moved.contains($0) ? next.next() ?? $0 : $0 }
-            if row.pinned {
+            if separatePin {
                 order.setPinned(saved)
             } else {
                 order.set(saved, for: row.project)
             }
-            state.arrange(order)
+            state.arrange(order, grouping: sidebarGrouping)
             delegate?.workspaceOrderChanged(order)
         case let .view(view):
             var next: String?
