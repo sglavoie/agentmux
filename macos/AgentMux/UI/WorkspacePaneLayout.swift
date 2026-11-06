@@ -11,6 +11,7 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
         let sessionContext = WorkspaceSessionContextView()
         var onFocus: (() -> Void)?
         private var headerHeight: NSLayoutConstraint!
+        private var headingHeight: NSLayoutConstraint!
         private var splitHeading = false
         func showHeading(_ show: Bool) {
             splitHeading = show
@@ -24,8 +25,9 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
 
         private func updateHeaderHeight() {
             let hasContext = sessionContext.context != nil
-            heading.isHidden = !splitHeading && !hasContext
-            headerHeight.constant = hasContext ? 56 : splitHeading ? 28 : 0
+            heading.isHidden = !splitHeading
+            headingHeight.constant = splitHeading ? 28 : 0
+            headerHeight.constant = (splitHeading ? 28 : 0) + (hasContext ? 28 : 0)
         }
 
         init(body: NSView) {
@@ -45,11 +47,12 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
             addSubview(heading)
             addSubview(sessionContext)
             headerHeight = body.topAnchor.constraint(equalTo: topAnchor)
+            headingHeight = heading.heightAnchor.constraint(equalToConstant: 28)
             NSLayoutConstraint.activate([
                 heading.topAnchor.constraint(equalTo: topAnchor),
                 heading.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
                 heading.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-                heading.heightAnchor.constraint(equalToConstant: 28),
+                headingHeight,
                 sessionContext.topAnchor.constraint(equalTo: heading.bottomAnchor),
                 sessionContext.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
                 sessionContext.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
@@ -102,6 +105,7 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
         active.removeFromSuperview()
         other.removeFromSuperview()
         active.showHeading(split)
+        other.showHeading(split)
         if split, activeOnRight { addArrangedSubview(other) }
         addArrangedSubview(active)
         if split, !activeOnRight { addArrangedSubview(other) }
