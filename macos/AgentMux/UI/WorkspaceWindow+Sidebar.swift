@@ -58,7 +58,10 @@ extension WorkspaceWindowController {
         }
         let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
-        let own = views.all.filter { view in view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true }
+        let own = views.all.filter { view in
+            (showOverviewInSidebar || view.kind != .overview)
+                && (view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true)
+        }
         let counts = scoped.sectionCounts
         let paired = pairsWorkspaceNavigation
         let navigation = paired ? [Item.navigation] : []
@@ -271,7 +274,8 @@ extension WorkspaceWindowController {
     func numberOfRows(in tableView: NSTableView) -> Int { items.count }
 
     var pairsWorkspaceNavigation: Bool {
-        (sidebar.tableColumns.first?.width ?? sidebar.bounds.width) >= WorkspaceNavigationCellView.minimumWidth
+        showOverviewInSidebar
+            && (sidebar.tableColumns.first?.width ?? sidebar.bounds.width) >= WorkspaceNavigationCellView.minimumWidth
     }
 
     func refreshWorkspaceNavigationLayout() {

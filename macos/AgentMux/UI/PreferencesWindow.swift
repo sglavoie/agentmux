@@ -742,6 +742,8 @@ struct PreferencesView: View {
             }
 
             Section("Sidebar appearance") {
+                Toggle("Show Overview in sidebar", isOn: $model.preferences.showOverviewInSidebar)
+                note("Adds Overview beside Dashboard. Hidden by default; the right sidebar shows session details and activity.")
                 Picker("Group sessions by", selection: $model.preferences.sidebarGrouping) {
                     ForEach(WorkspaceSidebarGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
                 }

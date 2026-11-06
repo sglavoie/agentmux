@@ -27,6 +27,7 @@ struct AppPreferences: Equatable {
         static let sidebarGrouping = "amxSidebarGrouping"
         static let sidebarSort = "amxSidebarSort"
         static let compactSidebar = "amxCompactSidebar"
+        static let showOverviewInSidebar = "amxShowOverviewInSidebar"
         static let dashboardPlace = "amxDashboardPlace"
         static let terminalTheme = "amxTerminalTheme"
         static let confirmationPolicy = "amxConfirmationPolicy"
@@ -36,7 +37,7 @@ struct AppPreferences: Equatable {
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, environment,
             launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, sidebarSort, dashboardPlace, terminalTheme, workspaceShortcuts,
-            confirmBeforeClosing, confirmationPolicy, showWelcomeBack,
+            confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar,
         ]
     }
 
@@ -91,6 +92,8 @@ struct AppPreferences: Equatable {
     var sidebarZoomPercent = 100
     /// Shows attached terminals beside their session instead of below it.
     var compactSidebar = false
+    /// Opt in to the Overview navigation entry in the workspace sidebar.
+    var showOverviewInSidebar = false
     var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
     var sidebarSort: WorkspaceSidebarSort = .manual
     /// `amxDashboardPlace`: where the dashboard shortcut shows the dashboard.
@@ -125,6 +128,7 @@ struct AppPreferences: Equatable {
         preferences.defaultFontSize = DefaultFontSize.load(from: defaults)
         preferences.sidebarZoomPercent = int(defaults, Key.sidebarZoomPercent, in: sidebarZoomRange) ?? 100
         preferences.compactSidebar = bool(defaults, Key.compactSidebar) ?? false
+        preferences.showOverviewInSidebar = bool(defaults, Key.showOverviewInSidebar) ?? false
         preferences.sidebarSort = defaults.string(forKey: Key.sidebarSort).flatMap(WorkspaceSidebarSort.init(rawValue:)) ?? .manual
         preferences.sidebarGrouping = defaults.string(forKey: Key.sidebarGrouping).flatMap(WorkspaceSidebarGrouping.init(rawValue:)) ?? .stateThenProject
         // Only a stored string: `defaults.string` would read a stray true as "1".
@@ -160,6 +164,7 @@ struct AppPreferences: Equatable {
         DefaultFontSize.save(defaultFontSize, to: defaults)
         defaults.set(Self.clamp(sidebarZoomPercent, Self.sidebarZoomRange), forKey: Key.sidebarZoomPercent)
         defaults.set(compactSidebar, forKey: Key.compactSidebar)
+        defaults.set(showOverviewInSidebar, forKey: Key.showOverviewInSidebar)
         defaults.set(sidebarGrouping.rawValue, forKey: Key.sidebarGrouping)
         defaults.set(sidebarSort.rawValue, forKey: Key.sidebarSort)
         defaults.removeObject(forKey: Key.dashboardPlace)

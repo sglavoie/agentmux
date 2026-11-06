@@ -35,6 +35,7 @@ extension AppDelegate {
         controller.welcome.isEnabled = preferencesModel.preferences.showWelcomeBack
         controller.setSidebarZoom(percent: preferencesModel.preferences.sidebarZoomPercent)
         controller.setCompactSidebar(preferencesModel.preferences.compactSidebar)
+        controller.setShowOverviewInSidebar(preferencesModel.preferences.showOverviewInSidebar)
         controller.setSidebarGrouping(preferencesModel.preferences.sidebarGrouping)
         controller.setSidebarSort(preferencesModel.preferences.sidebarSort)
         controller.onSidebarZoomChanged = { [weak self] percent in

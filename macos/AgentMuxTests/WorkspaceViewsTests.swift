@@ -553,6 +553,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     }
 
     func testTheCloseButtonClosesAnOpenedViewWhereverThePaneIs() throws {
+        workspace.setShowOverviewInSidebar(true)
         app.store.apply(snapshot: F.snapshot(sessions))
         workspace.showView("dashboard")
         workspace.open(WorkspaceViewRequest(kind: "shell", directory: "/work/api", title: "api"))
@@ -977,6 +978,7 @@ final class WorkspaceViewsWindowTests: XCTestCase {
     }
 
     func testTheEmptyPaneOffersLaunchHistoryAndDashboard() throws {
+        workspace.setShowOverviewInSidebar(true)
         app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
         XCTAssertEqual(workspace.placeholder.button.title, "Launch Project…")

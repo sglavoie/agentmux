@@ -25,6 +25,8 @@ final class WorkspaceWindowTests: XCTestCase {
     override func setUp() async throws {
         app = FakeWorkspaceApp()
         workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        // Keep both utility entries visible for the shared layout fixtures.
+        workspace.setShowOverviewInSidebar(true)
         app.store.onChange = { [weak self] in self?.workspace.refresh() }
         workspace.openForTesting()
     }
@@ -315,6 +317,14 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.sidebar.keyDown(with: TestKey.function(NSRightArrowFunctionKey, keyCode: 124).event())
         workspace.focusSelectedItem()
         XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.overview.id)
+
+        workspace.setShowOverviewInSidebar(false)
+        XCTAssertFalse(workspace.items.contains(.navigation))
+        XCTAssertFalse(workspace.items.contains(.view(.overview)))
+        XCTAssertTrue(workspace.items.contains(.view(.dashboard)))
+        XCTAssertEqual(workspace.viewSelection, WorkspaceUtilityView.overview.id, "hiding the entry preserves the active view")
+        workspace.setShowOverviewInSidebar(true)
+        XCTAssertEqual(workspace.items[workspace.sidebar.selectedRow], .navigation)
 
         workspace.setSidebarZoom(percent: 200)
         try await settleLayout()
@@ -912,7 +922,10 @@ final class WorkspaceWindowTests: XCTestCase {
     }
 
     func testSidebarListsProjectsThenTheirSessions() throws {
-        // The workspace's own views are always listed, above the projects.
+        // Dashboard is listed by default; Overview is an optional entry.
+        workspace.setShowOverviewInSidebar(false)
+        XCTAssertEqual(workspace.items, [.section("Workspace"), .view(.dashboard)])
+        workspace.setShowOverviewInSidebar(true)
         XCTAssertEqual(workspace.items, [.section("Workspace"), .view(.dashboard), .view(.overview)])
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting to the daemon…")
 

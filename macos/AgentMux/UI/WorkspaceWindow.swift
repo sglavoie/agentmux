@@ -172,6 +172,15 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         reloadSidebar(allowReorder: true)
     }
 
+    private(set) var showOverviewInSidebar = false
+
+    func setShowOverviewInSidebar(_ show: Bool) {
+        guard showOverviewInSidebar != show else { return }
+        showOverviewInSidebar = show
+        guard sidebar.dataSource != nil else { return }
+        reloadSidebar(force: true, allowReorder: true)
+    }
+
     private(set) var compactSidebar = false
 
     func setCompactSidebar(_ compact: Bool) {

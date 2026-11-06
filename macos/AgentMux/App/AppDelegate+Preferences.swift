@@ -49,6 +49,9 @@ extension AppDelegate {
             cycler = AttentionCycler()
             workspace?.setSidebarSort(new.sidebarSort)
         }
+        if old.showOverviewInSidebar != new.showOverviewInSidebar {
+            workspace?.setShowOverviewInSidebar(new.showOverviewInSidebar)
+        }
         if old.compactSidebar != new.compactSidebar { workspace?.setCompactSidebar(new.compactSidebar) }
         if old.confirmationPolicy != new.confirmationPolicy {
             do { try workspaceConfirmationFile.write(new.confirmationPolicy) }

@@ -455,6 +455,10 @@ ASL answer panel work the same either way.
   scope and every grouping/sort option, without closing hidden terminals or
   changing the active pane. Reveal (⌘J) clears the filter if needed to show the
   selected session. The filter is temporary and starts off in a new window.
+  Preferences › Appearance › Show Overview in sidebar restores the optional
+  Overview entry beside Dashboard. It is hidden by default, applies immediately,
+  and is saved for the next launch. Overview remains available from the View menu
+  and its shortcut.
   Preferences › Appearance › Compact sidebar places attached terminals as
   tabs beside their session, saving a row for each terminal. The setting is
   kept for the next launch; the regular layout remains the default. Each tab
@@ -741,8 +745,8 @@ The app must be rebuilt with its companion CLI for the progress endpoint.
 ### Dashboard and utility views
 
 The sidebar's first section, **Workspace**, lists utility views
-(`Model/WorkspaceViews.swift`): the Dashboard and the Overview always, and a
-shell, editor, or pager while one is open. A utility view is a
+(`Model/WorkspaceViews.swift`): Dashboard, Overview when enabled in Preferences,
+and a shell, editor, or pager while one is open. A utility view is a
 `Ghostty.SurfaceView` running `amx workspace-view <kind> [target]`
 (`cmd/dashboard/workspace_view.go`); the app passes a kind and a target and
 never a command line, and amx decides the program and removes every session
@@ -765,8 +769,8 @@ never a command line, and amx decides the program and removes every session
   the daemon refuses and the surface shows the view in its own terminal.
 - **Lifetime.** A utility terminal is made when its view is first shown. A
   shell, editor, or pager that exits unlists its view and the pane goes back
-  to where it was; the Dashboard or the Overview that quits stays listed and
-  offers **Reopen**. Closing the window hides utility terminals without ending
+  to where it was; Dashboard and Overview remain available after exiting and
+  offer **Reopen**, with sidebar visibility controlled by Preferences. Closing the window hides utility terminals without ending
   them, unlike attachments.
 - **Terminals beside a session.** ⌘↩ (`openTerminalBesideSession`) opens a
   `.terminal` view: `amx workspace-view session-shell <runtime-session-id>`,
