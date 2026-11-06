@@ -102,6 +102,60 @@ enum WorkspaceSidebarItem: Equatable {
         return slot == index || slot == after ? nil : slot
     }
 
+    /// Boundaries between sessions, keeping attached terminals with their
+    /// session and omitting the space after the final session.
+    static func sessionDividers(in items: [Self]) -> IndexSet {
+        var boundaries = IndexSet()
+        var hasSession = false
+        for (index, item) in items.enumerated() {
+            switch item {
+            case .row:
+                if hasSession { boundaries.insert(index) }
+                hasSession = true
+            case let .view(view) where view.besideRuntimeSessionID != nil:
+                break
+            default:
+                hasSession = false
+            }
+        }
+        return boundaries
+    }
+
+    /// Boundaries around consecutive sessions of the same project in the
+    /// compact list. Child terminals stay inside their session's block,
+    /// and the last block has no trailing divider.
+    static func projectDividers(in items: [Self]) -> IndexSet {
+        var boundaries = IndexSet()
+        var project: String?
+        var start = 0
+        var count = 0
+        func finish(at end: Int) {
+            if count > 1 {
+                boundaries.insert(start)
+                if end < items.count { boundaries.insert(end) }
+            }
+        }
+        for (index, item) in items.enumerated() {
+            if case let .row(row) = item {
+                if row.project != project {
+                    finish(at: index)
+                    project = row.project
+                    start = index
+                    count = 0
+                }
+                count += 1
+            } else if case let .view(view) = item, view.besideRuntimeSessionID != nil {
+                continue
+            } else {
+                finish(at: index)
+                project = nil
+                count = 0
+            }
+        }
+        finish(at: items.count)
+        return boundaries
+    }
+
     /// Only section headings carry state color. Project headers, session
     /// rows, and their utility terminals retain the neutral sidebar surface.
     static func bands(in items: [Self]) -> [(lines: Range<Int>, band: WorkspaceSidebarBand)] {

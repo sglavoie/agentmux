@@ -6,6 +6,29 @@ import AppKit
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
     var onWidthChanged: (() -> Void)?
+    var projectDividers = IndexSet() {
+        didSet {
+            enumerateAvailableRowViews { rowView, row in self.syncProjectDivider(rowView, row: row) }
+        }
+    }
+    var sessionDividers = IndexSet() {
+        didSet {
+            enumerateAvailableRowViews { rowView, row in self.syncProjectDivider(rowView, row: row) }
+        }
+    }
+
+    func syncProjectDivider(_ rowView: NSTableRowView, row: Int) {
+        let existing = rowView.subviews.first { $0 is WorkspaceProjectDividerView } as? WorkspaceProjectDividerView
+        let highContrast = projectDividers.contains(row + 1)
+        guard highContrast || sessionDividers.contains(row + 1) else {
+            existing?.removeFromSuperview()
+            return
+        }
+        let divider = existing ?? WorkspaceProjectDividerView(frame: rowView.bounds)
+        divider.highContrast = highContrast
+        divider.autoresizingMask = [.width, .height]
+        rowView.addSubview(divider, positioned: .above, relativeTo: nil)
+    }
 
     override func setFrameSize(_ newSize: NSSize) {
         let changed = newSize.width != frame.width
@@ -107,6 +130,30 @@ final class WorkspaceSidebarView: NSTableView {
             return
         }
         super.keyDown(with: event)
+    }
+}
+
+/// A decorative rule above the row's contents, without adding a keyboard or
+/// mouse target. Each rule sits at the bottom of the preceding row.
+@MainActor
+private final class WorkspaceProjectDividerView: NSView {
+    var highContrast = false {
+        didSet { needsDisplay = true }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let thickness = 1 / (window?.backingScaleFactor ?? 2)
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        let color = highContrast ? NSColor(white: dark ? 0.9 : 0.1, alpha: 1) : .separatorColor
+        color.setFill()
+        NSRect(x: 10, y: 0, width: max(0, bounds.width - 20), height: thickness).fill()
     }
 }
 

@@ -118,6 +118,8 @@ extension WorkspaceWindowController {
                 changed?.formUnion(IndexSet(decorations.indices.filter { decorations[$0] != drawnDecorations[$0] }))
             }
             items = wanted
+            sidebar.projectDividers = sidebarGrouping == .compact ? Item.projectDividers(in: wanted) : []
+            sidebar.sessionDividers = sidebarGrouping == .compact ? Item.sessionDividers(in: wanted) : []
             sidebar.bands = Item.bands(in: wanted)
             drawnDecorations = decorations
             sidebar.alphaValue = dimmed
@@ -445,6 +447,7 @@ extension WorkspaceWindowController {
     }
 
     func tableView(_ tableView: NSTableView, didAdd rowView: NSTableRowView, forRow row: Int) {
+        sidebar.syncProjectDivider(rowView, row: row)
         (rowView as? WorkspaceRowView)?.syncCell()
     }
 
