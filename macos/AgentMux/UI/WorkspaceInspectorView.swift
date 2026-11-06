@@ -120,7 +120,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     let recap = WorkspaceRecapModel(command: { nil })
     let threads = WorkspaceThreadsModel(command: { nil })
     private lazy var threadsHost = NSHostingView(rootView: WorkspaceThreadsView(model: threads, onOpen: { [weak self] identity in self?.onSource?(identity) }))
-    private lazy var recapHost = WorkspaceInspectorRecapHost(rootView: WorkspaceInspectorRecapView(model: recap))
+    private lazy var recapHost = WorkspaceSidebarHostingView(rootView: WorkspaceInspectorRecapView(model: recap))
     private let sourceButton = NSButton(title: "Read Source Conversation", target: nil, action: nil)
     private let scroll = NSScrollView()
     private static let inset: CGFloat = 12
@@ -640,65 +640,18 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
 
 /// Give SwiftUI the sidebar's actual width when it computes the card's
 /// intrinsic height. An unconstrained ideal width undercounts wrapped lines.
-struct WorkspaceInspectorRecapView: View {
+struct WorkspaceInspectorRecapView: WorkspaceSidebarHostedContent {
     let model: WorkspaceRecapModel
     var width: CGFloat?
     var zoom: CGFloat = 1
 
     var body: some View {
-        WorkspaceRecapScaleLayout(zoom: zoom) {
+        WorkspaceSidebarScaleLayout(zoom: zoom) {
             WorkspaceRecapView(model: model)
                 .frame(width: width)
                 .fixedSize(horizontal: false, vertical: true)
                 .scaleEffect(zoom, anchor: .topLeading)
         }
-    }
-}
-
-/// Cancel the ancestor's AppKit transform at the hosting boundary. SwiftUI
-/// scales its own content so rendering and pointer coordinates stay together.
-@MainActor
-private final class WorkspaceInspectorRecapHost: NSHostingView<WorkspaceInspectorRecapView> {
-    var zoom: CGFloat = 1 {
-        didSet {
-            guard zoom != oldValue else { return }
-            rootView.zoom = zoom
-            updateBounds()
-            invalidateIntrinsicContentSize()
-        }
-    }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        if newSize.width > 0, rootView.width != newSize.width {
-            rootView.width = newSize.width
-        }
-        updateBounds()
-    }
-
-    private func updateBounds() {
-        let size = NSSize(width: frame.width * zoom, height: frame.height * zoom)
-        if bounds.size != size { setBoundsSize(size) }
-    }
-
-    override var intrinsicContentSize: NSSize {
-        let size = super.intrinsicContentSize
-        return NSSize(width: size.width / zoom, height: size.height / zoom)
-    }
-}
-
-private struct WorkspaceRecapScaleLayout: Layout {
-    let zoom: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let size = subviews[0].sizeThatFits(.init(width: proposal.width.map { $0 / zoom },
-                                                height: proposal.height.map { $0 / zoom }))
-        return CGSize(width: size.width * zoom, height: size.height * zoom)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews[0].place(at: bounds.origin, anchor: .topLeading,
-                          proposal: .init(width: bounds.width / zoom, height: bounds.height / zoom))
     }
 }
 

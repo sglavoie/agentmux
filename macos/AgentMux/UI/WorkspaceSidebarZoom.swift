@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 @MainActor
 protocol WorkspaceSidebarZoomAware: AnyObject {
@@ -94,5 +95,58 @@ final class WorkspaceZoomWindow: NSWindow {
             }
         }
         return false
+    }
+}
+
+/// SwiftUI roots embedded in an AppKit-scaled sidebar.
+protocol WorkspaceSidebarHostedContent: View {
+    var width: CGFloat? { get set }
+    var zoom: CGFloat { get set }
+}
+
+/// Cancel the ancestor's AppKit transform at the hosting boundary. SwiftUI
+/// scales its own content so rendering and pointer coordinates stay together.
+@MainActor
+final class WorkspaceSidebarHostingView<Content: WorkspaceSidebarHostedContent>: NSHostingView<Content> {
+    var zoom: CGFloat = 1 {
+        didSet {
+            guard zoom != oldValue else { return }
+            rootView.zoom = zoom
+            updateBounds()
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        if newSize.width > 0, rootView.width != newSize.width {
+            rootView.width = newSize.width
+        }
+        updateBounds()
+    }
+
+    private func updateBounds() {
+        let size = NSSize(width: frame.width * zoom, height: frame.height * zoom)
+        if bounds.size != size { setBoundsSize(size) }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let size = super.intrinsicContentSize
+        return NSSize(width: size.width / zoom, height: size.height / zoom)
+    }
+}
+
+struct WorkspaceSidebarScaleLayout: Layout {
+    let zoom: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews[0].sizeThatFits(.init(width: proposal.width.map { $0 / zoom },
+                                                height: proposal.height.map { $0 / zoom }))
+        return CGSize(width: size.width * zoom, height: size.height * zoom)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, anchor: .topLeading,
+                          proposal: .init(width: bounds.width / zoom, height: bounds.height / zoom))
     }
 }

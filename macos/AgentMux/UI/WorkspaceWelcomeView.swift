@@ -1,11 +1,19 @@
 import SwiftUI
 
 /// Lives below the session list, never over terminal output or input.
-struct WorkspaceWelcomeView: View {
+struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
     @ObservedObject var model: WorkspaceWelcomeModel
+    var width: CGFloat?
+    var zoom: CGFloat = 1
 
     var body: some View {
-        if model.visible { card }
+        if model.visible {
+            WorkspaceSidebarScaleLayout(zoom: zoom) {
+                card.frame(width: width)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .scaleEffect(zoom, anchor: .topLeading)
+            }
+        }
     }
 
     private var card: some View {
@@ -13,7 +21,10 @@ struct WorkspaceWelcomeView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(model.title).font(.system(size: 12, weight: .semibold)).lineLimit(1).help(model.title)
                 Spacer(minLength: 4)
-                Button { model.dismiss() } label: { Image(systemName: "xmark").font(.system(size: 9, weight: .medium)) }
+                Button { model.dismiss() } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
+                        .frame(width: 24, height: 24).contentShape(Rectangle())
+                }
                     .buttonStyle(.plain).help("Dismiss summary").accessibilityLabel("Dismiss summary")
             }
             Text(model.detail).font(.system(size: 11)).foregroundStyle(.secondary)

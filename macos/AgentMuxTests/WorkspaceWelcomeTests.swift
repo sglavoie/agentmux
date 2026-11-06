@@ -83,6 +83,36 @@ final class WorkspaceWelcomeTests: XCTestCase {
         XCTAssertTrue(model.detail.contains("Read status is unavailable"))
     }
 
+    func testDismissButtonReceivesClicksAtSidebarZoomLevels() async throws {
+        let app = FakeWorkspaceApp()
+        let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        workspace.setSidebarZoom(percent: 130)
+        workspace.openForTesting()
+        workspace.window.makeKeyAndOrderFront(nil)
+        defer { workspace.window.close() }
+        for zoom in [130, 100, 80] {
+            workspace.setSidebarZoom(percent: zoom)
+            workspace.welcome.answerSent()
+            workspace.window.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(200))
+            let host = workspace.welcomeView
+            // Center of the visible 24-point dismiss target, measured from
+            // the card's top/trailing padding in the sidebar's logical space.
+            let frame = host.convert(host.bounds, to: nil)
+            let scale = CGFloat(zoom) / 100
+            let point = NSPoint(x: frame.maxX - 30 * scale, y: frame.maxY - 22 * scale)
+            let up = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: workspace.window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
+            let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
+                windowNumber: workspace.window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+            NSApp.postEvent(up, atStart: true)
+            workspace.window.sendEvent(down)
+            try await Task.sleep(for: .milliseconds(100))
+            XCTAssertTrue(workspace.welcome.dismissed, "Dismiss must work at \(zoom)% sidebar zoom")
+            XCTAssertLessThanOrEqual(host.frame.height, 1, "Dismissed banner must give its space back to the list")
+        }
+    }
+
     func testPaletteKeepsShortcutAndUnavailableReasonVisibleTogether() {
         let cell = WorkspaceSwitcherCellView()
         cell.show(.init(place: .command(.newShell), glyph: "›", title: "New Shell", detail: "⌘T", unavailableReason: "Session unavailable"))

@@ -116,7 +116,13 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     let sidebar = WorkspaceSidebarView()
     let groupFilter = WorkspaceGroupFilter()
     lazy var welcome = WorkspaceWelcomeModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
-    lazy var welcomeView = NSHostingView(rootView: WorkspaceWelcomeView(model: welcome))
+    lazy var welcomeView: WorkspaceSidebarHostingView<WorkspaceWelcomeView> = {
+        let host = WorkspaceSidebarHostingView(rootView: WorkspaceWelcomeView(model: welcome))
+        // The stack needs logical intrinsic height; SwiftUI's automatic
+        // minimum-size constraints would reserve the scaled pixel height.
+        host.sizingOptions = [.intrinsicContentSize]
+        return host
+    }()
     /// nil is All; a literal group named All remains a separate choice.
     var selectedGroup: String? {
         didSet {
@@ -179,6 +185,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         sidebarZoomPercent = percent
         guard let sidebarZoomView else { return true }
         sidebarZoomView.zoom = sidebarZoom
+        welcomeView.zoom = sidebarZoom
         inspectorZoomView?.zoom = sidebarZoom
         window.contentView?.layoutSubtreeIfNeeded()
         return true
@@ -678,6 +685,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         groupFilter.onSelect = { [weak self] group in self?.selectGroup(group) }
         let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
         sidebarZoomView.zoom = sidebarZoom
+        welcomeView.zoom = sidebarZoom
         sidebarZoomView.opaqueInLight = true
         sidebarController.view = sidebarZoomView
         self.sidebarZoomView = sidebarZoomView
