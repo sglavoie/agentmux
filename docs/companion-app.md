@@ -482,7 +482,9 @@ is committed.
 
 ### Returning to work
 
-A compact **Welcome back** card at the bottom of the right sidebar shows unread recorded
+Enable **Settings › Workspace › Show Welcome back** to see a compact **Welcome back**
+card at the bottom of the right sidebar. It is off by default; turning it off hides
+an existing welcome card immediately. The card shows unread recorded
 updates from the past seven days and the live attention count. It appears only
 once per app launch, when first opening the workspace. **Activity** and
 **Briefing** open the existing review windows; **Next waiting** focuses a waiting

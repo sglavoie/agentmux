@@ -48,6 +48,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertNil(preferences.snoozeUntil)
         XCTAssertEqual(preferences.environment, [:])
         XCTAssertEqual(preferences.launchBackend, .workspace)
+        XCTAssertFalse(preferences.showWelcomeBack)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
         XCTAssertTrue(preferences.confirmBeforeClosing)
         XCTAssertNil(preferences.defaultFontSize)
@@ -70,6 +71,7 @@ final class AppPreferencesTests: XCTestCase {
         var preferences = AppPreferences()
         preferences.launchBackend = .workspace
         preferences.openWorkspaceAtLaunch = true
+        preferences.showWelcomeBack = true
         defaults.set("unsupported", forKey: "amxDashboardPlace")
         preferences.save(to: defaults)
         XCTAssertEqual(defaults.string(forKey: "amxLaunchBackend"), "workspace")
@@ -84,10 +86,12 @@ final class AppPreferencesTests: XCTestCase {
 
         defaults.set("ghostty", forKey: "amxLaunchBackend")
         defaults.set("yes", forKey: "amxOpenWorkspaceAtLaunch")
+        defaults.set("yes", forKey: "amxShowWelcomeBack")
         defaults.set("ghostty", forKey: "amxDashboardPlace")
         let stray = AppPreferences.load(from: defaults)
         XCTAssertEqual(stray.launchBackend, .workspace)
         XCTAssertFalse(stray.openWorkspaceAtLaunch)
+        XCTAssertFalse(stray.showWelcomeBack)
     }
 
     func testKeysAreThePlannedNames() {
@@ -95,7 +99,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy",
+            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy", "amxShowWelcomeBack",
         ])
     }
 

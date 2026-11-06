@@ -14,6 +14,13 @@ final class WorkspaceWelcomeModel: ObservableObject {
     @Published private(set) var working = 0
     @Published private(set) var live = false
     @Published private(set) var dismissed = false
+    var isEnabled = false {
+        didSet {
+            guard oldValue != isEnabled, !isEnabled else { return }
+            generation += 1
+            summary = nil
+        }
+    }
     var command: () -> AMXCommand?
     var onReceipt: (Receipt) -> Void = { _ in }
     var onAction: (WorkspaceCommand) -> Void = { _ in }
@@ -77,7 +84,7 @@ final class WorkspaceWelcomeModel: ObservableObject {
 
     /// The app retains this model with its workspace controller across closes.
     func showWelcomeOnce() {
-        guard !hasShownWelcome, command() != nil else { return }
+        guard isEnabled, !hasShownWelcome, command() != nil else { return }
         hasShownWelcome = true
         refresh()
     }

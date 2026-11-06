@@ -36,6 +36,10 @@ extension AppDelegate {
 
     func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
+        if old.showWelcomeBack != new.showWelcomeBack {
+            workspace?.welcome.isEnabled = new.showWelcomeBack
+            if let workspace, workspace.isOpen { workspace.welcome.showWelcomeOnce() }
+        }
         workspace?.setSidebarZoom(percent: new.sidebarZoomPercent)
         if old.sidebarGrouping != new.sidebarGrouping {
             cycler = AttentionCycler()

@@ -26,12 +26,48 @@ final class WorkspaceWelcomeTests: XCTestCase {
         return ["entries": entries, "since": "2026-10-30T00:00:00Z", "earliest_available": "", "truncated": true, "corrupt_lines": 0, "matched": 8]
     }
 
+    func testWelcomeIsOptInAndCanBeEnabledLater() {
+        let runner = WelcomeRunner()
+        let amx = command { _ in self.report() }
+        let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+        model.showWelcomeOnce()
+        XCTAssertFalse(model.visible)
+        XCTAssertTrue(runner.pending.isEmpty, "Disabled welcomes must not read activity")
+        model.isEnabled = true
+        model.showWelcomeOnce()
+        XCTAssertEqual(runner.pending.count, 1)
+        runner.release()
+        XCTAssertTrue(model.visible)
+    }
+
+    func testDisablingWelcomeClearsSummaryAndDiscardsPendingRead() {
+        for finishReadFirst in [false, true] {
+            let runner = WelcomeRunner()
+            let amx = command { _ in self.report() }
+            let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+            model.isEnabled = true
+            model.showWelcomeOnce()
+            if finishReadFirst { runner.release() }
+            XCTAssertTrue(model.visible)
+            model.isEnabled = false
+            if !finishReadFirst { runner.release() }
+            XCTAssertNil(model.summary)
+            XCTAssertFalse(model.visible)
+            model.showWelcomeOnce()
+            XCTAssertTrue(runner.pending.isEmpty)
+            model.answerSent()
+            XCTAssertEqual(model.title, "Answer sent")
+            XCTAssertTrue(model.visible, "The preference only controls the welcome summary")
+        }
+    }
+
     func testWelcomeReadsExactUnreadIDsOnlyOncePerLaunch() {
         let runner = WelcomeRunner()
         var calls: [[String]] = []
         let amx = command { args in calls.append(args); return self.report() }
         let markers = WorkspaceActivityReadStore(load: { .init(read: ["read": Date()]) }, save: { _ in XCTFail("A glance must not acknowledge events") })
         let model = WorkspaceWelcomeModel(command: { amx }, runner: runner, readStore: markers)
+        model.isEnabled = true
         model.showWelcomeOnce()
         model.showWelcomeOnce()
         XCTAssertEqual(runner.pending.count, 1, "Activation during startup must not duplicate the read")
@@ -47,6 +83,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         XCTAssertTrue(runner.pending.isEmpty, "Reopening the workspace must not repeat the welcome")
         XCTAssertFalse(model.visible)
         let relaunched = WorkspaceWelcomeModel(command: { amx }, runner: runner, readStore: markers)
+        relaunched.isEnabled = true
         relaunched.showWelcomeOnce()
         XCTAssertEqual(runner.pending.count, 1, "A new app launch can show the welcome again")
     }
@@ -55,6 +92,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         let runner = WelcomeRunner()
         let amx = command { _ in self.report() }
         let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+        model.isEnabled = true
         model.showWelcomeOnce()
         model.close()
         model.showWelcomeOnce()
@@ -68,6 +106,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
             let runner = WelcomeRunner()
             let amx = command { _ in self.report() }
             let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+            model.isEnabled = true
             var expiry: DispatchWorkItem?
             model.schedule = { _, work in expiry = work }
             model.showWelcomeOnce()
@@ -86,6 +125,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         let runner = WelcomeRunner()
         var amx: AMXCommand?
         let model = WorkspaceWelcomeModel(command: { amx }, runner: runner)
+        model.isEnabled = true
         model.showWelcomeOnce()
         XCTAssertFalse(model.visible)
         amx = command { _ in self.report() }
@@ -122,6 +162,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         let amx = command { _ in self.report() }
         let model = WorkspaceWelcomeModel(command: { amx }, runner: runner,
             readStore: .init(load: { throw CocoaError(.fileReadNoPermission) }, save: { _ in XCTFail() }))
+        model.isEnabled = true
         model.showWelcomeOnce(); runner.release()
         XCTAssertTrue(model.detail.contains("Read status is unavailable"))
     }

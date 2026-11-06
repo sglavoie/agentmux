@@ -32,6 +32,7 @@ extension AppDelegate {
         if let workspace { return workspace }
         let controller = WorkspaceWindowController(delegate: self)
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
+        controller.welcome.isEnabled = preferencesModel.preferences.showWelcomeBack
         controller.setSidebarZoom(percent: preferencesModel.preferences.sidebarZoomPercent)
         controller.setCompactSidebar(preferencesModel.preferences.compactSidebar)
         controller.setSidebarGrouping(preferencesModel.preferences.sidebarGrouping)
