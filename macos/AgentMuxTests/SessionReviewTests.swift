@@ -44,7 +44,7 @@ final class SessionReviewTests: XCTestCase {
         idle.review = SessionReview()
         XCTAssertEqual(try group([working, idle]).reviewLabel, "1 needs review", "new members are unacknowledged")
         let row = WorkspaceSidebar.row(working, now: Date(), glyphs: .fallback)
-        XCTAssertTrue(row.detail.contains("Accounted for"))
+        XCTAssertFalse(row.detail.contains("Accounted for"))
         XCTAssertTrue(row.toolTip.contains("reviewer parked"))
     }
 
@@ -91,6 +91,40 @@ final class SessionReviewTests: XCTestCase {
         XCTAssertFalse(workspace.reviewMenuItems(rows: workspace.state.rows).first { $0.title == "Mark Accounted For" }!.isEnabled)
     }
 
+    func testShortcutTogglesShownSessionWithoutMovingFocus() async throws {
+        let app = FakeWorkspaceApp()
+        let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        app.store.onChange = { [weak workspace] in workspace?.refresh() }
+        workspace.openForTesting()
+        defer { workspace.window.close() }
+        var session = F.tmux(1, project: "Example")
+        session.review.epoch = "observed"
+        for accounted in [false, true] {
+            session.review.accounted = accounted
+            app.store.apply(snapshot: F.snapshot([session, F.tmux(2, project: "Example")]))
+            workspace.select(.embedded(F.runtimeID(1)), focus: true)
+            let focus = workspace.window.firstResponder
+            XCTAssertTrue(workspace.canReviewShownSession)
+            XCTAssertEqual(workspace.shownSessionReviewTitle, accounted ? "Clear Acknowledgement" : "Mark Accounted For")
+            let saved = expectation(description: "shortcut saved review")
+            workspace.sessionReviewService = { request in
+                XCTAssertEqual(request.targets, [F.runtimeID(1): "observed"])
+                XCTAssertEqual(request.accounted, !accounted)
+                XCTAssertNil(request.note)
+                saved.fulfill()
+                return .success(SessionReviewResult(undoToken: "receipt", count: 1))
+            }
+            workspace.toggleShownSessionAccounted()
+            XCTAssertFalse(workspace.canReviewShownSession, "a second press cannot race the current save")
+            await fulfillment(of: [saved], timeout: 3)
+            for _ in 0..<50 where workspace.sessionReviewBusy { try await Task.sleep(for: .milliseconds(10)) }
+            XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+            XCTAssertTrue(workspace.window.firstResponder === focus)
+        }
+        app.store.apply(.disconnected(.heartbeatLost, retryIn: 1))
+        XCTAssertFalse(workspace.canReviewShownSession)
+    }
+
     func testFailedSaveKeepsReceiptAndSavedNotes() async throws {
         let app = FakeWorkspaceApp()
         let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
@@ -113,6 +147,42 @@ final class SessionReviewTests: XCTestCase {
         XCTAssertEqual(workspace.sessionReviewUndo, "prior-receipt")
         XCTAssertEqual(workspace.state.rows.first?.review.note, "Prior note")
         XCTAssertFalse(workspace.sessionReviewBusy)
+    }
+
+    func testAccountedTitleStaysOnOneLineInCompactRows() throws {
+        var session = F.tmux(1, project: "amx", icon: "stop", attention: false)
+        session.profile = "personal-codex-with-a-long-title"
+        session.harnessIcon = "🐱"
+        session.review.accounted = true
+        let cell = WorkspaceRowCellView()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 52),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = cell
+        defer { window.close() }
+        let terminal = WorkspaceUtilityView(kind: .terminal, target: F.runtimeID(1), title: "Terminal")
+        for name in ["", "A named session with a very long title"] {
+            session.name = name
+            cell.show(WorkspaceSidebar.row(session, now: Date(), glyphs: .fallback), muteGlyph: "", projectFirstLine: true)
+            cell.showCompactTerminals([terminal], selectedID: terminal.id)
+            window.layoutIfNeeded()
+            let heading = name.isEmpty ? cell.titleLabel : cell.nameLabel
+            let icon = name.isEmpty ? cell.titleReviewIcon : cell.nameReviewIcon
+            XCTAssertFalse(icon.isHidden)
+            XCTAssertNotNil(icon.image)
+            XCTAssertLessThanOrEqual(heading.frame.height, 18, "the heading must not wrap")
+            let headingBounds = cell.convert(heading.bounds, from: heading)
+            let button = cell.compactTerminalButtons[0]
+            let terminalBounds = cell.convert(button.bounds, from: button)
+            XCTAssertLessThan(headingBounds.maxX, terminalBounds.minX)
+        }
+        session.review.accounted = false
+        cell.show(WorkspaceSidebar.row(session, now: Date(), glyphs: .fallback), muteGlyph: "")
+        XCTAssertTrue(cell.nameReviewIcon.isHidden)
+        XCTAssertTrue(cell.titleReviewIcon.isHidden)
+        cell.show(terminal)
+        XCTAssertTrue(cell.nameReviewIcon.isHidden)
+        XCTAssertTrue(cell.titleReviewIcon.isHidden)
     }
 
     func testProjectReviewVisuals() async throws {

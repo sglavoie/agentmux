@@ -753,6 +753,10 @@ final class WorkspaceRowCellView: NSTableCellView {
     let glyphLabel = WorkspaceSidebarLabel(labelWithString: "")
     let nameLabel = WorkspaceSidebarLabel(labelWithString: "")
     let titleLabel = WorkspaceSidebarLabel(labelWithString: "")
+    let nameReviewIcon = NSImageView()
+    let titleReviewIcon = NSImageView()
+    private let nameHeading = NSStackView()
+    private let titleHeading = NSStackView()
     let detailLabel = WorkspaceSidebarLabel(labelWithString: "")
     let closeButton = NSButton(title: "", target: nil, action: nil)
     /// `⌘1`: the key that goes to the session, empty when it has none.
@@ -788,13 +792,30 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isHidden = true
         titleLabel.lineBreakMode = .byTruncatingTail
+        for (heading, icon, label) in [(nameHeading, nameReviewIcon, nameLabel), (titleHeading, titleReviewIcon, titleLabel)] {
+            label.maximumNumberOfLines = 1
+            label.cell?.usesSingleLineMode = true
+            icon.image = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Accounted for")?
+                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .bold))
+            icon.contentTintColor = .labelColor
+            icon.toolTip = "Accounted for"
+            icon.isHidden = true
+            icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+            heading.orientation = .horizontal
+            heading.alignment = .centerY
+            heading.spacing = 4
+            heading.addArrangedSubview(icon)
+            heading.addArrangedSubview(label)
+        }
+        nameHeading.isHidden = true
         detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
         // Not the cell's textField: the source list restyles that outlet,
         // drawing it dark on the selected line's pill in a dark appearance
         // and faded on a session's color, whatever color the line sets.
-        let text = NSStackView(views: [nameLabel, titleLabel, detailLabel])
+        let text = NSStackView(views: [nameHeading, titleHeading, detailLabel])
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
@@ -969,6 +990,9 @@ final class WorkspaceRowCellView: NSTableCellView {
               progress: Ghostty.Progress? = nil) {
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
+        nameHeading.isHidden = true
+        nameReviewIcon.isHidden = true
+        titleReviewIcon.isHidden = true
         titleLabel.lineBreakMode = .byTruncatingTail
         glyphLabel.stringValue = view.glyph
         titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
@@ -1000,7 +1024,11 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         nameLabel.stringValue = projectFirstLine && !row.name.isEmpty ? "\(row.project) — \(row.namedLabel)" : row.namedLabel
+        nameLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         nameLabel.isHidden = row.name.isEmpty
+        nameHeading.isHidden = row.name.isEmpty
+        nameReviewIcon.isHidden = !row.review.accounted || row.name.isEmpty
+        titleReviewIcon.isHidden = !row.review.accounted || !row.name.isEmpty
         glyphLabel.stringValue = row.glyph
         // A pinned or promoted session names the project it is away from.
         let namesProject = projectFirstLine ? row.name.isEmpty : (away ?? (row.pinned || row.needsAttention))
@@ -1042,6 +1070,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         if row.pinned { spoken.append("pinned") }
         if row.muted { spoken.append("muted") }
         if row.attention { spoken.append("needs attention") } else if row.working { spoken.append("working") }
+        if row.review.accounted { spoken.append("Accounted for") }
         if bell { spoken.append("bell") }
         if closing { spoken.append("ending session") } else if !row.detail.isEmpty { spoken.append(row.detail) }
         if let sessionKey { spoken.append("Command \(sessionKey)") }

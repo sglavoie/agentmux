@@ -5,6 +5,7 @@ import AppKit
 enum WorkspaceShortcut: String, CaseIterable, Identifiable {
     case splitShell, splitChanges, focusOtherPane, swapPanes, hideOtherPane
     case runs, runPlan, activity, flightLog, briefing, history, changes, commandPalette
+    case sessionAccounted
     var id: String { rawValue }
     var title: String {
         switch self {
@@ -21,6 +22,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .history: return "Conversation History…"
         case .changes: return "Checkout Changes…"
         case .commandPalette: return "Command Palette…"
+        case .sessionAccounted: return "Mark Accounted For"
         }
     }
     @MainActor var action: Selector {
@@ -38,6 +40,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .history: return #selector(AppDelegate.showHistory(_:))
         case .changes: return #selector(AppDelegate.showChanges(_:))
         case .commandPalette: return #selector(AppDelegate.showCommandPalette(_:))
+        case .sessionAccounted: return #selector(AppDelegate.toggleSessionAccounted(_:))
         }
     }
     /// ⌘⇧ and a letter for the command palette and review windows. Menu
@@ -49,6 +52,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
     private var defaultKey: String? {
         switch self {
         case .commandPalette: return "p"
+        case .sessionAccounted: return "k"
         case .runs: return "r"
         case .runPlan: return "n"
         case .activity: return "u"

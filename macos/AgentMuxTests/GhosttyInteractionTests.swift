@@ -667,6 +667,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("\r", keyCode: 36), "New Terminal Below"),
             (.command("\r", keyCode: 36, shifted: "\r"), "New Session Below…"),
             (.command("r", keyCode: 15), "Name Session…"),
+            (.command("k", keyCode: 40, shifted: "K"), "Mark Accounted For"),
             (.command(".", keyCode: 47), "Pin Session"),
             (.command("w", keyCode: 13, shifted: "W"), "End Session…"),
             (.function(NSF7FunctionKey, keyCode: 98), "F7"),
@@ -778,6 +779,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("w", keyCode: 13, shifted: "W"), "End Session…"),
             (.command("l", keyCode: 37, shifted: "L"), "Session List"),
             (.command("i", keyCode: 34, shifted: "I"), "Waiting"),
+            (.command("k", keyCode: 40, shifted: "K"), "Mark Accounted For"),
         ]
         for (key, title) in expected {
             XCTAssertEqual(owner(key), title, "\(key.flags.rawValue) \(key.unmodified)")

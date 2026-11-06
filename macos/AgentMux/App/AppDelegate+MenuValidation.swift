@@ -24,6 +24,7 @@ extension AppDelegate: NSMenuItemValidation {
         #selector(biggerWorkspaceSidebars(_:)), #selector(smallerWorkspaceSidebars(_:)), #selector(resetWorkspaceSidebars(_:)),
         #selector(newSessionTerminal(_:)), #selector(newSessionBelow(_:)), #selector(continueWithAnotherAgent(_:)), #selector(nameSession(_:)), #selector(togglePinSession(_:)),
         #selector(endWorkspaceSession(_:)), #selector(searchConversation(_:)),
+        #selector(toggleSessionAccounted(_:)),
         #selector(focusNextSession(_:)), #selector(focusPreviousSession(_:)),
         #selector(pickSessionIcon(_:)), #selector(pickSessionColor(_:)),
         #selector(clearSessionState(_:)), #selector(toggleSessionMute(_:)), #selector(markSessionActive(_:)),
@@ -62,6 +63,9 @@ extension AppDelegate: NSMenuItemValidation {
         case #selector(togglePinSession(_:)):
             item.title = workspace?.pinShownTitle ?? WorkspaceWindowController.pinShownSessionTitle
             return workspace?.shownSessionRow != nil
+        case #selector(toggleSessionAccounted(_:)):
+            item.title = workspace?.shownSessionReviewTitle ?? WorkspaceShortcut.sessionAccounted.title
+            return workspace?.canReviewShownSession == true
         // F5, F6, F8, F10, and F11 act on the session the pane is on; with
         // none shown they are greyed out rather than beeping.
         case #selector(pickSessionIcon(_:)), #selector(pickSessionColor(_:)),

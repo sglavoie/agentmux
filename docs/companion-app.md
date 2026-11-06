@@ -1022,6 +1022,10 @@ reopen the notice. Older notices without an exact issue identity remain dismissi
 
 ### Accounted-for sessions and notes
 
+Press **⌘⇧K** to mark the current session accounted for, or clear its acknowledgement
+if it is already marked. This works while its terminal has focus. The **Session**
+menu shows the current action; customize the shortcut in Settings.
+
 Right-click a session or project heading and choose **Mark Accounted For** to
 record that you have checked its current work. The action keeps your terminal
 selection and focus. A project action covers its current sessions across profiles,

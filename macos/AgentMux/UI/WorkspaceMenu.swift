@@ -179,6 +179,8 @@ enum WorkspaceMenu {
         session.addItem(item(WorkspaceWindowController.newSessionTitle, #selector(AppDelegate.newSessionBelow(_:)), "\r", mask: [.command, .shift], target: target))
         session.addItem(item(WorkspaceWindowController.nameSessionTitle, #selector(AppDelegate.nameSession(_:)), "r", target: target))
         session.addItem(item(WorkspaceWindowController.pinShownSessionTitle, #selector(AppDelegate.togglePinSession(_:)), ".", target: target))
+        session.addItem(item(WorkspaceShortcut.sessionAccounted.title, WorkspaceShortcut.sessionAccounted.action,
+                             WorkspaceShortcut.sessionAccounted.defaultMenuKey, target: target))
         session.addItem(item(WorkspaceWindowController.endSessionTitle, #selector(AppDelegate.endWorkspaceSession(_:)), "W", target: target))
         session.addItem(.separator())
         // ⌘] and ⌘[ stop at every session and terminal under one; F9 and F7

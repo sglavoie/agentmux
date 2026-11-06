@@ -460,6 +460,10 @@ extension AppDelegate {
     @objc func togglePinSession(_ sender: Any?) {
         if workspace?.togglePinOfShownSession() != true { refuse(Self.noSessionShown) }
     }
+    @objc func toggleSessionAccounted(_ sender: Any?) {
+        guard workspaceIsKey else { return }
+        workspace?.toggleShownSessionAccounted()
+    }
     @objc func toggleWorkspaceSidebar(_ sender: Any?) { workspace?.toggleSidebar() }
     @objc func toggleWorkspaceInspector(_ sender: Any?) { workspace?.toggleInspector() }
     @objc func revealInWorkspaceSidebar(_ sender: Any?) {

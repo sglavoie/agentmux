@@ -2,6 +2,19 @@ import AppKit
 import SwiftUI
 
 extension WorkspaceWindowController {
+    var canReviewShownSession: Bool {
+        state.current && !sessionReviewBusy && shownSessionRow?.embeddedRuntimeSessionID != nil
+    }
+
+    var shownSessionReviewTitle: String {
+        shownSessionRow?.review.accounted == true ? "Clear Acknowledgement" : "Mark Accounted For"
+    }
+
+    func toggleShownSessionAccounted() {
+        guard canReviewShownSession, let row = shownSessionRow, let id = row.embeddedRuntimeSessionID else { return }
+        saveSessionReview(SessionReviewRequest(targets: [id: row.review.epoch], accounted: !row.review.accounted))
+    }
+
     /// A menu keeps the exact reviewed membership and epochs, so arrivals and
     /// a new prompt cannot be silently included while the menu is open.
     func reviewMenuItems(rows: [WorkspaceRow], project: String? = nil) -> [NSMenuItem] {
@@ -14,6 +27,13 @@ extension WorkspaceWindowController {
         mark.representedObject = ReviewMenuRequest(request)
         mark.target = self
         mark.isEnabled = state.current && !sessionReviewBusy
+        if project == nil, rows.count == 1,
+           let shortcut = NSApp.mainMenu?.item(withTitle: "Session")?.submenu?.items.first(where: {
+               $0.action == WorkspaceShortcut.sessionAccounted.action
+           }) {
+            mark.keyEquivalent = shortcut.keyEquivalent
+            mark.keyEquivalentModifierMask = shortcut.keyEquivalentModifierMask
+        }
         request.accounted = nil
         request.note = project == nil ? rows[0].review.note : rows[0].review.projectNote
         let note = NSMenuItem(title: project == nil ? "Edit Session Note…" : "Edit Project Note…", action: #selector(editSessionReviewNote(_:)), keyEquivalent: "")

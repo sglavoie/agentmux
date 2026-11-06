@@ -1043,7 +1043,9 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(cell.titleLabel.stringValue, "work", "the profile stays on its own line")
         XCTAssertTrue(cell.nameLabel.font?.fontDescriptor.symbolicTraits.contains(.bold) == true)
         XCTAssertEqual(cell.nameLabel.textColor, .labelColor, "name follows the current appearance")
-        XCTAssertTrue((cell.nameLabel.superview as? NSStackView)?.arrangedSubviews.first === cell.nameLabel, "the name is the first line")
+        let nameBounds = cell.convert(cell.nameLabel.bounds, from: cell.nameLabel)
+        let profileBounds = cell.convert(cell.titleLabel.bounds, from: cell.titleLabel)
+        XCTAssertGreaterThanOrEqual(nameBounds.minY, profileBounds.maxY, "the name is the first line")
         XCTAssertGreaterThan(workspace.sidebar.rect(ofRow: work).height, workspace.sidebar.rect(ofRow: personal).height,
                              "the named line is taller by its first line")
 

@@ -625,7 +625,7 @@ enum WorkspaceSidebar {
         if !session.branch.isEmpty { detail.append("\(session.branch)\(session.dirty ? "*" : "")") }
         if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
         // State remains readable without interpreting an emoji or profile color.
-        if !session.review.label.isEmpty { detail.append(session.review.accounted ? "✓ Accounted for" : "Needs review") }
+        if session.review.reviewed && !session.review.accounted { detail.append("Needs review") }
         detail.insert(session.reason.isEmpty ? WorkspaceInspector.word(for: session.iconState) : WorkspaceWording.status(session.reason), at: 0)
 
         return WorkspaceRow(
