@@ -309,6 +309,7 @@ struct CompanionStatusEvidence: Decodable, Equatable {
 }
 
 struct CompanionSession: Decodable, Equatable {
+    var review = SessionReview()
     var statusEvidence: CompanionStatusEvidence?
     var harness = ""
     var profile = ""
@@ -349,7 +350,7 @@ struct CompanionSession: Decodable, Equatable {
     var needsAttention: Bool {
         switch iconState {
         case "key", "error", "question": return true
-        case "stop": return unseen
+        case "stop": return unseen && !review.accounted
         default: return false
         }
     }
@@ -357,7 +358,7 @@ struct CompanionSession: Decodable, Equatable {
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, pinned, branch, dirty, name
+        case review, harness, profile, project, conversation, reason, unseen, attention, muted, locked, looping, pinned, branch, dirty, name
         case statusEvidence = "status_evidence"
         case runtime
         case aslRunID = "asl_run_id"
@@ -371,6 +372,7 @@ struct CompanionSession: Decodable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        review = c.lenient(.review, SessionReview())
         harness = c.lenient(.harness, "")
         profile = c.lenient(.profile, "")
         project = c.lenient(.project, "")

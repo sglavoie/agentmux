@@ -87,6 +87,11 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 		{commands.SearchProject, commands.GroupSession, "Search This Project's Past Sessions", []string{"history", "project", "transcripts"}, keyProjectSessionSearch},
 		{commands.ShowDetails, commands.GroupSession, "Show Session Details", []string{"events", "hooks"}, ""},
 		{commands.ShowTimeline, commands.GroupSession, "Show Session Timeline", []string{"events", "phases"}, ""},
+		{"review.SessionAccounted", commands.GroupReview, "Mark Session Accounted For", nil, "ctrl+g"},
+		{"review.SessionNote", commands.GroupReview, "Edit Session Note…", nil, ""},
+		{"review.ProjectAccounted", commands.GroupReview, "Mark Project Accounted For", nil, ""},
+		{"review.ProjectNote", commands.GroupReview, "Edit Project Note…", nil, ""},
+		{"review.undo", commands.GroupReview, "Undo Annotation", nil, ""},
 		{commands.UndoClose, commands.GroupApplication, "Recover Ended Session (relaunch project)", []string{"restore", "reopen", "resume", "relaunch", "undo last close"}, keyUndoClose},
 		{commands.ShowFeedback, commands.GroupApplication, "Show Action Feedback", []string{"errors", "failures", "notices", "waiting"}, ""},
 		{commands.ShowHealth, commands.GroupApplication, "Show Health Details", []string{"daemon", "hooks", "diagnostics", "status"}, ""},
@@ -130,7 +135,7 @@ func TestCommandCatalogStableInventory(t *testing.T) {
 	}
 
 	// Group contiguity is part of stable catalog order, not a renderer concern.
-	wantGroups := []commands.Group{commands.GroupNavigate, commands.GroupSession, commands.GroupApplication}
+	wantGroups := []commands.Group{commands.GroupNavigate, commands.GroupSession, commands.GroupReview, commands.GroupApplication}
 	var gotGroups []commands.Group
 	for _, candidate := range got {
 		if len(gotGroups) == 0 || gotGroups[len(gotGroups)-1] != candidate.Group {
@@ -172,6 +177,11 @@ func TestCommandCatalogDashboardShortcutBindings(t *testing.T) {
 		// Everything below is palette-and-actions-only. None of these lost its
 		// command; each lost the direct dashboard shortcut that used to duplicate
 		// it, which is what the replacement keymap is.
+		"review.SessionAccounted":   "ctrl+g",
+		"review.SessionNote":        noDashboardKey,
+		"review.ProjectAccounted":   noDashboardKey,
+		"review.ProjectNote":        noDashboardKey,
+		"review.undo":               noDashboardKey,
 		commands.PeekScrollback:     noDashboardKey,
 		commands.RestartSession:     noDashboardKey,
 		commands.OverrideProfile:    noDashboardKey,
@@ -394,7 +404,7 @@ func TestCommandCatalogConditionalVisibility(t *testing.T) {
 			visible++
 		}
 	}
-	if visible != 34 {
-		t.Fatalf("clean catalog has %d visible commands, want 34", visible)
+	if visible != 39 {
+		t.Fatalf("clean catalog has %d visible commands, want 39", visible)
 	}
 }

@@ -41,7 +41,7 @@ func (m Model) activeRootMode() Mode {
 		return m.healthReturnMode
 	case ModeASLResponse:
 		return ModeASLRuns
-	case ModeSend:
+	case ModeReviewNote, ModeSend:
 		return ModeList
 	case ModePlanRun:
 		return ModePlanSearch

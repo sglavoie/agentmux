@@ -225,7 +225,7 @@ func runtimeSessions(in Input, runs map[int]string) []candidate {
 		if s.Conversation != nil {
 			s.Harness = display(s.Conversation.Harness)
 		}
-		s.Attention = protocol.AttentionStates[s.IconState]
+		s.Attention = protocol.AttentionStates[s.IconState] && (s.IconState != "stop" || !s.Review.Accounted)
 		out = append(out, candidate{
 			session: s, order: len(out),
 			entry: runtimeOrderEntry(in.Runtime[slot]),
@@ -270,6 +270,7 @@ func applyState(s *protocol.CompanionSession, st protocol.WindowStateSnapshot) {
 		evidence := *st.StatusEvidence
 		s.StatusEvidence = &evidence
 	}
+	s.Review = st.Review
 	s.IconState = display(st.IconState)
 	s.Reason = display(st.Reason)
 	s.Unseen = st.Unseen
@@ -348,7 +349,9 @@ func countAttention(a *protocol.CompanionAttention, s protocol.CompanionSession)
 	}
 	switch s.IconState {
 	case "stop":
-		a.Stop++
+		if !s.Review.Accounted {
+			a.Stop++
+		}
 	case "key":
 		a.Key++
 	case "error":
@@ -359,7 +362,7 @@ func countAttention(a *protocol.CompanionAttention, s protocol.CompanionSession)
 	if workingStates[s.IconState] {
 		a.Working++
 	}
-	if s.Unseen {
+	if s.Unseen && !s.Review.Accounted {
 		a.Unseen++
 	}
 }

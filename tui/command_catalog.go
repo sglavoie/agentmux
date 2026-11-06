@@ -31,10 +31,8 @@ import (
 // cannot become a command target because it never produces one.
 func captureCommandContext(m Model) commands.Context {
 	s, ok := m.selectedSession()
-	if !ok {
-		return commands.Context{}
-	}
-	return commands.Context{Target: s, HasTarget: true}
+	rows, project := m.collectReviewTargets(true)
+	return commands.Context{Target: s, HasTarget: ok, ReviewRows: rows, ReviewProject: project}
 }
 
 func undoCommandAvailability(m Model, _ commands.Context) commands.Availability {
@@ -106,6 +104,7 @@ func commandCatalog() []commands.Command[Model] {
 func commandDeclarations() []commands.Command[Model] {
 	catalog := navigateCommandDeclarations()
 	catalog = append(catalog, sessionCommandDeclarations()...)
+	catalog = append(catalog, reviewCommandDeclarations()...)
 	return append(catalog, applicationCommandDeclarations()...)
 }
 

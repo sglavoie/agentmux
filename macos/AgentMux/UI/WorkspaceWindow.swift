@@ -98,6 +98,16 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     weak var delegate: WorkspaceDelegate?
     var state = WorkspaceState()
+    var sessionReviewUndo: String?
+    var sessionReviewBusy = false
+    var sessionReviewPopover: NSPopover?
+    var sessionReviewRunner = QueueWorkRunner()
+    var sessionReviewService: (SessionReviewRequest) -> Result<SessionReviewResult, Error> = {
+        guard !AppDelegate.isRunningTests else {
+            return .failure(NSError(domain: "SessionReview", code: 1, userInfo: [NSLocalizedDescriptionKey: "Tests must supply an isolated review service."]))
+        }
+        return DaemonClient().sessionReview($0)
+    }
     /// The order sessions were dragged into; the app keeps it across
     /// launches.
     var order = WorkspaceOrder()

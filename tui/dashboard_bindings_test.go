@@ -698,6 +698,7 @@ func TestEveryCatalogCommandIsAvailableSomewhere(t *testing.T) {
 	})
 	closed.now = func() time.Time { return undoTestNow }
 	closed.recovery = recoveryWith(undoTestNow, "api")
+	closed.reviewUndo = "test-annotation"
 	states = append(states, struct {
 		name string
 		m    Model

@@ -161,6 +161,15 @@ func projectCardMetaLines(in ProjectCardInput) []string {
 	lines[3] = inspectorLabelled(in.Width, "Branch", projectCardBranchText(members))
 	lines[4] = inspectorDirectoryLine(in.Width, projectCardRoot(members))
 	lines[5] = inspectorLabelled(in.Width, "Watch", projectCardWatchText(in, members))
+	if review := ReviewSummary(members); review != "" {
+		lines = append(lines, inspectorLabelled(in.Width, "Review", review))
+	}
+	notes := memberValues(members, func(s session.RunningSession) string { return s.Review.ProjectNote })
+	for _, note := range notes {
+		if note != "" {
+			lines = append(lines, inspectorLabelled(in.Width, "Project note", note))
+		}
+	}
 	return lines
 }
 

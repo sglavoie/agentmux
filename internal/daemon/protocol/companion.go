@@ -62,6 +62,7 @@ var CompanionMessageTypes = []MessageType{
 	TypeNotificationTest,
 	TypeWorkspaceView,
 	TypeFocusSession,
+	TypeSessionReview,
 }
 
 // AttentionStates is the set of icon states that mean a human is being waited
@@ -333,6 +334,7 @@ type CompanionASLWaiting struct {
 // except PresentationChangedAtMS, which mirrors WindowStateSnapshot. Runtime
 // is the session identity used by focus and other actions.
 type CompanionSession struct {
+	Review         SessionReview          `json:"review,omitzero"`
 	StatusEvidence *StatusEvidence        `json:"status_evidence,omitempty"`
 	Harness        string                 `json:"harness,omitempty"`
 	Profile        string                 `json:"profile,omitempty"`

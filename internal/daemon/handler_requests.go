@@ -54,6 +54,8 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		} else {
 			resp = legacyStateUpdate(h, req)
 		}
+	case protocol.TypeSessionReview:
+		resp = h.handleSessionReview(req)
 	case protocol.TypeStateQuery:
 		resp = h.handleStateQuery()
 	case protocol.TypeOverviewPreferences:

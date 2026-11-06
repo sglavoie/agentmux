@@ -206,6 +206,11 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 
 	decision := st.Reducer.ApplyNormalized(n)
 	reducerTrace, _ := st.Reducer.LatestTrace()
+	// A new same-kind prompt/completion is still new attention. Duplicate and
+	// suppressed deliveries, child completions, and ordinary busy churn are not.
+	if decision == protocol.DecisionApplied && n.Source.Kind != protocol.SourceSubagent && reviewAttentionIcon(protocol.IconState(n.Action)) {
+		advanceReviewEpoch(st)
+	}
 	reducerMutated := decision == protocol.DecisionApplied || decision == protocol.DecisionAcknowledged || decision == protocol.DecisionSuppressed
 	// ShadowSeq is the window-wide receipt generation applyAuthoritativeIdle
 	// captures before a slow off-lock screen/transcript read and re-checks under
@@ -346,7 +351,11 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 // twice: restored windows after a restart, and watchdog-expired windows
 // during the 30-minute monitored audit). Callers hold stateMu.
 func (h *Handler) publishEffectiveLocked(windowID int, st *state.WindowState, effective state.EffectiveState) {
+	observeReviewTurn(st)
 	previousIcon := st.Effective.Icon
+	if effective.Icon != previousIcon && reviewAttentionIcon(effective.Icon) {
+		advanceReviewEpoch(st)
+	}
 	previousUnseen := st.Unseen
 	now := time.Now()
 	// The unseen bit is a transition rule, not an invariant of the new icon

@@ -151,6 +151,12 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		theme.ObserveBackground(msg.IsDark())
 		return m, nil
 	case tea.PasteMsg:
+		if m.mode == ModeReviewNote {
+			if !m.reviewBusy {
+				m.insertReviewNote(msg.Content)
+			}
+			return m, nil
+		}
 		return m.handleSendPaste(msg)
 
 	case tea.WindowSizeMsg:
@@ -178,6 +184,8 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commands.ErrMsg:
 		return m.handleRefreshErr(msg)
 
+	case reviewDoneMsg:
+		return m.handleReviewDone(msg)
 	case commands.ActionDoneMsg:
 		return m.handleActionDone(msg)
 

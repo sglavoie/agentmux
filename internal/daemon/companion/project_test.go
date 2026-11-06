@@ -206,3 +206,25 @@ func TestCompanionPackageDoesNoIO(t *testing.T) {
 		}
 	}
 }
+
+func TestReviewAnnotationPreservesAgentStateAndAttentionCounts(t *testing.T) {
+	in := runtimeInput(3)
+	icons := []string{"stop", "key", "error"}
+	i := 0
+	for slot := range in.Runtime {
+		in.States[slot] = protocol.WindowStateSnapshot{IconState: icons[i], Unseen: true, Review: protocol.SessionReview{Accounted: true, Reviewed: true, Note: "Parked", ProjectNote: "Implementation running"}}
+		i++
+	}
+	snap := Project(in)
+	if snap.Attention.Total != 2 || snap.Attention.Stop != 0 || snap.Attention.Unseen != 0 {
+		t.Fatalf("accounted completion still counted: %+v", snap.Attention)
+	}
+	for _, s := range snap.Sessions {
+		if !s.Review.Accounted || s.Review.Note != "Parked" || s.Review.ProjectNote != "Implementation running" {
+			t.Fatalf("annotation missing: %+v", s)
+		}
+		if s.Attention != (s.IconState != "stop") {
+			t.Fatalf("attention hidden or retained incorrectly: %+v", s)
+		}
+	}
+}

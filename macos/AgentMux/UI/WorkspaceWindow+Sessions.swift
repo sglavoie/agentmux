@@ -220,7 +220,7 @@ extension WorkspaceWindowController {
         let toggle = NSMenuItem(title: title, action: #selector(toggleClickedGroup(_:)), keyEquivalent: "")
         toggle.representedObject = WorkspaceOrder.groupToken(group)
         toggle.target = self
-        return [toggle]
+        return [toggle] + (group.isSectionHeading || group.pinned || group.isFlat ? [] : reviewMenuItems(rows: state.rows.filter { $0.project == group.project }, project: group.project))
     }
 
     @objc private func toggleClickedGroup(_ sender: Any?) {
@@ -303,13 +303,13 @@ extension WorkspaceWindowController {
         end.representedObject = row.key
         end.target = self
         end.isEnabled = closing[id] == nil
-        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, session, handoff, copy, .separator(), end] }
+        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, session, handoff, copy, .separator(), end] + reviewMenuItems(rows: [row]) }
         // What a click or Return on the line does: attach again, taking the
         // session from whichever terminal has it.
         let reattach = NSMenuItem(title: Self.reattachTitle, action: #selector(reattachClickedSession(_:)), keyEquivalent: "")
         reattach.representedObject = row.key
         reattach.target = self
-        return [name] + looks + [pin, .separator(), reattach, terminal, session, handoff, copy, .separator(), end]
+        return [name] + looks + [pin, .separator(), reattach, terminal, session, handoff, copy, .separator(), end] + reviewMenuItems(rows: [row])
     }
 
     @objc private func clickedSessionAction(_ sender: Any?) {

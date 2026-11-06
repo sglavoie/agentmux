@@ -486,3 +486,23 @@ func TestMuteToggleWithoutAFlagMutesTheCurrentRuntimeSession(t *testing.T) {
 		}
 	}
 }
+
+func TestRuntimeAttentionSkipsAccountedCompletionsButKeepsRequests(t *testing.T) {
+	old := sessionCommandsDaemon
+	t.Cleanup(func() { sessionCommandsDaemon = old })
+	sessionCommandsDaemon = func(protocol.Request) (protocol.Response, error) {
+		return protocol.Response{OK: true,
+			RuntimeSlots: map[int]protocol.RuntimeSlot{1: {RuntimeSessionID: "done"}, 2: {RuntimeSessionID: "permission"}, 3: {RuntimeSessionID: "error"}},
+			States: map[int]protocol.WindowStateSnapshot{
+				1: {IconState: "stop", Review: protocol.SessionReview{Accounted: true}},
+				2: {IconState: "key", Review: protocol.SessionReview{Accounted: true}},
+				3: {IconState: "error", Review: protocol.SessionReview{Accounted: true}},
+			}}, nil
+	}
+	attention := runtimeAttention()
+	for _, id := range []string{"done", "permission", "error"} {
+		if got := attention(session.RunningSession{RuntimeSessionID: runtimesession.ID(id)}); got != (id != "done") {
+			t.Fatalf("%s attention=%v", id, got)
+		}
+	}
+}

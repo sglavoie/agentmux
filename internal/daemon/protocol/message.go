@@ -132,6 +132,7 @@ type DeliveryAcknowledgement struct {
 // can leak it. They are exported only because the daemon package that stamps
 // them now lives outside this one.
 type Request struct {
+	Review *SessionReviewRequest `json:"review,omitempty"`
 	// OverviewCompact is nil for a read, or the desired daemon-lifetime setting.
 	OverviewCompact *bool `json:"overview_compact,omitempty"`
 	// CurrentIconState is daemon-internal snapshot context. It is deliberately
@@ -295,7 +296,8 @@ type RuntimeSlot struct {
 }
 
 type Response struct {
-	OverviewCompact *bool `json:"overview_compact,omitempty"`
+	Review          *SessionReviewResult `json:"review,omitempty"`
+	OverviewCompact *bool                `json:"overview_compact,omitempty"`
 	// OverviewCompactExplicit reports whether OverviewCompact was set by an
 	// operator toggle during this daemon's lifetime. When false the value is the
 	// zero default and the overview keeps its configured opening mode.

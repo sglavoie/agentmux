@@ -14,6 +14,7 @@ import (
 
 // RunningSession is a managed harness running in a tmux pane.
 type RunningSession struct {
+	Review                protocol.SessionReview
 	TabID                 int
 	TabNumber             int // legacy positional metadata
 	WindowID              int

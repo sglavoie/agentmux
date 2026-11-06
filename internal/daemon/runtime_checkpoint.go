@@ -341,9 +341,13 @@ func (h *Handler) flushRuntimeCheckpoint() error {
 	entries := h.runtimeCheckpointEntriesLocked()
 	captured := h.runtimeSlotGenerationsLocked()
 	capturedAt := time.Now()
+	// Serialize snapshot capture with publication. An older maintenance snapshot
+	// must not overwrite the checkpoint a successful review just made durable.
+	h.runtimeCheckpointMu.Lock()
 	h.stateMu.Unlock()
-
-	if err := h.writeRuntimeCheckpoint(entries); err != nil {
+	err := h.writeRuntimeCheckpointLocked(entries)
+	h.runtimeCheckpointMu.Unlock()
+	if err != nil {
 		return err
 	}
 	h.settleRuntimeSlots(captured, capturedAt)
@@ -354,6 +358,12 @@ func (h *Handler) flushRuntimeCheckpoint() error {
 // content changed since the last successful write. No path means no
 // checkpoint is kept, which is not a failure.
 func (h *Handler) writeRuntimeCheckpoint(entries []runtimeCheckpointEntry) error {
+	h.runtimeCheckpointMu.Lock()
+	defer h.runtimeCheckpointMu.Unlock()
+	return h.writeRuntimeCheckpointLocked(entries)
+}
+
+func (h *Handler) writeRuntimeCheckpointLocked(entries []runtimeCheckpointEntry) error {
 	if h.runtimeCheckpointPath == "" {
 		return nil
 	}
@@ -362,8 +372,6 @@ func (h *Handler) writeRuntimeCheckpoint(entries []runtimeCheckpointEntry) error
 		return err
 	}
 	sum := sha256.Sum256(data)
-	h.runtimeCheckpointMu.Lock()
-	defer h.runtimeCheckpointMu.Unlock()
 	if h.runtimeCheckpointWritten && sum == h.runtimeCheckpointDigest {
 		return nil
 	}

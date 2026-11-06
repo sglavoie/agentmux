@@ -1019,3 +1019,25 @@ failures. A later fork can create a different conversation, so it does not resol
 an earlier fork's failure or unknown outcome. Resolved notices retain their original message, resolution evidence, and
 time across restarts, subject to the existing 30-entry bound. Repeated failures
 reopen the notice. Older notices without an exact issue identity remain dismissible.
+
+### Accounted-for sessions and notes
+
+Right-click a session or project heading and choose **Mark Accounted For** to
+record that you have checked its current work. The action keeps your terminal
+selection and focus. A project action covers its current sessions across profiles,
+including collapsed and pinned sessions; a later arrival remains unacknowledged.
+The sidebar shows **Accounted for** or the number of sessions needing review.
+
+Choose **Edit Session Note…** or **Edit Project Note…** in the same menu to open a
+small note editor. Save a one-line note of up to 500 characters, or save an empty
+note to remove it. Notes appear in the Session inspector and on sidebar hover.
+They persist after acknowledgement expires. **Clear Acknowledgement** preserves
+notes; **Undo Annotation** restores the prior annotation without hiding new events.
+
+Acknowledgement expires when meaningful new attention arrives: a turn completes,
+a question or permission request arrives, a warning/error occurs, or an agent
+exits unexpectedly. Working/compacting/subagent activity does not expire it.
+Questions and errors remain actionable even when acknowledged. Notification mute
+and snooze settings remain independent. The app and dashboard share these records
+through the daemon; offline controls are disabled. See
+[session annotations](usage.md#accounted-for-sessions-and-notes) for CLI and storage.

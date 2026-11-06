@@ -49,6 +49,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleASLRunsKey(msg)
 	case ModeASLResponse:
 		return m.handleASLResponseKey(msg)
+	case ModeReviewNote:
+		return m.handleReviewNoteKey(msg)
 	case ModeSend:
 		return m.handleSendKey(msg)
 	case ModePlanRun:

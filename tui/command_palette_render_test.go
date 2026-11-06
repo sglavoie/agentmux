@@ -70,7 +70,7 @@ func TestCommandPaletteFullAndFilteredLayouts(t *testing.T) {
 			seen = append(seen, row.Group)
 		}
 	}
-	want := []commands.Group{commands.GroupNavigate, commands.GroupSession, commands.GroupApplication}
+	want := []commands.Group{commands.GroupNavigate, commands.GroupSession, commands.GroupReview, commands.GroupApplication}
 	if !reflect.DeepEqual(seen, want) {
 		t.Fatalf("group rules = %v, want %v\n%s", seen, want, text)
 	}

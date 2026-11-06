@@ -156,6 +156,11 @@ func (h *Handler) processLifecycleTick(ctx context.Context, observedAt time.Time
 		if !result.Changed {
 			continue
 		}
+		// An interactive exit can settle directly to idle, so icon transitions
+		// alone cannot tell operator reviews that the agent is gone.
+		if result.Reason != state.HarnessProcessExitReasonReset {
+			advanceReviewEpoch(st)
+		}
 		// Only a settlement of this exact producer retires the hold: a pass that
 		// changed nothing has not replaced the withheld stop with anything, and a
 		// pass that settled a different process in the same window has not either.

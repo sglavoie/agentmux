@@ -218,6 +218,17 @@ func inspectorMetaLines(in InspectorInput) []string {
 	if watch := inspectorWatchText(in, s); watch != "" {
 		lines = append(lines, inspectorLabelled(in.Width, "Watch", watch))
 	}
+	if s.Review.Accounted {
+		lines = append(lines, inspectorLabelled(in.Width, "Review", "Accounted for"))
+	} else if s.Review.Reviewed {
+		lines = append(lines, inspectorLabelled(in.Width, "Review", "Needs review"))
+	}
+	if s.Review.Note != "" {
+		lines = append(lines, inspectorLabelled(in.Width, "Note", s.Review.Note))
+	}
+	if s.Review.ProjectNote != "" {
+		lines = append(lines, inspectorLabelled(in.Width, "Project note", s.Review.ProjectNote))
+	}
 	return lines
 }
 

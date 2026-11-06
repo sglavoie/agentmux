@@ -330,6 +330,11 @@ func BuildQueue(in QueueInput) []QueueRow {
 			Unread:    unreadStop(s),
 			Group:     group,
 		}
+		if s.Review.Accounted {
+			queue[i].Name += " ✓"
+		} else if s.Review.Reviewed {
+			queue[i].Name += " · review"
+		}
 	}
 	return queue
 }

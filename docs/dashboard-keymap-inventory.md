@@ -50,6 +50,7 @@ fails there.
 | `i` | Toggle inspector; open full-screen when necessary |
 | `/` | Edit filters |
 | `a` | Selected-session actions |
+| `Ctrl+g` | Toggle the selected session’s accounted-for acknowledgement |
 | `l` | Launcher |
 | `s` | Past Sessions for the selected project |
 | `S` | All-project Past Sessions, newest activity first; clears previous history filters |

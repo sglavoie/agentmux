@@ -205,6 +205,7 @@ func lostPortableSessions() []session.RunningSession {
 			continue
 		}
 		rs.State, rs.Looping, rs.AgentTurn, rs.ASLPhases, rs.Unseen, rs.Reason = "error", false, nil, nil, false, ""
+		rs.Review.Accounted = false
 		lost = append(lost, rs)
 	}
 	return lost

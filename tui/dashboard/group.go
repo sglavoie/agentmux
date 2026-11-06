@@ -86,7 +86,7 @@ func StateGroup(s session.RunningSession, lastActivity map[int]time.Time, thresh
 		// Decided inside the switch rather than in the tail below, so an
 		// unknown/legacy state name keeps reaching the tail's own Idle rule
 		// instead of being answered by this one.
-		if s.Unseen {
+		if s.Unseen && !s.Review.Accounted {
 			return 0
 		}
 		return 2

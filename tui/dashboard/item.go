@@ -218,7 +218,7 @@ func (l ItemList) HasUnreadNotice(it Item) bool {
 // that is still working. It is the same claim StateGroup makes about the same
 // two fields, said here for the marker rather than for the bucket.
 func unreadStop(s session.RunningSession) bool {
-	return s.State == "stop" && s.Unseen
+	return s.State == "stop" && s.Unseen && !s.Review.Accounted
 }
 
 // RowTarget names where a cursor has to go to reach one underlying row, and

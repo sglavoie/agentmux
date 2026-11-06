@@ -439,6 +439,15 @@ func renderSummaryRow(in ListInput, it Item, width int) string {
 		}
 	}
 
+	var members []session.RunningSession
+	for _, index := range it.Members {
+		if index >= 0 && index < len(in.Items.Rows) {
+			members = append(members, in.Items.Rows[index])
+		}
+	}
+	if review := ReviewSummary(members); review != "" {
+		label += " · " + review
+	}
 	head := chevron + " " + layout.PadIconCell(icon) + " " + groupLabelStyle(group).Render(label)
 	tally := renderSummaryCounts(in.Items.SummaryCounts(it, in.LastActivity, in.IdleThreshold))
 

@@ -36,6 +36,9 @@ import (
 
 // Model is the root Bubble Tea model for the dashboard.
 type Model struct {
+	reviewEditor                                          reviewEditor
+	reviewUndo                                            string
+	reviewBusy                                            bool
 	flightReport                                          *flightlog.Report
 	flightRead                                            func(flightlog.Filters, []string, int) tea.Cmd
 	flightFilters                                         flightlog.Filters
@@ -683,9 +686,10 @@ const (
 	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
 	ModeFeedback               // retained action outcomes
 	ModeHealth                 // scrollable details for every health check, from cached facts
-	ModeSend                   // text and keys for one tmux session, sent without attaching
-	ModePlanRun                // choices for starting an agent-session-loop run of one plan
-	ModeFlightLog              // durable session statistics and milestone collection
+	ModeReviewNote
+	ModeSend      // text and keys for one tmux session, sent without attaching
+	ModePlanRun   // choices for starting an agent-session-loop run of one plan
+	ModeFlightLog // durable session statistics and milestone collection
 )
 
 // String names the mode in stable lower snake case ("list",
@@ -736,6 +740,8 @@ func (mode Mode) String() string {
 		return "asl_runs"
 	case ModeASLResponse:
 		return "asl_response"
+	case ModeReviewNote:
+		return "review_note"
 	case ModeSend:
 		return "send"
 	case ModePlanRun:

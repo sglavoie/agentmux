@@ -51,6 +51,7 @@ func dashboardBindings() commands.BindingSet {
 		{Keys: []string{keyEnter}, Display: keyEnter, Hint: "open session", Command: commands.FocusSession},
 		{Keys: []string{keyProjectSessionSearch}, Display: keyProjectSessionSearch, Hint: "project's past sessions", Command: commands.SearchProject},
 		{Keys: []string{keySend}, Display: keySend, Hint: "send", Command: commands.SendToSession},
+		{Keys: []string{"ctrl+g"}, Display: "ctrl+g", Hint: "accounted for", Command: "review.SessionAccounted"},
 
 		// Navigate.
 		{Keys: []string{keyAllSessions}, Display: keyAllSessions, Hint: "past sessions", Command: commands.SearchAllSessions},

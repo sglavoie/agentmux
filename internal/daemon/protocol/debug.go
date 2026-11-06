@@ -22,6 +22,7 @@ type StatusEvidence struct {
 // It is deliberately a value copy: callers must never observe or mutate the
 // handler's live WindowState entries.
 type WindowStateSnapshot struct {
+	Review         SessionReview      `json:"review,omitzero"`
 	StatusEvidence *StatusEvidence    `json:"status_evidence,omitempty"`
 	IconState      string             `json:"icon_state"`
 	Looping        bool               `json:"looping"`

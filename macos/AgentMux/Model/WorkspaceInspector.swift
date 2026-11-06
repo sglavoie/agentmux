@@ -227,7 +227,8 @@ enum WorkspaceInspector {
             ]
         }
 
-        let all = [("Status", status), ("Identity", identity), ("Git", git)]
+        let review = [Field(label: "Review", value: session.review.label), Field(label: "Note", value: session.review.note), Field(label: "Project note", value: session.review.projectNote)]
+        let all = [("Your notes", review), ("Status", status), ("Identity", identity), ("Git", git)]
         let sections = all.compactMap { title, fields -> WorkspaceInspection.Section? in
             let filled = fields.filter { !$0.value.isEmpty }
             return filled.isEmpty ? nil : WorkspaceInspection.Section(title: title, fields: filled)

@@ -47,6 +47,9 @@ type WindowState struct {
 	// maintenance republish must not make old attention look new, while a focus
 	// observation that marks a resting row read is itself a visible transition.
 	PresentationChangedAt time.Time
+	// ReviewEpoch changes for meaningful new attention, independently of activity.
+	ReviewEpoch string
+	ReviewTurn  string
 
 	// Unseen marks a window that came to rest on a turn the user has not looked
 	// at yet. The polarity is deliberately inverted: the ZERO VALUE MEANS SEEN.
@@ -246,7 +249,9 @@ type windowStatePayload struct {
 	// PresentationChangedAt is the dashboard-visible transition clock in unix
 	// milliseconds. It is additive within schema v4: an older payload restores
 	// zero, and older readers ignore this compact key.
-	PresentationChangedAt int64 `json:"pc,omitempty"`
+	PresentationChangedAt int64  `json:"pc,omitempty"`
+	ReviewEpoch           string `json:"re,omitempty"`
+	ReviewTurn            string `json:"rt,omitempty"`
 	// Unseen is the durable unseen bit, added inside schema v4 on the same terms
 	// as BusySince above: older readers ignore it, and a payload written without
 	// it restores zero. Because the polarity is inverted (zero means *seen*)
@@ -295,6 +300,8 @@ func (s WindowState) MarshalStatePayload() (string, error) {
 		Account:                    s.LastAccount,
 		Harness:                    s.LastHarness,
 		Unseen:                     s.Unseen,
+		ReviewEpoch:                s.ReviewEpoch,
+		ReviewTurn:                 s.ReviewTurn,
 	}
 	if !s.GuardExpiresAt.IsZero() {
 		uv.GuardExpiresAt = s.GuardExpiresAt.Unix()
@@ -369,6 +376,8 @@ func (s *WindowState) UnmarshalStatePayload(value string) error {
 		LastPipeMode:               uv.PipeMode,
 		LastAccount:                uv.Account,
 		LastHarness:                uv.Harness,
+		ReviewEpoch:                uv.ReviewEpoch,
+		ReviewTurn:                 uv.ReviewTurn,
 	}
 	if uv.GuardExpiresAt != 0 {
 		s.GuardExpiresAt = time.Unix(uv.GuardExpiresAt, 0)

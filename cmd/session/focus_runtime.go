@@ -106,7 +106,7 @@ func runtimeAttention() func(session.RunningSession) bool {
 	waiting := map[string]bool{}
 	if response, err := sessionCommandsDaemon(protocol.Request{Type: protocol.TypeStateQuery}); err == nil && response.OK {
 		for slot, bound := range response.RuntimeSlots {
-			if state, ok := response.States[slot]; ok && protocol.AttentionStates[state.IconState] {
+			if state, ok := response.States[slot]; ok && protocol.AttentionStates[state.IconState] && (state.IconState != "stop" || !state.Review.Accounted) {
 				waiting[bound.RuntimeSessionID] = true
 			}
 		}

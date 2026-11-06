@@ -68,6 +68,7 @@ struct WorkspaceRow: Equatable {
     /// The session's icon state (`stop`, `bolt`, …); empty when idle. What
     /// the line's background under a project says.
     var iconState = ""
+    var review = SessionReview()
 
     var sessionLabel: String { qualified(label) }
     var namedLabel: String { name.isEmpty ? "" : qualified(name) }
@@ -179,6 +180,8 @@ struct WorkspaceGroup: Equatable {
     var isFlat = false
     /// Waiting count for a project heading whose rows live in child groups.
     var waitingCount = 0
+    var reviewLabel = ""
+    var projectNote = ""
 
     var title: String {
         if let branch { return branch.isEmpty ? "No branch" : branch }
@@ -482,7 +485,18 @@ enum WorkspaceSidebar {
     static func groups(_ rows: [WorkspaceRow], order: WorkspaceOrder, prioritizeAttention: Bool = true,
                        grouping: WorkspaceSidebarGrouping = .stateThenProject,
                        sorting: WorkspaceSidebarSort = .manual) -> [WorkspaceGroup] {
-        let groups = manuallyGrouped(rows, order: order, prioritizeAttention: prioritizeAttention, grouping: grouping)
+        let groups = manuallyGrouped(rows, order: order, prioritizeAttention: prioritizeAttention, grouping: grouping).map { group in
+            var annotated = group
+            if !group.isSectionHeading && !group.pinned && !group.needsAttention && !group.isFlat {
+                let members = rows.filter { $0.project == group.project }
+                let remaining = members.filter { !$0.review.accounted }.count
+                if members.contains(where: { $0.review.reviewed }) {
+                    annotated.reviewLabel = remaining == 0 ? "✓ Accounted for" : "\(remaining) needs review"
+                }
+                annotated.projectNote = members.first?.review.projectNote ?? ""
+            }
+            return annotated
+        }
         guard sorting == .recentlyVisited else { return groups }
         return groups.map { group in
             var sorted = group
@@ -611,6 +625,7 @@ enum WorkspaceSidebar {
         if !session.branch.isEmpty { detail.append("\(session.branch)\(session.dirty ? "*" : "")") }
         if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
         // State remains readable without interpreting an emoji or profile color.
+        if !session.review.label.isEmpty { detail.append(session.review.accounted ? "✓ Accounted for" : "Needs review") }
         detail.insert(session.reason.isEmpty ? WorkspaceInspector.word(for: session.iconState) : WorkspaceWording.status(session.reason), at: 0)
 
         return WorkspaceRow(
@@ -623,7 +638,7 @@ enum WorkspaceSidebar {
             attention: session.attention,
             working: session.isWorking,
             muted: session.muted,
-            toolTip: MenuBuilder.place(of: session),
+            toolTip: ([MenuBuilder.place(of: session), session.review.label, session.review.note, session.review.projectNote].filter { !$0.isEmpty }).joined(separator: "\n"),
             tabColor: WorkspaceTabColor(hex: session.tabColor),
             name: session.name,
             harnessIcon: session.harnessIcon,
@@ -633,7 +648,8 @@ enum WorkspaceSidebar {
             needsAttention: session.needsAttention,
             conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil },
             branch: session.branch,
-            iconState: session.iconState
+            iconState: session.iconState,
+            review: session.review
         )
     }
 

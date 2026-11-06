@@ -137,6 +137,11 @@ func (h *Handler) acceptASLSupervisorProjection(
 			return
 		}
 	}
+	if previous.LatestQuestionID != projection.LatestQuestionID {
+		if st, ok := h.windowStateLocked(target.WindowID); ok {
+			advanceReviewEpoch(st)
+		}
+	}
 	h.aslSupervisors.SetProjection(ref, projection)
 	notification := h.applyASLSupervisorQuestionLocked(now, target, projection)
 	h.stateMu.Unlock()
@@ -197,6 +202,9 @@ func (h *Handler) handleASLSupervisorMailboxQuestion(
 			h.aslSupervisors.SetProjection(ref, projection)
 			h.stateMu.Unlock()
 			continue
+		}
+		if previous.LatestQuestionID != projection.LatestQuestionID {
+			advanceReviewEpoch(st)
 		}
 		h.aslSupervisors.SetProjection(ref, projection)
 		notification := h.applyASLSupervisorQuestionEvidenceLocked(

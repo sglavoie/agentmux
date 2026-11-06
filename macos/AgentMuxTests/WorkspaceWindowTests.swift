@@ -1082,7 +1082,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
-                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…"])
+                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…", "", "Mark Accounted For", "Edit Session Note…", "Undo Annotation"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(asked.map(\.0), [personal])
         XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
@@ -2151,7 +2151,7 @@ final class WorkspaceWindowTests: XCTestCase {
         workspace.select(other.key)
         let items = workspace.contextMenuItems(forRow: try index(of: work.key))
         XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
-                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…"])
+                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…", "", "Mark Accounted For", "Edit Session Note…", "Undo Annotation"])
         _ = try XCTUnwrap(items[6].target).perform(try XCTUnwrap(items[6].action), with: items[6])
         XCTAssertEqual(workspace.state.selection, work.key)
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(4), F.runtimeID(1)])
@@ -2179,7 +2179,7 @@ final class WorkspaceWindowTests: XCTestCase {
             try XCTUnwrap(workspace.items.firstIndex { if case let .group(group) = $0 { return group.project == project } else { return false } })
         }
         var items = workspace.contextMenuItems(forRow: try header("api"))
-        XCTAssertEqual(items.map(\.title), ["Collapse Project"])
+        XCTAssertEqual(items.map(\.title), ["Collapse Project", "", "Mark Accounted For", "Edit Project Note…", "Undo Annotation"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(lines(), ["[Done]", "[api]+", "[web]", "web/work"])
         XCTAssertEqual(app.orders.last?.collapsed, [WorkspaceOrder.groupToken(project: "api", pinned: false)])
@@ -2201,7 +2201,7 @@ final class WorkspaceWindowTests: XCTestCase {
         XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]+"])
 
         items = workspace.contextMenuItems(forRow: try header("api"))
-        XCTAssertEqual(items.map(\.title), ["Expand Project"])
+        XCTAssertEqual(items.map(\.title), ["Expand Project", "", "Mark Accounted For", "Edit Project Note…", "Undo Annotation"])
         _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
         XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]", "api/personal", "api/work"])
         XCTAssertEqual(workspace.sidebar.selectedRowIndexes, IndexSet(integer: try index(of: work.key)))

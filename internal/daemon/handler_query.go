@@ -51,6 +51,7 @@ func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapsh
 	}
 	for id, st := range h.store {
 		state := protocol.WindowStateSnapshot{
+			Review:          h.sessionReviewLocked(id, st),
 			StatusEvidence:  statusEvidence(st),
 			IconState:       rendering.DesiredIcon(st),
 			Looping:         st.Looping,

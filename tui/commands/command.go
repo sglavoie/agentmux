@@ -68,6 +68,7 @@ type Group string
 const (
 	GroupNavigate    Group = "Navigate"
 	GroupSession     Group = "Session"
+	GroupReview      Group = "Review"
 	GroupApplication Group = "Application"
 )
 
@@ -75,8 +76,10 @@ const (
 // copied when the context is created so a background refresh or live cursor
 // move cannot retarget a command before it executes.
 type Context struct {
-	Target    session.RunningSession
-	HasTarget bool
+	ReviewRows    []session.RunningSession
+	ReviewProject string
+	Target        session.RunningSession
+	HasTarget     bool
 }
 
 // Availability carries both the controller decision and the inline reason

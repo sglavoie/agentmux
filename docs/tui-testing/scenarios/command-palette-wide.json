@@ -1,7 +1,7 @@
 {
   "name": "command-palette-wide",
   "fixture": "basic",
-  "size": { "width": 120, "height": 44 },
+  "size": { "width": 120, "height": 52 },
   "actions": [{ "type": "key", "key": ":" }],
   "assertions": [
     { "type": "mode_equals", "mode": "command_palette" },
@@ -13,9 +13,11 @@
     { "type": "contains_text", "text": "Open Launcher" },
     { "type": "contains_text", "text": "─ Session ─" },
     { "type": "contains_text", "text": "Focus Selected Session" },
+    { "type": "contains_text", "text": "─ Review ─" },
+    { "type": "contains_text", "text": "Mark Project Accounted For" },
     { "type": "contains_text", "text": "─ Application ─" },
     { "type": "contains_text", "text": "Choose configured projects to launch." },
     { "type": "excludes_text", "text": "Browse all projects and harnesses" },
-    { "type": "contains_text", "text": "Command Palette: 34 results" }
+    { "type": "contains_text", "text": "Command Palette: 39 results" }
   ]
 }

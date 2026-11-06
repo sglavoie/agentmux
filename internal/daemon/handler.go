@@ -117,6 +117,7 @@ type Handler struct {
 	// windowMetadata. Per-window state lives under store so handlers mutate a
 	// single WindowState entry instead of a set of parallel maps.
 	stateMu sync.Mutex
+	reviews reviewStore
 	store   map[int]*state.WindowState
 
 	// resetStopCommitMu linearizes a claimed held Stop's final state

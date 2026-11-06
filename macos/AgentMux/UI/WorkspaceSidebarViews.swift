@@ -591,6 +591,12 @@ final class WorkspaceGroupCellView: NSTableCellView {
         disclosureLabel.stringValue = group.collapsed ? Self.collapsedDisclosure : Self.expandedDisclosure
         disclosureLabel.toolTip = group.collapsed ? "Collapsed: click to expand" : "Click to collapse"
         disclosureLabel.setAccessibilityLabel(group.collapsed ? "collapsed" : "expanded")
+        if !group.reviewLabel.isEmpty {
+            countLabel.stringValue += (countLabel.stringValue.isEmpty ? "" : " · ") + group.reviewLabel
+            label += ", " + group.reviewLabel
+        }
+        toolTip = [group.title, group.reviewLabel, group.projectNote].filter { !$0.isEmpty }.joined(separator: "\n")
+        if !group.projectNote.isEmpty { label += ", " + group.projectNote }
         label += group.collapsed ? ", collapsed" : ", expanded"
         setAccessibilityLabel(label)
         setAccessibilityDisclosed(!group.collapsed)

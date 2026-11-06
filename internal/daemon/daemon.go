@@ -187,6 +187,7 @@ func run(ctx context.Context, cfg *config.Config, deps runDependencies) (retErr 
 	// Runtime-session slots restore before the socket binds, so no event can
 	// land in a slot before its checkpoint does.
 	handler.SetRuntimeCheckpointPath(DefaultRuntimeCheckpointPath())
+	handler.loadSessionReviews()
 	handler.enableConversationThreads()
 	// The registry is reconciled first: an agent that exited or was lost
 	// while no daemon ran is recorded as such before its checkpoint entry is
