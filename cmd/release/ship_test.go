@@ -54,6 +54,7 @@ func newShipWorld(t *testing.T) shipWorld {
 		shipWrite(t, filepath.Join(w.root, "scripts", name), string(data), 0o755)
 	}
 	shipWrite(t, filepath.Join(w.root, "cmd/root.go"), "package cmd\n\nconst version = \"0.8.9\"\n", 0o644)
+	shipWrite(t, filepath.Join(w.root, ".gitignore"), "/amx\n/macos/build/\n", 0o644)
 	shipWrite(t, filepath.Join(w.root, "Justfile"), "# gates replaced by a stand-in\n", 0o644)
 	shipWrite(t, filepath.Join(w.root, "macos/scripts/release-gate.sh"), `#!/bin/sh
 echo toolchain >> "$SHIP_TRACE"
@@ -225,6 +226,147 @@ func TestShipFailuresPreserveVersionAndExplainRecovery(t *testing.T) {
 			}
 			if failure == "gates" && !strings.Contains(out, "#retrying-a-release") {
 				t.Fatalf("missing evidence recovery instructions: %s", out)
+			}
+		})
+	}
+}
+
+// Force follows the real publisher through packaging and real tag pushes.
+// Tool fixtures fail if an unexpected test or gate is invoked.
+func setupForcedShip(t *testing.T, w shipWorld) string {
+	t.Helper()
+	upload := t.TempDir()
+	t.Setenv("SHIP_UPLOAD", upload)
+	shipWrite(t, filepath.Join(w.bin, "just"), `#!/bin/sh
+echo "just $*" >> "$SHIP_TRACE"
+[ "$3 $4" = 'mac-app Release' ] || exit 90
+[ "${SHIP_BUILD_STATUS:-0}" = 0 ] || exit 1
+root=$(dirname "$2")
+mkdir -p "$root/macos/build/Agent Mux.app/Contents/MacOS"
+printf 'app' > "$root/macos/build/Agent Mux.app/Contents/MacOS/Agent Mux"
+printf 'amx' > "$root/amx"
+`, 0o755)
+	shipWrite(t, filepath.Join(w.bin, "go"), `#!/bin/sh
+case "$1 $2" in
+    'env GOARCH') echo arm64 ;;
+    'tool buildid') echo fixture-build-id ;;
+    *) exit 90 ;;
+esac
+`, 0o755)
+	shipWrite(t, filepath.Join(w.bin, "codesign"), "#!/bin/sh\nexit 0\n", 0o755)
+	shipWrite(t, filepath.Join(w.bin, "spctl"), "#!/bin/sh\nexit 0\n", 0o755)
+	shipWrite(t, filepath.Join(w.bin, "xcrun"), `#!/bin/sh
+[ "${SHIP_NOTARY_STATUS:-0}" = 0 ] || exit 1
+echo 'status: Accepted'
+`, 0o755)
+	shipWrite(t, filepath.Join(w.bin, "ditto"), `#!/bin/sh
+for target do :; done
+printf 'archive' > "$target"
+`, 0o755)
+	shipWrite(t, filepath.Join(w.bin, "gh"), `#!/bin/sh
+echo "gh $*" >> "$SHIP_TRACE"
+case "$1 $2" in
+    'auth status') exit 0 ;;
+    'repo view') echo test/agentmux ;;
+    'release list') exit 0 ;;
+    'release view')
+        case "$*" in *--json*) echo https://example.invalid/release ;; *) exit 1 ;; esac ;;
+    'release create')
+        for arg do
+            case "$arg" in *.zip|*/SHA256SUMS|*/notes.md) cp "$arg" "$SHIP_UPLOAD/" ;; esac
+        done ;;
+    *) exit 90 ;;
+esac
+`, 0o755)
+	return upload
+}
+
+func TestShipForcePublishesWithoutCIOrTestGates(t *testing.T) {
+	for _, bump := range []string{"", "patch"} {
+		t.Run("bump="+bump, func(t *testing.T) {
+			w := newShipWorld(t)
+			upload := setupForcedShip(t, w)
+			// A forced release does not depend on ASL or an evidence key.
+			t.Setenv("AMX_ASL_ROOT", w.asl+"-missing")
+			t.Setenv("AMX_RELEASE_SIGNING_KEY", w.key+"-missing")
+			before := shipGit(t, w.root, "rev-parse", "HEAD")
+			args := []string{"--force"}
+			version := "0.8.9"
+			if bump != "" {
+				args = append(args, bump)
+				version = "0.8.10"
+			}
+			if out, err := w.run(args...); err != nil {
+				t.Fatalf("force: %v\n%s", err, out)
+			}
+			revision := shipGit(t, w.root, "rev-parse", "HEAD")
+			if bump == "" && revision != before {
+				t.Fatal("force without a bump changed the revision")
+			}
+			if bump != "" && !strings.Contains(shipGit(t, w.root, "log", "-1", "--format=%s"), "[skip ci]") {
+				t.Fatal("forced version commit did not skip CI")
+			}
+			if got := shipGit(t, w.root+".git", "rev-parse", "refs/tags/v"+version+"^{commit}"); got != revision {
+				t.Fatalf("published tag = %s, want %s", got, revision)
+			}
+			if tags := shipGit(t, w.asl+".git", "tag"); tags != "" {
+				t.Fatalf("forced release tagged ASL: %s", tags)
+			}
+			trace, _ := os.ReadFile(w.trace)
+			if strings.Contains(string(trace), "gh run") || strings.Contains(string(trace), "gate <") {
+				t.Fatalf("force ran CI or test gates: %s", trace)
+			}
+			notes, err := os.ReadFile(filepath.Join(upload, "notes.md"))
+			if err != nil || !strings.Contains(string(notes), "Tests and release gates were skipped") || strings.Contains(string(notes), "records and their signatures are attached") {
+				t.Fatalf("missing truthful force release notes: %s, %v", notes, err)
+			}
+			cmd := exec.Command("shasum", "-a", "256", "--check", "SHA256SUMS")
+			cmd.Dir = upload
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("download checksums: %v\n%s", err, out)
+			}
+		})
+	}
+}
+
+func TestShipForceDryRunAndFailuresDoNotPublish(t *testing.T) {
+	for _, mode := range []string{"dry-run-first", "force-first", "build", "notary", "dirty", "tag-conflict"} {
+		t.Run(mode, func(t *testing.T) {
+			w := newShipWorld(t)
+			upload := setupForcedShip(t, w)
+			before := shipGit(t, w.root, "rev-parse", "HEAD")
+			args := []string{"--force"}
+			dryRun := strings.Contains(mode, "first")
+			switch mode {
+			case "dry-run-first":
+				args = []string{"patch", "--dry-run", "--force"}
+			case "force-first":
+				args = []string{"patch", "--force", "--dry-run"}
+			case "build":
+				t.Setenv("SHIP_BUILD_STATUS", "1")
+			case "notary":
+				t.Setenv("SHIP_NOTARY_STATUS", "1")
+			case "dirty":
+				shipWrite(t, filepath.Join(w.root, "untracked"), "dirty", 0o644)
+			case "tag-conflict":
+				shipGit(t, w.root, "tag", "v0.8.9")
+				shipGit(t, w.root, "commit", "--allow-empty", "-m", "new work")
+				before = shipGit(t, w.root, "rev-parse", "HEAD")
+			}
+			out, err := w.run(args...)
+			if (err == nil) != dryRun {
+				t.Fatalf("unexpected result: %v\n%s", err, out)
+			}
+			if shipGit(t, w.root, "rev-parse", "HEAD") != before {
+				t.Fatal("current version changed")
+			}
+			files, _ := os.ReadDir(upload)
+			if len(files) != 0 || shipGit(t, w.root+".git", "tag") != "" {
+				t.Fatal("published despite dry run or failure")
+			}
+			trace, _ := os.ReadFile(w.trace)
+			if dryRun && strings.Contains(string(trace), "mac-app") {
+				t.Fatal("dry run built the app")
 			}
 		})
 	}

@@ -341,7 +341,30 @@ release prerequisites, updates `cmd/root.go`, commits the version, pushes
 `main`, waits for the successful push CI run on that exact commit, then runs
 `just release`. It installs both programs, restarts the daemon, runs both
 release gates, pushes their pair tags and publishes the notarized downloads.
-It preserves the existing pair tag scheme; it does not create `vX.Y.Z` tags.
+The default flow preserves the existing pair tag scheme.
+
+To publish without running tests, use `--force`:
+
+```bash
+just ship --force                # publish the current version (retry a failed ship)
+just ship patch --force          # bump first, then publish without tests
+just ship patch --force --dry-run
+```
+
+Force skips waiting for CI and skips both the paired and desktop test gates.
+A forced version commit includes `[skip ci]`; an existing CI run is left alone.
+It builds the Release app and CLI, signs and notarizes both, checks the app
+bundle, then publishes both ZIPs and `SHA256SUMS`. Builds and notarization still
+take time and must succeed. `--dry-run` and `--force` work in either order.
+
+A forced release uses an Agent Mux-only `vX.Y.Z` tag and release notes stating
+that tests were skipped. It does not tag ASL, install either program, restart
+the daemon, or attach test-pass evidence. ASL and the SSH evidence signing key
+are not required. A clean `main`, GitHub access, Xcode, Developer ID signing,
+and notarization credentials are still required. An existing version tag on
+another revision is refused. After a failure, retry with `just ship --force`
+to keep the current version; any failed gate evidence from the earlier attempt
+is unused. An already published release is still rejected by ship's preflight.
 
 The defaults are the sibling `../sglavoie_agent-session-loop` checkout and
 the SSH evidence signing key `~/.ssh/amx_release`. Set `AMX_ASL_ROOT` and
@@ -409,7 +432,9 @@ and amx is notarized before anything is pushed.
 
 ### Retrying a release
 
-If shipping fails after the version commit, that commit is preserved. Do not
+If shipping fails after the version commit, that commit is preserved. To bypass
+tests and publish that version immediately, run `just ship --force`. To retry
+the tested release flow, follow the steps below. Do not
 run `just ship patch` again: it would bump another version. If the failure
 was in pushing `main` or waiting for CI, push `main`, let CI pass, then run
 `just release` with the paths above. If the paired gate failed before tagging,

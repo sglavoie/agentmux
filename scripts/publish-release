@@ -2,6 +2,8 @@
 # publish-release preflight AMX_ROOT ASL_ROOT SIGNING_KEY
 # publish-release prepare AMX_ROOT ASL_ROOT SIGNING_KEY NEXT_VERSION
 # publish-release publish AMX_ROOT PAIR_RECORD DESKTOP_RECORD
+# publish-release prepare-force AMX_ROOT VERSION
+# publish-release force AMX_ROOT
 #
 # The GitHub half of a release. The paired release gate decides whether a pair
 # is releasable and tags it locally, and the desktop gate whether the notarized
@@ -80,14 +82,18 @@ require_signing_env() {
 }
 
 preflight() {
-    local amx_root="$1" asl_root="$2" signing_key="$3" next_version="${4:-}"
+    local amx_root="$1" asl_root="$2" signing_key="$3" next_version="${4:-}" forced="${5:-no}"
     need gh
     need jq
     gh auth status >/dev/null 2>&1 || die "gh is not signed in (gh auth login)"
-    [ -f "$signing_key" ] || die "no signing key at $signing_key"
+    local roots=("$amx_root")
+    if [ "$forced" != yes ]; then
+        [ -f "$signing_key" ] || die "no signing key at $signing_key"
+        roots+=("$asl_root")
+    fi
 
     local root
-    for root in "$amx_root" "$asl_root"; do
+    for root in "${roots[@]}"; do
         [ "$(git -C "$root" rev-parse --is-inside-work-tree 2>/dev/null)" = true ] || die "$root is not a Git checkout"
         if [ -n "$(git -C "$root" status --porcelain)" ]; then
             die "$root has uncommitted changes"
@@ -116,7 +122,7 @@ preflight() {
 }
 
 publish() {
-    local amx_root="$1" record="$2" desktop="$3"
+    local amx_root="$1" record="$2" desktop="$3" forced=no
     need gh
     need jq
     require_signing_env
@@ -165,10 +171,44 @@ publish() {
     if [ "$(shasum -a 256 "$app/Contents/MacOS/Agent Mux" | cut -d' ' -f1)" != "$(fact bundle_executable_sha256)" ]; then
         die "$app is not the bundle the desktop gate passed; run it again"
     fi
+    publish_downloads
+}
+
+# A forced release has its own version tag and makes no paired-gate claim.
+# Build/sign/notarize through the usual app recipe, without either test gate.
+publish_force() {
+    local amx_root="$1" forced=yes
+    need gh
+    need jq
+    need just
+    require_signing_env
+    [ "$(git -C "$amx_root" branch --show-current)" = main ] || die "switch to main before releasing"
+    [ -z "$(git -C "$amx_root" status --porcelain)" ] || die "commit or stash changes before releasing"
+    local amx_rev version pair_id arch build_id
+    amx_rev="$(git -C "$amx_root" rev-parse HEAD)"
+    version="$(version_at "$amx_root" "$amx_rev")"
+    [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || die "invalid version: $version"
+    pair_id="v$version"
+    require_on_origin_main "$amx_root" "$amx_rev"
+    local tagged
+    if tagged="$(git -C "$amx_root" rev-parse --verify --quiet "refs/tags/$pair_id^{commit}")"; then
+        [ "$tagged" = "$amx_rev" ] || die "$pair_id already names another revision"
+    fi
+    just --justfile "$amx_root/Justfile" mac-app Release
+    "$amx_root/macos/scripts/release-gate.sh" bundle --notarized
+    local app="$amx_root/macos/build/Agent Mux.app"
+    arch="$(go env GOARCH)"
+    build_id="$(go tool buildid "$amx_root/amx")"
+    [ -n "$build_id" ] || die "amx has no Go build ID"
+    publish_downloads
+}
+
+# Uses the validated release facts from publish or publish_force. Both paths
+# share signing, notarization, archive names, checksums and upload behavior.
+publish_downloads() {
+    local cli_zip app_zip
     xcrun stapler validate "$app" >/dev/null 2>&1 || die "$app carries no notarization ticket"
     spctl --assess --type execute "$app" 2>/dev/null || die "Gatekeeper refuses $app"
-
-    local cli_zip app_zip
     stage="$(mktemp -d)" # global: the EXIT trap runs after publish returns
     trap 'rm -rf "$stage"' EXIT
     app_zip="$stage/Agent-Mux-$version-macos-$arch.zip"
@@ -190,29 +230,49 @@ publish() {
         tee "$stage/notary.log"
     grep -q 'status: Accepted' "$stage/notary.log" || die "Apple did not accept amx for notarization"
 
-    while IFS=$'\t' read -r repo root; do
-        echo "pushing $pair_id to $repo's origin"
-        git -C "$root" push --quiet origin "refs/tags/$pair_id"
-    done < <(jq -r '.repositories[] | [.repo, .root] | @tsv' "$record")
+    if [ "${forced:-no}" = yes ]; then
+        [ "$(git -C "$amx_root" rev-parse HEAD)" = "$amx_rev" ] &&
+            [ -z "$(git -C "$amx_root" status --porcelain)" ] || die "source changed during the release build"
+        if ! git -C "$amx_root" show-ref --verify --quiet "refs/tags/$pair_id"; then
+            git -C "$amx_root" tag -a "$pair_id" "$amx_rev" -m "Agent Mux $version (forced; tests skipped)"
+        fi
+        [ "$(git -C "$amx_root" rev-parse "refs/tags/$pair_id^{commit}")" = "$amx_rev" ] || die "$pair_id changed during the build"
+        git -C "$amx_root" push --quiet origin "refs/tags/$pair_id"
+    else
+        while IFS=$'\t' read -r repo root; do
+            echo "pushing $pair_id to $repo's origin"
+            git -C "$root" push --quiet origin "refs/tags/$pair_id"
+        done < <(jq -r '.repositories[] | [.repo, .root] | @tsv' "$record")
 
-    cp "$record" "$sig" "$desktop" "$desktop.sig" "$stage/"
+        cp "$record" "$sig" "$desktop" "$desktop.sig" "$stage/"
+    fi
 
     local notes="$stage/notes.md"
     {
-        echo "Agent Mux $version, released as pair \`$pair_id\` with agent-session-loop."
-        echo
-        echo "| | |"
-        echo "| --- | --- |"
-        jq -r '.repositories[] | "| \(.repo) | `\(.revision)` |"' "$record"
-        jq -r '"| contract set | `\(.contract.set_id)` |"' "$record"
-        jq -r '.artifacts[] | "| \(.name) sha256 | `\(.sha256)` |"' "$record"
-        echo
-        echo "| amx Go build ID | \`$build_id\` |"
+        if [ "${forced:-no}" = yes ]; then
+            echo "Agent Mux $version, forced release of \`$amx_rev\`."
+            echo
+            echo "Tests and release gates were skipped with --force. This release has no paired compatibility or test-pass evidence."
+        else
+            echo "Agent Mux $version, released as pair \`$pair_id\` with agent-session-loop."
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            jq -r '.repositories[] | "| \(.repo) | `\(.revision)` |"' "$record"
+            jq -r '"| contract set | `\(.contract.set_id)` |"' "$record"
+            jq -r '.artifacts[] | "| \(.name) sha256 | `\(.sha256)` |"' "$record"
+            echo
+        fi
+        echo "amx Go build ID: \`$build_id\`"
         echo
         echo "Both downloads are signed with Developer ID and notarized by Apple, for macOS on $arch."
         echo "\`Agent-Mux-$version-macos-$arch.zip\` is the app, with this \`amx\` and its tmux runtime inside."
-        echo "\`amx-$version-darwin-$arch.zip\` is the command line alone. The sha256 above is of"
-        echo "the unsigned build the gate tested; the signed copy differs only in its signature,"
+        echo "\`amx-$version-darwin-$arch.zip\` is the command line alone."
+        if [ "${forced:-no}" = yes ]; then
+            echo "The unsigned build was not tested. The signed copy preserves its Go build ID,"
+        else
+            echo "The sha256 above is of the unsigned build the gate tested; the signed copy differs only in its signature,"
+        fi
         echo "and \`go tool buildid amx\` prints the same build ID."
         echo
         echo "### Install the macOS app"
@@ -229,23 +289,27 @@ publish() {
         echo 'shasum -a 256 --check --ignore-missing SHA256SUMS'
         echo '```'
         echo
-        echo "The two evidence records and their signatures are attached. Verify them with:"
-        echo
-        echo '```bash'
-        echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n agentmux-asl-release \\"
-        echo "  -s $(basename "$sig") < $(basename "$record")"
-        echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n agentmux-desktop-release \\"
-        echo "  -s $(basename "$desktop").sig < $(basename "$desktop")"
-        echo '```'
+        if [ "${forced:-no}" != yes ]; then
+            echo "The two evidence records and their signatures are attached. Verify them with:"
+            echo
+            echo '```bash'
+            echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n agentmux-asl-release \\"
+            echo "  -s $(basename "$sig") < $(basename "$record")"
+            echo "ssh-keygen -Y verify -f allowed_signers -I <signer> -n agentmux-desktop-release \\"
+            echo "  -s $(basename "$desktop").sig < $(basename "$desktop")"
+            echo '```'
+        fi
     } >"$notes"
 
     local gh_repo_name
     gh_repo_name="$(gh_repo "$amx_root")"
     local assets=("$app_zip" "$cli_zip")
     local file
-    for file in "$record" "$sig" "$desktop" "$desktop.sig"; do
-        assets+=("$stage/$(basename "$file")")
-    done
+    if [ "${forced:-no}" != yes ]; then
+        for file in "$record" "$sig" "$desktop" "$desktop.sig"; do
+            assets+=("$stage/$(basename "$file")")
+        done
+    fi
     # The evidence hashes the unsigned build. Downloads carry signatures and
     # ZIP metadata, so publish checksums of the exact bytes being uploaded too.
     local names=()
@@ -263,6 +327,14 @@ publish() {
 }
 
 case "${1:-}" in
+    prepare-force)
+        [ "$#" -eq 3 ] || die "usage: publish-release prepare-force AMX_ROOT VERSION"
+        preflight "$2" "" "" "$3" yes
+        ;;
+    force)
+        [ "$#" -eq 2 ] || die "usage: publish-release force AMX_ROOT"
+        publish_force "$2"
+        ;;
     prepare)
         [ "$#" -eq 5 ] || die "usage: publish-release prepare AMX_ROOT ASL_ROOT SIGNING_KEY NEXT_VERSION"
         preflight "$2" "$3" "$4" "$5"
@@ -276,6 +348,6 @@ case "${1:-}" in
         publish "$2" "$3" "$4"
         ;;
     *)
-        die "usage: publish-release prepare|preflight|publish ..."
+        die "usage: publish-release prepare|preflight|publish|prepare-force|force ..."
         ;;
 esac

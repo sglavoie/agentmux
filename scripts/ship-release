@@ -7,17 +7,22 @@ die() {
     exit 1
 }
 
-bump="${1:-}"
-case "$bump" in
-    patch|minor|major) shift ;;
-    *) die "usage: just ship patch|minor|major [--dry-run]" ;;
-esac
+usage="usage: just ship [patch|minor|major] [--force] [--dry-run]"
+bump=
 dry_run=no
-if [ "${1:-}" = --dry-run ]; then
-    dry_run=yes
-    shift
-fi
-[ "$#" -eq 0 ] || die "usage: just ship patch|minor|major [--dry-run]"
+force=no
+for arg do
+    case "$arg" in
+        patch|minor|major)
+            [ -z "$bump" ] || die "$usage"
+            bump="$arg" ;;
+        --dry-run) dry_run=yes ;;
+        --force) force=yes ;;
+        "") ;; # just supplies the optional bump's empty default
+        *) die "$usage" ;;
+    esac
+done
+[ -n "$bump" ] || [ "$force" = yes ] || die "$usage"
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
@@ -32,6 +37,7 @@ version="$(sed -n 's/^const version = "\(.*\)"$/\1/p' "$source_file")"
 [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
     die "invalid version in $source_file: $version"
 IFS=. read -r major minor patch <<< "$version"
+next="$version"
 case "$bump" in
     patch) next="$major.$minor.$((patch + 1))" ;;
     minor) next="$major.$((minor + 1)).0" ;;
@@ -50,14 +56,22 @@ export AMX_NOTARY_PROFILE="${AMX_NOTARY_PROFILE:-agentmux-notary}"
 # Check both repositories, GitHub, signing, Xcode and notarization before
 # writing a version commit. The future amx commit has not been pushed yet.
 original="$(git rev-parse HEAD)"
-scripts/publish-release prepare "$root" "$asl_root" "$signing_key" "$next"
+if [ "$force" = yes ]; then
+    scripts/publish-release prepare-force "$root" "$next"
+else
+    scripts/publish-release prepare "$root" "$asl_root" "$signing_key" "$next"
+fi
 [ "$(git rev-parse HEAD)" = "$original" ] && [ -z "$(git status --porcelain)" ] ||
     die "source changed during preflight; start again"
 
 echo "Release Agent Mux $version -> $next"
-echo "ASL checkout: $asl_root"
-echo "Evidence signing key: $signing_key"
-echo "This commits the version, pushes main, waits for CI, runs both release gates and publishes."
+if [ "$force" = yes ]; then
+    echo "FORCE: skipping CI and both test gates; building and publishing an untested release."
+else
+    echo "ASL checkout: $asl_root"
+    echo "Evidence signing key: $signing_key"
+    echo "This commits the version, pushes main, waits for CI, runs both release gates and publishes."
+fi
 if [ "$dry_run" = yes ]; then
     echo "Dry run passed; no version commit, push, gates or publication performed."
     exit 0
@@ -69,7 +83,9 @@ finish() {
     local status=$?
     if [ "$status" -ne 0 ] && [ "$committed" = yes ]; then
         echo "ship-release: release $next stopped; its version commit is preserved. Do not bump again to retry." >&2
-        if [ "$gates_started" = no ]; then
+        if [ "$force" = yes ]; then
+            echo "Retry the current version without another bump: just ship --force" >&2
+        elif [ "$gates_started" = no ]; then
             echo "Push main and let CI pass, then run:" >&2
             printf '  just release %q %q\n' "$asl_root" "$signing_key" >&2
         else
@@ -79,13 +95,22 @@ finish() {
 }
 trap finish EXIT
 
-updated="$(sed "s/^const version = \"$version\"$/const version = \"$next\"/" "$source_file")"
-printf '%s\n' "$updated" > "$source_file"
-git add -- "$source_file"
-git commit -m "chore(release): amx $next" -- "$source_file"
+if [ -n "$bump" ]; then
+    updated="$(sed "s/^const version = \"$version\"$/const version = \"$next\"/" "$source_file")"
+    printf '%s\n' "$updated" > "$source_file"
+    git add -- "$source_file"
+    message="chore(release): amx $next"
+    [ "$force" != yes ] || message="$message [skip ci]"
+    git commit -m "$message" -- "$source_file"
+fi
 committed=yes
 revision="$(git rev-parse HEAD)"
 git push origin "$revision:refs/heads/main"
+
+if [ "$force" = yes ]; then
+    scripts/publish-release force "$root"
+    exit 0
+fi
 
 # Match the exact push, rather than following an older or pull-request run.
 run=

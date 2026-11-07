@@ -516,9 +516,9 @@ paired-release-gate asl_root signing_key="" tag="no":
 
     go run . "${args[@]}"
 
-# Bump patch/minor/major, commit, push, wait for CI, then publish (--dry-run checks prerequisites)
+# Bump and publish; --force skips tests, --force alone retries the current version; --dry-run checks prerequisites
 [positional-arguments]
-ship bump *flags:
+ship bump="" *flags:
     bash scripts/ship-release "$@"
 
 # The one-step release: everything paired-release-gate does with tag=yes, then
