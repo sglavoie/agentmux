@@ -750,6 +750,15 @@ final class WorkspaceOverviewChip: NSButton {
 @MainActor
 final class WorkspaceRowCellView: NSTableCellView {
     static let identifier = NSUserInterfaceItemIdentifier("workspace.row")
+    /// A deeper green on light sidebars and a brighter green on dark ones.
+    /// The state glyph sits outside the selection pill, on the sidebar surface.
+    static let completedGlyphColor = NSColor(name: nil) { appearance in
+        if appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua {
+            return NSColor(srgbRed: 0x61 / 255.0, green: 0xd9 / 255.0, blue: 0x85 / 255.0, alpha: 1)
+        }
+        return NSColor(srgbRed: 0x16 / 255.0, green: 0x70 / 255.0, blue: 0x38 / 255.0, alpha: 1)
+    }
+    private var hasCompletedGlyph = false
     let glyphLabel = WorkspaceSidebarLabel(labelWithString: "")
     let nameLabel = WorkspaceSidebarLabel(labelWithString: "")
     let titleLabel = WorkspaceSidebarLabel(labelWithString: "")
@@ -915,7 +924,14 @@ final class WorkspaceRowCellView: NSTableCellView {
 
     func setStateGlyphOutsidePill(_ outside: Bool) {
         contentStack.spacing = outside ? 10 : 6
-        if outside { glyphLabel.textColor = .labelColor }
+        if outside { glyphLabel.textColor = hasCompletedGlyph ? Self.completedGlyphColor : .labelColor }
+    }
+
+    private func showStateGlyph(_ glyph: String, completed: Bool = false) {
+        hasCompletedGlyph = completed
+        glyphLabel.stringValue = glyph
+        glyphLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: completed ? .bold : .regular)
+        glyphLabel.textColor = completed ? Self.completedGlyphColor : .labelColor
     }
 
     /// Whether the title may run under the × or the key label: only where
@@ -968,7 +984,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     func setTabText(_ color: NSColor?, selected: Bool = false, chip: NSColor? = nil) {
         [glyphLabel, nameLabel, titleLabel, detailLabel, keyLabel].forEach { $0.chip = chip }
         nameLabel.textColor = color ?? .labelColor
-        glyphLabel.textColor = color ?? .labelColor
+        glyphLabel.textColor = hasCompletedGlyph ? Self.completedGlyphColor : (color ?? .labelColor)
         titleLabel.textColor = color ?? .labelColor
         let muted = color?.withAlphaComponent(0.8) ?? (chip != nil ? Self.highlightedDetailColor : nil)
             ?? (selected ? Self.selectedDetailColor : nil)
@@ -994,7 +1010,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameReviewIcon.isHidden = true
         titleReviewIcon.isHidden = true
         titleLabel.lineBreakMode = .byTruncatingTail
-        glyphLabel.stringValue = view.glyph
+        showStateGlyph(view.glyph)
         titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
         titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
         let detail = view.detail(session: session, program: program)
@@ -1029,7 +1045,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameHeading.isHidden = row.name.isEmpty
         nameReviewIcon.isHidden = !row.review.accounted || row.name.isEmpty
         titleReviewIcon.isHidden = !row.review.accounted || !row.name.isEmpty
-        glyphLabel.stringValue = row.glyph
+        showStateGlyph(row.glyph, completed: row.iconState == "stop")
         // A pinned or promoted session names the project it is away from.
         let namesProject = projectFirstLine ? row.name.isEmpty : (away ?? (row.pinned || row.needsAttention))
         let place = namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
