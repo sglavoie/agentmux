@@ -2,13 +2,61 @@ package overview
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/tui/commands"
 )
+
+func TestCompactRefreshInsertsNewSessionsAlphabeticallyWithinEachTier(t *testing.T) {
+	for _, state := range []string{"question", "stop", "compact", "bolt"} {
+		t.Run(state, func(t *testing.T) {
+			later := viewSession(1, "zeta", "work", "codex")
+			middle := viewSession(2, "Beta", "work", "codex")
+			earlier := viewSession(3, "alpha", "work", "codex")
+			later.State, middle.State, earlier.State = state, state, state
+			m, _ := started(t, 0)
+			m = press(t, m, "c")
+			m = only(t, m, snapshot(firstRefreshSeq, 0, []session.RunningSession{later}))
+			m = only(t, m, commands.TickMsg{})
+			m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{later, middle, earlier}))
+			if got, want := tabs(m), []int{3, 2, 1}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("compact refresh order = %v, want %v", got, want)
+			}
+			if m.selectedTabID != 1 || m.selected != 2 {
+				t.Fatalf("selection = index %d/tab %d, want index 2/tab 1", m.selected, m.selectedTabID)
+			}
+		})
+	}
+}
+
+func TestEnteringCompactSortsExistingSessionsAndKeepsSelection(t *testing.T) {
+	for _, restore := range []bool{false, true} {
+		t.Run(map[bool]string{false: "toggle", true: "restore"}[restore], func(t *testing.T) {
+			later := viewSession(1, "zeta", "work", "codex")
+			earlier := viewSession(2, "alpha", "work", "codex")
+			m, _ := started(t, 0)
+			m = only(t, m, snapshot(firstRefreshSeq, 0, []session.RunningSession{later}))
+			m = only(t, m, commands.TickMsg{})
+			m = only(t, m, snapshot(m.refreshActiveSeq, 0, []session.RunningSession{later, earlier}))
+			if restore {
+				m = only(t, m, commands.OverviewPreferencesMsg{Read: true, Explicit: true, Compact: true})
+			} else {
+				m = press(t, m, "c")
+			}
+			if got, want := tabs(m), []int{2, 1}; !reflect.DeepEqual(got, want) {
+				t.Fatalf("entering compact order = %v, want %v", got, want)
+			}
+			if m.selectedTabID != 1 || m.selected != 1 {
+				t.Fatalf("selection = index %d/tab %d, want index 1/tab 1", m.selected, m.selectedTabID)
+			}
+		})
+	}
+}
 
 func TestCompactToggleKeepsSelectionAndSuspendsCaptures(t *testing.T) {
 	m, r := atSize(t, viewSessions(30), 17, 160, 45)

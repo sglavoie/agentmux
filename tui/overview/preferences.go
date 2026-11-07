@@ -10,12 +10,22 @@ func (m model) toggleCompact() (tea.Model, tea.Cmd) {
 	if m.quitAfterPreference {
 		return m, nil
 	}
-	m.compact = !m.compact
+	m.setCompact(!m.compact)
 	m.preferenceChanged = true
 	m.preferenceErr = nil
 	m.reconcileCaptures()
 	save := m.savePreference()
 	return m, tea.Batch(save, m.pumpCaptures())
+}
+
+// Compact lists keep each status tier alphabetical, including when switching
+// from a normal grid whose surviving tiles retained their earlier positions.
+func (m *model) setCompact(compact bool) {
+	m.compact = compact
+	if compact {
+		m.sessions = OpeningOrder(m.sessions, m.lastActivity, m.idleThreshold)
+		m.reconcileSelection()
+	}
 }
 
 // Only one write can be in flight. Rapid toggles coalesce to the newest value,
@@ -40,7 +50,7 @@ func (m model) handlePreferences(msg commands.OverviewPreferencesMsg) (tea.Model
 		// Without an operator toggle this daemon lifetime, the configured
 		// opening mode stands.
 		if msg.Err == nil && msg.Explicit {
-			m.compact = msg.Compact
+			m.setCompact(msg.Compact)
 			m.reconcileCaptures()
 			return m, m.pumpCaptures()
 		}

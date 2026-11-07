@@ -590,10 +590,11 @@ The tiles put sessions needing attention first, followed by Done sessions,
 then other statuses that are not Working, then Working sessions. On opening,
 each tier uses project and tab identity order. While the overview remains
 open, refreshes update statuses and previews and move a session to the tier
-its status now belongs in. Relative order within a tier stays stable, so a
-tile moves only when its own tier changes; new sessions join the end of their
-tier. Selection stays on the same session. Closing and reopening F2 takes a
-fresh identity order within each tier.
+its status now belongs in. Compact mode keeps each tier alphabetically ordered
+by project, including newly added sessions. Normal mode retains relative order
+within a tier, with new sessions joining the end of their tier. Selection stays
+on the same session in both modes. Switching to compact mode or reopening F2
+restores project and tab identity order within each tier.
 
 The header is the full inspector's six-line metadata block cut to the three
 questions asked of a session you are *not* currently looking at. Branch,

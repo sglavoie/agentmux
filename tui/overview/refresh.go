@@ -119,10 +119,12 @@ func (m model) handleSessions(msg commands.SessionsMsg) (tea.Model, tea.Cmd) {
 	// the tile paints is already overlaid onto these rows by the shared reader,
 	// and the watchdog is a dashboard status-bar input the grid has no slot for;
 	// holding either here would be state nothing reads.
-	if wasLoaded {
+	if wasLoaded && !m.compact {
 		m.sessions = RetainOrder(m.sessions, msg.Sessions, msg.Activity, m.idleThreshold)
 	} else {
 		m.sessions = OpeningOrder(msg.Sessions, msg.Activity, m.idleThreshold)
+	}
+	if !wasLoaded {
 		// Opening always starts at the first card. The source is a separate
 		// marker, resolved only from a managed tab in this successful snapshot.
 		m.selected, m.selectedTabID, m.selectedWindowID = 0, 0, 0

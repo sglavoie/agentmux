@@ -2,7 +2,8 @@
 //
 // The grid surfaces sessions needing attention, then Done sessions, then other
 // non-Working sessions, then Working sessions. At opening, each tier is in
-// identity order. Subsequent reads move a session to the tier its status now
+// identity order. Compact mode maintains that order on every read. In normal
+// mode, subsequent reads move a session to the tier its status now
 // belongs in while retaining relative order within every tier, so a tile moves
 // only when its own tier changes.
 //
