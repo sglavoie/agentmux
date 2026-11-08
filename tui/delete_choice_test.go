@@ -22,10 +22,12 @@ func TestRenderDeleteChoiceBox(t *testing.T) {
 		Path:    "/tmp/demo.jsonl",
 	}
 	m := Model{
-		mode:         ModeDeleteChoice,
-		width:        100,
-		height:       40,
-		deleteTarget: &target,
+		mode:   ModeDeleteChoice,
+		width:  100,
+		height: 40,
+		modelHistoryState: modelHistoryState{
+			deleteTarget: &target,
+		},
 	}
 	raw := renderDeleteChoiceBox(m)
 	if !strings.Contains(raw, "╭") {
@@ -51,7 +53,7 @@ func TestRenderDeleteChoiceCompactsSharedHomeProfiles(t *testing.T) {
 		Project:  "demo",
 		Path:     "/tmp/demo.jsonl",
 	}
-	out := stripAnsi(renderDeleteChoice(Model{deleteTarget: &target}))
+	out := stripAnsi(renderDeleteChoice(Model{modelHistoryState: modelHistoryState{deleteTarget: &target}}))
 	if !strings.Contains(out, "claude · work+2 · /tmp/demo.jsonl") {
 		t.Fatalf("delete prompt did not render compact shared-home profile label:\n%s", out)
 	}
@@ -64,7 +66,7 @@ func TestDeleteChoiceQCancels(t *testing.T) {
 	t.Parallel()
 
 	target := transcript.SessionMeta{Harness: "claude", Path: "/tmp/demo.jsonl"}
-	m := Model{mode: ModeDeleteChoice, deleteTarget: &target}
+	m := Model{mode: ModeDeleteChoice, modelHistoryState: modelHistoryState{deleteTarget: &target}}
 
 	updated, cmd := m.Update(keyPress("q"))
 	if cmd != nil {

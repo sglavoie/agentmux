@@ -1,0 +1,436 @@
+package tui
+
+import (
+	"strings"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/sglavoie/agentmux/internal/aslbridge"
+	"github.com/sglavoie/agentmux/internal/daemon/ipc"
+	"github.com/sglavoie/agentmux/tui/asl"
+)
+
+// aslQuestionLoadedMsg carries one deliberately fetched question body. The body
+// is a SecretText, so it is redacted by every formatter it could reach on the
+// way to the form.
+type aslQuestionLoadedMsg struct {
+	seq  int
+	body aslbridge.QuestionBody
+	err  error
+}
+
+// aslActionDoneMsg is the outcome of one submitted mutation. It reports the
+// receipt's identity and status and never the text that was submitted.
+type aslActionDoneMsg struct {
+	seq         int
+	control     bool
+	rowID       string
+	method      string
+	operationID string
+	status      string
+	err         error
+}
+
+func aslQuestionCmd(seq int, planDir, questionID string) tea.Cmd {
+	return func() tea.Msg {
+		body, err := ipc.NewClient().ASLQuestionBody(aslbridge.QuestionRequest{
+			PlanDir:    planDir,
+			QuestionID: questionID,
+		})
+		return aslQuestionLoadedMsg{seq: seq, body: body, err: err}
+	}
+}
+
+func aslActionCmd(seq int, control bool, rowID string, req aslbridge.ActionRequest) tea.Cmd {
+	return func() tea.Msg {
+		op, err := ipc.NewClient().ASLAct(req)
+		return aslActionDoneMsg{
+			seq: seq, control: control, rowID: rowID, method: req.Method,
+			operationID: req.OperationID, status: op.Status, err: err,
+		}
+	}
+}
+
+func (m Model) runASLQuestionCmd(seq int, planDir, questionID string) tea.Cmd {
+	if m.backgroundCommands.aslQuestion != nil {
+		return m.backgroundCommands.aslQuestion(m, seq, planDir, questionID)
+	}
+	return defaultModelBackgroundCommands().aslQuestion(m, seq, planDir, questionID)
+}
+
+func (m Model) runASLActionCmd(seq int, control bool, rowID string, req aslbridge.ActionRequest) tea.Cmd {
+	if m.backgroundCommands.aslAction != nil {
+		return m.backgroundCommands.aslAction(m, seq, control, rowID, req)
+	}
+	return defaultModelBackgroundCommands().aslAction(m, seq, control, rowID, req)
+}
+
+// openASLResponse opens the response form for the selected run. Only the
+// selected question's body is fetched; the remaining IDs travel as metadata and
+// are fetched one at a time as the operator navigates.
+func (m Model) openASLResponse() (tea.Model, tea.Cmd) {
+	row, ok := m.selectedASLRow()
+	if !ok {
+		return m, nil
+	}
+	kind := asl.ResponseKindFor(row)
+	if allowed, reason := aslActionAllowed(m, row, asl.ResponseGateMethod(kind)); !allowed {
+		m.aslNotice = reason
+		return m, nil
+	}
+
+	ids := asl.QuestionIDs(row)
+	state := asl.ResponseState{
+		Active: true,
+		Kind:   kind,
+		Target: asl.ActionTarget{
+			RowID:       row.RowID,
+			PlanDir:     row.PlanDir,
+			RunID:       row.RunID,
+			ActionToken: row.ActionToken,
+			Label:       asl.RowLabel(row),
+		},
+		QuestionIDs: ids,
+		Buttons:     asl.ResponseButtons(kind),
+		Drafts:      map[string]aslbridge.SecretText{},
+		// The counters carry on from the form before, which closeASLResponse
+		// kept: a fetch or a submission still out for that form must not
+		// match this one.
+		FetchSeq:  m.aslResponse.FetchSeq,
+		ActionSeq: m.aslResponse.ActionSeq,
+	}
+	for _, id := range ids {
+		if draft := m.aslReplyDrafts.get(row.PlanDir, id); draft != "" {
+			state.Drafts[id] = draft
+		}
+	}
+	if row.Question != nil {
+		state.ContextKind = row.Question.ContextKind
+		state.AskedAt = row.Question.AskedAt
+		for i, id := range ids {
+			if id == row.Question.QuestionID {
+				state.QuestionIdx = i
+			}
+		}
+	}
+	if len(ids) > 0 {
+		state.Target.QuestionID = ids[state.QuestionIdx]
+	}
+
+	m.aslNotice = ""
+	m.aslResponse = state
+	m.mode = ModeASLResponse
+	return m, m.startASLQuestionFetch()
+}
+
+func (m *Model) startASLQuestionFetch() tea.Cmd {
+	m.aslResponse.FetchSeq++
+	m.aslResponse.Fetching = true
+	m.aslResponse.Body = ""
+	m.aslResponse.BodyBytes = 0
+	m.aslResponse.BodyScroll = 0
+	m.aslResponse.Notice = ""
+	return m.runASLQuestionCmd(m.aslResponse.FetchSeq, m.aslResponse.Target.PlanDir, m.aslResponse.Target.QuestionID)
+}
+
+// closeASLResponse returns to the Runs list and drops the form state. The
+// fetched body goes with it; the drafts are kept per question (keepASLDrafts)
+// so esc never discards a half-written reply. The fetch and action sequences
+// survive, so an answer still in flight to the closed form cannot match the
+// next one.
+func (m *Model) closeASLResponse() {
+	m.keepASLDrafts()
+	m.aslResponse = asl.ResponseState{FetchSeq: m.aslResponse.FetchSeq, ActionSeq: m.aslResponse.ActionSeq}
+	m.mode = ModeASLRuns
+}
+
+// aslDraftStore keeps unsent replies per question after the form closes. The
+// values are pointers for the reason sendform.Drafts' are: fmt never calls a
+// String method on an unexported field, so a plain SecretText value would be
+// printed verbatim by any %+v of the model.
+type aslDraftStore struct {
+	values map[string]*aslbridge.SecretText
+}
+
+func (aslDraftStore) String() string     { return "aslDraftStore{redacted}" }
+func (s aslDraftStore) GoString() string { return s.String() }
+
+// aslReplyDraftKey names one question's draft. Question IDs are a run's own,
+// so the plan directory keeps two plans' questions apart.
+func aslReplyDraftKey(planDir, questionID string) string {
+	return planDir + "\x00" + questionID
+}
+
+func (s aslDraftStore) get(planDir, questionID string) aslbridge.SecretText {
+	if value := s.values[aslReplyDraftKey(planDir, questionID)]; value != nil {
+		return *value
+	}
+	return ""
+}
+
+// put stores a draft; an empty one removes it, so clearing a reply sticks.
+func (s *aslDraftStore) put(planDir, questionID string, text aslbridge.SecretText) {
+	key := aslReplyDraftKey(planDir, questionID)
+	if text == "" {
+		delete(s.values, key)
+		return
+	}
+	if s.values == nil {
+		s.values = map[string]*aslbridge.SecretText{}
+	}
+	s.values[key] = &text
+}
+
+// keepASLDrafts moves the open form's drafts into the store that outlives it.
+func (m *Model) keepASLDrafts() {
+	state := m.aslResponse
+	if !state.Active {
+		return
+	}
+	for _, id := range state.QuestionIDs {
+		m.aslReplyDrafts.put(state.Target.PlanDir, id, state.Drafts[id])
+	}
+}
+
+// invalidateASLResponse tears the form down when the bridge reports that the
+// target no longer matches what the operator was answering. The submission is
+// not retried under a fresh token: the list is refreshed and the operator
+// re-selects deliberately.
+func (m Model) invalidateASLResponse() (tea.Model, tea.Cmd) {
+	m.closeASLResponse()
+	m.aslNotice = asl.TargetChangedText
+	return m, m.beginASLRefresh()
+}
+
+func (m Model) handleASLQuestionLoaded(msg aslQuestionLoadedMsg) (tea.Model, tea.Cmd) {
+	if !m.aslResponse.Active || msg.seq != m.aslResponse.FetchSeq {
+		return m, nil
+	}
+	m.aslResponse.Fetching = false
+	if msg.err != nil {
+		if asl.StaleTarget(msg.err) {
+			return m.invalidateASLResponse()
+		}
+		m.aslResponse.Notice = asl.RefusalText(msg.err)
+		return m, nil
+	}
+	if !asl.BodyMatchesTarget(msg.body, m.aslResponse.Target) {
+		return m.invalidateASLResponse()
+	}
+	if m.aslResponse.Reauthorize {
+		// The previous closure changed what the run's token fingerprints, so
+		// the captured authorization is spent. The fetch that proved the next
+		// question is still open is also what re-mints it; without a fresh one
+		// there is nothing legitimate left to submit under.
+		if msg.body.ActionToken == "" {
+			return m.invalidateASLResponse()
+		}
+		m.aslResponse.Target.ActionToken = msg.body.ActionToken
+		m.aslResponse.Reauthorize = false
+	}
+	m.aslResponse.Body = msg.body.Body
+	m.aslResponse.BodyBytes = msg.body.BodyBytes
+	if msg.body.ContextKind != "" {
+		m.aslResponse.ContextKind = msg.body.ContextKind
+	}
+	return m, nil
+}
+
+func (m Model) handleASLResponseKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if !m.aslResponse.Active {
+		m.mode = ModeASLRuns
+		return m, nil
+	}
+	key := msg.String()
+	switch key {
+	case keyCtrlC:
+		return m, tea.Quit
+	case keyEsc:
+		m.closeASLResponse()
+		return m, nil
+	case keyTab, keyShiftTab:
+		m.aslResponse.FocusButtons = !m.aslResponse.FocusButtons
+		return m, nil
+	case keyCtrlS:
+		button, ok := m.aslResponse.Button()
+		if !ok {
+			return m, nil
+		}
+		if !button.NeedsText {
+			// Ctrl+S is the answer-submitting shortcut. When the cursor sits on
+			// an answerless button it still submits the answer, so a typed reply
+			// is never discarded by a stray focus position.
+			button = m.aslResponse.Buttons[0]
+		}
+		return m.submitASLResponse(button)
+	case keyCtrlN:
+		return m.moveASLQuestion(1)
+	case keyCtrlP:
+		return m.moveASLQuestion(-1)
+	}
+
+	if m.aslResponse.FocusButtons {
+		switch key {
+		case keyEnter:
+			button, ok := m.aslResponse.Button()
+			if !ok {
+				return m, nil
+			}
+			return m.submitASLResponse(button)
+		case keyLeft, keyUp:
+			m.aslResponse.ButtonIdx = clamp(m.aslResponse.ButtonIdx-1, 0, len(m.aslResponse.Buttons)-1)
+		case keyRight, keyDown:
+			m.aslResponse.ButtonIdx = clamp(m.aslResponse.ButtonIdx+1, 0, len(m.aslResponse.Buttons)-1)
+		}
+		return m, nil
+	}
+
+	draft := string(m.aslResponse.Draft())
+	switch key {
+	case keyEnter:
+		draft += "\n"
+	case keyBackspace:
+		if runes := []rune(draft); len(runes) > 0 {
+			draft = string(runes[:len(runes)-1])
+		}
+	default:
+		text := msg.Key().Text
+		if text == "" {
+			return m, nil
+		}
+		draft += text
+	}
+	m.aslResponse.SetDraft(aslbridge.SecretText(draft))
+	return m, nil
+}
+
+// moveASLQuestion walks the captured question set. Each question's body is
+// fetched separately, and the draft typed for the question being left is kept
+// under its own ID so navigating away never discards a half-written answer.
+func (m Model) moveASLQuestion(delta int) (tea.Model, tea.Cmd) {
+	if len(m.aslResponse.QuestionIDs) < 2 || m.aslResponse.InFlight {
+		return m, nil
+	}
+	next := clamp(m.aslResponse.QuestionIdx+delta, 0, len(m.aslResponse.QuestionIDs)-1)
+	if next == m.aslResponse.QuestionIdx {
+		return m, nil
+	}
+	m.aslResponse.QuestionIdx = next
+	m.aslResponse.Target.QuestionID = m.aslResponse.QuestionIDs[next]
+	m.aslResponse.Pending = asl.PendingSubmission{}
+	m.aslResponse.Status = ""
+	m.aslResponse.FocusButtons = false
+	m.aslResponse.ButtonIdx = 0
+	return m, m.startASLQuestionFetch()
+}
+
+func (m Model) submitASLResponse(button asl.ResponseButton) (tea.Model, tea.Cmd) {
+	if m.aslResponse.InFlight {
+		return m, nil
+	}
+	if m.aslResponse.Reauthorize {
+		m.aslResponse.Notice = "the previous answer was accepted: this question is still being re-authorized"
+		return m, nil
+	}
+	text := m.aslResponse.Draft()
+	if button.NeedsText && strings.TrimSpace(string(text)) == "" {
+		m.aslResponse.Notice = "the answer is empty: type a reply before submitting"
+		return m, nil
+	}
+
+	pending := m.aslResponse.Pending
+	if pending.OperationID == "" || pending.Method != button.Method || pending.Resolution != button.Resolution {
+		pending = asl.PendingSubmission{
+			OperationID: asl.NewOperationID(),
+			Method:      button.Method,
+			Resolution:  button.Resolution,
+		}
+	}
+	target := m.aslResponse.Target
+	req := aslbridge.ActionRequest{
+		Method:      button.Method,
+		PlanDir:     target.PlanDir,
+		RunID:       target.RunID,
+		QuestionID:  target.QuestionID,
+		OperationID: pending.OperationID,
+		ActionToken: target.ActionToken,
+		Resolution:  button.Resolution,
+	}
+	if button.NeedsText {
+		req.Text = text
+	}
+
+	m.aslResponse.Pending = pending
+	m.aslResponse.InFlight = true
+	m.aslResponse.ActionSeq++
+	m.aslResponse.Status = asl.OpSubmitting
+	m.aslResponse.Notice = ""
+	m.trackASLOperation(asl.OperationView{
+		OperationID: pending.OperationID,
+		Method:      button.Method,
+		RowID:       target.RowID,
+		State:       asl.OpSubmitting,
+	})
+	return m, m.runASLActionCmd(m.aslResponse.ActionSeq, false, target.RowID, req)
+}
+
+func (m Model) handleASLActionDone(msg aslActionDoneMsg) (tea.Model, tea.Cmd) {
+	state := asl.OperationState(msg.status)
+	if msg.err != nil {
+		state = asl.OpFailed
+	}
+	m.recordASLOperationState(msg.operationID, state)
+
+	if msg.control {
+		return m.handleASLControlDone(msg, state)
+	}
+	if !m.aslResponse.Active || msg.seq != m.aslResponse.ActionSeq {
+		return m, nil
+	}
+	m.aslResponse.InFlight = false
+	if msg.err != nil {
+		if asl.StaleTarget(msg.err) {
+			return m.invalidateASLResponse()
+		}
+		m.aslResponse.Status = asl.OpFailed
+		m.aslResponse.Notice = asl.RefusalText(msg.err)
+		return m, nil
+	}
+	m.aslResponse.Status = state
+	return m.advanceASLResponse()
+}
+
+// advanceASLResponse closes out an accepted submission: the answered question's
+// draft is dropped, the list is refreshed because ASL now knows more than the
+// held snapshot, and any question still open in the captured set becomes the
+// form's new target. A resume closes the form outright, because the run it
+// resumed is no longer paused.
+func (m Model) advanceASLResponse() (tea.Model, tea.Cmd) {
+	answered := m.aslResponse.Target.QuestionID
+	delete(m.aslResponse.Drafts, answered)
+	m.aslReplyDrafts.put(m.aslResponse.Target.PlanDir, answered, "")
+	m.aslResponse.Pending = asl.PendingSubmission{}
+
+	remaining := make([]string, 0, len(m.aslResponse.QuestionIDs))
+	for _, id := range m.aslResponse.QuestionIDs {
+		if id != answered {
+			remaining = append(remaining, id)
+		}
+	}
+	if m.aslResponse.Kind == asl.ResponsePaused || len(remaining) == 0 {
+		m.closeASLResponse()
+		return m, m.beginASLRefresh()
+	}
+
+	m.aslResponse.QuestionIDs = remaining
+	m.aslResponse.QuestionIdx = clamp(m.aslResponse.QuestionIdx, 0, len(remaining)-1)
+	m.aslResponse.Target.QuestionID = remaining[m.aslResponse.QuestionIdx]
+	m.aslResponse.Reauthorize = true
+	m.aslResponse.FocusButtons = false
+	m.aslResponse.ButtonIdx = 0
+	m.aslResponse.Status = ""
+	return m, tea.Batch(m.startASLQuestionFetch(), m.beginASLRefresh())
+}
+
+// This file owns the two run-level control commands (stop after current and
+// abort) and the model's half of the receipt window. The window's own shape and
+// bound live in tui/asl; what a confirmation DOES to the model stays here.

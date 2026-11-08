@@ -15,11 +15,13 @@ func planSearchNavModel(total, height int) Model {
 		results[i] = plans.Result{Meta: plans.PlanMeta{Name: indexedRowName(i)}}
 	}
 	return Model{
-		mode:        ModePlanSearch,
-		width:       100,
-		height:      height,
-		cfg:         &config.Config{},
-		planResults: results,
+		mode:   ModePlanSearch,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelPlanState: modelPlanState{
+			planResults: results,
+		},
 	}
 }
 
@@ -34,11 +36,13 @@ func sessionSearchNavModel(total, height int) Model {
 		}
 	}
 	return Model{
-		mode:           ModeSessionSearch,
-		width:          100,
-		height:         height,
-		cfg:            &config.Config{},
-		sessionResults: results,
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelHistoryState: modelHistoryState{
+			sessionResults: results,
+		},
 	}
 }
 
@@ -48,22 +52,26 @@ func sessionViewNavModel(total, height int) Model {
 		messages[i] = transcript.Message{Role: "user", Text: indexedRowName(i)}
 	}
 	return Model{
-		mode:           ModeSessionView,
-		width:          100,
-		height:         height,
-		cfg:            &config.Config{},
-		viewerMessages: messages,
+		mode:   ModeSessionView,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelHistoryState: modelHistoryState{
+			viewerMessages: messages,
+		},
 	}
 }
 
 func wrappedPlanViewNavModel() Model {
 	return Model{
-		mode:             ModePlanView,
-		width:            8,
-		height:           8,
-		cfg:              &config.Config{},
-		planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
-		planViewerCursor: 0,
+		mode:   ModePlanView,
+		width:  8,
+		height: 8,
+		cfg:    &config.Config{},
+		modelPlanState: modelPlanState{
+			planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
+			planViewerCursor: 0,
+		},
 	}
 }
 

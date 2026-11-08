@@ -1,7 +1,6 @@
-// This file is the root program model itself: every field the TUI holds, the
-// mode vocabulary those fields are read under, and the recent-transition
-// pulses the dashboard paints from. Everything else in the root package
-// answers a question about this struct or decides what a message does to it.
+// The root program model. Conversation, plan browser, and ASL state are
+// embedded by value from their model_*_state.go files; mode names and
+// transition pulses live in model_modes.go and model_transitions.go.
 
 package tui
 
@@ -12,16 +11,13 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/sglavoie/agentmux/internal/actions"
-	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/daemon/protocol"
 	"github.com/sglavoie/agentmux/internal/flightlog"
 	"github.com/sglavoie/agentmux/internal/handoff"
-	"github.com/sglavoie/agentmux/internal/plans"
 	"github.com/sglavoie/agentmux/internal/session"
 	"github.com/sglavoie/agentmux/internal/transcript"
 	"github.com/sglavoie/agentmux/internal/worktree"
-	"github.com/sglavoie/agentmux/tui/asl"
 	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/dashboard"
 	"github.com/sglavoie/agentmux/tui/launch"
@@ -190,17 +186,19 @@ type Model struct {
 	// check or completion started against an older list is dropped.
 	pickerGen int
 	// pickerStateWriter and pickerStateSeq order the launcher's saves.
-	pickerStateWriter    *pickerStateWriter
-	pickerStateSeq       uint64
-	pickerSelected       map[int]bool
-	pickerPinned         map[int]bool // project index -> persistent launcher pin
-	pickerCursor         int
-	pickerOffset         int    // top row index for the scrollable picker view
-	pickerFilter         string // live filter buffer (DSL)
-	pickerProfileFilter  string // cycled default-profile filter; empty means all profiles
-	pickerFilteredIdx    []int  // indices into pickerSessions for the filtered view
-	pickerSearchMode     bool   // true while / is active and filter input is open
-	pickerPreviewEnabled bool   // picker-local preview toggle, independent of ModeList
+	pickerStateWriter   *pickerStateWriter
+	pickerStateSeq      uint64
+	pickerSelected      map[int]bool
+	pickerPinned        map[int]bool // project index -> persistent launcher pin
+	pickerCursor        int
+	pickerOffset        int    // top row index for the scrollable picker view
+	pickerFilter        string // live filter buffer (DSL)
+	pickerProfileFilter string // cycled default-profile filter; empty means all profiles
+	pickerFilteredIdx   []int  // indices into pickerSessions for the filtered view
+	// Restored when the launcher filter prompt is cancelled.
+	pickerFilterSaved    string
+	pickerSearchMode     bool // true while / is active and filter input is open
+	pickerPreviewEnabled bool // picker-local preview toggle, independent of ModeList
 	// directory prompt: open on pickerDirIdx while pickerDirMode is true
 	pickerDirMode  bool
 	pickerDirIdx   int
@@ -427,144 +425,36 @@ type Model struct {
 	detailShowSuppressed bool
 	detailShowTimestamps bool
 
-	// transcript index + per-harness readers are loaded from the filesystem
-	// cache at startup and reused across every ModeSessionSearch refresh/search.
-	transcriptIndex   *transcript.Index
-	transcriptReaders map[string]transcript.Reader
-
-	// Background warm-up state for ModeSessionSearch. The startup cache load
-	// publishes warm rows before the slower source refresh and retention prune.
-	sessionCacheLoadInFlight bool
-	sessionRefreshInFlight   bool
-
-	// session search view (ModeSessionSearch). sessionResults holds the
-	// most recent transcript.Search output. sessionQuery is the free-text
-	// query typed after `/`. sessionSearchMode is true while the user is
-	// actively editing sessionQuery (mirrors pickerSearchMode). The chip
-	// fields hold the current harness/profile/project filters. sessionLoading
-	// covers cache/query result loading; sessionRefreshInFlight tracks the
-	// slower background scan so warmed rows can remain visible while it runs.
-	sessionQuery   string
-	sessionResults []transcript.Result
-	sessionCursor  int
-	sessionOffset  int
-	// sessionWantedKey is the transcript.IndexKey of the conversation a
-	// history view was opened on. Results select it the first time they list
-	// it, or until the operator moves; then it is spent.
-	sessionWantedKey string
-	// Exact conversation scope for the native browser's specialized actions.
-	historyConversation string
-	// historyOnly marks a model started in Past Sessions with no session
-	// list behind it (NewHistoryModel).
-	historyOnly         bool
-	sessionSearchMode   bool
-	sessionLoading      bool
-	sessionRefreshErr   error
-	sessionSearchErr    error
-	sessionSearchSeq    int      // bumps on each Search dispatch; stale msgs are dropped
-	filterHarness       []string // chip filter; "" means "no filter"
-	filterProfile       []string
-	filterProject       []string
-	filterMessageSource string // "" (any), "user", or "harness"
-
-	// chip picker overlay (ModeChipPicker) opened from ModeSessionSearch or
-	// ModePlanSearch to choose a categorical filter. chipPickerKind selects
-	// which filter is being edited, while chipPickerReturnMode preserves the
-	// owning search view. chipPickerAllOptions is the full
-	// list captured at open time; chipPickerOptions is the visible list used by
-	// the cursor, renderer, and selection (the leading empty string represents
-	// "(any)" when visible). chipPickerCursor/Offset follow the same window
-	// contract as sessionCursor/sessionOffset.
-	chipPickerKind       chipPickerKind
-	chipPickerAllOptions []string
-	chipPickerOptions    []string
-	chipPickerCursor     int
-	chipPickerOffset     int
-	chipPickerQuery      string
-	chipPickerSearchMode bool
-	chipPickerReturnMode Mode
-
-	// session viewer (ModeSessionView). viewerSession is the metadata of the
-	// transcript currently being read; nil when the viewer is closed.
-	// viewerMessages is the parsed message list. The viewer splits selection
-	// from windowing: viewerCursor is the selected message row (always a
-	// valid index into viewerMessages when the viewer is open), and
-	// viewerScroll is the top-of-window index. j/k/g/G/pgup/pgdn move the
-	// cursor; scroll follows via scrollViewerToCursor. viewerMatchLines
-	// holds the indices into viewerMessages whose text contains the current
-	// sessionQuery (lowercased substring match); viewerMatchIdx is the
-	// cursor into viewerMatchLines for n/N navigation (which moves
-	// viewerCursor to the chosen match). viewerLoading covers the async
-	// ReadMessages call; viewerLoadSeq is a monotonic counter separate from
-	// sessionSearchSeq so a stale viewer load arriving after the user moved
-	// on is dropped.
-	viewerSession    *transcript.SessionMeta
-	viewerMessages   []transcript.Message
-	viewerCursor     int
-	viewerScroll     int
-	viewerMatchIdx   int
-	viewerMatchLines []int
-	viewerLoading    bool
-	viewerLoadErr    error
-	viewerLoadSeq    int
-
-	// delete flow (ModeDeleteChoice). deleteTarget holds the entry the user
-	// selected with `d` from ModeSessionSearch; nil when no delete is in
-	// progress. The prompt itself reads from this pointer.
-	deleteTarget *transcript.SessionMeta
-
-	// ModeMessageDetail overlay state. messageDetailIdx is the message
-	// index captured at overlay open time; -1 means closed.
-	// messageDetailScroll is the top wrapped-line index.
-	messageDetailIdx    int
-	messageDetailScroll int
-
+	modelHistoryState
+	// Conversation search command seams and the query restored when search is cancelled.
+	sessionWarmRefreshCommand func(int, transcript.Query) tea.Cmd
+	sessionRefreshCommand     func(int) tea.Cmd
+	sessionSearchCommand      func(int, transcript.Query) tea.Cmd
+	sessionQuerySaved         string
 	// worktree inventory view (ModeWorktrees). worktreeEntries keeps the last
 	// successful Git-authoritative snapshot while worktreeFiltered is the
 	// whitespace-AND filtered window. Refreshes preserve the selected stable ID
 	// and retain cached rows until the matching sequence response arrives.
-	worktreeEntries    []actions.WorktreeView
-	worktreeFiltered   []actions.WorktreeView
-	worktreeCursor     int
-	worktreeOffset     int
-	worktreeFilter     string
-	worktreeFilterMode bool
-	worktreeLoading    bool
-	worktreeWarnings   []string
-	worktreeErr        error
-	worktreeRefreshSeq int
-	worktreeSelectedID string
+	worktreeEntries  []actions.WorktreeView
+	worktreeFiltered []actions.WorktreeView
+	worktreeCursor   int
+	worktreeOffset   int
+	worktreeFilter   string
+	// Restored when the worktree filter prompt is cancelled.
+	worktreeFilterSaved string
+	worktreeFilterMode  bool
+	worktreeLoading     bool
+	worktreeWarnings    []string
+	worktreeErr         error
+	worktreeRefreshSeq  int
+	worktreeSelectedID  string
 	// Lifecycle detours retain a value copy of the selected row so refreshes
 	// cannot retarget a confirmation, live-session choice, or profile choice.
 	worktreeActionTarget   *actions.WorktreeView
 	worktreeActionInFlight bool
 
-	// agent-session-loop runs view (ModeASLRuns). aslRows is the last snapshot
-	// projection sorted by urgency; refreshes keep the cached rows and the
-	// selected row_id so a poll landing under the cursor cannot move it.
-	// aslLoaded distinguishes "no snapshot yet" from "a snapshot with no rows",
-	// and aslStatus carries the daemon's availability verdict so the header can
-	// say unavailable instead of rendering a false empty state.
-	aslRows       []aslbridge.Row
-	aslMeta       aslbridge.SnapshotMeta
-	aslStatus     aslbridge.Status
-	aslCursor     int
-	aslOffset     int
-	aslSelectedID string
-	aslLoading    bool
-	aslLoaded     bool
-	aslErr        error
-	aslRefreshSeq int
-	// aslFocusTarget retains the row a focus detour was raised for, so an
-	// ambiguity choice cannot be retargeted by a refresh landing mid-detour.
-	aslFocusTarget string
-	// aslResponse is the answer form (ModeASLResponse). It owns the fetched
-	// question body and is zeroed wholesale on close, success, and mode exit.
-	// The drafts typed into it outlive the form in aslReplyDrafts, keyed by plan
-	// and question, the way unsent send drafts do: esc keeps a reply and the next
-	// open of the same question restores it. An accepted answer drops its draft.
-	aslResponse    asl.ResponseState
-	aslReplyDrafts aslDraftStore
+	modelASLState
+
 	// send is the send form (ModeSend). It holds the operator's draft and is
 	// cleared when the form closes; unsent drafts and pending sends outlive it.
 	send           sendform.State
@@ -575,20 +465,6 @@ type Model struct {
 	// still out for, by seq, so a run started after esc still says so.
 	planRun           runform.State
 	planRunOperations map[int]string
-	// aslOperations is the bounded body-free receipt window shown next to the
-	// runs list, so an accepted submission can reach consumed after its form has
-	// already closed.
-	aslOperations []asl.OperationView
-	// aslActionTarget retains the run a stop/abort confirmation was raised for,
-	// so a refresh landing under the overlay cannot retarget it.
-	aslActionTarget    *asl.ActionTarget
-	aslControlInFlight bool
-	aslControlSeq      int
-	// aslNotice explains the outcome of a deliberate action: a refusal, an
-	// invalidated target, or an accepted control command. It is kept apart from
-	// aslErr because aslErr also decides whether the held snapshot is
-	// trustworthy, and an action refusal says nothing about the snapshot.
-	aslNotice string
 
 	// Shared live-session ambiguity picker (ModeLiveSessionPicker). Any caller
 	// that resolves a target to more than one live session raises it;
@@ -600,267 +476,5 @@ type Model struct {
 	livePickerTitle      string
 	livePickerReturnMode Mode
 
-	// plan search view (ModePlanSearch). plansIndex is lazy-constructed on first
-	// entry and reused across refreshes. planResults holds the most recent
-	// plans.Search output; planQuery is the text typed after `/`. planSearchMode
-	// is true while editing planQuery. planSearchSeq dedupes in-flight
-	// refresh/search dispatches the same way sessionSearchSeq does.
-	plansIndex                *plans.Index
-	planCacheLoadInFlight     bool
-	planRefreshCommand        func(*plans.Index, *config.Config, int) tea.Cmd
-	planRunCommand            func(int, plans.PlanMeta, map[string]string) tea.Cmd
-	planSearchCommand         func(int, *plans.Index, plans.Query) tea.Cmd
-	sessionWarmRefreshCommand func(int, transcript.Query) tea.Cmd
-	sessionRefreshCommand     func(int) tea.Cmd
-	sessionSearchCommand      func(int, transcript.Query) tea.Cmd
-	planQuery                 string
-	planResults               []plans.Result
-	planCursor                int
-	planOffset                int
-	planSearchMode            bool
-	planLoading               bool
-	planRefreshErr            error
-	planSearchErr             error
-	planSearchSeq             int
-	// planScanSeq is the search seq of the source refresh still running, zero
-	// once it reported; the "Scanning plans…" notice is settled only after it.
-	planScanSeq int
-	// The *Saved fields hold each list's query as it was when `/` opened it, so
-	// esc inside the prompt restores it the way the dashboard's filter prompt
-	// does (savedFilter) and enter keeps what was typed.
-	planQuerySaved      string
-	sessionQuerySaved   string
-	worktreeFilterSaved string
-	pickerFilterSaved   string
-	planSortMode        plans.SortMode // cycled with `o`; zero value = SortByMatches
-	planFilterProject   plans.ProjectFilter
-
-	// plan viewer (ModePlanView). viewerPlan points at the plan meta the
-	// user opened with Enter; nil when the viewer is closed. planViewerLines
-	// is the flattened concatenation of every file in viewerPlan.Files with
-	// "--- <rel> ---" separator rows between them. planViewerCursor is a
-	// logical source-line index into planViewerLines; planViewerScroll is a
-	// visual wrapped-row offset derived from those logical lines. The viewer
-	// keeps selection on source lines so actions like `y` copy the raw line,
-	// while windowing and page keys operate on wrapped terminal rows.
-	// planViewerMatchLines holds the logical line indices containing planQuery
-	// (case-insensitive substring); planViewerMatchIdx is the cursor into that
-	// list for n/N navigation. planViewerLoadSeq is monotonic so a stale async
-	// load (user already left the viewer or opened a different plan) is
-	// dropped in Update.
-	viewerPlan           *plans.PlanMeta
-	planViewerLines      []string
-	planViewerCursor     int
-	planViewerScroll     int
-	planViewerMatchIdx   int
-	planViewerMatchLines []int
-	planViewerLoading    bool
-	planViewerLoadErr    error
-	planViewerLoadSeq    int
-}
-
-// Mode represents the current UI mode.
-type Mode int
-
-const (
-	ModeList              Mode = iota
-	ModeSearch                 // typing a filter expression (DSL)
-	ModeConfirm                // y/n confirmation for a destructive action
-	ModePicker                 // multi-select session launcher
-	ModeConfigPicker           // account picker for config override
-	ModeHelp                   // help overlay
-	ModeDetail                 // detail pane: per-session hook event log
-	ModeActions                // per-row actions overlay
-	ModeSessionSearch          // searchable list of past harness transcripts
-	ModeSessionView            // scrollable transcript viewer for a single past session
-	ModeDeleteChoice           // three-way prompt: hide from index, also delete file, cancel
-	ModeChipPicker             // overlay listing chip values for ModeSessionSearch
-	ModeMessageDetail          // full-message overlay opened from ModeSessionView
-	ModeWorktrees              // managed Git worktree inventory and non-destructive actions
-	ModePlanSearch             // searchable list of past agent-plan directories
-	ModePlanView               // inline pager for a single plan directory
-	ModeCommandPalette         // searchable dashboard command catalog
-	ModeLiveSessionPicker      // ambiguous live sessions for one target
-	ModeASLRuns                // agent-session-loop active and actionable runs
-	ModeASLResponse            // answer editor and closure buttons for one ASL question
-	ModeProjectSwitcher        // overlay choosing the dashboard's project scope
-	ModeFeedback               // retained action outcomes
-	ModeHealth                 // scrollable details for every health check, from cached facts
-	ModeReviewNote
-	ModeSend      // text and keys for one tmux session, sent without attaching
-	ModePlanRun   // choices for starting an agent-session-loop run of one plan
-	ModeFlightLog // durable session statistics and milestone collection
-)
-
-// String names the mode in stable lower snake case ("list",
-// "command_palette"). The scenario harness reports and asserts modes by these
-// names, so a new mode must be added here or its observations read "unknown";
-// an out-of-range value reads "unknown" rather than panicking.
-func (mode Mode) String() string {
-	switch mode {
-	case ModeFlightLog:
-		return "flight_log"
-	case ModeList:
-		return "list"
-	case ModeSearch:
-		return "search"
-	case ModeConfirm:
-		return "confirm"
-	case ModePicker:
-		return "picker"
-	case ModeConfigPicker:
-		return "config_picker"
-	case ModeHelp:
-		return "help"
-	case ModeDetail:
-		return "detail"
-	case ModeActions:
-		return "actions"
-	case ModeSessionSearch:
-		return "session_search"
-	case ModeSessionView:
-		return "session_view"
-	case ModeDeleteChoice:
-		return "delete_choice"
-	case ModeChipPicker:
-		return "chip_picker"
-	case ModeMessageDetail:
-		return "message_detail"
-	case ModeWorktrees:
-		return "worktrees"
-	case ModePlanSearch:
-		return "plan_search"
-	case ModePlanView:
-		return "plan_view"
-	case ModeCommandPalette:
-		return "command_palette"
-	case ModeLiveSessionPicker:
-		return "live_session_picker"
-	case ModeASLRuns:
-		return "asl_runs"
-	case ModeASLResponse:
-		return "asl_response"
-	case ModeReviewNote:
-		return "review_note"
-	case ModeSend:
-		return "send"
-	case ModePlanRun:
-		return "plan_run"
-	case ModeProjectSwitcher:
-		return "project_switcher"
-	case ModeFeedback:
-		return "feedback"
-	case ModeHealth:
-		return "health"
-	default:
-		return "unknown"
-	}
-}
-
-// LivePickerPurpose names the caller that raised ModeLiveSessionPicker. The
-// picker only chooses among candidates; the purpose decides what Enter does
-// with the chosen one and which root view the detour returns to.
-type LivePickerPurpose int
-
-const (
-	LivePickerWorktreeReopen LivePickerPurpose = iota
-	LivePickerASLFocus
-)
-
-// pulseDecay is how long a recorded state transition keeps pulsing in the
-// list before it's swept off.
-const pulseDecay = 5 * time.Second
-
-// recordTransitions diffs the current m.sessions against m.lastSeenStates
-// and records any state change in m.recentTransitions. On the very first
-// refresh (lastSeenStates is nil) the snapshot is seeded silently so the
-// initial list does not pulse every row.
-func (m *Model) recordTransitions() {
-	if m.lastSeenStates == nil {
-		m.lastSeenStates = make(map[int]string, len(m.sessions))
-		for _, s := range m.sessions {
-			m.lastSeenStates[s.WindowID] = s.State
-		}
-		return
-	}
-	for _, s := range m.sessions {
-		prev, ok := m.lastSeenStates[s.WindowID]
-		if !ok {
-			// New session since last snapshot — treat as no-op so a freshly
-			// launched tab does not pulse on its first appearance.
-			m.lastSeenStates[s.WindowID] = s.State
-			continue
-		}
-		if prev == s.State {
-			continue
-		}
-		if m.recentTransitions == nil {
-			m.recentTransitions = make(map[int]time.Time)
-		}
-		if _, already := m.recentTransitions[s.WindowID]; !already {
-			m.recentTransitions[s.WindowID] = time.Now()
-		}
-		// Advance the snapshot to the new state. Without this, a session
-		// that changed once and remained stable would re-pulse forever:
-		// after sweepRecentTransitions drops the entry past pulseDecay,
-		// the next refresh still sees prev != s.State and would record a
-		// fresh pulse. Updating here ties the pulse strictly to the
-		// observed change rather than the persistent mismatch between
-		// the (stale) snapshot and current state.
-		m.lastSeenStates[s.WindowID] = s.State
-	}
-}
-
-// sweepRecentTransitions drops entries older than pulseDecay so the maps
-// stay bounded and stale pulses do not linger after their visual window.
-func (m *Model) sweepRecentTransitions() {
-	if len(m.recentTransitions) == 0 {
-		return
-	}
-	cutoff := time.Now().Add(-pulseDecay)
-	for id, t := range m.recentTransitions {
-		if t.Before(cutoff) {
-			delete(m.recentTransitions, id)
-		}
-	}
-}
-
-// snapshotSeenStates refreshes the per-session state snapshot to match the
-// current view and clears any in-flight pulses. Called on every ModeList
-// key press so the pulse layer surfaces only changes the user has not yet
-// seen.
-func (m *Model) snapshotSeenStates() {
-	if m.lastSeenStates == nil {
-		m.lastSeenStates = make(map[int]string, len(m.sessions))
-	}
-	for _, s := range m.sessions {
-		m.lastSeenStates[s.WindowID] = s.State
-	}
-	if len(m.recentTransitions) > 0 {
-		m.recentTransitions = nil
-	}
-}
-
-// hasActivePulse reports whether windowID has a recent-transition record
-// that has not yet decayed past pulseDecay.
-func (m Model) hasActivePulse(windowID int) bool {
-	if len(m.recentTransitions) == 0 {
-		return false
-	}
-	t, ok := m.recentTransitions[windowID]
-	if !ok {
-		return false
-	}
-	return modelNow(m).Sub(t) < pulseDecay
-}
-
-// modelNow reads the render clock, falling back to the wall clock for a Model
-// built as a bare literal — which is how most of this package's render tests
-// construct their input. Anything that stamps or compares a display time must
-// go through here, or the scenario harness cannot freeze it.
-func modelNow(m Model) time.Time {
-	if m.now == nil {
-		return time.Now()
-	}
-	return m.now()
+	modelPlanState
 }

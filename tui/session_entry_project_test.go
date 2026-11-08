@@ -224,14 +224,16 @@ func TestSessionWarmRefreshDoneRerunsLatestProjectSearch(t *testing.T) {
 		Preview: "stale refresh result",
 	}
 	m := Model{
-		mode:                   ModeSessionSearch,
-		sessionSearchSeq:       5,
-		sessionRefreshInFlight: true,
-		sessionLoading:         true,
-		sessionResults:         []transcript.Result{{Meta: old}},
-		filterProject:          []string{"Foo"},
-		transcriptIndex:        idx,
-		transcriptReaders:      map[string]transcript.Reader{},
+		mode: ModeSessionSearch,
+		modelHistoryState: modelHistoryState{
+			sessionSearchSeq:       5,
+			sessionRefreshInFlight: true,
+			sessionLoading:         true,
+			sessionResults:         []transcript.Result{{Meta: old}},
+			filterProject:          []string{"Foo"},
+			transcriptIndex:        idx,
+			transcriptReaders:      map[string]transcript.Reader{},
+		},
 	}
 
 	updated, cmd := m.Update(sessionWarmRefreshDoneMsg{

@@ -24,17 +24,21 @@ func TestPathRowsRenderInPathAwareModes(t *testing.T) {
 			out: stripAnsi(renderSessionSearch(Model{
 				width: 100,
 				cfg:   &config.Config{},
-				sessionResults: []transcript.Result{{
-					Meta: transcript.SessionMeta{Project: "api", Path: "/tmp/session.jsonl"},
-				}},
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{
+						Meta: transcript.SessionMeta{Project: "api", Path: "/tmp/session.jsonl"},
+					}},
+				},
 			})),
 			want: "session path: /tmp/session.jsonl",
 		},
 		{
 			name: "session viewer",
 			out: stripAnsi(renderSessionView(Model{
-				width:         100,
-				viewerSession: &transcript.SessionMeta{Project: "api", Path: "/tmp/viewer.jsonl"},
+				width: 100,
+				modelHistoryState: modelHistoryState{
+					viewerSession: &transcript.SessionMeta{Project: "api", Path: "/tmp/viewer.jsonl"},
+				},
 			})),
 			want: "session path: /tmp/viewer.jsonl",
 		},
@@ -42,17 +46,21 @@ func TestPathRowsRenderInPathAwareModes(t *testing.T) {
 			name: "plan search",
 			out: stripAnsi(renderPlanSearch(Model{
 				width: 100,
-				planResults: []plans.Result{{
-					Meta: plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan-dir"},
-				}},
+				modelPlanState: modelPlanState{
+					planResults: []plans.Result{{
+						Meta: plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan-dir"},
+					}},
+				},
 			})),
 			want: "plan path: /tmp/plan-dir",
 		},
 		{
 			name: "plan viewer",
 			out: stripAnsi(renderPlanView(Model{
-				width:      100,
-				viewerPlan: &plans.PlanMeta{Name: "plan", DirPath: "/tmp/viewer-plan"},
+				width: 100,
+				modelPlanState: modelPlanState{
+					viewerPlan: &plans.PlanMeta{Name: "plan", DirPath: "/tmp/viewer-plan"},
+				},
 			})),
 			want: "plan path: /tmp/viewer-plan",
 		},

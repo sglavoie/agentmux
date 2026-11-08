@@ -190,11 +190,13 @@ func TestRenderSessionSearchLinesStayWithinWidth(t *testing.T) {
 	for _, width := range []int{60, 80, 120} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
 			m := Model{
-				mode:           ModeSessionSearch,
-				width:          width,
-				height:         30,
-				cfg:            &config.Config{},
-				sessionResults: results,
+				mode:   ModeSessionSearch,
+				width:  width,
+				height: 30,
+				cfg:    &config.Config{},
+				modelHistoryState: modelHistoryState{
+					sessionResults: results,
+				},
 			}
 			assertVisibleWidthAtMost(t, renderSessionSearch(m), width)
 		})
@@ -219,11 +221,13 @@ func TestRenderPlanSearchLinesStayWithinWidth(t *testing.T) {
 	for _, width := range []int{40, 60, 100} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
 			m := Model{
-				mode:        ModePlanSearch,
-				width:       width,
-				height:      30,
-				cfg:         &config.Config{},
-				planResults: results,
+				mode:   ModePlanSearch,
+				width:  width,
+				height: 30,
+				cfg:    &config.Config{},
+				modelPlanState: modelPlanState{
+					planResults: results,
+				},
 			}
 			assertVisibleWidthAtMost(t, renderPlanSearch(m), width)
 		})

@@ -13,12 +13,14 @@ import (
 // tests).
 func chipPickerFixture(kind chipPickerKind, opts []string, cursor int) Model {
 	return Model{
-		mode:              ModeChipPicker,
-		width:             100,
-		height:            40,
-		chipPickerKind:    kind,
-		chipPickerOptions: opts,
-		chipPickerCursor:  cursor,
+		mode:   ModeChipPicker,
+		width:  100,
+		height: 40,
+		modelHistoryState: modelHistoryState{
+			chipPickerKind:    kind,
+			chipPickerOptions: opts,
+			chipPickerCursor:  cursor,
+		},
 	}
 }
 
@@ -163,10 +165,12 @@ func TestEnterChipPickerGhostFilterFallsBackToAny(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:          ModeSessionSearch,
-		width:         100,
-		height:        40,
-		filterProfile: []string{"ghost-profile"},
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: 40,
+		modelHistoryState: modelHistoryState{
+			filterProfile: []string{"ghost-profile"},
+		},
 		cfg: &config.Config{
 			Profiles: []config.Account{{Name: "work"}},
 		},

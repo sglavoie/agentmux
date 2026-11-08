@@ -20,9 +20,11 @@ func planProjectFilterTestModel() Model {
 			{Title: "Alias"},
 			{Title: "Unrepresented"},
 		}},
-		planResults: []plans.Result{
-			{Meta: plans.PlanMeta{Name: "known", Project: "Primary", Projects: []string{"Primary", "Alias"}}},
-			{Meta: plans.PlanMeta{Name: "unknown"}},
+		modelPlanState: modelPlanState{
+			planResults: []plans.Result{
+				{Meta: plans.PlanMeta{Name: "known", Project: "Primary", Projects: []string{"Primary", "Alias"}}},
+				{Meta: plans.PlanMeta{Name: "unknown"}},
+			},
 		},
 	}
 }
@@ -80,7 +82,7 @@ func TestPlanSearchAndViewerRenderProjectLabels(t *testing.T) {
 	if got := stripAnsi(renderPlanSearch(m)); !strings.Contains(got, "[r] project: (unknown)") {
 		t.Fatalf("plan search missing active project chip:\n%s", got)
 	}
-	viewer := Model{width: 100, height: 20, viewerPlan: &known}
+	viewer := Model{width: 100, height: 20, modelPlanState: modelPlanState{viewerPlan: &known}}
 	if got := stripAnsi(renderPlanView(viewer)); !strings.Contains(got, "· project: Primary ·") {
 		t.Fatalf("plan viewer missing project label:\n%s", got)
 	}

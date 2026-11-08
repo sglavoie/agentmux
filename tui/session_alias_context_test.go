@@ -31,18 +31,20 @@ func sharedProjectAliasMeta() transcript.SessionMeta {
 func sharedProjectAliasModel() Model {
 	meta := sharedProjectAliasMeta()
 	return Model{
-		mode:          ModeSessionSearch,
-		width:         120,
-		height:        30,
-		filterProject: []string{"streamutil"},
+		mode:   ModeSessionSearch,
+		width:  120,
+		height: 30,
+		modelHistoryState: modelHistoryState{
+			filterProject: []string{"streamutil"},
+			transcriptReaders: map[string]transcript.Reader{
+				harness.Claude: sessionSearchTestReader{harness: harness.Claude},
+			},
+			sessionResults: []transcript.Result{{Meta: meta, Preview: meta.Snippet}},
+		},
 		cfg: &config.Config{Accounts: []config.Account{
 			{Name: "work", Harness: harness.Claude},
 			{Name: "personal", Harness: harness.Claude},
 		}},
-		transcriptReaders: map[string]transcript.Reader{
-			harness.Claude: sessionSearchTestReader{harness: harness.Claude},
-		},
-		sessionResults: []transcript.Result{{Meta: meta, Preview: meta.Snippet}},
 	}
 }
 
@@ -54,7 +56,7 @@ func TestContextualSessionMetaCopiesOnlyMatchingSingleProjectAlias(t *testing.T)
 	want := meta
 	want.Project = "streamutil"
 
-	got := (Model{filterProject: []string{"streamutil"}}).contextualSessionMeta(meta)
+	got := (Model{modelHistoryState: modelHistoryState{filterProject: []string{"streamutil"}}}).contextualSessionMeta(meta)
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("contextual metadata = %#v, want %#v", got, want)
 	}
@@ -71,7 +73,7 @@ func TestContextualSessionMetaCopiesOnlyMatchingSingleProjectAlias(t *testing.T)
 		{name: "non-member", filter: []string{"other"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := (Model{filterProject: tc.filter}).contextualSessionMeta(meta); !reflect.DeepEqual(got, meta) {
+			if got := (Model{modelHistoryState: modelHistoryState{filterProject: tc.filter}}).contextualSessionMeta(meta); !reflect.DeepEqual(got, meta) {
 				t.Fatalf("contextual metadata = %#v, want unchanged %#v", got, meta)
 			}
 		})

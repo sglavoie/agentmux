@@ -41,13 +41,15 @@ func runViewerCopyCmd(t *testing.T, cmd tea.Cmd) string {
 func TestSessionViewerYCopiesSelectedMessage(t *testing.T) {
 	m := Model{
 		mode: ModeSessionView,
-		viewerMessages: []transcript.Message{
-			{Role: "user", Text: "first"},
-			{Role: "assistant", Text: "selected"},
+		modelHistoryState: modelHistoryState{
+			viewerMessages: []transcript.Message{
+				{Role: "user", Text: "first"},
+				{Role: "assistant", Text: "selected"},
+			},
+			viewerCursor: 1,
 		},
-		viewerCursor: 1,
-		width:        80,
-		height:       20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("y"))
@@ -67,12 +69,14 @@ func TestSessionViewerYCopiesBackingMultilineText(t *testing.T) {
 	}
 	m := Model{
 		mode: ModeSessionView,
-		viewerMessages: []transcript.Message{
-			{Role: "user", Text: raw},
+		modelHistoryState: modelHistoryState{
+			viewerMessages: []transcript.Message{
+				{Role: "user", Text: raw},
+			},
+			viewerCursor: 0,
 		},
-		viewerCursor: 0,
-		width:        24,
-		height:       20,
+		width:  24,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("y"))
@@ -99,17 +103,21 @@ func TestSessionViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
 		{
 			name: "cursor below zero",
 			m: Model{
-				mode:           ModeSessionView,
-				viewerMessages: []transcript.Message{{Text: "present"}},
-				viewerCursor:   -1,
+				mode: ModeSessionView,
+				modelHistoryState: modelHistoryState{
+					viewerMessages: []transcript.Message{{Text: "present"}},
+					viewerCursor:   -1,
+				},
 			},
 		},
 		{
 			name: "cursor past end",
 			m: Model{
-				mode:           ModeSessionView,
-				viewerMessages: []transcript.Message{{Text: "present"}},
-				viewerCursor:   1,
+				mode: ModeSessionView,
+				modelHistoryState: modelHistoryState{
+					viewerMessages: []transcript.Message{{Text: "present"}},
+					viewerCursor:   1,
+				},
 			},
 		},
 	}
@@ -131,13 +139,15 @@ func TestSessionViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
 func TestSessionSearchCopyPathCopiesSelectedTranscriptPath(t *testing.T) {
 	m := Model{
 		mode: ModeSessionSearch,
-		sessionResults: []transcript.Result{
-			{Meta: transcript.SessionMeta{Path: "/tmp/first.jsonl"}},
-			{Meta: transcript.SessionMeta{Path: "/tmp/selected.jsonl"}},
+		modelHistoryState: modelHistoryState{
+			sessionResults: []transcript.Result{
+				{Meta: transcript.SessionMeta{Path: "/tmp/first.jsonl"}},
+				{Meta: transcript.SessionMeta{Path: "/tmp/selected.jsonl"}},
+			},
+			sessionCursor: 1,
 		},
-		sessionCursor: 1,
-		width:         80,
-		height:        20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("Y"))
@@ -164,25 +174,31 @@ func TestSessionSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
 		{
 			name: "cursor below zero",
 			m: Model{
-				mode:           ModeSessionSearch,
-				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
-				sessionCursor:  -1,
+				mode: ModeSessionSearch,
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
+					sessionCursor:  -1,
+				},
 			},
 		},
 		{
 			name: "cursor past end",
 			m: Model{
-				mode:           ModeSessionSearch,
-				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
-				sessionCursor:  1,
+				mode: ModeSessionSearch,
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
+					sessionCursor:  1,
+				},
 			},
 		},
 		{
 			name: "empty path",
 			m: Model{
-				mode:           ModeSessionSearch,
-				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: ""}}},
-				sessionCursor:  0,
+				mode: ModeSessionSearch,
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: ""}}},
+					sessionCursor:  0,
+				},
 			},
 		},
 	}
@@ -205,15 +221,17 @@ func TestSessionSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:              ModeSessionSearch,
-		sessionSearchMode: true,
-		sessionQuery:      "path:",
-		sessionResults: []transcript.Result{
-			{Meta: transcript.SessionMeta{Path: "/tmp/selected.jsonl"}},
+		mode: ModeSessionSearch,
+		modelHistoryState: modelHistoryState{
+			sessionSearchMode: true,
+			sessionQuery:      "path:",
+			sessionResults: []transcript.Result{
+				{Meta: transcript.SessionMeta{Path: "/tmp/selected.jsonl"}},
+			},
+			sessionCursor: 0,
 		},
-		sessionCursor: 0,
-		width:         80,
-		height:        20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("Y"))
@@ -230,16 +248,18 @@ func TestSessionSearchCopyIDCopiesSelectedSessionID(t *testing.T) {
 	const selectedID = "019f8b51-a61b-7531-95da-94149ba2852e"
 	m := Model{
 		mode: ModeSessionSearch,
-		sessionResults: []transcript.Result{
-			{Meta: transcript.SessionMeta{ID: "first-id", Path: "/tmp/first.jsonl"}},
-			{Meta: transcript.SessionMeta{
-				ID:   selectedID,
-				Path: "/Users/sglavoie/.codex/sessions/2026/07/22/rollout-2026-07-22T13-33-31-" + selectedID + ".jsonl",
-			}},
+		modelHistoryState: modelHistoryState{
+			sessionResults: []transcript.Result{
+				{Meta: transcript.SessionMeta{ID: "first-id", Path: "/tmp/first.jsonl"}},
+				{Meta: transcript.SessionMeta{
+					ID:   selectedID,
+					Path: "/Users/sglavoie/.codex/sessions/2026/07/22/rollout-2026-07-22T13-33-31-" + selectedID + ".jsonl",
+				}},
+			},
+			sessionCursor: 1,
 		},
-		sessionCursor: 1,
-		width:         80,
-		height:        20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("i"))
@@ -266,25 +286,31 @@ func TestSessionSearchCopyIDNoOpForEmptyOrInvalidSelection(t *testing.T) {
 		{
 			name: "cursor below zero",
 			m: Model{
-				mode:           ModeSessionSearch,
-				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{ID: "present"}}},
-				sessionCursor:  -1,
+				mode: ModeSessionSearch,
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{ID: "present"}}},
+					sessionCursor:  -1,
+				},
 			},
 		},
 		{
 			name: "cursor past end",
 			m: Model{
-				mode:           ModeSessionSearch,
-				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{ID: "present"}}},
-				sessionCursor:  1,
+				mode: ModeSessionSearch,
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{ID: "present"}}},
+					sessionCursor:  1,
+				},
 			},
 		},
 		{
 			name: "empty ID",
 			m: Model{
-				mode:           ModeSessionSearch,
-				sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
-				sessionCursor:  0,
+				mode: ModeSessionSearch,
+				modelHistoryState: modelHistoryState{
+					sessionResults: []transcript.Result{{Meta: transcript.SessionMeta{Path: "/tmp/present.jsonl"}}},
+					sessionCursor:  0,
+				},
 			},
 		},
 	}
@@ -307,15 +333,17 @@ func TestSessionSearchCopyIDIgnoredDuringTextEntry(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:              ModeSessionSearch,
-		sessionSearchMode: true,
-		sessionQuery:      "session:",
-		sessionResults: []transcript.Result{
-			{Meta: transcript.SessionMeta{ID: "selected"}},
+		mode: ModeSessionSearch,
+		modelHistoryState: modelHistoryState{
+			sessionSearchMode: true,
+			sessionQuery:      "session:",
+			sessionResults: []transcript.Result{
+				{Meta: transcript.SessionMeta{ID: "selected"}},
+			},
+			sessionCursor: 0,
 		},
-		sessionCursor: 0,
-		width:         80,
-		height:        20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("i"))
@@ -330,10 +358,12 @@ func TestSessionSearchCopyIDIgnoredDuringTextEntry(t *testing.T) {
 
 func TestSessionViewerCopyPathCopiesTranscriptPath(t *testing.T) {
 	m := Model{
-		mode:          ModeSessionView,
-		viewerSession: &transcript.SessionMeta{Path: "/tmp/current.jsonl"},
-		width:         80,
-		height:        20,
+		mode: ModeSessionView,
+		modelHistoryState: modelHistoryState{
+			viewerSession: &transcript.SessionMeta{Path: "/tmp/current.jsonl"},
+		},
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("Y"))
@@ -360,8 +390,10 @@ func TestSessionViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
 		{
 			name: "empty path",
 			m: Model{
-				mode:          ModeSessionView,
-				viewerSession: &transcript.SessionMeta{},
+				mode: ModeSessionView,
+				modelHistoryState: modelHistoryState{
+					viewerSession: &transcript.SessionMeta{},
+				},
 			},
 		},
 	}
@@ -386,11 +418,13 @@ func TestSessionViewerSlashReopensTheQuery(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:           ModeSessionView,
-		sessionQuery:   "auth refactor",
-		viewerMessages: []transcript.Message{{Role: "user", Text: "auth"}},
-		width:          80,
-		height:         20,
+		mode: ModeSessionView,
+		modelHistoryState: modelHistoryState{
+			sessionQuery:   "auth refactor",
+			viewerMessages: []transcript.Message{{Role: "user", Text: "auth"}},
+		},
+		width:  80,
+		height: 20,
 	}
 	updated, _ := m.Update(keyPress("/"))
 	got := updated.(Model)
@@ -406,12 +440,14 @@ func TestSessionViewerSlashReopensTheQuery(t *testing.T) {
 // long message is read, so it is where copying it has to work.
 func TestMessageDetailYCopiesTheOpenMessage(t *testing.T) {
 	m := Model{
-		mode:             ModeMessageDetail,
-		viewerMessages:   []transcript.Message{{Role: "user", Text: "first"}, {Role: "assistant", Text: "the long one"}},
-		viewerCursor:     1,
-		messageDetailIdx: 1,
-		width:            80,
-		height:           20,
+		mode: ModeMessageDetail,
+		modelHistoryState: modelHistoryState{
+			viewerMessages:   []transcript.Message{{Role: "user", Text: "first"}, {Role: "assistant", Text: "the long one"}},
+			viewerCursor:     1,
+			messageDetailIdx: 1,
+		},
+		width:  80,
+		height: 20,
 	}
 	_, cmd := m.Update(keyPress("y"))
 	if got := runViewerCopyCmd(t, cmd); got != "the long one" {

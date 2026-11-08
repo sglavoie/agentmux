@@ -84,17 +84,19 @@ func newModel(cfg *config.Config, client any, sourceWindowID int, initialMode Mo
 	// internal/config raises a deprecation for it — but nothing on the dashboard
 	// navigates by it.
 	return Model{
-		client:                client,
-		cfg:                   cfg,
-		interval:              interval,
-		sortMode:              sort,
-		backgroundCommands:    defaultModelBackgroundCommands(),
-		daemonCommand:         commands.DaemonRequest,
-		now:                   time.Now,
-		idleThreshold:         idle,
-		amxBin:                amxBin,
-		deprecations:          cfg.Deprecations,
-		messageDetailIdx:      -1,
+		client:             client,
+		cfg:                cfg,
+		interval:           interval,
+		sortMode:           sort,
+		backgroundCommands: defaultModelBackgroundCommands(),
+		daemonCommand:      commands.DaemonRequest,
+		now:                time.Now,
+		idleThreshold:      idle,
+		amxBin:             amxBin,
+		deprecations:       cfg.Deprecations,
+		modelHistoryState: modelHistoryState{
+			messageDetailIdx: -1,
+		},
 		initialSourceWindowID: sourceWindowID,
 		mode:                  initialMode,
 		// Arm the first refresh here rather than in Init. Init has a value

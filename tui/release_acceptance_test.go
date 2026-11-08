@@ -85,8 +85,14 @@ func TestAcceptanceRepeatedPlanRefreshRetainsLastGoodResults(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Defaults.PlansDirectory = planRoot
 	m := Model{
-		mode: ModePlanSearch, cfg: cfg, plansIndex: idx,
-		planResults: results, width: 100, height: 30,
+		mode: ModePlanSearch,
+		cfg:  cfg,
+		modelPlanState: modelPlanState{
+			plansIndex:  idx,
+			planResults: results,
+		},
+		width:  100,
+		height: 30,
 	}
 
 	for iteration := 0; iteration < 2; iteration++ {
@@ -169,10 +175,12 @@ func TestAcceptanceWarmPastSessionsStayVisibleAndPartialRefreshPublishesSuccessf
 	}
 	cfg := &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}}
 	m := Model{
-		cfg:               cfg,
-		transcriptIndex:   snapshot.transcriptIndex,
-		transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
-		sessionResults:    append([]transcript.Result(nil), snapshot.transcriptResults...),
+		cfg: cfg,
+		modelHistoryState: modelHistoryState{
+			transcriptIndex:   snapshot.transcriptIndex,
+			transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
+			sessionResults:    append([]transcript.Result(nil), snapshot.transcriptResults...),
+		},
 	}
 	oldResults := append([]transcript.Result(nil), m.sessionResults...)
 	updated, cmd := m.enterSessionSearch()
@@ -300,11 +308,13 @@ func TestAcceptancePastSessionsSharedProjectAliasContinuesAndForksInAliasContext
 			commands.Portable.Registry = registry
 			t.Cleanup(func() { commands.Portable = previous })
 			m := Model{
-				mode:              ModeSessionSearch,
-				cfg:               cfg,
-				filterProject:     []string{"streamutil"},
-				transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
-				sessionResults:    []transcript.Result{{Meta: meta}},
+				mode: ModeSessionSearch,
+				cfg:  cfg,
+				modelHistoryState: modelHistoryState{
+					filterProject:     []string{"streamutil"},
+					transcriptReaders: map[string]transcript.Reader{harness.Claude: reader},
+					sessionResults:    []transcript.Result{{Meta: meta}},
+				},
 				daemonCommand: func(protocol.Request) (protocol.Response, error) {
 					return protocol.Response{OK: true}, nil
 				},

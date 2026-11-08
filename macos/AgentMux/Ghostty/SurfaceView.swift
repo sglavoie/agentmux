@@ -2,67 +2,6 @@
 import AppKit
 import GhosttyKit
 
-/// Hears what one surface reports. Every call arrives on the main thread and
-/// never from inside a Ghostty callback, so a delegate may close the surface
-/// in response.
-protocol GhosttySurfaceDelegate: AnyObject {
-    func surfaceDidChangeTitle(_ surface: Ghostty.SurfaceView)
-    func surfaceDidChangeWorkingDirectory(_ surface: Ghostty.SurfaceView)
-    func surfaceDidChangeBackground(_ surface: Ghostty.SurfaceView)
-    /// The program the surface ran has exited. The surface stays open, showing
-    /// its last output, until the delegate closes it. No exit status comes
-    /// with it: Ghostty starts the program under login(1), whose own status
-    /// is all it sees, so how an agent ended is the backend's to say.
-    func surfaceChildDidExit(_ surface: Ghostty.SurfaceView)
-    /// Ghostty wants the surface closed: its program ended and nothing keeps
-    /// it open, or a close binding fired. `needsConfirm` is Ghostty's "would
-    /// closing need confirmation"; it is not whether the process is alive.
-    func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool)
-    /// The program asked for a desktop notification (OSC 9 / OSC 777).
-    func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String)
-    /// The program rang the bell. Whether anything is heard or shown is the
-    /// host's: only it knows whether this terminal is the one in view.
-    func surfaceDidRingBell(_ surface: Ghostty.SurfaceView)
-    /// The pointer moved onto a link or off one (`hoveredLink`).
-    func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView)
-    /// The renderer reported itself unhealthy, or healthy again
-    /// (`rendererHealthy`). An unhealthy one draws nothing new.
-    func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView)
-    /// A search through the terminal's own buffer began, was asked for
-    /// again, ended, or was counted. Only a terminal holding its own
-    /// history (`Scrollback.terminal`) reports one.
-    func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate)
-    func surfaceRequestedServerFind(_ surface: Ghostty.SurfaceView)
-    /// The viewport moved in the terminal's own buffer, or the buffer grew
-    /// (`scrollbar`). Never reported when the config says `scrollbar = never`
-    /// or the terminal's history is the server's.
-    func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView)
-    /// The program reported progress, or its report was removed or expired
-    /// (`progress`).
-    func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView)
-    /// The terminal put text on the clipboard: a Copy, or, in a session
-    /// view, tmux copying a selection made with the mouse (OSC 52), which
-    /// otherwise happens with nothing to show for it.
-    func surfaceDidWriteClipboard(_ surface: Ghostty.SurfaceView)
-}
-
-extension GhosttySurfaceDelegate {
-    func surfaceDidChangeTitle(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidChangeWorkingDirectory(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidChangeBackground(_ surface: Ghostty.SurfaceView) {}
-    func surfaceChildDidExit(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidRequestClose(_ surface: Ghostty.SurfaceView, needsConfirm: Bool) {}
-    func surface(_ surface: Ghostty.SurfaceView, didRequestNotificationTitled title: String, body: String) {}
-    func surfaceDidRingBell(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidChangeHoveredLink(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidChangeRendererHealth(_ surface: Ghostty.SurfaceView) {}
-    func surface(_ surface: Ghostty.SurfaceView, didUpdateSearch update: Ghostty.SearchUpdate) {}
-    func surfaceRequestedServerFind(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidChangeScrollbar(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidChangeProgress(_ surface: Ghostty.SurfaceView) {}
-    func surfaceDidWriteClipboard(_ surface: Ghostty.SurfaceView) {}
-}
-
 extension Ghostty {
     /// One terminal: an AppKit view hosting a `ghostty_surface_t`. Any number
     /// share a `Ghostty.App`, each running its own `SurfaceConfiguration`.
@@ -105,7 +44,7 @@ extension Ghostty {
         private(set) var focused: Bool = false
 
         /// Whether the surface was last told it can be seen.
-        private(set) var visible: Bool = true
+        var visible: Bool = true
 
         /// The link under the pointer, as Ghostty reports it; nil when none.
         private(set) var hoveredLink: String?
@@ -135,7 +74,7 @@ extension Ghostty {
         /// key, and the key tables in force, innermost last. While either
         /// is set every key is Ghostty's, so the menu claims none.
         private(set) var keySequenceActive = false
-        private(set) var keyTables: [String] = []
+        var keyTables: [String] = []
 
         /// What the operator knows this terminal as, named when a program
         /// in it asks for the clipboard; empty when the host set none.
@@ -147,11 +86,11 @@ extension Ghostty {
 
         /// Set when the view was resized while hidden: the surface is told
         /// once it is shown, not on every frame of a window's live resize.
-        private(set) var sizePending = false
+        var sizePending = false
 
         /// The last size requested in points, reused when only the scale
         /// changes, because mid-animation the frame may lag the target size.
-        private var contentSize: CGSize = .zero
+        var contentSize: CGSize = .zero
 
         private var appliedColorScheme: ghostty_color_scheme_e?
 
@@ -310,156 +249,6 @@ extension Ghostty {
             return ghostty_surface_needs_confirm_quit(surface)
         }
 
-        // MARK: Size and scale
-
-        /// Tells the surface its framebuffer size for a view size in points.
-        /// Ghostty derives the grid from it, so this is what keeps rows and
-        /// columns matching the view.
-        func sizeDidChange(_ size: CGSize) {
-            contentSize = size
-            let scaled = convertToBacking(size)
-            setSurfaceSize(Self.pixelSize(scaled))
-        }
-
-        /// Backing-store points rounded down to whole pixels, never zero, since
-        /// a zero-sized surface has no grid to lay a program out on.
-        static func pixelSize(_ backing: CGSize) -> (width: UInt32, height: UInt32) {
-            let width = max(1, backing.width.rounded(.down))
-            let height = max(1, backing.height.rounded(.down))
-            return (UInt32(clamping: Int(width)), UInt32(clamping: Int(height)))
-        }
-
-        private func setSurfaceSize(_ size: (width: UInt32, height: UInt32)) {
-            guard let surface else { return }
-            ghostty_surface_set_size(surface, size.width, size.height)
-        }
-
-        override func setFrameSize(_ newSize: NSSize) {
-            super.setFrameSize(newSize)
-            // A hidden terminal behind the one shown follows every frame of a
-            // window's live resize; its grid only matters once it is seen.
-            if isHiddenOrHasHiddenAncestor {
-                sizePending = true
-                return
-            }
-            sizeDidChange(newSize)
-        }
-
-        /// Gives the surface a size, and any scale, deferred while it was
-        /// hidden.
-        private func applyPendingSize() {
-            guard sizePending, !isHiddenOrHasHiddenAncestor else { return }
-            sizePending = false
-            setContentScale()
-            sizeDidChange(frame.size)
-        }
-
-        /// Tells the surface the scale its frame has in the backing store.
-        private func setContentScale() {
-            guard let surface else { return }
-            let backing = convertToBacking(frame)
-            if frame.width > 0, frame.height > 0 {
-                ghostty_surface_set_content_scale(
-                    surface, backing.width / frame.width, backing.height / frame.height)
-            }
-        }
-
-        override func viewDidEndLiveResize() {
-            super.viewDidEndLiveResize()
-            applyPendingSize()
-        }
-
-        override func viewDidChangeBackingProperties() {
-            super.viewDidChangeBackingProperties()
-
-            // The renderer scales its own contents; without matching the
-            // layer's contentsScale the compositor would scale them again when
-            // the window moves between Retina and non-Retina displays.
-            if let window {
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                layer?.contentsScale = window.backingScaleFactor
-                CATransaction.commit()
-            }
-
-            // A hidden terminal's last size may be stale: the new scale goes
-            // to the surface with its current size once it is shown, so
-            // tmux never hears of a grid nobody sees.
-            if isHiddenOrHasHiddenAncestor {
-                sizePending = true
-                return
-            }
-            setContentScale()
-            // A new scale is a new framebuffer size for the same point size.
-            setSurfaceSize(Self.pixelSize(convertToBacking(contentSize)))
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            // Leaving a window is the same as being hidden: nothing to draw
-            // for, and no focus to hold.
-            updateOcclusion()
-            syncFocus()
-            guard window != nil else { return }
-            updateDisplayID()
-            viewDidChangeBackingProperties()
-        }
-
-        // MARK: Display and occlusion
-
-        @objc private func windowDidChangeScreen(_ notification: Notification) {
-            guard let window, notification.object as? NSWindow === window else { return }
-            updateDisplayID()
-            // The new screen may carry a different scale factor; upstream
-            // re-runs the backing change asynchronously for the same reason.
-            DispatchQueue.main.async { [weak self] in
-                self?.viewDidChangeBackingProperties()
-            }
-        }
-
-        /// Points the renderer's display link at the window's current screen.
-        private func updateDisplayID() {
-            guard let surface, let screen = window?.screen else { return }
-            ghostty_surface_set_display_id(surface, Self.displayID(of: screen) ?? 0)
-        }
-
-        static func displayID(of screen: NSScreen) -> UInt32? {
-            (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
-        }
-
-        @objc private func windowDidChangeOcclusionState(_ notification: Notification) {
-            guard let window, notification.object as? NSWindow === window else { return }
-            updateOcclusion()
-        }
-
-        override func viewDidHide() {
-            super.viewDidHide()
-            updateOcclusion()
-        }
-
-        override func viewDidUnhide() {
-            super.viewDidUnhide()
-            applyPendingSize()
-            updateOcclusion()
-        }
-
-        /// A surface nobody can see stops rendering; its terminal keeps
-        /// running. That is a covered or miniaturized window, and equally a
-        /// view hidden behind the one terminal a workspace shows at a time.
-        private func updateOcclusion() {
-            guard let window else {
-                setVisible(false)
-                return
-            }
-            setVisible(window.occlusionState.contains(.visible) && !isHiddenOrHasHiddenAncestor)
-        }
-
-        private func setVisible(_ visible: Bool) {
-            guard let surface, self.visible != visible else { return }
-            self.visible = visible
-            ghostty_surface_set_occlusion(surface, visible)
-        }
-
         // MARK: Focus
 
         override func becomeFirstResponder() -> Bool {
@@ -483,7 +272,7 @@ extension Ghostty {
         /// controller decides it; the cursor blinks and focus reports follow.
         /// With several surfaces in a window at most one is first responder,
         /// so at most one is focused.
-        private func syncFocus() {
+        func syncFocus() {
             guard let window else {
                 focusDidChange(false)
                 return
@@ -571,233 +360,6 @@ extension Ghostty {
         static var copyLink: (String) -> Void = { link in
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link, forType: .string)
-        }
-
-        // MARK: Drag and drop
-
-        /// Files arrive as shell-escaped paths, other URLs shell-escaped
-        /// too, and text as text.
-        static let dropTypes: [NSPasteboard.PasteboardType] = [.fileURL, .URL, .string]
-
-        /// What a drop types into the terminal. A URL is a word for the
-        /// shell, so `&` or `?` in it never start anything.
-        static func dropText(from pasteboard: NSPasteboard) -> String? {
-            if let urls = pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL], !urls.isEmpty {
-                return urls
-                    .map { Ghostty.App.shellEscape($0.isFileURL ? $0.path : $0.absoluteString) }
-                    .joined(separator: " ")
-            }
-            return pasteboard.string(forType: .string).flatMap { $0.isEmpty ? nil : $0 }
-        }
-
-        /// Dropped text of more than one line is pasted, so Ghostty's paste
-        /// protection asks about it first and a bracketed paste stays one.
-        static func dropIsPaste(_ text: String) -> Bool {
-            text.contains(where: \.isNewline)
-        }
-
-        /// Types dropped text into the terminal, or pastes it when it spans
-        /// lines. Returns whether Ghostty took it.
-        @discardableResult
-        func drop(_ text: String) -> Bool {
-            guard let surface else { return false }
-            if Self.dropIsPaste(text) { return paste(text) }
-            let len = text.utf8CString.count
-            text.withCString { ptr in
-                ghostty_surface_text(surface, ptr, UInt(len - 1))
-            }
-            return true
-        }
-
-        /// Runs Ghostty's own paste on `text` instead of the clipboard's: the
-        /// request that paste makes is answered from `pendingPaste`
-        /// (`Ghostty.App.readClipboard`), and the clipboard is left alone.
-        @discardableResult
-        func paste(_ text: String) -> Bool {
-            pendingPaste = text
-            defer { pendingPaste = nil }
-            return performBindingAction("paste_from_clipboard")
-        }
-
-        override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-            guard surface != nil else { return [] }
-            return Self.dropText(from: sender.draggingPasteboard) == nil ? [] : .copy
-        }
-
-        override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-            guard surface != nil, let text = Self.dropText(from: sender.draggingPasteboard), drop(text) else { return false }
-            // A drop from Finder leaves Finder in front; keep typing here.
-            NSApp.activate()
-            window?.makeKeyAndOrderFront(nil)
-            window?.makeFirstResponder(self)
-            return true
-        }
-
-        // MARK: Runtime actions
-
-        /// Answers a surface-targeted action, returning whether it was
-        /// performed. Ghostty may call from any thread and is still inside its
-        /// own callback, so state changes hop to the main thread and delegate
-        /// calls are always deferred: a delegate may then free the surface.
-        func perform(_ action: ghostty_action_s) -> Bool {
-            switch action.tag {
-            case GHOSTTY_ACTION_SET_TITLE:
-                guard let ptr = action.action.set_title.title else { return false }
-                let title = String(cString: ptr)
-                later { $0.setTitle(title) }
-                return true
-
-            case GHOSTTY_ACTION_PWD:
-                guard let ptr = action.action.pwd.pwd else { return false }
-                let pwd = String(cString: ptr)
-                later { $0.setWorkingDirectory(pwd) }
-                return true
-
-            case GHOSTTY_ACTION_MOUSE_SHAPE:
-                let shape = action.action.mouse_shape
-                later { $0.setCursorShape(shape) }
-                return true
-
-            case GHOSTTY_ACTION_MOUSE_VISIBILITY:
-                let visible = action.action.mouse_visibility == GHOSTTY_MOUSE_VISIBLE
-                later { $0.setCursorVisibility(visible) }
-                return true
-
-            case GHOSTTY_ACTION_COLOR_CHANGE:
-                let change = action.action.color_change
-                guard change.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND else { return false }
-                let color = Ghostty.color(ghostty_config_color_s(r: change.r, g: change.g, b: change.b))
-                later { $0.setBackgroundColor(color) }
-                return true
-
-            case GHOSTTY_ACTION_RENDERER_HEALTH:
-                let healthy = action.action.renderer_health == GHOSTTY_RENDERER_HEALTH_HEALTHY
-                if !healthy {
-                    Ghostty.logger.error("renderer reported unhealthy")
-                }
-                later { $0.setRendererHealthy(healthy) }
-                return true
-
-            case GHOSTTY_ACTION_DESKTOP_NOTIFICATION:
-                // Nobody to show it: Ghostty is told it was not.
-                guard delegate != nil else { return false }
-                let note = action.action.desktop_notification
-                let title = note.title.map { String(cString: $0) } ?? ""
-                let body = note.body.map { String(cString: $0) } ?? ""
-                later { $0.delegate?.surface($0, didRequestNotificationTitled: title, body: body) }
-                return true
-
-            case GHOSTTY_ACTION_RING_BELL:
-                later { $0.delegate?.surfaceDidRingBell($0) }
-                return true
-
-            case GHOSTTY_ACTION_MOUSE_OVER_LINK:
-                let link = action.action.mouse_over_link
-                let url = link.url.flatMap { ptr in
-                    link.len == 0 ? nil : String(data: Data(bytes: ptr, count: Int(link.len)), encoding: .utf8)
-                }
-                later { $0.setHoveredLink(url) }
-                return true
-
-            case GHOSTTY_ACTION_SECURE_INPUT:
-                let change = action.action.secure_input
-                now { $0.setSecureInput(change) }
-                return true
-
-            // The next key may already be on its way: these take effect
-            // before this callback returns whenever it runs on the main thread.
-            case GHOSTTY_ACTION_KEY_SEQUENCE:
-                let active = action.action.key_sequence.active
-                now { $0.setKeySequenceActive(active) }
-                return true
-
-            case GHOSTTY_ACTION_KEY_TABLE:
-                let table = action.action.key_table
-                // The name is Ghostty's only for the length of the callback.
-                if table.tag == GHOSTTY_KEY_TABLE_ACTIVATE, !Thread.isMainThread {
-                    let value = table.value.activate
-                    let name = value.name.map {
-                        String(data: Data(bytes: $0, count: Int(value.len)), encoding: .utf8) ?? ""
-                    } ?? ""
-                    later { $0.keyTables.append(name) }
-                    return true
-                }
-                now { $0.setKeyTable(table) }
-                return true
-
-            // A session's terminal is a viewer of the tmux server, whose
-            // history and search are the server's (SurfaceView+History.swift).
-            case GHOSTTY_ACTION_START_SEARCH:
-                guard scrollback == .terminal else { return false }
-                let needle = action.action.start_search.needle.map { String(cString: $0) } ?? ""
-                later { $0.searchDidChange(.started(needle: needle)) }
-                return true
-
-            case GHOSTTY_ACTION_END_SEARCH:
-                guard scrollback == .terminal else { return false }
-                later { $0.searchDidChange(.ended) }
-                return true
-
-            case GHOSTTY_ACTION_SEARCH_TOTAL:
-                guard scrollback == .terminal else { return false }
-                let total = action.action.search_total.total
-                later { $0.searchDidChange(.total(total < 0 ? nil : Int(total))) }
-                return true
-
-            case GHOSTTY_ACTION_SEARCH_SELECTED:
-                guard scrollback == .terminal else { return false }
-                let selected = action.action.search_selected.selected
-                later { $0.searchDidChange(.selected(selected < 0 ? nil : Int(selected))) }
-                return true
-
-            case GHOSTTY_ACTION_SCROLLBAR:
-                guard scrollback == .terminal else { return false }
-                let bar = action.action.scrollbar
-                let scrollbar = Scrollbar(total: bar.total, offset: bar.offset, len: bar.len)
-                later { $0.setScrollbar(scrollbar) }
-                return true
-
-            case GHOSTTY_ACTION_PROGRESS_REPORT:
-                let progress = Progress(action.action.progress_report)
-                later { $0.setProgress(progress) }
-                return true
-
-            case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
-                // Returning true tells Ghostty the host shows the exit, so it
-                // writes nothing of its own into the terminal.
-                later { $0.childDidExit() }
-                return true
-
-            case GHOSTTY_ACTION_CLOSE_WINDOW:
-                // An embedded terminal's "window" is its view.
-                closeRequested(needsConfirm: false)
-                return true
-
-            default:
-                return false
-            }
-        }
-
-        /// Ghostty asked for this surface to be closed.
-        func closeRequested(needsConfirm: Bool) {
-            later { $0.delegate?.surfaceDidRequestClose($0, needsConfirm: needsConfirm) }
-        }
-
-        /// Runs `work` on the main thread after the current Ghostty callback
-        /// has returned, and only if the surface is still open then.
-        private func later(_ work: @escaping (SurfaceView) -> Void) {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.surface != nil else { return }
-                work(self)
-            }
-        }
-
-        /// Runs `work` at once when on the main thread, else as `later`. Only
-        /// for state changes: it calls no delegate.
-        private func now(_ work: @escaping (SurfaceView) -> Void) {
-            guard Thread.isMainThread else { return later(work) }
-            guard surface != nil else { return }
-            work(self)
         }
 
         /// What a bell does, as the app's config says.

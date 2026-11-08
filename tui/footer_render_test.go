@@ -31,11 +31,13 @@ func TestPlanViewsAdvertiseLessNavigationKeys(t *testing.T) {
 		height: 20,
 	}
 	planView := Model{
-		mode:             ModePlanView,
-		width:            100,
-		height:           20,
-		planViewerLines:  []string{"first", "second"},
-		planViewerCursor: 0,
+		mode:   ModePlanView,
+		width:  100,
+		height: 20,
+		modelPlanState: modelPlanState{
+			planViewerLines:  []string{"first", "second"},
+			planViewerCursor: 0,
+		},
 	}
 	cases := []struct {
 		name string

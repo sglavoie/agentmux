@@ -121,7 +121,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var sessionShortcutRows: [WorkspaceRow] = []
     var content: Content = .empty
     /// Whether the window is on screen; terminals exist only while it is.
-    private(set) var isOpen = false
+    var isOpen = false
 
     let sidebar = WorkspaceSidebarView()
     let groupFilter = WorkspaceGroupFilter()
@@ -144,89 +144,23 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var onGroupContextsChanged: ([String: WorkspaceRestoration.GroupContext]) -> Void = { _ in }
     var choosingGroupPlace = false
     var showingEmptyGroup = false
-    private(set) var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
-    private(set) var sidebarSort: WorkspaceSidebarSort = .manual
-    private(set) var sidebarWaitingOnly = false
+    var sidebarGrouping: WorkspaceSidebarGrouping = .stateThenProject
+    var sidebarSort: WorkspaceSidebarSort = .manual
+    var sidebarWaitingOnly = false
 
-    func setSidebarSort(_ sorting: WorkspaceSidebarSort) {
-        guard sidebarSort != sorting else { return }
-        sidebarSort = sorting
-        state.arrange(order, grouping: sidebarGrouping, sorting: sorting)
-        guard sidebar.dataSource != nil else { return }
-        reloadSidebar(allowReorder: true)
-    }
+    var showOverviewInSidebar = false
 
-    func setSidebarWaitingOnly(_ waitingOnly: Bool) {
-        guard sidebarWaitingOnly != waitingOnly else { return }
-        sidebarWaitingOnly = waitingOnly
-        groupFilter.showWaitingOnly(waitingOnly)
-        guard sidebar.dataSource != nil else { return }
-        reloadSidebar(allowReorder: true)
-    }
+    var compactSidebar = false
 
-    func setSidebarGrouping(_ grouping: WorkspaceSidebarGrouping) {
-        guard sidebarGrouping != grouping else { return }
-        sidebarGrouping = grouping
-        state.arrange(order, grouping: grouping, sorting: sidebarSort)
-        guard sidebar.dataSource != nil else { return }
-        reloadSidebar(allowReorder: true)
-    }
-
-    private(set) var showOverviewInSidebar = false
-
-    func setShowOverviewInSidebar(_ show: Bool) {
-        guard showOverviewInSidebar != show else { return }
-        showOverviewInSidebar = show
-        guard sidebar.dataSource != nil else { return }
-        reloadSidebar(force: true, allowReorder: true)
-    }
-
-    private(set) var compactSidebar = false
-
-    func setCompactSidebar(_ compact: Bool) {
-        guard compactSidebar != compact else { return }
-        compactSidebar = compact
-        guard sidebar.dataSource != nil else { return }
-        applying = true
-        sidebar.reloadData()
-        applying = false
-        syncSidebarSelection()
-    }
     /// The sidebars' zoom in percent, kept whole so steps never drift.
-    private(set) var sidebarZoomPercent = 100
+    var sidebarZoomPercent = 100
     var sidebarZoom: CGFloat { CGFloat(sidebarZoomPercent) / 100 }
-    private var sidebarZoomView: WorkspaceSidebarZoomView?
-    private var inspectorZoomView: WorkspaceSidebarZoomView?
+    var sidebarZoomView: WorkspaceSidebarZoomView?
+    var inspectorZoomView: WorkspaceSidebarZoomView?
     /// Told of each zoom the operator asks for with ⌥+, ⌥−, or ⌥0, so
     /// Settings can keep it; not called by `setSidebarZoom(percent:)`.
     var onSidebarZoomChanged: ((Int) -> Void)?
 
-    func zoomSidebars(_ change: WorkspaceZoomWindow.Zoom) {
-        let step = AppPreferences.sidebarZoomStep
-        let percent = switch change {
-        case .bigger: sidebarZoomPercent + step
-        case .smaller: sidebarZoomPercent - step
-        case .reset: 100
-        }
-        guard setSidebarZoom(percent: percent) else { return }
-        onSidebarZoomChanged?(sidebarZoomPercent)
-    }
-
-    /// Applies a zoom, clamped to `AppPreferences.sidebarZoomRange`; false
-    /// when it was already the zoom. It never makes the window: one made
-    /// now would open before the saved widths are given to it.
-    @discardableResult
-    func setSidebarZoom(percent: Int) -> Bool {
-        let percent = AppPreferences.clamp(percent, AppPreferences.sidebarZoomRange)
-        guard percent != sidebarZoomPercent else { return false }
-        sidebarZoomPercent = percent
-        guard let sidebarZoomView else { return true }
-        sidebarZoomView.zoom = sidebarZoom
-        welcomeView.zoom = sidebarZoom
-        inspectorZoomView?.zoom = sidebarZoom
-        window.contentView?.layoutSubtreeIfNeeded()
-        return true
-    }
     /// Hides the sidebar and brings it back, from the title bar, so that
     /// neither the sidebar nor the pane gives up anything to it.
     let sidebarToggle = WorkspaceWindowChrome.makeSidebarToggle()
@@ -236,7 +170,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var reportedOtherShowing: TerminalNotice.Origin?
     var sidebarItem: NSSplitViewItem?
     var contentItem: NSSplitViewItem?
-    private var sidebarObservation: NSKeyValueObservation?
+    var sidebarObservation: NSKeyValueObservation?
     lazy var inspector = WorkspaceInspectorView(welcome: welcomeView)
     /// Hides the inspector and brings it back, from the title bar.
     let inspectorToggle = WorkspaceWindowChrome.makeInspectorToggle()
@@ -244,7 +178,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var inspectorTab = WorkspaceInspectorTab.waiting
     var reportedInspectorCollapsed = true
     var inspectorItem: NSSplitViewItem?
-    private var inspectorObservation: NSKeyValueObservation?
+    var inspectorObservation: NSKeyValueObservation?
     /// The widths the sidebar and the inspector open at, which the app sets
     /// before the window is made; nil gives each its default.
     var sidebarWidth: CGFloat?
@@ -252,7 +186,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The widths the delegate was last told of.
     var reportedSidebarWidth: CGFloat?
     var reportedInspectorWidth: CGFloat?
-    private var splitObservation: NSObjectProtocol?
+    var splitObservation: NSObjectProtocol?
     let feedLabel = NSTextField(labelWithString: "")
     /// Start Daemon or Restart Daemon under the feed's notice, whenever the
     /// feed says one would help: held rows keep the pane's own button away,
@@ -465,7 +399,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// while nothing changes, so without it they would stand still.
     static let ageRefreshInterval: TimeInterval = 30
     /// Runs while the window is open, and only then.
-    private(set) var ageTimer: Timer?
+    var ageTimer: Timer?
 
     init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init) {
         self.delegate = delegate
@@ -485,226 +419,6 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         }
     }
 
-    /// The runtime sessions that have a terminal right now.
-    var attachedRuntimeSessionIDs: Set<String> { Set(terminals.keys) }
-
-    func terminalView(for runtimeSessionID: String) -> NSView? { terminals[runtimeSessionID]?.view }
-
-    /// The utility views that have a terminal right now, by id.
-    var runningViewIDs: Set<String> { Set(viewTerminals.keys) }
-
-    func utilityTerminalView(for id: String) -> NSView? { viewTerminals[id]?.view }
-
-    // MARK: Showing
-
-    /// Brings the window forward, opening it if it is closed.
-    func show() {
-        if !isOpen {
-            isOpen = true
-            Self.logger.notice("workspace: opened")
-            delegate?.workspaceVisibilityChanged(true)
-            comeBackToSelection()
-        }
-        startAgeTimer()
-        NSApp.activate()
-        window.makeKeyAndOrderFront(nil)
-        refresh()
-        welcome.showWelcomeOnce()
-    }
-
-    /// Opens the window without activating the app or ordering it in, for
-    /// tests: everything else behaves as it does on screen.
-    func openForTesting() {
-        _ = window
-        if !isOpen {
-            isOpen = true
-            comeBackToSelection()
-        }
-        startAgeTimer()
-        refresh()
-    }
-
-    /// Reopening comes back to the session the window was on the way a
-    /// launch does: a terminal that attached to it while the window was
-    /// closed keeps it, so it is attached again only once amx says nobody
-    /// else has it.
-    private func comeBackToSelection() {
-        guard pendingLayout == nil else { return }
-        if let context = groupContexts[WorkspaceRestoration.contextKey(selectedGroup)] {
-            restoreLayout(context.layout, conversation: context.conversation.flatMap(ConversationIdentity.init(encoded:)))
-            return
-        }
-        guard let key = state.selection, viewSelection == nil, !key.runtimeSessionID.isEmpty else { return }
-        let id = key.runtimeSessionID
-        let conversation = state.row(key)?.conversation
-            ?? (shownConversation?.runtimeSessionID == id ? shownConversation?.conversation : nil)
-        restore(.session(runtimeSessionID: id), conversation: conversation)
-    }
-
-    private func startAgeTimer() {
-        guard ageTimer == nil else { return }
-        let timer = Timer(timeInterval: Self.ageRefreshInterval, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshAges() }
-        }
-        timer.tolerance = Self.ageRefreshInterval / 6
-        RunLoop.main.add(timer, forMode: .common)
-        ageTimer = timer
-    }
-
-    /// Says the ages again, as a snapshot would: only the lines whose text
-    /// changed are drawn again, so the selection, the pointer's ×, and the
-    /// keyboard stay where they are.
-    func refreshAges() {
-        guard isOpen else { return }
-        refresh()
-    }
-
-    func windowShouldClose(_ sender: NSWindow) -> Bool { reviewCanClose() }
-
-    func windowWillClose(_ notification: Notification) {
-        guard isOpen else { return }
-        welcome.close()
-        inspector.recap.close()
-        inspector.threads.close()
-        paneLayout.active.showContext(nil, canAnswer: false)
-        paneLayout.other.showContext(nil, canAnswer: false)
-        reportLayout()
-        pendingLayout = nil
-        layoutGeneration += 1
-        isOpen = false
-        if let paneClickMonitor { NSEvent.removeMonitor(paneClickMonitor) }
-        paneClickMonitor = nil
-        if reviewSelected {
-            switch otherPlace {
-            case let .session(key)?: state.select(key); viewSelection = nil
-            case let .view(id)?: state.select(nil); viewSelection = id
-            default: break
-            }
-        }
-        otherPlace = nil
-        otherContent = .empty
-        activeOnRight = false
-        reviewView?.removeFromSuperview()
-        reviewView = nil
-        reviewSelected = false
-        reviewClosed()
-        reviewClosed = {}
-        paneLayout.arrange(split: false, activeOnRight: false)
-        ageTimer?.invalidate()
-        ageTimer = nil
-        Self.logger.notice("workspace: closed, detaching \(self.terminals.count) terminal(s)")
-        for id in Array(terminals.keys) { discardTerminal(id) }
-        detached.removeAll()
-        // The utility views keep their programs: an editor with unsaved work
-        // or a running shell is not an attachment that can simply be remade.
-        for terminal in viewTerminals.values { terminal.view.isHidden = true }
-        closeSwitcher(restoring: false)
-        inspector.discardContext()
-        awaited = nil
-        leaveRecovery()
-        content = .empty
-        reportedShowing = nil
-        reportedOtherShowing = nil
-        delegate?.workspaceVisibilityChanged(false)
-    }
-
-    /// Kept for the next launch. A window closed while in full screen, or
-    /// one the app is quitting with, keeps what it had: neither is the
-    /// operator leaving full screen.
-    func windowDidEnterFullScreen(_ notification: Notification) {
-        guard isOpen else { return }
-        delegate?.workspaceFullScreenChanged(true)
-    }
-
-    func windowDidExitFullScreen(_ notification: Notification) {
-        guard isOpen else { return }
-        delegate?.workspaceFullScreenChanged(false)
-    }
-
-    /// At launch, for a window that was in full screen when the app last ran.
-    func enterFullScreen() {
-        guard isOpen, !window.styleMask.contains(.fullScreen) else { return }
-        window.toggleFullScreen(nil)
-    }
-
-    func windowDidBecomeKey(_ notification: Notification) {
-        guard isOpen else { return }
-        reportedShowing = showing
-        if let showing { delegate?.workspaceShowing(showing) }
-        if let otherShowing { delegate?.workspaceShowing(otherShowing) }
-    }
-
-    // MARK: State
-
-    /// Brings the sidebar and the pane in line with the store.
-    func refresh() {
-        guard let store = delegate?.store else { return }
-        var live: [WorkspaceGroup]?
-        if store.feed == .live, store.snapshot != nil {
-            live = WorkspaceSidebar.groups(store.sessions, now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping, sorting: sidebarSort)
-        }
-        let wasCurrent = state.current
-        let previousRows = state.rows
-        let previous = state.selection
-        let previousName = state.selectedRow?.displayName
-        let lost = state.apply(live)
-        if state.current != wasCurrent {
-            Self.logger.notice("workspace: rows \(self.state.current ? "current" : "held from the last snapshot", privacy: .public) (\(self.state.rows.count) session(s), selection \(Self.describe(self.state.selection), privacy: .public))")
-        }
-        if lost {
-            Self.logger.notice("workspace: selected session \(Self.describe(previous), privacy: .public) is no longer listed")
-            // A session the operator closed is not reported as gone.
-            if let previous, !previous.runtimeSessionID.isEmpty, closing[previous.runtimeSessionID] == nil {
-                sessionGone(previous.runtimeSessionID, name: previousName ?? "This session")
-            }
-        }
-        if state.current {
-            // Only a live snapshot says a session is gone, and what was kept
-            // of it in the orders dragged into with it.
-            let kept = order
-            order.forget(notAmong: state.rows)
-            if order != kept { delegate?.workspaceOrderChanged(order) }
-            let listed = state.embeddedRuntimeSessionIDs
-            for id in terminals.keys where !listed.contains(id) {
-                Self.logger.notice("workspace: \(id, privacy: .public) is no longer listed; detaching its terminal")
-                discardTerminal(id)
-            }
-            closeTerminals(beside: Set(views.opened.compactMap(\.besideRuntimeSessionID)).subtracting(listed))
-            detached.formIntersection(listed)
-            closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
-        }
-        arrangeNewSessionBelow()
-        reloadSidebar()
-        if state.current { flashStateChanges(from: previousRows) }
-        welcome.observe(waiting: AttentionCycler.ordered(store.managedSessions).count,
-                        working: state.rows.filter(\.working).count,
-                        live: state.current, celebrate: isOpen && NSApp.isActive)
-        let notice = WorkspaceSidebar.feedNotice(store.feed)
-        feedLabel.stringValue = notice ?? ""
-        feedLabel.isHidden = notice == nil
-        feedLabel.toolTip = notice
-        let action = WorkspaceSidebar.daemonAction(store.feed)
-        feedButton.title = action?.title ?? ""
-        feedButton.isHidden = action == nil
-        if let awaited {
-            if let row = state.row(.embedded(awaited.runtimeSessionID)) {
-                Self.logger.notice("workspace: awaited session \(awaited.runtimeSessionID, privacy: .public) is listed; showing it")
-                self.awaited = nil
-                activate(row)
-                revealInSidebar()
-                return
-            }
-            if now() >= awaited.until {
-                Self.logger.notice("workspace: awaited session \(awaited.runtimeSessionID, privacy: .public) was never listed; giving up")
-                self.awaited = nil
-            }
-        }
-        continueRestoring()
-        continueChoosingGroupPlace()
-        continueRestoringLayout()
-        updateContent(focus: false)
-    }
-
     /// Takes a copied runtime session ID; the general pasteboard unless a
     /// test says otherwise.
     var copyToPasteboard: (String) -> Void = { value in
@@ -713,186 +427,4 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     }
     var copiedNoticeEnd: DispatchWorkItem?
 
-    // MARK: Window
-
-    static let minimumSize = NSSize(width: 640, height: 360)
-
-    private func makeWindow() -> NSWindow {
-        let sidebarController = WorkspaceWindowChrome.sidebar(table: sidebar, groupFilter: groupFilter, feedLabel: feedLabel, feedButton: feedButton)
-        groupFilter.onSelect = { [weak self] group in self?.selectGroup(group) }
-        groupFilter.onWaitingOnly = { [weak self] waitingOnly in self?.setSidebarWaitingOnly(waitingOnly) }
-        let sidebarZoomView = WorkspaceSidebarZoomView(content: sidebarController.view)
-        sidebarZoomView.zoom = sidebarZoom
-        welcomeView.zoom = sidebarZoom
-        sidebarZoomView.opaqueInLight = true
-        sidebarController.view = sidebarZoomView
-        self.sidebarZoomView = sidebarZoomView
-        sidebar.dataSource = self
-        sidebar.delegate = self
-        sidebar.target = self
-        sidebar.action = #selector(rowClicked(_:))
-        sidebar.onPointerChanged = { [weak self] in self?.reloadSidebar() }
-        sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
-        sidebar.onWidthChanged = { [weak self] in self?.refreshWorkspaceNavigationLayout() }
-        sidebar.onCollapse = { [weak self] collapsed in
-            guard let self else { return }
-            if self.sidebar.selectedRow >= 0, self.items[self.sidebar.selectedRow] == .navigation {
-                self.selectWorkspaceNavigation(!collapsed)
-            } else { self.setSelectedProjectCollapsed(collapsed) }
-        }
-        sidebar.onStep = { [weak self] offset in self?.stepFromUnlistedPlace(offset) ?? false }
-        sidebar.hasMenu = { [weak self] row in !(self?.contextMenuItems(forRow: row).isEmpty ?? true) }
-        sidebar.registerForDraggedTypes([Self.dragType])
-        sidebar.setDraggingSourceOperationMask(.move, forLocal: true)
-        sidebar.setDraggingSourceOperationMask([], forLocal: false)
-        let context = NSMenu()
-        // Each item says itself whether it can be chosen: End Session… is
-        // greyed out on a session already closing, which validation would
-        // otherwise turn back on.
-        context.autoenablesItems = false
-        context.delegate = self
-        sidebar.menu = context
-        feedButton.target = self
-        feedButton.action = #selector(daemonButtonPressed(_:))
-
-        scrollbarView.onScroll = { [weak self] row in self?.scrollbarMoved(toRow: row) }
-        findBar.onNeedle = { [weak self] needle in self?.findBarNeedleChanged(needle) }
-        findBar.onNext = { [weak self] in self?.findBarNavigate(next: true) }
-        findBar.onPrevious = { [weak self] in self?.findBarNavigate(next: false) }
-        findBar.onClose = { [weak self] in self?.closeFindBar() }
-        switcher.onChoose = { [weak self] entry in self?.go(to: entry) }
-        switcher.onCancel = { [weak self] in self?.closeSwitcher(restoring: true) }
-        switcher.onLeave = { [weak self] in self?.closeSwitcher(restoring: false) }
-        WorkspaceWindowChrome.installPaneOverlays(
-            in: pane, placeholder: placeholder, linkLabel: linkLabel,
-            scrollbar: scrollbarView, findBar: findBar, switcher: switcher
-        )
-        conversationSearchButton.target = self
-        conversationSearchButton.action = #selector(searchFullConversation(_:))
-        conversationSearchButton.bezelStyle = .rounded
-        conversationSearchButton.controlSize = .small
-        conversationSearchButton.refusesFirstResponder = true
-        conversationSearchButton.toolTip = "Search saved conversation prose, including messages outside terminal Find’s scope. Carries the active terminal query into History."
-        conversationSearchButton.isHidden = true
-        conversationSearchButton.translatesAutoresizingMaskIntoConstraints = false
-        pane.addSubview(conversationSearchButton)
-        NSLayoutConstraint.activate([
-            conversationSearchButton.topAnchor.constraint(equalTo: pane.topAnchor, constant: 8),
-            conversationSearchButton.trailingAnchor.constraint(equalTo: pane.trailingAnchor, constant: -12),
-            conversationSearchButton.leadingAnchor.constraint(greaterThanOrEqualTo: pane.leadingAnchor, constant: 8),
-        ])
-        let paneController = NSViewController()
-        otherPlaceholder.frame = otherPane.bounds
-        otherPlaceholder.autoresizingMask = [.width, .height]
-        otherPane.addSubview(otherPlaceholder)
-        paneLayout.other.onFocus = { [weak self] in _ = self?.focusOtherPane() }
-        paneLayout.active.onFocus = { [weak self] in self?.updateContent(focus: true) }
-        paneController.view = paneLayout
-
-        let split = NSSplitViewController()
-        let sidebarItem = NSSplitViewItem(sidebarWithViewController: sidebarController)
-        sidebarItem.minimumThickness = Self.sidebarWidths.lowerBound
-        sidebarItem.maximumThickness = Self.sidebarWidths.upperBound
-        sidebarItem.canCollapse = true
-        sidebarItem.canCollapseFromWindowResize = false
-        self.sidebarItem = sidebarItem
-        sidebarObservation = sidebarItem.observe(\.isCollapsed) { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.sidebarCollapseChanged() }
-        }
-        let paneItem = NSSplitViewItem(viewController: paneController)
-        paneItem.minimumThickness = 320
-        contentItem = paneItem
-
-        inspector.onTab = { [weak self] tab in self?.setInspectorTab(tab) }
-        inspector.onAllWaitingGroups = { [weak self] showAll in
-            self?.showsAllWaitingGroups = showAll
-            self?.reloadInspector()
-        }
-        inspector.onWaiting = { [weak self] key in
-            guard let self, let row = self.state.row(key) else { return }
-            self.activate(row)
-            self.revealInSidebar()
-        }
-        inspector.onAction = { [weak self] action in self?.delegate?.workspaceInspectorAction(action) }
-        inspector.onAnswer = { [weak self] answer in self?.delegate?.workspaceAnswer(answer) }
-        inspector.onLeaveReader = { [weak self] in
-            guard let self else { return }
-            let back = self.waitingReturn
-            self.waitingReturn = nil
-            if let back, (back as? NSView)?.isHiddenOrHasHiddenAncestor != true, self.window.makeFirstResponder(back) { return }
-            self.focusListOrPane()
-        }
-        inspector.onContext = { [weak self] row, completion in
-            self?.delegate?.workspaceContext(row, completion: completion)
-        }
-        let inspectorController = NSViewController()
-        let inspectorZoomView = WorkspaceSidebarZoomView(content: inspector)
-        inspectorZoomView.zoom = sidebarZoom
-        inspectorController.view = inspectorZoomView
-        self.inspectorZoomView = inspectorZoomView
-        let inspectorItem = NSSplitViewItem(viewController: inspectorController)
-        inspectorItem.minimumThickness = Self.inspectorWidths.lowerBound
-        inspectorItem.maximumThickness = Self.inspectorWidths.upperBound
-        inspectorItem.canCollapse = true
-        // Like the sidebar it keeps its width while the window is resized:
-        // the pane takes the difference.
-        inspectorItem.holdingPriority = sidebarItem.holdingPriority
-        self.inspectorItem = inspectorItem
-        split.addSplitViewItem(sidebarItem)
-        split.addSplitViewItem(paneItem)
-        split.addSplitViewItem(inspectorItem)
-
-        let window = WorkspaceZoomWindow(contentViewController: split)
-        window.onSidebarZoom = { [weak self] change in self?.zoomSidebars(change) }
-        window.title = "Agent Mux"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.isReleasedWhenClosed = false
-        window.minSize = Self.minimumSize
-        window.setContentSize(NSSize(width: 1100, height: 700))
-        window.delegate = self
-        window.center()
-        if let frameAutosaveName { window.setFrameAutosaveName(frameAutosaveName) }
-        let splitView = split.splitView
-        splitView.layoutSubtreeIfNeeded()
-        // The inspector gets its width while shown, so that showing it
-        // again brings that width back. It goes first: moving its divider
-        // takes from the sidebar too.
-        let inspectorShown = Self.width(inspectorWidth, default: Self.defaultInspectorWidth, in: Self.inspectorWidths)
-        splitView.setPosition(splitView.bounds.width - inspectorShown - splitView.dividerThickness, ofDividerAt: 1)
-        // Hidden until it is asked for. An item is collapsed for good only
-        // once its split view is laid out in a window.
-        splitView.layoutSubtreeIfNeeded()
-        inspectorItem.isCollapsed = true
-        // The sidebar goes last, once the hidden inspector has given its
-        // room back: beside a shown one in a narrow window it would be cut
-        // to what is left, and that width saved over its own.
-        splitView.layoutSubtreeIfNeeded()
-        splitView.setPosition(Self.width(sidebarWidth, default: Self.defaultSidebarWidth, in: Self.sidebarWidths), ofDividerAt: 0)
-        splitView.layoutSubtreeIfNeeded()
-        reportedSidebarWidth = sidebarWidth
-        reportedInspectorWidth = inspectorWidth
-        splitObservation = NotificationCenter.default.addObserver(
-            forName: NSSplitView.didResizeSubviewsNotification, object: splitView, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.splitResized() }
-        }
-        inspectorObservation = inspectorItem.observe(\.isCollapsed) { [weak self] _, _ in
-            MainActor.assumeIsolated { self?.inspectorCollapseChanged() }
-        }
-
-        sidebarToggle.target = self
-        sidebarToggle.action = #selector(toggleSidebar(_:))
-        window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(sidebarToggle, at: .leading))
-        inspectorToggle.target = self
-        inspectorToggle.action = #selector(toggleInspector(_:))
-        window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(inspectorToggle, at: .trailing))
-        return window
-    }
-}
-
-/// The hovered link's overlay. It only shows the link: clicks under it go
-/// to the terminal beneath.
-@MainActor
-final class WorkspaceLinkLabel: NSTextField {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

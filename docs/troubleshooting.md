@@ -2,7 +2,7 @@
 
 For first setup, start with the [minimal configuration](../README.md#first-session).
 For lifecycle behavior and confirmation preferences, see
-[Session lifecycle](usage.md#session-lifecycle).
+[Session lifecycle](usage/sessions.md#session-lifecycle).
 
 - **Icons, hooks, or cached transcript data look wrong**: run `amx debug status`
   first, then `amx debug explain` with the trace/request/source-event ID from
@@ -287,7 +287,7 @@ amx backend status --check  # the same, and exit 1 when launching on tmux would 
 `--check` exits 1 when there is no usable tmux server. `amx doctor` raises the same
 problems under `backend_` plus the code `backend status` gives them, with that
 report's hint as the remediation, so the two never advise different things.
-[When tmux cannot be used](usage.md#when-tmux-cannot-be-used-and-what-doctor-reports)
+[When tmux cannot be used](usage/launching.md#when-tmux-cannot-be-used-and-what-doctor-reports)
 has the full table of what doctor reports.
 
 - **`backend_tmux_unavailable`**: no tmux 3.5 or newer could be used. The

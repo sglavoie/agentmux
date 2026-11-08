@@ -16,7 +16,7 @@ dashboard or overview to refresh its captured launch destination.
 
 If tmux is unavailable, launches report the setup error; run
 `amx backend status --check` to see the required fix. See
-[launch destinations](usage.md#launch-destinations) for all entry points.
+[launch destinations](usage/launching.md#launch-destinations) for all entry points.
 
 ## Upgrading from the old dashboard shortcuts
 
@@ -24,7 +24,7 @@ The dashboard used to bind roughly thirty keys directly. It now has twelve
 command bindings (`Enter`, `s`, `S`, `t`, `/`, `Esc`, `l`, `i`, `p`, `u`, `?`,
 and `q`/`Ctrl+C`), plus the keys that move the cursor or open a surface (`a`,
 `:`, `n`/`N`, `Tab`/`Shift+Tab`, and the paging keys). The rest of the
-capabilities moved to the two surfaces the [dashboard](usage.md#dashboard)
+capabilities moved to the two surfaces the [dashboard](usage/dashboard.md#dashboard)
 opens, the actions menu (`a`) and the command palette (`:`); no capability was
 dropped. A retired key is *unbound* rather than rebound: pressing it does
 nothing at all.
@@ -74,7 +74,7 @@ Old installations may still contain retired database artifacts. This is a
 manual deployment cleanup, not a recurring migration. First build and pass
 `just acceptance`, stop the installed daemon, and confirm `amx daemon status`
 no longer reports it running. Preserve the caches and assets listed under
-[Local storage](usage.md#local-storage), then remove only these entries from
+[Local storage](usage/plans.md#local-storage), then remove only these entries from
 `~/.local/share/agent-mux/`:
 
 ```text

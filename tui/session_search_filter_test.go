@@ -99,15 +99,17 @@ func sessionSearchFilterModel(t *testing.T) Model {
 	// Empty readers map is sufficient because both entries have search
 	// sidecars (the fast path skips reader lookups entirely).
 	m := Model{
-		mode:              ModeSessionSearch,
-		width:             100,
-		height:            30,
-		cfg:               &config.Config{},
-		transcriptIndex:   idx,
-		transcriptReaders: map[string]transcript.Reader{},
-		sessionResults: []transcript.Result{
-			{Meta: hit, Preview: hit.Snippet},
-			{Meta: miss, Preview: miss.Snippet},
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: 30,
+		cfg:    &config.Config{},
+		modelHistoryState: modelHistoryState{
+			transcriptIndex:   idx,
+			transcriptReaders: map[string]transcript.Reader{},
+			sessionResults: []transcript.Result{
+				{Meta: hit, Preview: hit.Snippet},
+				{Meta: miss, Preview: miss.Snippet},
+			},
 		},
 	}
 	return m
@@ -117,10 +119,12 @@ func TestCurrentSessionQueryAlwaysRequestsMainSessions(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		sessionQuery:  "needle",
-		filterHarness: []string{harness.Claude},
-		filterProfile: []string{"work"},
-		filterProject: []string{"api"},
+		modelHistoryState: modelHistoryState{
+			sessionQuery:  "needle",
+			filterHarness: []string{harness.Claude},
+			filterProfile: []string{"work"},
+			filterProject: []string{"api"},
+		},
 	}
 	q := m.currentSessionQuery()
 	if !q.MainOnly {

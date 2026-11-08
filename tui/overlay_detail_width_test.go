@@ -76,10 +76,12 @@ func TestDeleteChoiceHeaderPadsEmojiTitleIcon(t *testing.T) {
 		Path:    "/tmp/demo.jsonl",
 	}
 	m := Model{
-		mode:         ModeDeleteChoice,
-		width:        100,
-		height:       40,
-		deleteTarget: &target,
+		mode:   ModeDeleteChoice,
+		width:  100,
+		height: 40,
+		modelHistoryState: modelHistoryState{
+			deleteTarget: &target,
+		},
 	}
 	out := stripAnsi(renderDeleteChoice(m))
 	if !strings.Contains(out, `Delete "🗣commscoach"?`) {

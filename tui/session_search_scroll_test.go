@@ -24,11 +24,13 @@ func sessionSearchScrollFixture(t *testing.T, rows, height int) Model {
 		}
 	}
 	m := Model{
-		mode:           ModeSessionSearch,
-		width:          100,
-		height:         height,
-		sessionResults: results,
-		cfg:            &config.Config{},
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: height,
+		modelHistoryState: modelHistoryState{
+			sessionResults: results,
+		},
+		cfg: &config.Config{},
 	}
 	if visible := sessionSearchVisibleHeight(m); visible >= rows {
 		t.Fatalf("sessionSearchScrollFixture: visible budget %d not smaller than rows %d; tighten the height", visible, rows)

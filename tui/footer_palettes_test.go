@@ -458,51 +458,68 @@ func footerAvailabilityCases() []footerAvailabilityCase {
 		{
 			name:    "session search",
 			entries: sessionSearchFooterPalette,
-			model: Model{sessionCursor: 0, sessionResults: []transcript.Result{
-				{Meta: transcript.SessionMeta{ID: "abc123", Path: "/tmp/session.jsonl"}},
-			}},
+			model: Model{
+				modelHistoryState: modelHistoryState{
+					sessionCursor: 0,
+					sessionResults: []transcript.Result{
+						{Meta: transcript.SessionMeta{ID: "abc123", Path: "/tmp/session.jsonl"}},
+					},
+				},
+			},
 			key: "c", label: "continue",
 		},
 		{
 			name:    "session view",
 			entries: sessionViewFooterPalette,
 			model: Model{
-				viewerSession:    &transcript.SessionMeta{ID: "abc123", Path: "/tmp/session.jsonl"},
-				viewerMessages:   []transcript.Message{{}},
-				viewerMatchLines: []int{0},
+				modelHistoryState: modelHistoryState{
+					viewerSession:    &transcript.SessionMeta{ID: "abc123", Path: "/tmp/session.jsonl"},
+					viewerMessages:   []transcript.Message{{}},
+					viewerMatchLines: []int{0},
+				},
 			},
 			key: "f", label: "fork",
 		},
 		{
 			name:    "plan search",
 			entries: planSearchFooterPalette,
-			model: Model{planCursor: 0, planResults: []plans.Result{
-				{Meta: plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}},
-			}},
+			model: Model{
+				modelPlanState: modelPlanState{
+					planCursor: 0,
+					planResults: []plans.Result{
+						{Meta: plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}},
+					},
+				},
+			},
 			key: "O", label: "editor",
 		},
 		{
 			name:    "plan view",
 			entries: planViewFooterPalette,
 			model: Model{
-				viewerPlan:           &plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"},
-				planViewerLines:      []string{"body"},
-				planViewerMatchLines: []int{0},
+				modelPlanState: modelPlanState{
+					viewerPlan:           &plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"},
+					planViewerLines:      []string{"body"},
+					planViewerMatchLines: []int{0},
+				},
 			},
 			key: "O", label: "editor",
 		},
 		{
 			name:    "worktrees",
 			entries: worktreesFooterPalette,
-			model: Model{worktreeCursor: 0, worktreeFiltered: []actions.WorktreeView{
-				{Entry: worktree.Entry{Path: "/tmp/worktree", Exists: true}},
-			}},
+			model: Model{
+				worktreeCursor: 0,
+				worktreeFiltered: []actions.WorktreeView{
+					{Entry: worktree.Entry{Path: "/tmp/worktree", Exists: true}},
+				},
+			},
 			key: "o", label: "shell",
 		},
 		{
 			name:    "asl response",
 			entries: aslResponseFooterPalette,
-			model:   Model{aslResponse: asl.ResponseState{QuestionIDs: []string{"q1", "q2"}}},
+			model:   Model{modelASLState: modelASLState{aslResponse: asl.ResponseState{QuestionIDs: []string{"q1", "q2"}}}},
 			key:     "ctrl+n/p", label: "question",
 		},
 	}

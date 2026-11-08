@@ -31,13 +31,15 @@ func viewerActionConfig() *config.Config {
 func viewerActionModel() Model {
 	meta := viewerActionMeta()
 	return Model{
-		mode:              ModeSessionView,
-		width:             200,
-		height:            30,
-		cfg:               viewerActionConfig(),
-		transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
-		viewerSession:     &meta,
-		viewerMessages:    []transcript.Message{{Role: "user", Text: "hello"}},
+		mode:   ModeSessionView,
+		width:  200,
+		height: 30,
+		cfg:    viewerActionConfig(),
+		modelHistoryState: modelHistoryState{
+			transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+			viewerSession:     &meta,
+			viewerMessages:    []transcript.Message{{Role: "user", Text: "hello"}},
+		},
 	}
 }
 
@@ -181,12 +183,14 @@ func TestSessionSearchContinuityFlowsStillReturnToSearch(t *testing.T) {
 
 	meta := viewerActionMeta()
 	base := Model{
-		mode:              ModeSessionSearch,
-		width:             200,
-		height:            30,
-		cfg:               viewerActionConfig(),
-		transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
-		sessionResults:    []transcript.Result{{Meta: meta}},
+		mode:   ModeSessionSearch,
+		width:  200,
+		height: 30,
+		cfg:    viewerActionConfig(),
+		modelHistoryState: modelHistoryState{
+			transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+			sessionResults:    []transcript.Result{{Meta: meta}},
+		},
 	}
 
 	updated, _ := base.Update(keyPress("w"))

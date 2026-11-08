@@ -25,21 +25,23 @@ func TestRenderDeleteChoiceOverlayComposition(t *testing.T) {
 		Path:    "/tmp/demo.jsonl",
 	}
 	m := Model{
-		mode:         ModeDeleteChoice,
-		width:        100,
-		height:       40,
-		deleteTarget: &target,
-		cfg:          &config.Config{},
-		sessionResults: []transcript.Result{
-			{Meta: transcript.SessionMeta{
-				ID:        "abc",
-				Harness:   "claude",
-				Profile:   "work",
-				Project:   "agentmux",
-				StartedAt: now.Add(-time.Hour),
-				LastAt:    now,
-			}},
+		mode:   ModeDeleteChoice,
+		width:  100,
+		height: 40,
+		modelHistoryState: modelHistoryState{
+			deleteTarget: &target,
+			sessionResults: []transcript.Result{
+				{Meta: transcript.SessionMeta{
+					ID:        "abc",
+					Harness:   "claude",
+					Profile:   "work",
+					Project:   "agentmux",
+					StartedAt: now.Add(-time.Hour),
+					LastAt:    now,
+				}},
+			},
 		},
+		cfg: &config.Config{},
 	}
 
 	out := m.render()
@@ -72,12 +74,14 @@ func TestRenderChipPickerOverlayNarrowTerminal(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:              ModeChipPicker,
-		width:             20,
-		height:            10,
-		chipPickerKind:    chipPickerHarness,
-		chipPickerOptions: []string{"", "claude", "codex"},
-		cfg:               &config.Config{},
+		mode:   ModeChipPicker,
+		width:  20,
+		height: 10,
+		modelHistoryState: modelHistoryState{
+			chipPickerKind:    chipPickerHarness,
+			chipPickerOptions: []string{"", "claude", "codex"},
+		},
+		cfg: &config.Config{},
 	}
 
 	out := m.render()
@@ -103,11 +107,13 @@ func TestRenderDeleteChoiceOverlayNarrowTerminal(t *testing.T) {
 		Path:    "/tmp/demo.jsonl",
 	}
 	m := Model{
-		mode:         ModeDeleteChoice,
-		width:        20,
-		height:       10,
-		deleteTarget: &target,
-		cfg:          &config.Config{},
+		mode:   ModeDeleteChoice,
+		width:  20,
+		height: 10,
+		modelHistoryState: modelHistoryState{
+			deleteTarget: &target,
+		},
+		cfg: &config.Config{},
 	}
 
 	out := m.render()

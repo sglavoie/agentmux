@@ -113,7 +113,7 @@ func TestModalAndStandaloneHintRowsUseFooterBindings(t *testing.T) {
 		{name: "command palette", view: renderCommandPalette(commandPaletteTestModel(100, 40)), key: "enter"},
 		{name: "detail", view: detailFooter(Model{}, 10, 10), key: "t"},
 		{name: "timeline", view: renderTimeline(Model{width: 100, height: 30}), key: "t"},
-		{name: "delete choice", view: renderDeleteChoice(Model{deleteTarget: &target}), key: "[i]"},
+		{name: "delete choice", view: renderDeleteChoice(Model{modelHistoryState: modelHistoryState{deleteTarget: &target}}), key: "[i]"},
 	}
 
 	for _, tc := range cases {

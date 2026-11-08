@@ -70,6 +70,31 @@ def export(ansi, code_format=CONSOLE_SVG_FORMAT, unique_id=None):
     return re.sub(r"@font-face\s*\{[^}]*\}", "", svg)
 
 
+def share_clip_paths(svg):
+    """Reuse identical line clips across frames, keeping the SVG self-contained."""
+    clips = {}
+    aliases = {}
+
+    def keep_first(match):
+        identifier, geometry = match.groups()
+        geometry = re.sub(r"\s+", " ", geometry).strip()
+        if geometry in clips:
+            aliases[identifier] = clips[geometry]
+            return ""
+        clips[geometry] = identifier
+        return match[0]
+
+    svg = re.sub(
+        r'<clipPath id="([^"]+)">\s*(.*?)\s*</clipPath>\n?',
+        keep_first, svg, flags=re.S,
+    )
+    svg = re.sub(
+        r"url\(#([^)]+)\)",
+        lambda match: f"url(#{aliases.get(match[1], match[1])})", svg,
+    )
+    return re.sub(r"<defs>\s*</defs>\n?", "", svg)
+
+
 def animate(frames):
     total = sum(frame["hold_ms"] for frame in frames)
     width = int(re.search(r'viewBox="0 0 ([\d.]+)', export(frames[0]["ansi"], unique_id="amx")).group(1))
@@ -107,7 +132,7 @@ def animate(frames):
                       '<desc id="demo-description">Three scripted agent sessions. Inspect their output, '
                       'jump to the session needing permission, filter by harness, switch projects, '
                       'and find commands.</desc>\n    <!-- Generated', 1)
-    return svg.replace("@RULES@", "\n".join(rules)).replace("@FRAMES@", "\n".join(bodies))
+    return share_clip_paths(svg.replace("@RULES@", "\n".join(rules)).replace("@FRAMES@", "\n".join(bodies)))
 
 
 def main():

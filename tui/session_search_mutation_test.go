@@ -197,8 +197,10 @@ func TestRenderSessionViewCompactsSharedHomeProfiles(t *testing.T) {
 	}
 
 	out := stripAnsi(renderSessionView(Model{
-		width:         100,
-		viewerSession: &meta,
+		width: 100,
+		modelHistoryState: modelHistoryState{
+			viewerSession: &meta,
+		},
 	}))
 	if !strings.Contains(out, "Transcript: Foo  [work+2/claude]") {
 		t.Fatalf("viewer header did not render compact shared-home profile label:\n%s", out)

@@ -21,11 +21,13 @@ func chipPickerScrollFixture(t *testing.T, rows, height int) Model {
 		opts[i] = indexedRowName(i - 1)
 	}
 	m := Model{
-		mode:              ModeChipPicker,
-		width:             100,
-		height:            height,
-		chipPickerKind:    chipPickerProject,
-		chipPickerOptions: opts,
+		mode:   ModeChipPicker,
+		width:  100,
+		height: height,
+		modelHistoryState: modelHistoryState{
+			chipPickerKind:    chipPickerProject,
+			chipPickerOptions: opts,
+		},
 	}
 	if visible := chipPickerVisibleHeight(m); visible >= rows {
 		t.Fatalf("chipPickerScrollFixture: visible budget %d not smaller than rows %d; tighten the height", visible, rows)

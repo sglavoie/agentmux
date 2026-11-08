@@ -67,13 +67,15 @@ func planSearchTestModel(t *testing.T) Model {
 	var client any
 
 	m := Model{
-		mode:        ModePlanSearch,
-		width:       100,
-		height:      30,
-		cfg:         cfg,
-		client:      client,
-		plansIndex:  idx,
-		planResults: results,
+		mode:   ModePlanSearch,
+		width:  100,
+		height: 30,
+		cfg:    cfg,
+		client: client,
+		modelPlanState: modelPlanState{
+			plansIndex:  idx,
+			planResults: results,
+		},
 	}
 	return m
 }
@@ -93,12 +95,14 @@ func TestEnterPlanSearch_TransitionsModeAndDispatchesRefresh(t *testing.T) {
 	var client any
 
 	m := Model{
-		mode:       ModeList,
-		width:      100,
-		height:     30,
-		cfg:        cfg,
-		client:     client,
-		plansIndex: idx,
+		mode:   ModeList,
+		width:  100,
+		height: 30,
+		cfg:    cfg,
+		client: client,
+		modelPlanState: modelPlanState{
+			plansIndex: idx,
+		},
 	}
 	updated, cmd := m.enterPlanSearch()
 	got := updated.(Model)

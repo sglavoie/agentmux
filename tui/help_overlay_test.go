@@ -108,12 +108,14 @@ func overlayLoadViewerModel(t *testing.T) (Model, viewerMessagesLoadedMsg) {
 	t.Helper()
 	meta := viewerActionMeta()
 	base := Model{
-		mode:              ModeSessionSearch,
-		width:             80,
-		height:            40,
-		cfg:               viewerActionConfig(),
-		sessionResults:    []transcript.Result{{Meta: meta}},
-		transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+		mode:   ModeSessionSearch,
+		width:  80,
+		height: 40,
+		cfg:    viewerActionConfig(),
+		modelHistoryState: modelHistoryState{
+			sessionResults:    []transcript.Result{{Meta: meta}},
+			transcriptReaders: map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+		},
 	}
 	updated, cmd := base.enterSessionView(meta)
 	m := updated.(Model)
@@ -131,11 +133,13 @@ func overlayLoadPlanViewerModel(t *testing.T) (Model, planFilesLoadedMsg) {
 	t.Helper()
 	plan := plans.PlanMeta{Name: "plan-a", DirPath: "/tmp/plan-a"}
 	base := Model{
-		mode:        ModePlanSearch,
-		width:       80,
-		height:      40,
-		cfg:         viewerActionConfig(),
-		planResults: []plans.Result{{Meta: plan}},
+		mode:   ModePlanSearch,
+		width:  80,
+		height: 40,
+		cfg:    viewerActionConfig(),
+		modelPlanState: modelPlanState{
+			planResults: []plans.Result{{Meta: plan}},
+		},
 	}
 	updated, cmd := base.enterPlanView(plan)
 	m := updated.(Model)

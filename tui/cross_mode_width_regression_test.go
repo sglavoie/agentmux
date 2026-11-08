@@ -204,11 +204,13 @@ func TestCrossModeSessionSearchWidthAcrossFixture(t *testing.T) {
 	for _, width := range []int{80, 120, 160} {
 		t.Run("width-"+itoa(width), func(t *testing.T) {
 			m := Model{
-				mode:           ModeSessionSearch,
-				width:          width,
-				height:         30,
-				cfg:            cfg,
-				sessionResults: results,
+				mode:   ModeSessionSearch,
+				width:  width,
+				height: 30,
+				cfg:    cfg,
+				modelHistoryState: modelHistoryState{
+					sessionResults: results,
+				},
 			}
 			rendered := stripAnsi(renderSessionSearch(m))
 			for i, line := range strings.Split(rendered, "\n") {
@@ -235,9 +237,11 @@ func TestCrossModeViewerHeadersPadEmojiIconColumn(t *testing.T) {
 			m := Model{
 				width:  60,
 				height: 20,
-				viewerSession: &transcript.SessionMeta{
-					Project: tc.title,
-					Path:    "/tmp/" + tc.body + ".jsonl",
+				modelHistoryState: modelHistoryState{
+					viewerSession: &transcript.SessionMeta{
+						Project: tc.title,
+						Path:    "/tmp/" + tc.body + ".jsonl",
+					},
 				},
 			}
 			header := strings.SplitN(stripAnsi(renderSessionView(m)), "\n", 2)[0]
@@ -247,10 +251,12 @@ func TestCrossModeViewerHeadersPadEmojiIconColumn(t *testing.T) {
 			m := Model{
 				width:  60,
 				height: 20,
-				viewerPlan: &plans.PlanMeta{
-					Name:    tc.title,
-					DirPath: "/tmp/" + tc.body,
-					Files:   []string{"manifest.md"},
+				modelPlanState: modelPlanState{
+					viewerPlan: &plans.PlanMeta{
+						Name:    tc.title,
+						DirPath: "/tmp/" + tc.body,
+						Files:   []string{"manifest.md"},
+					},
 				},
 			}
 			header := strings.SplitN(stripAnsi(renderPlanView(m)), "\n", 2)[0]
@@ -311,10 +317,12 @@ func TestCrossModeDetailAndOverlayHeadersPadEmojiIconColumn(t *testing.T) {
 				Path:    "/tmp/demo.jsonl",
 			}
 			m := Model{
-				mode:         ModeDeleteChoice,
-				width:        100,
-				height:       40,
-				deleteTarget: &target,
+				mode:   ModeDeleteChoice,
+				width:  100,
+				height: 40,
+				modelHistoryState: modelHistoryState{
+					deleteTarget: &target,
+				},
 			}
 			out := stripAnsi(renderDeleteChoice(m))
 			assertContainsRenderedTitle(t, "delete-choice header", out, tc)

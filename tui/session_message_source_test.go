@@ -59,7 +59,7 @@ func TestSessionMessageSourcePickerPreservesAndResets(t *testing.T) {
 func TestSessionMessageSourceViewerMatches(t *testing.T) {
 	t.Parallel()
 
-	m := Model{mode: ModeSessionView, sessionQuery: "needle", filterMessageSource: "harness", viewerLoadSeq: 3, width: 80, height: 24}
+	m := Model{mode: ModeSessionView, modelHistoryState: modelHistoryState{sessionQuery: "needle", filterMessageSource: "harness", viewerLoadSeq: 3}, width: 80, height: 24}
 	loaded, _ := m.handleViewerMessagesLoaded(viewerMessagesLoadedMsg{seq: 3, messages: []transcript.Message{
 		{Role: "user", Text: "needle prompt"},
 		{Role: "assistant", Text: "needle reply"},

@@ -19,22 +19,24 @@ func TestRenderChipPickerOverlayComposition(t *testing.T) {
 
 	now := time.Now()
 	m := Model{
-		mode:              ModeChipPicker,
-		width:             100,
-		height:            40,
-		chipPickerKind:    chipPickerHarness,
-		chipPickerOptions: []string{"", "claude", "codex"},
-		cfg:               &config.Config{},
-		sessionResults: []transcript.Result{
-			{Meta: transcript.SessionMeta{
-				ID:        "abc",
-				Harness:   "claude",
-				Profile:   "work",
-				Project:   "agentmux",
-				StartedAt: now.Add(-time.Hour),
-				LastAt:    now,
-			}},
+		mode:   ModeChipPicker,
+		width:  100,
+		height: 40,
+		modelHistoryState: modelHistoryState{
+			chipPickerKind:    chipPickerHarness,
+			chipPickerOptions: []string{"", "claude", "codex"},
+			sessionResults: []transcript.Result{
+				{Meta: transcript.SessionMeta{
+					ID:        "abc",
+					Harness:   "claude",
+					Profile:   "work",
+					Project:   "agentmux",
+					StartedAt: now.Add(-time.Hour),
+					LastAt:    now,
+				}},
+			},
 		},
+		cfg: &config.Config{},
 	}
 
 	out := m.render()
@@ -65,12 +67,14 @@ func TestRenderChipPickerOverlayClampsOnTinyHeight(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:              ModeChipPicker,
-		width:             60,
-		height:            8,
-		chipPickerKind:    chipPickerProfile,
-		chipPickerOptions: []string{"", "work"},
-		cfg:               &config.Config{},
+		mode:   ModeChipPicker,
+		width:  60,
+		height: 8,
+		modelHistoryState: modelHistoryState{
+			chipPickerKind:    chipPickerProfile,
+			chipPickerOptions: []string{"", "work"},
+		},
+		cfg: &config.Config{},
 	}
 
 	out := m.render()

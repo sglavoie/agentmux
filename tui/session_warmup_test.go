@@ -68,7 +68,7 @@ func TestSessionCacheLoadMissingIndexStartsEmptyWarmRefresh(t *testing.T) {
 		t.Fatalf("cold cache snapshot = len %d results %d", msg.idx.Len(), len(msg.results))
 	}
 
-	m := Model{cfg: sessionWarmupTestConfig(), sessionCacheLoadInFlight: true, sessionLoading: true}
+	m := Model{cfg: sessionWarmupTestConfig(), modelHistoryState: modelHistoryState{sessionCacheLoadInFlight: true, sessionLoading: true}}
 	updated, cmd := m.Update(msg)
 	got := updated.(Model)
 	if got.sessionCacheLoadInFlight || !got.sessionRefreshInFlight || got.sessionLoading || got.transcriptIndex == nil || cmd == nil {
@@ -95,7 +95,7 @@ func TestSessionCacheLoadMalformedIndexPublishesRecoveringSnapshot(t *testing.T)
 		t.Fatalf("quarantined caches = %v, want one", matches)
 	}
 
-	m := Model{mode: ModeSessionSearch, cfg: sessionWarmupTestConfig(), sessionCacheLoadInFlight: true, sessionLoading: true, sessionSearchSeq: 4}
+	m := Model{mode: ModeSessionSearch, cfg: sessionWarmupTestConfig(), modelHistoryState: modelHistoryState{sessionCacheLoadInFlight: true, sessionLoading: true, sessionSearchSeq: 4}}
 	updated, cmd := m.Update(msg)
 	got := updated.(Model)
 	if got.transcriptIndex == nil || got.sessionRefreshErr == nil || !got.sessionRefreshInFlight || got.sessionLoading || cmd == nil {
@@ -180,11 +180,13 @@ func TestSessionWarmRefreshDoneUpdatesResults(t *testing.T) {
 		Meta: transcript.SessionMeta{ID: "refreshed", Harness: harness.Claude, LastAt: time.Now()},
 	}
 	m := Model{
-		cfg:                    sessionWarmupTestConfig(),
-		sessionRefreshInFlight: true,
-		sessionResults: []transcript.Result{{
-			Meta: transcript.SessionMeta{ID: "old", Harness: harness.Claude},
-		}},
+		cfg: sessionWarmupTestConfig(),
+		modelHistoryState: modelHistoryState{
+			sessionRefreshInFlight: true,
+			sessionResults: []transcript.Result{{
+				Meta: transcript.SessionMeta{ID: "old", Harness: harness.Claude},
+			}},
+		},
 	}
 
 	updated, cmd := m.Update(sessionWarmRefreshDoneMsg{

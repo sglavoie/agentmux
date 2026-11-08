@@ -117,41 +117,50 @@ func TestStatusBarFallbackBehavior(t *testing.T) {
 		{name: "detail", m: Model{mode: ModeDetail, width: 80, detailWindowID: 17}, want: "Session details: window 17"},
 		{
 			name: "detail on a tmux session",
-			m: Model{mode: ModeDetail, width: 80, detailWindowID: commands.PortableIDBase + 7, sessions: []session.RunningSession{{
-				WindowID: commands.PortableIDBase + 7, Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-7",
-			}}},
+			m: Model{
+				mode:           ModeDetail,
+				width:          80,
+				detailWindowID: commands.PortableIDBase + 7,
+				sessions: []session.RunningSession{{
+					WindowID: commands.PortableIDBase + 7, Backend: runtimesession.BackendTmux, RuntimeSessionID: "rs-7",
+				}},
+			},
 			want: "Session details: tmux session rs-7",
 		},
 		{name: "detail on an unlisted tmux session", m: Model{mode: ModeDetail, width: 80, detailWindowID: commands.PortableIDBase + 9}, want: "Session details"},
 		{name: "actions", m: Model{mode: ModeActions, width: 80}, want: "Session actions"},
 		{name: "command palette", m: Model{mode: ModeCommandPalette, width: 80, commandResults: make([]commands.Command[Model], 3)}, want: "Command Palette: 3 results"},
-		{name: "session search", m: Model{mode: ModeSessionSearch, width: 80, sessionResults: []transcript.Result{{}, {}}}, want: "Past Sessions: 2 results"},
+		{name: "session search", m: Model{mode: ModeSessionSearch, width: 80, modelHistoryState: modelHistoryState{sessionResults: []transcript.Result{{}, {}}}}, want: "Past Sessions: 2 results"},
 		{
 			name: "session view",
 			m: Model{
-				mode:           ModeSessionView,
-				width:          80,
-				viewerSession:  &transcript.SessionMeta{Project: "api"},
-				viewerMessages: []transcript.Message{{}, {}},
+				mode:  ModeSessionView,
+				width: 80,
+				modelHistoryState: modelHistoryState{
+					viewerSession:  &transcript.SessionMeta{Project: "api"},
+					viewerMessages: []transcript.Message{{}, {}},
+				},
 			},
 			want: "Transcript: api · 2 messages",
 		},
 		{name: "delete choice", m: Model{mode: ModeDeleteChoice, width: 80}, want: "Delete session"},
-		{name: "chip picker", m: Model{mode: ModeChipPicker, width: 80, chipPickerKind: chipPickerProject}, want: "Choose project"},
+		{name: "chip picker", m: Model{mode: ModeChipPicker, width: 80, modelHistoryState: modelHistoryState{chipPickerKind: chipPickerProject}}, want: "Choose project"},
 		{
 			name: "message detail",
 			m: Model{
-				mode:             ModeMessageDetail,
-				width:            80,
-				messageDetailIdx: 1,
-				viewerMessages:   []transcript.Message{{}, {}},
+				mode:  ModeMessageDetail,
+				width: 80,
+				modelHistoryState: modelHistoryState{
+					messageDetailIdx: 1,
+					viewerMessages:   []transcript.Message{{}, {}},
+				},
 			},
 			want: "Message detail: 2/2",
 		},
-		{name: "plan search", m: Model{mode: ModePlanSearch, width: 80, planResults: []plans.Result{{}, {}}}, want: "Plans: 2 results"},
-		{name: "plan search while a query runs", m: Model{mode: ModePlanSearch, width: 80, planLoading: true, planResults: []plans.Result{{}, {}}}, want: "Plans: 2 results · searching"},
-		{name: "plan search while scanning", m: Model{mode: ModePlanSearch, width: 80, planLoading: true, planScanSeq: 3}, want: "Plans: scanning"},
-		{name: "plan view", m: Model{mode: ModePlanView, width: 80, viewerPlan: &plans.PlanMeta{Name: "plan-a"}}, want: "Plan: plan-a"},
+		{name: "plan search", m: Model{mode: ModePlanSearch, width: 80, modelPlanState: modelPlanState{planResults: []plans.Result{{}, {}}}}, want: "Plans: 2 results"},
+		{name: "plan search while a query runs", m: Model{mode: ModePlanSearch, width: 80, modelPlanState: modelPlanState{planLoading: true, planResults: []plans.Result{{}, {}}}}, want: "Plans: 2 results · searching"},
+		{name: "plan search while scanning", m: Model{mode: ModePlanSearch, width: 80, modelPlanState: modelPlanState{planLoading: true, planScanSeq: 3}}, want: "Plans: scanning"},
+		{name: "plan view", m: Model{mode: ModePlanView, width: 80, modelPlanState: modelPlanState{viewerPlan: &plans.PlanMeta{Name: "plan-a"}}}, want: "Plan: plan-a"},
 	}
 
 	for _, tc := range cases {
@@ -276,10 +285,12 @@ func TestStatusBarPromotesTranscriptScanWithCachedResults(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:                   ModeSessionSearch,
-		width:                  100,
-		sessionRefreshInFlight: true,
-		sessionResults:         []transcript.Result{{}, {}},
+		mode:  ModeSessionSearch,
+		width: 100,
+		modelHistoryState: modelHistoryState{
+			sessionRefreshInFlight: true,
+			sessionResults:         []transcript.Result{{}, {}},
+		},
 	}
 
 	msg := fallbackStatusMessage(m)

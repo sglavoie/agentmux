@@ -577,8 +577,8 @@ func TestViewerFootersAdvertiseCopy(t *testing.T) {
 func TestFootersWhileTypingAQueryNameOnlyApplyAndCancel(t *testing.T) {
 	for name, m := range map[string]Model{
 		"launcher":      {mode: ModePicker, pickerSearchMode: true},
-		"past sessions": {mode: ModeSessionSearch, sessionSearchMode: true},
-		"plans":         {mode: ModePlanSearch, planSearchMode: true},
+		"past sessions": {mode: ModeSessionSearch, modelHistoryState: modelHistoryState{sessionSearchMode: true}},
+		"plans":         {mode: ModePlanSearch, modelPlanState: modelPlanState{planSearchMode: true}},
 		"worktrees":     {mode: ModeWorktrees, worktreeFilterMode: true},
 	} {
 		t.Run(name, func(t *testing.T) {

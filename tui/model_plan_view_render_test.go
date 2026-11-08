@@ -13,8 +13,10 @@ func TestRenderPlanViewBody_WrapsLongLineWithoutTruncation(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		width:           8,
-		planViewerLines: []string{"abcdefghijklmnopqrstuvwxTAIL"},
+		width: 8,
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{"abcdefghijklmnopqrstuvwxTAIL"},
+		},
 	}
 
 	out := stripAnsi(renderPlanViewBody(m, 10))
@@ -32,9 +34,11 @@ func TestRenderPlanViewBody_VisualScrollShowsWrappedTail(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		width:            8,
-		planViewerScroll: 3,
-		planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
+		width: 8,
+		modelPlanState: modelPlanState{
+			planViewerScroll: 3,
+			planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
+		},
 	}
 
 	out := stripAnsi(renderPlanViewBody(m, 3))
@@ -50,8 +54,10 @@ func TestRenderPlanViewBody_IndicatorsUseWrappedRowCount(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		width:           8,
-		planViewerLines: []string{"abcdefghijklmnopqrstuvwxTAIL"},
+		width: 8,
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{"abcdefghijklmnopqrstuvwxTAIL"},
+		},
 	}
 
 	top := stripAnsi(renderPlanViewBody(m, 3))
@@ -73,12 +79,14 @@ func TestRenderPlanViewBody_StylesEveryWrappedRowBySourceLine(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		width:           8,
-		planViewerLines: []string{"--- abcdefghijklmnop ---", "needleabcdefghijklmnop", "selectedabcdefghijklmnop"},
-		planViewerMatchLines: []int{
-			1,
+		width: 8,
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{"--- abcdefghijklmnop ---", "needleabcdefghijklmnop", "selectedabcdefghijklmnop"},
+			planViewerMatchLines: []int{
+				1,
+			},
+			planViewerCursor: 2,
 		},
-		planViewerCursor: 2,
 	}
 
 	out := renderPlanViewBody(m, 20)
@@ -107,13 +115,15 @@ func TestRenderPlanViewBody_RowsFitWithinModelWidth(t *testing.T) {
 
 	m := Model{
 		width: 12,
-		planViewerLines: []string{
-			"abcdefghijklmnopqrstuvwx",
-			"こんにちこんにちは",
-			"short",
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{
+				"abcdefghijklmnopqrstuvwx",
+				"こんにちこんにちは",
+				"short",
+			},
+			planViewerMatchLines: []int{0, 1},
+			planViewerCursor:     2,
 		},
-		planViewerMatchLines: []int{0, 1},
-		planViewerCursor:     2,
 	}
 
 	out := stripAnsi(renderPlanViewBody(m, 20))
@@ -129,8 +139,10 @@ func TestPlanViewerRows_ZeroWidthFallsBackToBoundedWrap(t *testing.T) {
 
 	line := strings.Repeat("x", layout.FallbackWidth+1)
 	rows := planViewerRows(Model{
-		width:           0,
-		planViewerLines: []string{line},
+		width: 0,
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{line},
+		},
 	})
 
 	if len(rows) != 2 {

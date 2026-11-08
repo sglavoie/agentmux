@@ -8,11 +8,13 @@ import (
 
 func TestPlanViewerYCopiesSelectedLine(t *testing.T) {
 	m := Model{
-		mode:             ModePlanView,
-		planViewerLines:  []string{"first", "selected"},
-		planViewerCursor: 1,
-		width:            80,
-		height:           20,
+		mode: ModePlanView,
+		modelPlanState: modelPlanState{
+			planViewerLines:  []string{"first", "selected"},
+			planViewerCursor: 1,
+		},
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("y"))
@@ -28,11 +30,13 @@ func TestPlanViewerYCopiesSelectedLine(t *testing.T) {
 func TestPlanViewerYCopiesRawLineNotRenderedTruncation(t *testing.T) {
 	raw := "this plan line is intentionally longer than the rendered viewport"
 	m := Model{
-		mode:             ModePlanView,
-		planViewerLines:  []string{raw},
-		planViewerCursor: 0,
-		width:            16,
-		height:           20,
+		mode: ModePlanView,
+		modelPlanState: modelPlanState{
+			planViewerLines:  []string{raw},
+			planViewerCursor: 0,
+		},
+		width:  16,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("y"))
@@ -59,17 +63,21 @@ func TestPlanViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
 		{
 			name: "cursor below zero",
 			m: Model{
-				mode:             ModePlanView,
-				planViewerLines:  []string{"present"},
-				planViewerCursor: -1,
+				mode: ModePlanView,
+				modelPlanState: modelPlanState{
+					planViewerLines:  []string{"present"},
+					planViewerCursor: -1,
+				},
 			},
 		},
 		{
 			name: "cursor past end",
 			m: Model{
-				mode:             ModePlanView,
-				planViewerLines:  []string{"present"},
-				planViewerCursor: 1,
+				mode: ModePlanView,
+				modelPlanState: modelPlanState{
+					planViewerLines:  []string{"present"},
+					planViewerCursor: 1,
+				},
 			},
 		},
 	}
@@ -91,13 +99,15 @@ func TestPlanViewerYNoOpForEmptyOrInvalidSelection(t *testing.T) {
 func TestPlanSearchCopyPathCopiesSelectedPlanPath(t *testing.T) {
 	m := Model{
 		mode: ModePlanSearch,
-		planResults: []plans.Result{
-			{Meta: plans.PlanMeta{DirPath: "/tmp/first-plan"}},
-			{Meta: plans.PlanMeta{DirPath: "/tmp/selected-plan"}},
+		modelPlanState: modelPlanState{
+			planResults: []plans.Result{
+				{Meta: plans.PlanMeta{DirPath: "/tmp/first-plan"}},
+				{Meta: plans.PlanMeta{DirPath: "/tmp/selected-plan"}},
+			},
+			planCursor: 1,
 		},
-		planCursor: 1,
-		width:      80,
-		height:     20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("Y"))
@@ -124,25 +134,31 @@ func TestPlanSearchCopyPathNoOpForEmptyOrInvalidSelection(t *testing.T) {
 		{
 			name: "cursor below zero",
 			m: Model{
-				mode:        ModePlanSearch,
-				planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: "/tmp/present-plan"}}},
-				planCursor:  -1,
+				mode: ModePlanSearch,
+				modelPlanState: modelPlanState{
+					planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: "/tmp/present-plan"}}},
+					planCursor:  -1,
+				},
 			},
 		},
 		{
 			name: "cursor past end",
 			m: Model{
-				mode:        ModePlanSearch,
-				planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: "/tmp/present-plan"}}},
-				planCursor:  1,
+				mode: ModePlanSearch,
+				modelPlanState: modelPlanState{
+					planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: "/tmp/present-plan"}}},
+					planCursor:  1,
+				},
 			},
 		},
 		{
 			name: "empty path",
 			m: Model{
-				mode:        ModePlanSearch,
-				planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: ""}}},
-				planCursor:  0,
+				mode: ModePlanSearch,
+				modelPlanState: modelPlanState{
+					planResults: []plans.Result{{Meta: plans.PlanMeta{DirPath: ""}}},
+					planCursor:  0,
+				},
 			},
 		},
 	}
@@ -165,15 +181,17 @@ func TestPlanSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:           ModePlanSearch,
-		planSearchMode: true,
-		planQuery:      "path:",
-		planResults: []plans.Result{
-			{Meta: plans.PlanMeta{DirPath: "/tmp/selected-plan"}},
+		mode: ModePlanSearch,
+		modelPlanState: modelPlanState{
+			planSearchMode: true,
+			planQuery:      "path:",
+			planResults: []plans.Result{
+				{Meta: plans.PlanMeta{DirPath: "/tmp/selected-plan"}},
+			},
+			planCursor: 0,
 		},
-		planCursor: 0,
-		width:      80,
-		height:     20,
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("Y"))
@@ -188,10 +206,12 @@ func TestPlanSearchCopyPathIgnoredDuringTextEntry(t *testing.T) {
 
 func TestPlanViewerCopyPathCopiesPlanPath(t *testing.T) {
 	m := Model{
-		mode:       ModePlanView,
-		viewerPlan: &plans.PlanMeta{DirPath: "/tmp/current-plan"},
-		width:      80,
-		height:     20,
+		mode: ModePlanView,
+		modelPlanState: modelPlanState{
+			viewerPlan: &plans.PlanMeta{DirPath: "/tmp/current-plan"},
+		},
+		width:  80,
+		height: 20,
 	}
 
 	updated, cmd := m.Update(keyPress("Y"))
@@ -218,8 +238,10 @@ func TestPlanViewerCopyPathNoOpForNilOrEmptyPath(t *testing.T) {
 		{
 			name: "empty path",
 			m: Model{
-				mode:       ModePlanView,
-				viewerPlan: &plans.PlanMeta{},
+				mode: ModePlanView,
+				modelPlanState: modelPlanState{
+					viewerPlan: &plans.PlanMeta{},
+				},
 			},
 		},
 	}

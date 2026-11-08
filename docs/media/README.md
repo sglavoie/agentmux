@@ -33,6 +33,7 @@ runs only on the chosen physical Mac, never in GitHub Actions.
 frames with synthetic Claude, Codex, and Copilot sessions. CSS switches between
 the frames, preserving sharp text at any scale. It uses no JavaScript, external
 fonts, or embedded screenshots. Reduced-motion viewers see the opening frame.
+Frames share their line-clipping definitions to keep the generated SVG small.
 
 The offline `TestReadmeDemo` fixture drives the dashboard with keyboard input
 and checks each frame for layout issues and expected content. The renderer

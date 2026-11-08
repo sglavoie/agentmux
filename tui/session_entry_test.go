@@ -46,11 +46,13 @@ func TestLegacySessionSearchKeepsEnterViewerAndAddsContinuityActions(t *testing.
 
 	meta := transcript.SessionMeta{ID: "source-1", Harness: harness.Claude, Profile: "work", Project: "api"}
 	base := Model{
-		mode:                   ModeSessionSearch,
-		cfg:                    &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
-		transcriptReaders:      map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
-		sessionResults:         []transcript.Result{{Meta: meta}},
-		sessionRefreshInFlight: true,
+		mode: ModeSessionSearch,
+		cfg:  &config.Config{Accounts: []config.Account{{Name: "work", Harness: harness.Claude}, {Name: "target", Harness: harness.Codex}}},
+		modelHistoryState: modelHistoryState{
+			transcriptReaders:      map[string]transcript.Reader{harness.Claude: transcript.NewClaudeReader()},
+			sessionResults:         []transcript.Result{{Meta: meta}},
+			sessionRefreshInFlight: true,
+		},
 	}
 
 	updated, cmd := base.Update(keyPress("enter"))
@@ -221,13 +223,15 @@ func TestEnterSessionSearchWithWarmCacheRefreshesAndShowsNewTranscript(t *testin
 		},
 	}
 	m := Model{
-		mode:              ModeList,
-		width:             100,
-		height:            30,
-		cfg:               &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
-		transcriptIndex:   idx,
-		transcriptReaders: readers,
-		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
+		mode:   ModeList,
+		width:  100,
+		height: 30,
+		cfg:    &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
+		modelHistoryState: modelHistoryState{
+			transcriptIndex:   idx,
+			transcriptReaders: readers,
+			sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
+		},
 	}
 
 	got, cmd := runDashboardCommand(t, m, commands.SearchAllSessions)
@@ -338,15 +342,17 @@ func TestEnterSessionSearchWithPreservedQueryRefreshesMatchingRows(t *testing.T)
 		},
 	}
 	m := Model{
-		mode:              ModeList,
-		width:             100,
-		height:            30,
-		cfg:               &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
-		transcriptIndex:   idx,
-		transcriptReaders: readers,
-		sessionQuery:      "needle",
-		sessionSearchSeq:  7,
-		sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
+		mode:   ModeList,
+		width:  100,
+		height: 30,
+		cfg:    &config.Config{Profiles: []config.Account{{Name: "work", Harness: harness.Claude, HomeDir: home}}},
+		modelHistoryState: modelHistoryState{
+			transcriptIndex:   idx,
+			transcriptReaders: readers,
+			sessionQuery:      "needle",
+			sessionSearchSeq:  7,
+			sessionResults:    []transcript.Result{{Meta: warmed, Preview: warmed.Snippet}},
+		},
 	}
 
 	entered, cmd := m.enterSessionSearch()

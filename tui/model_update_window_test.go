@@ -25,12 +25,14 @@ func TestWindowSizeMsg_ResizeKeepsSessionSearchCursorVisible(t *testing.T) {
 		}
 	}
 	m := Model{
-		mode:           ModeSessionSearch,
-		width:          100,
-		height:         40,
-		cfg:            &config.Config{},
-		sessionResults: results,
-		sessionCursor:  50,
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: 40,
+		cfg:    &config.Config{},
+		modelHistoryState: modelHistoryState{
+			sessionResults: results,
+			sessionCursor:  50,
+		},
 	}
 	scrollSessionSearchToCursor(&m)
 
@@ -58,12 +60,14 @@ func TestWindowSizeMsg_ResizeKeepsPlanSearchCursorVisible(t *testing.T) {
 		}
 	}
 	m := Model{
-		mode:        ModePlanSearch,
-		width:       100,
-		height:      40,
-		cfg:         &config.Config{},
-		planResults: results,
-		planCursor:  50,
+		mode:   ModePlanSearch,
+		width:  100,
+		height: 40,
+		cfg:    &config.Config{},
+		modelPlanState: modelPlanState{
+			planResults: results,
+			planCursor:  50,
+		},
 	}
 	scrollPlanSearchToCursor(&m)
 
@@ -86,12 +90,14 @@ func TestWindowSizeMsg_ResizeClampsPlanViewerVisualScroll(t *testing.T) {
 		width:  8,
 		height: 8,
 		cfg:    &config.Config{},
-		planViewerLines: []string{
-			"abcdefghijklmnopqrstuvwx",
-			"cursor line",
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{
+				"abcdefghijklmnopqrstuvwx",
+				"cursor line",
+			},
+			planViewerCursor: 1,
+			planViewerScroll: 99,
 		},
-		planViewerCursor: 1,
-		planViewerScroll: 99,
 	}
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 8})

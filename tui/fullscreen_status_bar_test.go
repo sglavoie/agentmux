@@ -90,22 +90,22 @@ func TestFullScreenModeErrorsMirrorToStatusBar(t *testing.T) {
 	}{
 		{
 			name: "session search",
-			m:    Model{mode: ModeSessionSearch, width: 80, sessionSearchErr: errors.New("bad query")},
+			m:    Model{mode: ModeSessionSearch, width: 80, modelHistoryState: modelHistoryState{sessionSearchErr: errors.New("bad query")}},
 			want: "Search error: bad query",
 		},
 		{
 			name: "session viewer",
-			m:    Model{mode: ModeSessionView, width: 80, viewerLoadErr: errors.New("missing transcript")},
+			m:    Model{mode: ModeSessionView, width: 80, modelHistoryState: modelHistoryState{viewerLoadErr: errors.New("missing transcript")}},
 			want: "Read error: missing transcript",
 		},
 		{
 			name: "plan search",
-			m:    Model{mode: ModePlanSearch, width: 80, planRefreshErr: errors.New("scan failed")},
+			m:    Model{mode: ModePlanSearch, width: 80, modelPlanState: modelPlanState{planRefreshErr: errors.New("scan failed")}},
 			want: "Refresh error: scan failed",
 		},
 		{
 			name: "plan viewer",
-			m:    Model{mode: ModePlanView, width: 80, planViewerLoadErr: errors.New("missing file")},
+			m:    Model{mode: ModePlanView, width: 80, modelPlanState: modelPlanState{planViewerLoadErr: errors.New("missing file")}},
 			want: "Read error: missing file",
 		},
 	}
@@ -139,12 +139,14 @@ func TestSessionSearchOverlaysReserveStickyStatusBar(t *testing.T) {
 		{
 			name: "chip picker",
 			m: Model{
-				mode:              ModeChipPicker,
-				width:             80,
-				height:            10,
-				cfg:               &config.Config{},
-				chipPickerKind:    chipPickerProject,
-				chipPickerOptions: []string{"", "api", "web"},
+				mode:   ModeChipPicker,
+				width:  80,
+				height: 10,
+				cfg:    &config.Config{},
+				modelHistoryState: modelHistoryState{
+					chipPickerKind:    chipPickerProject,
+					chipPickerOptions: []string{"", "api", "web"},
+				},
 			},
 			status: "Choose project",
 			footer: "/ search",
@@ -152,11 +154,13 @@ func TestSessionSearchOverlaysReserveStickyStatusBar(t *testing.T) {
 		{
 			name: "delete choice",
 			m: Model{
-				mode:         ModeDeleteChoice,
-				width:        80,
-				height:       10,
-				cfg:          &config.Config{},
-				deleteTarget: &target,
+				mode:   ModeDeleteChoice,
+				width:  80,
+				height: 10,
+				cfg:    &config.Config{},
+				modelHistoryState: modelHistoryState{
+					deleteTarget: &target,
+				},
 			},
 			status: "Delete session",
 			footer: "[i] index only",
@@ -198,11 +202,13 @@ func fullScreenSessionSearchModel(total, height int) Model {
 		}
 	}
 	return Model{
-		mode:           ModeSessionSearch,
-		width:          100,
-		height:         height,
-		cfg:            &config.Config{},
-		sessionResults: results,
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelHistoryState: modelHistoryState{
+			sessionResults: results,
+		},
 	}
 }
 
@@ -212,12 +218,14 @@ func fullScreenSessionViewModel(total, height int) Model {
 		messages[i] = transcript.Message{Role: "user", Text: indexedRowName(i)}
 	}
 	return Model{
-		mode:           ModeSessionView,
-		width:          100,
-		height:         height,
-		cfg:            &config.Config{},
-		viewerSession:  &transcript.SessionMeta{Project: "api", Path: "/tmp/api-session.jsonl"},
-		viewerMessages: messages,
+		mode:   ModeSessionView,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelHistoryState: modelHistoryState{
+			viewerSession:  &transcript.SessionMeta{Project: "api", Path: "/tmp/api-session.jsonl"},
+			viewerMessages: messages,
+		},
 	}
 }
 
@@ -227,11 +235,13 @@ func fullScreenPlanSearchModel(total, height int) Model {
 		results[i] = plans.Result{Meta: plans.PlanMeta{Name: indexedRowName(i), DirPath: "/tmp/plan-" + indexedRowName(i)}}
 	}
 	return Model{
-		mode:        ModePlanSearch,
-		width:       100,
-		height:      height,
-		cfg:         &config.Config{},
-		planResults: results,
+		mode:   ModePlanSearch,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelPlanState: modelPlanState{
+			planResults: results,
+		},
 	}
 }
 
@@ -241,12 +251,14 @@ func fullScreenPlanViewModel(total, height int) Model {
 		lines[i] = indexedRowName(i)
 	}
 	return Model{
-		mode:             ModePlanView,
-		width:            100,
-		height:           height,
-		cfg:              &config.Config{},
-		viewerPlan:       &plans.PlanMeta{Name: "api-plan", DirPath: "/tmp/api-plan"},
-		planViewerLines:  lines,
-		planViewerCursor: 0,
+		mode:   ModePlanView,
+		width:  100,
+		height: height,
+		cfg:    &config.Config{},
+		modelPlanState: modelPlanState{
+			viewerPlan:       &plans.PlanMeta{Name: "api-plan", DirPath: "/tmp/api-plan"},
+			planViewerLines:  lines,
+			planViewerCursor: 0,
+		},
 	}
 }

@@ -14,14 +14,18 @@ func TestRenderSessionViewEmojiTitleReservesIconColumn(t *testing.T) {
 	t.Parallel()
 
 	emoji := Model{
-		width:         60,
-		height:        20,
-		viewerSession: &transcript.SessionMeta{Project: "🗣commscoach", Path: "/tmp/a.jsonl"},
+		width:  60,
+		height: 20,
+		modelHistoryState: modelHistoryState{
+			viewerSession: &transcript.SessionMeta{Project: "🗣commscoach", Path: "/tmp/a.jsonl"},
+		},
 	}
 	plain := Model{
-		width:         60,
-		height:        20,
-		viewerSession: &transcript.SessionMeta{Project: "Foocoach", Path: "/tmp/b.jsonl"},
+		width:  60,
+		height: 20,
+		modelHistoryState: modelHistoryState{
+			viewerSession: &transcript.SessionMeta{Project: "Foocoach", Path: "/tmp/b.jsonl"},
+		},
 	}
 
 	emojiHeader := strings.SplitN(stripAnsi(renderSessionView(emoji)), "\n", 2)[0]
@@ -44,14 +48,18 @@ func TestRenderPlanViewEmojiTitleReservesIconColumn(t *testing.T) {
 	// "🗣" is treated as a 2-cell project icon, so the helper must not add
 	// a trailing space. A plain ASCII name is left alone.
 	emoji := Model{
-		width:      60,
-		height:     20,
-		viewerPlan: &plans.PlanMeta{Name: "🗣commscoach", DirPath: "/tmp/a", Files: []string{"manifest.md"}},
+		width:  60,
+		height: 20,
+		modelPlanState: modelPlanState{
+			viewerPlan: &plans.PlanMeta{Name: "🗣commscoach", DirPath: "/tmp/a", Files: []string{"manifest.md"}},
+		},
 	}
 	plain := Model{
-		width:      60,
-		height:     20,
-		viewerPlan: &plans.PlanMeta{Name: "commscoach", DirPath: "/tmp/b", Files: []string{"manifest.md"}},
+		width:  60,
+		height: 20,
+		modelPlanState: modelPlanState{
+			viewerPlan: &plans.PlanMeta{Name: "commscoach", DirPath: "/tmp/b", Files: []string{"manifest.md"}},
+		},
 	}
 
 	emojiHeader := strings.SplitN(stripAnsi(renderPlanView(emoji)), "\n", 2)[0]
@@ -88,12 +96,14 @@ func TestMessageDetailBodyLinesGraphemeSafe(t *testing.T) {
 	// clusters whole; the resulting body lines must not exceed the
 	// requested width when measured through layout.StyledWidth.
 	m := Model{
-		mode:             ModeMessageDetail,
-		width:            12,
-		height:           20,
-		messageDetailIdx: 0,
-		viewerMessages: []transcript.Message{
-			{Role: "user", Text: strings.Repeat("🗣", 30)},
+		mode:   ModeMessageDetail,
+		width:  12,
+		height: 20,
+		modelHistoryState: modelHistoryState{
+			messageDetailIdx: 0,
+			viewerMessages: []transcript.Message{
+				{Role: "user", Text: strings.Repeat("🗣", 30)},
+			},
 		},
 	}
 	lines := messageDetailBodyLines(m)

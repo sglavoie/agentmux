@@ -22,7 +22,7 @@ func TestSessionDetailQuestionMarkOpensHelpAndReturns(t *testing.T) {
 }
 
 func TestHistoryOnlyFooterSaysEscQuits(t *testing.T) {
-	m := Model{mode: ModeSessionSearch, width: 220, historyOnly: true}
+	m := Model{mode: ModeSessionSearch, width: 220, modelHistoryState: modelHistoryState{historyOnly: true}}
 	if got := stripAnsi(renderFooter(m)); !strings.Contains(got, "esc quit") || strings.Contains(got, "esc back") {
 		t.Fatalf("standalone Past Sessions footer = %q, want esc quit", got)
 	}
@@ -70,8 +70,8 @@ func TestQLeavesListViewsInOneStep(t *testing.T) {
 		name string
 		m    Model
 	}{
-		{"past sessions", Model{mode: ModeSessionSearch, width: 220, sessionQuery: "api"}},
-		{"plans", Model{mode: ModePlanSearch, width: 220, planQuery: "api"}},
+		{"past sessions", Model{mode: ModeSessionSearch, width: 220, modelHistoryState: modelHistoryState{sessionQuery: "api"}}},
+		{"plans", Model{mode: ModePlanSearch, width: 220, modelPlanState: modelPlanState{planQuery: "api"}}},
 		{"worktrees", Model{mode: ModeWorktrees, width: 220, worktreeFilter: "api"}},
 	}
 	for _, tc := range cases {

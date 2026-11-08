@@ -168,11 +168,13 @@ func TestPlanViewerPageKeysScrollWrappedRowsWithinOneLogicalLine(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:             ModePlanView,
-		width:            8,
-		height:           8,
-		planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
-		planViewerCursor: 0,
+		mode:   ModePlanView,
+		width:  8,
+		height: 8,
+		modelPlanState: modelPlanState{
+			planViewerLines:  []string{"abcdefghijklmnopqrstuvwxTAIL"},
+			planViewerCursor: 0,
+		},
 	}
 
 	updated, _ := m.Update(keyPress("pgdown"))
@@ -210,12 +212,14 @@ func TestPlanViewerMatchJumpScrollsToFirstWrappedRow(t *testing.T) {
 		mode:   ModePlanView,
 		width:  8,
 		height: 8,
-		planViewerLines: []string{
-			"short",
-			"abcdefghijklmnop",
-			"needleabcdefghijklmnop",
+		modelPlanState: modelPlanState{
+			planViewerLines: []string{
+				"short",
+				"abcdefghijklmnop",
+				"needleabcdefghijklmnop",
+			},
+			planViewerMatchLines: []int{2},
 		},
-		planViewerMatchLines: []int{2},
 	}
 
 	m.jumpToNextPlanMatch(1)
@@ -237,11 +241,13 @@ func TestPlanViewerNavigationEmptyAndInvalidSelectionsClampSafely(t *testing.T) 
 	t.Parallel()
 
 	empty := Model{
-		mode:             ModePlanView,
-		width:            8,
-		height:           8,
-		planViewerCursor: 4,
-		planViewerScroll: 4,
+		mode:   ModePlanView,
+		width:  8,
+		height: 8,
+		modelPlanState: modelPlanState{
+			planViewerCursor: 4,
+			planViewerScroll: 4,
+		},
 	}
 	updated, _ := empty.Update(keyPress("pgdown"))
 	got := updated.(Model)
@@ -253,12 +259,14 @@ func TestPlanViewerNavigationEmptyAndInvalidSelectionsClampSafely(t *testing.T) 
 	}
 
 	m := Model{
-		mode:             ModePlanView,
-		width:            8,
-		height:           8,
-		planViewerLines:  []string{"first", "second"},
-		planViewerCursor: 99,
-		planViewerScroll: 99,
+		mode:   ModePlanView,
+		width:  8,
+		height: 8,
+		modelPlanState: modelPlanState{
+			planViewerLines:  []string{"first", "second"},
+			planViewerCursor: 99,
+			planViewerScroll: 99,
+		},
 	}
 	scrollPlanViewerToCursor(&m)
 	if m.planViewerCursor != 1 {
@@ -426,7 +434,7 @@ func TestPlanViewerQReturnsToThePlanList(t *testing.T) {
 	t.Parallel()
 
 	for _, key := range []string{keyQ, keyEsc} {
-		m := Model{mode: ModePlanView, width: 100, height: 30, viewerPlan: &plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}, planViewerLines: []string{"body"}}
+		m := Model{mode: ModePlanView, width: 100, height: 30, modelPlanState: modelPlanState{viewerPlan: &plans.PlanMeta{Name: "plan", DirPath: "/tmp/plan"}, planViewerLines: []string{"body"}}}
 		m = pressKey(m, key)
 		if m.mode != ModePlanSearch || m.viewerPlan != nil {
 			t.Errorf("%s: mode = %v, viewer plan = %v; want the plan list", key, m.mode, m.viewerPlan)

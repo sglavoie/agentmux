@@ -34,14 +34,16 @@ func TestSessionViewerStaleResultCannotOverwriteNewerSelection(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:             ModeSessionView,
-		viewerSession:    &transcript.SessionMeta{ID: "newer", Harness: harness.Claude},
-		viewerMessages:   []transcript.Message{{Text: "newer selection"}},
-		viewerLoading:    true,
-		viewerLoadSeq:    2,
-		viewerCursor:     0,
-		viewerMatchIdx:   0,
-		viewerMatchLines: []int{0},
+		mode: ModeSessionView,
+		modelHistoryState: modelHistoryState{
+			viewerSession:    &transcript.SessionMeta{ID: "newer", Harness: harness.Claude},
+			viewerMessages:   []transcript.Message{{Text: "newer selection"}},
+			viewerLoading:    true,
+			viewerLoadSeq:    2,
+			viewerCursor:     0,
+			viewerMatchIdx:   0,
+			viewerMatchLines: []int{0},
+		},
 	}
 	updated, cmd := m.Update(viewerMessagesLoadedMsg{
 		seq:      1,
@@ -171,14 +173,16 @@ func TestRenderSessionSearchDistinguishesStatusAndErrors(t *testing.T) {
 	t.Parallel()
 
 	m := Model{
-		mode:                     ModeSessionSearch,
-		width:                    100,
-		height:                   30,
-		sessionLoading:           true,
-		sessionCacheLoadInFlight: true,
-		sessionRefreshInFlight:   true,
-		sessionRefreshErr:        errors.New("cache unavailable"),
-		sessionSearchErr:         errors.New("sidecar denied"),
+		mode:   ModeSessionSearch,
+		width:  100,
+		height: 30,
+		modelHistoryState: modelHistoryState{
+			sessionLoading:           true,
+			sessionCacheLoadInFlight: true,
+			sessionRefreshInFlight:   true,
+			sessionRefreshErr:        errors.New("cache unavailable"),
+			sessionSearchErr:         errors.New("sidecar denied"),
+		},
 	}
 
 	out := stripAnsi(renderSessionSearch(m))

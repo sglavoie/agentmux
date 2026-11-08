@@ -429,7 +429,7 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
 
 - **Plan preparation.** Agent Mux starts a run of a plan that is already
   loop-ready (`R` in Plans, `amx plans run`; see
-  [Starting a run of a plan](usage.md#starting-a-run-of-a-plan)) and reports
+  [Starting a run of a plan](usage/plans.md#starting-a-run-of-a-plan)) and reports
   `asl preflight`'s findings for one that is not. It does not evaluate
   readiness itself and repairs nothing: use `asl prepare` and
   `asl preflight -m`. Readiness is asked for when a run is, so the Plans list

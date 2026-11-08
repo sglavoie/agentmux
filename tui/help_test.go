@@ -362,21 +362,25 @@ func contextualHelpModel(mode Mode) Model {
 	meta := viewerActionMeta()
 	plan := plans.PlanMeta{Name: "plan-a", DirPath: "/tmp/plan-a"}
 	return Model{
-		mode:             mode,
-		width:            80,
-		height:           40,
-		cfg:              viewerActionConfig(),
-		sessionQuery:     "worktree",
-		sessionResults:   []transcript.Result{{Meta: meta}},
-		sessionCursor:    0,
-		viewerSession:    &meta,
-		viewerMessages:   []transcript.Message{{Role: "user", Text: "hello"}, {Role: "assistant", Text: "hi"}},
-		viewerCursor:     1,
-		planQuery:        "review",
-		planResults:      []plans.Result{{Meta: plan}},
-		viewerPlan:       &plan,
-		planViewerLines:  []string{"--- plan.md ---", "body"},
-		planViewerCursor: 1,
+		mode:   mode,
+		width:  80,
+		height: 40,
+		cfg:    viewerActionConfig(),
+		modelHistoryState: modelHistoryState{
+			sessionQuery:   "worktree",
+			sessionResults: []transcript.Result{{Meta: meta}},
+			sessionCursor:  0,
+			viewerSession:  &meta,
+			viewerMessages: []transcript.Message{{Role: "user", Text: "hello"}, {Role: "assistant", Text: "hi"}},
+			viewerCursor:   1,
+		},
+		modelPlanState: modelPlanState{
+			planQuery:        "review",
+			planResults:      []plans.Result{{Meta: plan}},
+			viewerPlan:       &plan,
+			planViewerLines:  []string{"--- plan.md ---", "body"},
+			planViewerCursor: 1,
+		},
 	}
 }
 

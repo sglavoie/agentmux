@@ -92,7 +92,7 @@ CLI. On macOS, native notifications additionally need
 
 CLI launches and terminal dashboards use tmux. The macOS app shows those
 sessions in embedded Ghostty terminals. See
-[launch destinations](docs/usage.md#launch-destinations).
+[launch destinations](docs/usage/launching.md#launch-destinations).
 
 ### Manual configuration
 
