@@ -1,6 +1,6 @@
 import AppKit
 
-/// A session row's profile color takes over its stretch of the band's strip.
+/// A session row's profile color fills a strip along its right edge.
 /// Selection uses the system accent independently of the profile's color.
 @MainActor
 class WorkspaceRowView: NSTableRowView {
@@ -52,7 +52,7 @@ class WorkspaceRowView: NSTableRowView {
         }
         if let tabColor {
             tabColor.setFill()
-            NSRect(x: bounds.minX, y: bounds.minY,
+            NSRect(x: bounds.maxX - WorkspaceSidebarView.stripWidth, y: bounds.minY,
                    width: WorkspaceSidebarView.stripWidth, height: bounds.height).fill()
         }
     }

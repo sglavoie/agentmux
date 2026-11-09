@@ -59,7 +59,7 @@ final class WorkspaceSidebarView: NSTableView {
         enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
     }
 
-    /// Width of the profile-color strip along the leading edge of a row.
+    /// Width of the profile-color strip along the right edge of a row.
     static let stripWidth: CGFloat = 6
 
     override func drawBackground(inClipRect clipRect: NSRect) {

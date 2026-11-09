@@ -147,9 +147,9 @@ ASL answer panel work the same either way.
   the placeholder's button, or the window takes it instead, so the arrow keys
   never switch sessions in a list that cannot be seen.
 - **Session colors.** `WorkspaceRowView` draws neutral rows with a small
-  profile-color marker. Child terminals share that marker; selection always
-  uses the system accent. Text follows the native appearance. The daemon's
-  `tab_color` still supplies the profile or F6-picked color. Native completed
+  profile-color marker on the right edge. Child terminals share that marker;
+  selection always uses the system accent. Text follows the native appearance.
+  The daemon's `tab_color` still supplies the profile or F6-picked color. Native completed
   turns use a checkmark; every session row also describes status in words.
   Duplicate display names gain a branch or short runtime suffix consistently
   across sidebar, switcher, Waiting, inspector, and dialogs.
