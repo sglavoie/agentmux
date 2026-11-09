@@ -399,7 +399,8 @@ extension WorkspaceWindowController {
             placeholder.show(
                 title: "\(name) closed",
                 message: "It is no longer running. No session was affected: the agents keep running.",
-                button: "Reopen"
+                button: "Reopen",
+                isDefault: true
             ) { [weak self] in self?.restartView(id) }
         case let .viewUnavailable(id, message):
             placeholder.show(title: "No terminal yet", message: message, button: "Try Again") { [weak self] in
