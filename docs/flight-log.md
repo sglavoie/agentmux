@@ -133,3 +133,39 @@ milestone sessions, and unknown intervals. Recording is asynchronous on the
 hook path; recording failures are logged and leave a gap marker on recovery.
 Unreadable records are reported as incomplete history and preserved for
 inspection. A damaged ledger is never rebuilt automatically.
+
+## Project missions and patches
+
+Open **Missions** in Flight Log to name a concrete outcome and its project.
+Optionally include a conversation identity, worktree path, or ASL run ID as
+a reference. References are local text labels, not executable links or automatic
+completion signals. Use **Briefed**, **In progress**, **Ready for review**, and
+**Mark shipped** to update the mission. Mark shipped explicitly confirms that
+the outcome is complete; agent turns and ASL events never ship it automatically.
+
+The first shipment earns a mission patch in **Milestones**, where **Revisit
+mission** returns to the board. Reopening a mission preserves its patch and
+original earning date. Shipping again does not earn another patch. Existing
+celebration preferences apply.
+
+Missions span all time and follow the project filter; harness, profile, and
+period filters apply to session statistics. Patches, like other milestones,
+use the whole history. The captain's weekly recap counts missions first shipped
+and missions created or updated in the current local calendar week.
+
+The terminal overview lists missions and the CLI manages them:
+
+```sh
+amx session flight-log mission create --project API --title "Ship authentication" --reference codex:conversation-id
+amx session flight-log mission update --id MISSION_ID --status in_progress
+amx session flight-log mission update --id MISSION_ID --status review
+amx session flight-log mission update --id MISSION_ID --status shipped
+```
+
+Updates can also change `--title`, `--project`, and `--reference` (repeat
+the reference flag to replace the reference collection). JSON responses return
+the saved mission in the standard envelope. Mission titles, project labels,
+references, and status history are stored locally in the Flight Log ledger
+and included in exports. Compaction preserves missions; reset deletes missions
+and patches along with the rest of Flight Log. Enable tracking before creating
+or changing missions.

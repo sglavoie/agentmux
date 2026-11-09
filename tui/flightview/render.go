@@ -88,6 +88,11 @@ func Lines(in Input, width int) []string {
 			}
 			b.WriteByte('\n')
 		}
+		b.WriteString("\nMISSIONS · all time, project filter\n")
+		for _, mission := range r.Missions {
+			fmt.Fprintf(&b, "%s · %s · %s\n  %s\n", mission.Project, mission.Title, mission.Status, mission.ID)
+		}
+		b.WriteString("Manage: amx session flight-log mission --help\n")
 		b.WriteString("\nTHIS WEEK\n")
 		for _, line := range r.Recap {
 			fmt.Fprintln(&b, line)

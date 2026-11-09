@@ -45,6 +45,7 @@ func Build(snapshot Snapshot, filters Filters, now time.Time, configuredHarnesse
 	start := midnight(now.AddDate(-1, 0, 0))
 	r.Days = calendarDays(selected, start, now)
 	r.Recap = recap(selected, periodStart("week", now), now)
+	missionReport(&r, events, now)
 	if r.TrackingSince.IsZero() {
 		r.Warnings = append(r.Warnings, "Tracking has not started. Start the daemon or launch a session.")
 	}

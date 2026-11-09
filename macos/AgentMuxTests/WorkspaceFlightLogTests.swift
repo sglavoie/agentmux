@@ -24,6 +24,28 @@ enum FlightLogFixture {
 
 @MainActor
 final class WorkspaceFlightLogTests: XCTestCase {
+    func testMissionCreationUsesCLIAndRefreshesReport() throws {
+        let runner = FlightRunner()
+        var calls: [[String]] = []
+        let command = FlightLogFixture.command { args in
+            calls.append(args)
+            if args.contains("mission") {
+                return Data(#"{"id":"m1","title":"Ship auth","project":"API","status":"briefed","references":["codex:abc"]}"#.utf8)
+            }
+            return try FlightLogFixture.data()
+        }
+        let model = WorkspaceFlightLogModel(command: { command }, runner: runner)
+        model.saveMission(title: "Ship auth", project: "API", status: "briefed", references: ["codex:abc"])
+        XCTAssertTrue(model.acting)
+        runner.drain()
+        XCTAssertFalse(model.acting)
+        XCTAssertEqual(model.actionMessage, "Mission saved.")
+        XCTAssertTrue(calls[0].contains("create"))
+        XCTAssertTrue(calls[0].contains("codex:abc"))
+        XCTAssertNotNil(model.report)
+        XCTAssertNil(model.report?.missions, "Older reports must still decode")
+    }
+
     func testGoReportDecodesAndScorecardsNavigateToExactConversation() throws {
         let runner = FlightRunner()
         let command = FlightLogFixture.command { _ in

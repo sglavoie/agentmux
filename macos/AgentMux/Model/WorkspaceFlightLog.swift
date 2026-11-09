@@ -92,6 +92,24 @@ struct FlightSettings: Decodable {
     let enabled, celebrations: Bool
 }
 
+struct FlightMission: Decodable, Identifiable {
+    let id, title, project, status: String
+    let references: [String]
+    let shippedAt: String?
+    enum CodingKeys: String, CodingKey {
+        case id, title, project, status, references
+        case shippedAt = "shipped_at"
+    }
+    var statusLabel: String {
+        switch status {
+        case "in_progress": return "In progress"
+        case "review": return "Ready for review"
+        case "shipped": return "Shipped"
+        default: return "Briefed"
+        }
+    }
+}
+
 struct FlightReport: Decodable {
     let trackingSince, generatedAt, timezone: String
     let settings: FlightSettings
@@ -99,10 +117,11 @@ struct FlightReport: Decodable {
     let days: [FlightDay]
     let sessions: [FlightSession]
     let achievements: [FlightAchievement]
+    let missions: [FlightMission]?
     let recap, warnings, projects, harnesses, profiles: [String]
     var trackingDate: Date? { trackingSince.hasPrefix("0001-") ? nil : WorkspaceActivityEntry.date(trackingSince) }
     enum CodingKeys: String, CodingKey {
-        case timezone, settings, totals, lifetime, days, sessions, achievements, recap, warnings, projects, harnesses, profiles
+        case timezone, settings, totals, lifetime, days, sessions, achievements, missions, recap, warnings, projects, harnesses, profiles
         case trackingSince = "tracking_since", generatedAt = "generated_at"
     }
 }
@@ -219,6 +238,25 @@ final class WorkspaceFlightLogModel: ObservableObject {
     func inspect(_ kind: String) { eventKind = kind; normalizeSelection() }
     func normalizeSelection() {
         if !visibleSessions.contains(where: { $0.key == selection }) { selection = visibleSessions.first?.key }
+    }
+    func saveMission(id: String? = nil, title: String, project: String, status: String, references: [String], onSaved: (() -> Void)? = nil) {
+        guard !acting, let command = command() else { return }
+        var args = ["session", "flight-log", "mission", id == nil ? "create" : "update", "--status", status]
+        if let id {
+            args += ["--id", id]
+        } else {
+            args += ["--title", title, "--project", project]
+            for reference in references { args += ["--reference", reference] }
+        }
+        acting = true; actionMessage = nil
+        runner.run({ command.json(FlightMission.self, args, mutates: true) }) { [weak self] result in
+            guard let self else { return }
+            self.acting = false
+            switch result {
+            case let .failure(error): self.actionMessage = error.message
+            case .success, .partial: self.actionMessage = "Mission saved."; onSaved?(); self.refresh()
+            }
+        }
     }
     func settings(enabled: Bool? = nil, celebrations: Bool? = nil) {
         var args = ["session", "flight-log", "settings"]

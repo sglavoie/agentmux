@@ -142,8 +142,8 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 
 See [Usage](docs/usage.md) for navigation, filtering, continuity, worktrees,
 and CLI examples.
-See [Flight Log](docs/flight-log.md) for scorecards, the activity calendar,
-milestones, weekly recaps, and local history controls.
+See [Flight Log](docs/flight-log.md) for project missions, collectible mission
+patches, scorecards, the activity calendar, weekly recaps, and local history controls.
 
 ## macOS workspace (optional)
 

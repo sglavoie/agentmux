@@ -13,6 +13,7 @@ const SchemaVersion = 1
 const ObservationLimit = 45 * time.Second
 
 type Event struct {
+	Mission          *Mission   `json:"mission,omitempty"`
 	ID               string     `json:"id"`
 	At               time.Time  `json:"at"`
 	Kind             string     `json:"kind"` // launch, state, sample, run, exit, gap
@@ -122,6 +123,7 @@ type Filters struct {
 }
 
 type Report struct {
+	Missions      []Mission     `json:"missions"`
 	SchemaVersion int           `json:"schema_version"`
 	TrackingSince time.Time     `json:"tracking_since"`
 	GeneratedAt   time.Time     `json:"generated_at"`

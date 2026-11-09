@@ -33,6 +33,9 @@ struct WorkspaceFlightLogView: View {
     @ObservedObject var model: WorkspaceFlightLogModel
     @State private var tab = "overview"
     @State private var confirmingReset = false
+    @State private var missionTitle = ""
+    @State private var missionProject = ""
+    @State private var missionReference = ""
     init(model: WorkspaceFlightLogModel, initialTab: String = "overview") {
         self.model = model; _tab = State(initialValue: initialTab)
     }
@@ -82,17 +85,17 @@ struct WorkspaceFlightLogView: View {
                     .accessibilityElement(children: .combine)
             }
             Picker("Flight Log view", selection: $tab) {
-                Text("Overview").tag("overview"); Text("Sessions").tag("sessions"); Text("Milestones").tag("milestones")
-            }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 420)
+                Text("Missions").tag("missions"); Text("Overview").tag("overview"); Text("Sessions").tag("sessions"); Text("Milestones").tag("milestones")
+            }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 540)
             Group {
-                switch tab { case "sessions": sessions; case "milestones": milestones; default: overview }
+                switch tab { case "missions": missions; case "sessions": sessions; case "milestones": milestones; default: overview }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.padding(14)
             .confirmationDialog("Reset Flight Log history?", isPresented: $confirmingReset) {
                 Button("Reset History", role: .destructive) { model.reset() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("This permanently deletes session statistics, milestones, and imported Flight Log history. Export first if you want a copy. A new tracking period will start.")
+                Text("This permanently deletes session statistics, missions, patches, milestones, and imported Flight Log history. Export first if you want a copy. A new tracking period will start.")
             }
             .background(WorkspaceReviewShortcuts { key, modifiers in
                 guard key == "r", modifiers == .command else { return false }
@@ -106,10 +109,77 @@ struct WorkspaceFlightLogView: View {
         }.labelsHidden().help("Filter by \(title.lowercased())").accessibilityLabel(title)
             .onChange(of: value.wrappedValue) { _, _ in model.refresh() }
     }
+    private var missions: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Choose an outcome. Ship it. Keep the patch.").font(.title3)
+                Text("Missions span all time and follow the project filter. Harness, profile, and period filters apply to session statistics.")
+                    .font(.caption).foregroundStyle(.secondary)
+                GroupBox("Brief a mission") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Outcome, e.g. Ship authentication", text: $missionTitle)
+                        TextField("Project", text: $missionProject)
+                        TextField("Optional conversation ID, worktree path, or ASL run ID", text: $missionReference)
+                        Button("Create mission") {
+                            model.saveMission(title: missionTitle, project: missionProject, status: "briefed",
+                                              references: missionReference.isEmpty ? [] : [missionReference]) {
+                                missionTitle = ""; missionReference = ""
+                            }
+                        }.disabled(missionTitle.trimmingCharacters(in: .whitespaces).isEmpty || missionProject.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }.padding(6)
+                }
+                if (model.report?.missions ?? []).isEmpty {
+                    Text("Your first mission starts with one concrete outcome.").foregroundStyle(.secondary)
+                }
+                ForEach(model.report?.missions ?? []) { mission in
+                    GroupBox {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: mission.shippedAt == nil ? "paperplane.circle" : "seal.fill")
+                                    .font(.largeTitle).foregroundStyle(.tint)
+                                VStack(alignment: .leading) {
+                                    Text(mission.title).font(.headline)
+                                    Text(mission.project + " · " + mission.statusLabel).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if mission.shippedAt != nil { Label("Patch earned", systemImage: "checkmark.seal") }
+                            }
+                            ForEach(mission.references, id: \.self) { Text($0).font(.caption).textSelection(.enabled) }
+                            HStack {
+                                ForEach(["briefed", "in_progress", "review", "shipped"], id: \.self) { status in
+                                    Button(missionStatusLabel(status)) {
+                                        model.saveMission(id: mission.id, title: mission.title, project: mission.project,
+                                                          status: status, references: mission.references)
+                                    }.disabled(status == mission.status)
+                                }
+                            }
+                            Text("Shipped is your confirmation that the outcome is complete. Earned patches remain if you reopen a mission.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.padding(6)
+                    }
+                }
+            }.padding(12)
+        }.disabled(model.acting || model.report?.settings.enabled == false)
+    }
+    private func missionStatusLabel(_ status: String) -> String {
+        switch status {
+        case "in_progress": return "In progress"
+        case "review": return "Ready for review"
+        case "shipped": return "Mark shipped"
+        default: return "Briefed"
+        }
+    }
     private var overview: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 if let report = model.report {
+                    GroupBox("Project missions") {
+                        HStack {
+                            Text("\((report.missions ?? []).filter { $0.status != "shipped" }.count) active · \((report.missions ?? []).filter { $0.shippedAt != nil }.count) patches earned")
+                            Spacer()
+                            Button("Open missions") { tab = "missions" }
+                        }.padding(6)
+                    }
                     metrics(report.totals)
                     GroupBox {
                         VStack(alignment: .leading, spacing: 10) {
@@ -127,7 +197,7 @@ struct WorkspaceFlightLogView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(6)
                     }
-                    GroupBox("This week") {
+                    GroupBox("Captain’s log · this week") {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(report.recap, id: \.self) { Text($0) }
                             Button("Explore this week") { model.selectedDay = nil; model.period = "week"; model.inspect("all"); tab = "sessions"; model.refresh() }
@@ -258,7 +328,11 @@ struct WorkspaceFlightLogView: View {
                         Text(achievement.description).foregroundStyle(.secondary)
                         if let at = achievement.unlockedAt {
                             Text("Unlocked " + (WorkspaceActivityEntry.date(at)?.formatted(date: .abbreviated, time: .omitted) ?? at)).font(.caption)
-                            Button("Revisit session") { model.revealAchievement(achievement); tab = "sessions" }.disabled(achievement.sessionKey.isEmpty)
+                            if achievement.id.hasPrefix("mission:") {
+                                Button("Revisit mission") { model.project = ""; model.harness = ""; model.profile = ""; model.refresh(); tab = "missions" }
+                            } else {
+                                Button("Revisit session") { model.revealAchievement(achievement); tab = "sessions" }.disabled(achievement.sessionKey.isEmpty)
+                            }
                         } else {
                             ProgressView(value: Double(min(achievement.progress, achievement.target)), total: Double(achievement.target))
                             Text("\(achievement.progress) / \(achievement.target)").font(.caption).monospacedDigit()

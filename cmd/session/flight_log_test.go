@@ -128,3 +128,35 @@ func TestFlightLogImportsOnlyOlderHistoryAndNeverDuplicatesIt(t *testing.T) {
 		t.Fatalf("import invented complete history: %+v", report.Totals)
 	}
 }
+
+func TestMissionCLIUpdatesRetainFieldsAndShipExplicitly(t *testing.T) {
+	store := flightlog.Store{Path: filepath.Join(t.TempDir(), "flight.jsonl")}
+	now := time.Now()
+	deps := flightLogDependencies{store: func() (flightlog.Store, error) { return store, nil }, now: func() time.Time { now = now.Add(time.Second); return now }, harnesses: func() []string { return nil }}
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := newFlightLogCommand(deps)
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&out)
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("%v: %s", err, out.String())
+		}
+		return out.String()
+	}
+	var receipt struct{ Data flightlog.Mission }
+	if err := json.Unmarshal([]byte(run("mission", "create", "--title", "Ship auth", "--project", "API", "--reference", "codex:abc", "--json")), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	id := receipt.Data.ID
+	if err := json.Unmarshal([]byte(run("mission", "update", "--id", id, "--status", "shipped", "--json")), &receipt); err != nil {
+		t.Fatal(err)
+	}
+	if receipt.Data.Title != "Ship auth" || receipt.Data.ShippedAt == nil || len(receipt.Data.References) != 1 {
+		t.Fatalf("bad receipt: %+v", receipt.Data)
+	}
+	if !strings.Contains(run("--json"), "Mission patch") {
+		t.Fatal("patch missing")
+	}
+}

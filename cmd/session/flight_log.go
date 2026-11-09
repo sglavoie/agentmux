@@ -81,6 +81,7 @@ of diagnostic journal retention.`,
 	for _, action := range []string{"export", "settings", "reset", "import"} {
 		cmd.AddCommand(newFlightLogAction(action, deps))
 	}
+	cmd.AddCommand(newFlightMissionCommand(deps))
 	return cmd
 }
 
@@ -221,6 +222,10 @@ func writeFlightLog(w io.Writer, r flightlog.Report) error {
 			status = "unlocked " + a.UnlockedAt.Local().Format(time.DateOnly)
 		}
 		fmt.Fprintf(&b, "%s · %s\n", a.Title, status)
+	}
+	b.WriteString("\nMISSIONS (all time, project filter)\n")
+	for _, m := range r.Missions {
+		fmt.Fprintf(&b, "%s · %s · %s · %s\n", m.ID, m.Project, m.Title, m.Status)
 	}
 	b.WriteString("\nTHIS WEEK\n")
 	for _, line := range r.Recap {
