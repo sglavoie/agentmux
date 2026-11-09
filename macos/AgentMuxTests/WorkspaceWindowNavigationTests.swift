@@ -129,8 +129,7 @@ extension WorkspaceWindowTests {
         XCTAssertTrue(rowView.isFlashing)
         let flashLayer = try XCTUnwrap(rowView.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
         let animation = try XCTUnwrap(flashLayer.animation(forKey: WorkspaceRowView.flashKey))
-        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
-        XCTAssertEqual(animation.duration, 0.4 * Double(pulses), accuracy: 0.001)
+        XCTAssertEqual(animation.duration, 0.32, accuracy: 0.001)
         rowView.effectiveAppearance.performAsCurrentDrawingAppearance {
             XCTAssertEqual(flashLayer.backgroundColor, WorkspaceSidebarBand.stopped.color.cgColor)
         }

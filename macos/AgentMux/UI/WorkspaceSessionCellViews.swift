@@ -186,10 +186,12 @@ final class WorkspaceRowCellView: NSTableCellView {
     }
 
     private func showStateGlyph(_ glyph: String, completed: Bool = false) {
+        let changed = !glyphLabel.stringValue.isEmpty && glyphLabel.stringValue != glyph
         hasCompletedGlyph = completed
         glyphLabel.stringValue = glyph
         glyphLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: completed ? .bold : .regular)
         glyphLabel.textColor = completed ? Self.completedGlyphColor : .labelColor
+        if changed { WorkspaceMotion.fade(glyphLabel, from: 0.35, to: 1, duration: WorkspaceMotion.entrance) }
     }
 
     /// Whether the title may run under the × or the key label: only where
@@ -297,7 +299,7 @@ final class WorkspaceRowCellView: NSTableCellView {
               away: Bool? = nil, projectFirstLine: Bool = false) {
         nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
-        nameLabel.stringValue = projectFirstLine && !row.name.isEmpty ? "\(row.project) — \(row.namedLabel)" : row.namedLabel
+        nameLabel.stringValue = row.namedLabel
         nameLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         nameLabel.isHidden = row.name.isEmpty
         nameHeading.isHidden = row.name.isEmpty
@@ -306,7 +308,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         showStateGlyph(row.glyph, completed: row.iconState == "stop")
         // A pinned or promoted session names the project it is away from.
         let namesProject = projectFirstLine ? row.name.isEmpty : (away ?? (row.pinned || row.needsAttention))
-        let place = namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
+        let place = !row.name.isEmpty ? row.taskMetadata : namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
         let badge = row.pinned ? "★ " : ""
         let label = badge + (row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)")
         let muted = row.muted ? "\(label) \(muteGlyph)" : label

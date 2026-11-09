@@ -143,8 +143,12 @@ completion signals. Use **Briefed**, **In progress**, **Ready for review**, and
 **Mark shipped** to update the mission. Mark shipped explicitly confirms that
 the outcome is complete; agent turns and ASL events never ship it automatically.
 
-The first shipment earns a mission patch in **Milestones**, where **Revisit
-mission** returns to the board. Reopening a mission preserves its patch and
+The first shipment earns a mission patch in **Milestones**. Each mission has a
+stable emblem, constellation, and color, with its title, project, and original
+shipment date. Clicking the patch or **Revisit mission** reveals and highlights
+that exact mission on the board, clearing filters when necessary. An explicit
+first shipment shows a brief patch reveal when celebrations are enabled; opening
+history never replays it. Reopening a mission preserves its patch and
 original earning date. Shipping again does not earn another patch. Existing
 celebration preferences apply.
 

@@ -58,7 +58,11 @@ extension AppDelegate {
     /// Answer… on a menu row or a banner: opens the answer panel on that run.
     func answer(_ target: ASLAnswerTarget) {
         let controller = aslPanel ?? ASLQuestionPanelController()
-        controller.flow.onAnswerSent = { [weak self] run in self?.workspaceAnswerSent(runID: run) }
+        let question = workspace?.allWaitingRows.first {
+            if case let .asl(answer)? = $0.answer { return answer.runID == target.runID }
+            return false
+        }
+        controller.flow.onAnswerSent = { [weak self] run in self?.workspaceAnswerSent(runID: run, question: question) }
         if aslPanel == nil {
             controller.onFinish = { [weak self] notice in self?.finishAnswer(notice) }
             controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
@@ -83,7 +87,7 @@ extension AppDelegate {
         statusItem?.rebuildMenu()
     }
 
-    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil) {
+    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil, question: WorkspaceWaitingRow? = nil) {
         if let session = store.managedSessions.first(where: {
             (runtimeSessionID != nil && $0.embeddedRuntimeSessionID == runtimeSessionID)
                 || (runID?.isEmpty == false && $0.aslRunID == runID)
@@ -92,6 +96,13 @@ extension AppDelegate {
                            grouping: preferencesModel.preferences.sidebarGrouping, sorting: preferencesModel.preferences.sidebarSort)
         }
         guard let workspace, workspace.isOpen else { return }
+        if let row = workspace.allWaitingRows.first(where: { row in
+            guard row.answer != nil, question?.sameContext(as: row) == true else { return false }
+            if let runtimeSessionID { return row.key.runtimeSessionID == runtimeSessionID }
+            if case let .asl(target)? = row.answer { return target.runID == runID }
+            return false
+        }) { workspace.inspector.markAnswerSent(row) }
+        workspace.welcome.pendingAnswers = workspace.inspector.sentAnswers.count
         workspace.welcome.answerSent()
         workspace.showNotice("Answer sent")
     }

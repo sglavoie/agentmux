@@ -44,6 +44,16 @@ background work and result application, including generation for surfaces that
 request it. The context strip requests only saved recaps. Interval metadata never
 includes queries, paths, session IDs, or conversation text.
 
+### Everyday experience
+
+`WorkspaceExperienceTests` covers absence boundaries, the return-summary preference,
+read-only recap use, stale question and recap replies, terminal focus/bounds during
+peek, palette query restoration, pending answer receipts, and task-name consistency.
+`WorkspaceHandoffTests` verifies naming only after a confirmed launch;
+`WorkspaceFlightLogTests` verifies first-shipment reveals and celebration preferences.
+The workflow preview suite captures return summaries, session peeks, and mission
+patches in light and dark appearances alongside the existing Briefing captures.
+
 ### Native agent handoff
 
 `WorkspaceHandoffModel` loads all configured profiles and a read-only

@@ -21,6 +21,15 @@ extension WorkspaceWindowController {
         sidebar.target = self
         sidebar.action = #selector(rowClicked(_:))
         sidebar.onPointerChanged = { [weak self] in self?.reloadSidebar() }
+        sidebar.onPeek = { [weak self] in
+            guard let self, self.items.indices.contains(self.sidebar.selectedRow),
+                  case let .row(row) = self.items[self.sidebar.selectedRow] else { return }
+            self.showSessionPeek(row.key)
+        }
+        switcher.onPeek = { [weak self] entry in
+            guard let self, case let .session(key) = entry.place else { return }
+            self.showSessionPeek(key, from: self.switcher)
+        }
         sidebar.onReturn = { [weak self] in self?.focusSelectedItem() }
         sidebar.onWidthChanged = { [weak self] in self?.refreshWorkspaceNavigationLayout() }
         sidebar.onCollapse = { [weak self] collapsed in
@@ -51,7 +60,10 @@ extension WorkspaceWindowController {
         findBar.onClose = { [weak self] in self?.closeFindBar() }
         switcher.onChoose = { [weak self] entry in self?.go(to: entry) }
         switcher.onCancel = { [weak self] in self?.closeSwitcher(restoring: true) }
-        switcher.onLeave = { [weak self] in self?.closeSwitcher(restoring: false) }
+        switcher.onLeave = { [weak self] in
+            guard let self, !self.presentingPeek, !self.peekPopover.popover.isShown else { return }
+            self.closeSwitcher(restoring: false)
+        }
         WorkspaceWindowChrome.installPaneOverlays(
             in: pane, placeholder: placeholder, linkLabel: linkLabel,
             scrollbar: scrollbarView, findBar: findBar, switcher: switcher
@@ -175,6 +187,9 @@ extension WorkspaceWindowController {
         inspectorToggle.target = self
         inspectorToggle.action = #selector(toggleInspector(_:))
         window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(inspectorToggle, at: .trailing))
+        summaryButton.target = self
+        summaryButton.action = #selector(showReturnSummary(_:))
+        window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(summaryButton, at: .trailing))
         return window
     }
 }

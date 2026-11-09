@@ -45,6 +45,16 @@ struct AppNotice: Decodable, Equatable {
         self.actions = actions
     }
 
+    func namingTask(from sessions: [CompanionSession]) -> Self {
+        guard !embeddedRuntimeSessionID.isEmpty,
+              let session = sessions.first(where: { $0.embeddedRuntimeSessionID == embeddedRuntimeSessionID }),
+              !session.name.isEmpty else { return self }
+        var notice = self
+        notice.title = session.name
+        notice.subtitle = [session.project, title, subtitle].filter { !$0.isEmpty }.joined(separator: " · ")
+        return notice
+    }
+
     /// The runtime session whose terminal a click shows in the workspace.
     var embeddedRuntimeSessionID: String {
         backend == CompanionRuntime.tmuxBackend ? runtimeSessionID : ""

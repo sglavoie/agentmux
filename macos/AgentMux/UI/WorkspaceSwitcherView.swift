@@ -16,7 +16,8 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
 
     let field = NSTextField()
     let table = NSTableView()
-    let keyboardHint = NSTextField(labelWithString: "↑↓ Navigate   ↩ Open   esc Close")
+    let keyboardHint = NSTextField(labelWithString: "↑↓ Navigate   ↩ Open   ⌥↩ Peek   esc Close")
+    let peekButton = NSButton(title: "Peek", target: nil, action: nil)
     let modeHint = NSTextField(labelWithString: "> Actions")
     /// Said in place of the list when nothing matches what is typed.
     let noMatchLabel = NSTextField(labelWithString: WorkspaceSwitcherView.noMatches)
@@ -25,6 +26,7 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     private var entries: [WorkspaceSwitcher.Entry] = []
     private var listHeight: NSLayoutConstraint?
 
+    var onPeek: ((WorkspaceSwitcher.Entry) -> Void)?
     var onChoose: ((WorkspaceSwitcher.Entry) -> Void)?
     var onCancel: (() -> Void)?
     /// The field gave up the keyboard while the list was up: a click went
@@ -89,7 +91,11 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
             hint.lineBreakMode = .byTruncatingTail
         }
         keyboardHint.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let footer = NSStackView(views: [keyboardHint, NSView(), modeHint])
+        peekButton.target = self; peekButton.action = #selector(peekSelected(_:))
+        peekButton.bezelStyle = .rounded; peekButton.controlSize = .small
+        peekButton.refusesFirstResponder = true
+        peekButton.toolTip = "Preview the selected session without leaving your terminal (⌥↩)"
+        let footer = NSStackView(views: [keyboardHint, NSView(), peekButton, modeHint])
         footer.spacing = 8
         let separator = NSBox()
         separator.boxType = .separator
@@ -210,6 +216,11 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         onChoose?(selected)
     }
 
+    @objc func peekSelected(_ sender: Any? = nil) {
+        guard let selected, case .session = selected.place else { return }
+        onPeek?(selected)
+    }
+
     func cancel() { onCancel?() }
 
     private func filter(keeping place: WorkspaceSwitcher.Entry.Place?) {
@@ -225,6 +236,8 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     }
 
     private func select(_ index: Int) {
+        if shown.indices.contains(index), case .session = shown[index].place { peekButton.isHidden = false }
+        else { peekButton.isHidden = true }
         guard shown.indices.contains(index) else { return table.deselectAll(nil) }
         table.selectRowIndexes([index], byExtendingSelection: false)
         table.scrollRowToVisible(index)
@@ -253,6 +266,9 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        if selector == NSSelectorFromString("insertNewlineIgnoringFieldEditor:") {
+            peekSelected(); return true
+        }
         switch selector {
         case #selector(NSResponder.moveUp(_:)): move(-1)
         case #selector(NSResponder.moveDown(_:)): move(1)
@@ -260,7 +276,9 @@ final class WorkspaceSwitcherView: NSBox, NSTextFieldDelegate, NSTableViewDataSo
         // keyboard out of the field and so putting the list away.
         case #selector(NSResponder.insertTab(_:)): move(1)
         case #selector(NSResponder.insertBacktab(_:)): move(-1)
-        case #selector(NSResponder.insertNewline(_:)): choose()
+        case #selector(NSResponder.insertNewline(_:)):
+            if NSApp.currentEvent?.modifierFlags.contains(.option) == true, let selected { onPeek?(selected) }
+            else { choose() }
         case #selector(NSResponder.cancelOperation(_:)): cancel()
         default: return false
         }

@@ -236,8 +236,12 @@ Whatever has the keyboard decides where a key goes.
   goes to what is already running.
 - **⌘R** names the session shown (**Session › Name Session…**), and so does
   **Name Session…** in the menu a right-click on a session's line opens. A
-  named session has its name on a bold first line above its profile. An empty name
-  removes it. The name is kept with the session (`amx name-session`), so it
+  named session leads with its task name, above project, harness/profile, and branch.
+  The dialog offers an editable suggestion from the saved conversation title or
+  branch; loading a suggestion never replaces what you type. An empty name removes it.
+  Task names also lead in the switcher, Waiting, and native notifications. Native
+  handoff carries the name to the receiving agent, with an editable field in its
+  preview. The name is kept with the session (`amx name-session`), so it
   is still there after the app was quit, and shows about two seconds after
   it was given. Only a session embedded here can be named.
 - **Pin to Top**, in the same right-click menu, moves a session out of its

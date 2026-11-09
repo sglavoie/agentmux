@@ -196,7 +196,7 @@ extension AppDelegate {
             }
         }
         controller.model.onHandoff = { [weak self, weak controller] conversation in
-            self?.showHandoff(source: conversation.identity, profile: conversation.profile, on: controller?.window)
+            self?.showHandoff(source: conversation.identity, profile: conversation.profile, on: controller?.window, taskName: conversation.title)
         }
         controller.model.sourceOrigin = { [weak self] identity in self?.handoffOrigins.origin(conversation: identity)?.identity }
         controller.model.onSource = { [weak self] identity in self?.openHistory(conversation: identity) }

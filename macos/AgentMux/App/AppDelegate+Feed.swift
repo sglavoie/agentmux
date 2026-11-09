@@ -29,7 +29,9 @@ extension AppDelegate: DaemonConnectionDelegate {
         case .disconnected:
             notifications?.connectionEnded()
         case let .frame(.notification(_, data)):
-            notifications?.present(frame: data)
+            if let notice = try? JSONDecoder().decode(AppNotice.self, from: data), !notice.notificationID.isEmpty {
+                notifications?.present(store.feed == .live ? notice.namingTask(from: store.managedSessions) : notice)
+            }
         case let .frame(.notificationRetract(_, frame)):
             notifications?.retract(frame)
         case let .frame(.workspaceView(_, request)):

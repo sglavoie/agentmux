@@ -4,25 +4,41 @@
 
 ### Returning to work
 
-Enable **Settings › Workspace › Show Welcome back** to see a compact **Welcome back**
-card at the bottom of the right sidebar. It is off by default; turning it off hides
-an existing welcome card immediately. The card shows unread recorded
-updates from the past seven days and the live attention count. It appears only
-once per app launch, when first opening the workspace. **Activity** and
-**Briefing** open the existing review windows; **Next waiting** focuses a waiting
-session. Dismissing the card does not mark any activity read. Incomplete history
-is labeled “At least”; unavailable reads and disconnected waiting status are
-shown explicitly.
+The title-bar **Since you stepped away** button opens a compact return summary.
+Enable **Settings › Workspace › Show return summaries** to open it automatically
+after at least two minutes away. This preference also retains the once-per-launch
+unread-activity card in the inspector; it remains off by default.
 
-Successful prompt submissions and accepted supervisor answers show **Answer sent** in the right sidebar.
-The waiting count follows the live feed, not the submission receipt. When a live
-waiting count reaches zero while the app is active, **All caught up** briefly
-shows how many agents are still working. New attention clears that acknowledgement.
-These updates never move keyboard focus or automatically navigate to another agent.
+The summary leads with waiting sessions, then recorded changes and agents still
+working. It shows up to six sessions, with saved outcomes and their timestamps.
+**View question**, **Review changes**, and **Open session** take you directly to
+the relevant work. Without an absence boundary, the button reads the last day.
+Incomplete or older history is labeled partial; **Activity** opens the full reader.
+Only the presence timestamp is saved for this feature. Opening or dismissing a
+summary never marks activity read and never generates a recap.
 
-Palette entrances, hover feedback, and sidebar/inspector disclosure use short,
-consistent transitions that respect Reduce Motion. Session state changes use one
-brief highlight. Terminal input and session navigation do not wait for animation.
+Successful prompt submissions and accepted supervisor answers show **Answer sent**
+on the waiting item until its question changes. That item cannot be answered
+again from Waiting while acknowledgment is pending. **Next waiting · N remaining**
+and the reader's N key skip submitted questions. Advancing is always explicit;
+the terminal's focus and draft stay where you left them. A live waiting count of
+zero produces a brief **All caught up** receipt showing how many agents still work.
+Disconnected status never implies that questions were resolved.
+
+Palette entrances, hover feedback, and sidebar/inspector disclosure respect
+Reduce Motion. Status glyphs fade briefly when they change. Routine navigation
+uses a quiet 160 ms highlight; explicit **Reveal in Sidebar** uses one 320 ms
+highlight. Terminal input and navigation never wait for animation.
+
+### Peek at another agent
+
+Right-click a session and choose **Peek at Session**, or select it in **⌘P** and
+choose **Peek** / **⌥Return**. Space also previews the selected session while the
+sidebar has keyboard focus. The preview reads its saved outcome, current question
+or terminal context, and last observed activity. Missing and stale data are labeled.
+It neither attaches the previewed terminal nor changes your active session, scroll
+position, or draft. Escape closes the preview first; from the switcher, another
+Escape returns to your terminal. Other terminal keys keep their usual destination.
 
 ### Command palette and launch
 
@@ -188,11 +204,13 @@ on the workspace's selected project when possible, and is also available from
 the command palette; assign a shortcut in Settings if desired.
 
 **Needs you** links to sessions with questions, permission requests, or other
-attention. **Live sessions** includes agents whose conversation identity is not
-known yet. **Recent outcomes and unfinished work** shows each conversation's
-saved goal, latest outcome, and outstanding work separately, with recap times,
-profile/model, excerpt coverage, and supporting-message links into History.
-Agent-reported results remain attributed to the agent.
+attention. **Recent outcomes and unfinished work** leads with the task, latest
+saved outcome, and next step, followed by Focus/Resume and Read actions.
+**Goal, sources & recap controls** expands the goal, provenance, supporting-message
+links, and generation controls. **Conversation details** holds identifiers,
+timestamps, handoff links, and the handoff action. Saved-context warnings remain
+visible. The **Live sessions** disclosure includes agents whose conversation
+identity is not known yet. Agent-reported results remain attributed to the agent.
 
 Recorded handoff chains are grouped as conversation threads. Older indexed
 members are included even when they fall outside the recent ten, and each

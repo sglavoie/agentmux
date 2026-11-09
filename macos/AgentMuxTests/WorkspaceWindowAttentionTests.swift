@@ -307,7 +307,7 @@ extension WorkspaceWindowTests {
         var cell = try line(work)
         XCTAssertFalse(cell.nameLabel.isHidden)
         XCTAssertEqual(cell.nameLabel.stringValue, "billing fix")
-        XCTAssertEqual(cell.titleLabel.stringValue, "work", "the profile stays on its own line")
+        XCTAssertEqual(cell.titleLabel.stringValue, "api · claude · work", "project and agent stay on the secondary line")
         XCTAssertTrue(cell.nameLabel.font?.fontDescriptor.symbolicTraits.contains(.bold) == true)
         XCTAssertEqual(cell.nameLabel.textColor, .labelColor, "name follows the current appearance")
         let nameBounds = cell.convert(cell.nameLabel.bounds, from: cell.nameLabel)
@@ -350,9 +350,10 @@ extension WorkspaceWindowTests {
         // wherever the pane is.
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
+        XCTAssertEqual(items.map(\.title), ["Peek at Session", "Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
                                             "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…", "", "Mark Accounted For", "Edit Session Note…", "Undo Annotation"])
-        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        let naming = try XCTUnwrap(items.first { $0.title == "Name Session…" })
+        _ = try XCTUnwrap(naming.target).perform(try XCTUnwrap(naming.action), with: naming)
         XCTAssertEqual(asked.map(\.0), [personal])
         XCTAssertTrue(app.named.isEmpty, "nothing is written before the answer")
         asked[0].1("  release notes ")

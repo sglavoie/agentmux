@@ -345,9 +345,10 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(workspace.content, .detached(runtimeSessionID: F.runtimeID(1)))
         workspace.select(other.key)
         let items = workspace.contextMenuItems(forRow: try index(of: work.key))
-        XCTAssertEqual(items.map(\.title), ["Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
+        XCTAssertEqual(items.map(\.title), ["Peek at Session", "Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "Reattach", "New Terminal Below",
                                             "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…", "", "Mark Accounted For", "Edit Session Note…", "Undo Annotation"])
-        _ = try XCTUnwrap(items[6].target).perform(try XCTUnwrap(items[6].action), with: items[6])
+        let reattach = try XCTUnwrap(items.first { $0.title == "Reattach" })
+        _ = try XCTUnwrap(reattach.target).perform(try XCTUnwrap(reattach.action), with: reattach)
         XCTAssertEqual(workspace.state.selection, work.key)
         XCTAssertEqual(app.made, [F.runtimeID(1), F.runtimeID(4), F.runtimeID(1)])
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(1)))

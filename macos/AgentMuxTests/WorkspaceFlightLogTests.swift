@@ -46,6 +46,37 @@ final class WorkspaceFlightLogTests: XCTestCase {
         XCTAssertNil(model.report?.missions, "Older reports must still decode")
     }
 
+    func testMissionPatchAppearsOnlyForFirstConfirmedShipmentAndRespectsPreference() throws {
+        for celebrates in [true, false] {
+            let runner = FlightRunner()
+            var mission: [String: Any] = ["id": "m-one", "title": "Ship authentication", "project": "API", "status": "review", "references": []]
+            let command = FlightLogFixture.command { args in
+                if args.contains("mission") {
+                    mission["status"] = args[args.firstIndex(of: "--status")! + 1]
+                    if mission["status"] as? String == "shipped" { mission["shipped_at"] = "2026-11-01T12:00:00Z" }
+                    return try JSONSerialization.data(withJSONObject: mission)
+                }
+                var report = try XCTUnwrap(JSONSerialization.jsonObject(with: FlightLogFixture.data()) as? [String: Any])
+                report["missions"] = [mission]
+                report["settings"] = ["enabled": true, "celebrations": celebrates]
+                return try JSONSerialization.data(withJSONObject: report)
+            }
+            let model = WorkspaceFlightLogModel(command: { command }, runner: runner)
+            model.refresh(); runner.drain()
+            XCTAssertNil(model.earnedPatch, "Reading historical data never reveals a patch")
+            model.saveMission(id: "m-one", title: "Ship authentication", project: "API", status: "shipped", references: [])
+            runner.drain()
+            XCTAssertEqual(model.earnedPatch?.id, celebrates ? "m-one" : nil)
+            XCTAssertEqual(model.report?.missions?.first?.shippedAt, "2026-11-01T12:00:00Z")
+            model.dismissCelebration()
+            model.saveMission(id: "m-one", title: "Ship authentication", project: "API", status: "review", references: [])
+            runner.drain()
+            model.saveMission(id: "m-one", title: "Ship authentication", project: "API", status: "shipped", references: [])
+            runner.drain()
+            XCTAssertNil(model.earnedPatch, "Reopening and shipping again must not replay the reveal")
+        }
+    }
+
     func testGoReportDecodesAndScorecardsNavigateToExactConversation() throws {
         let runner = FlightRunner()
         let command = FlightLogFixture.command { _ in

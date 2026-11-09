@@ -26,6 +26,7 @@ extension WorkspaceWindowController {
         window.makeKeyAndOrderFront(nil)
         refresh()
         welcome.showWelcomeOnce()
+        workspaceBecameActive()
     }
 
     /// Opens the window without activating the app or ordering it in, for
@@ -79,6 +80,9 @@ extension WorkspaceWindowController {
 
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
+        workspaceResignedActive()
+        returnSummary.close()
+        peekPopover.close()
         welcome.close()
         inspector.recap.close()
         inspector.threads.close()
@@ -189,9 +193,13 @@ extension WorkspaceWindowController {
             detached.formIntersection(listed)
             closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
         }
+        returnSummary.observe(rows: state.rows, current: state.current, active: isOpen && NSApp.isActive, now: now())
+        refreshSessionPeek()
+        inspector.reconcileSentAnswers(allWaitingRows, current: state.current)
         arrangeNewSessionBelow()
         reloadSidebar()
         if state.current { flashStateChanges(from: previousRows) }
+        welcome.pendingAnswers = inspector.sentAnswers.count
         welcome.observe(waiting: AttentionCycler.ordered(store.managedSessions).count,
                         working: state.rows.filter(\.working).count,
                         live: state.current, celebrate: isOpen && NSApp.isActive)

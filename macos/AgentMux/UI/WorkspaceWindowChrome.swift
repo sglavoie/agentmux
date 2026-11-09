@@ -13,6 +13,10 @@ enum WorkspaceWindowChrome {
         makeTitlebarToggle(symbol: "sidebar.right", title: "Toggle Inspector", shortcut: "⌘⇧B")
     }
 
+    static func makeSummaryButton() -> NSButton {
+        makeTitlebarToggle(symbol: "text.badge.star", title: "Since you stepped away", shortcut: "Return summary")
+    }
+
     private static func makeTitlebarToggle(symbol: String, title: String, shortcut: String) -> NSButton {
         let button = NSButton(title: "", target: nil, action: nil)
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)?

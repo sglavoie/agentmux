@@ -5,6 +5,7 @@ import AppKit
 /// project — and nothing typed here reaches a program.
 @MainActor
 final class WorkspaceSidebarView: NSTableView {
+    var onPeek: (() -> Void)?
     var onWidthChanged: (() -> Void)?
     var projectDividers = IndexSet() {
         didSet {
@@ -109,6 +110,9 @@ final class WorkspaceSidebarView: NSTableView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if event.keyCode == 49, event.modifierFlags.isDisjoint(with: [.command, .control, .option]) {
+            onPeek?(); return
+        }
         let returnKeys: Set<UInt16> = [36, 76]
         if returnKeys.contains(event.keyCode),
            event.modifierFlags.isDisjoint(with: [.command, .control, .option]) {

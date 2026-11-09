@@ -12,6 +12,8 @@ final class WorkspaceWelcomeModel: ObservableObject {
     @Published private(set) var summary: String?
     @Published private(set) var waiting = 0
     @Published private(set) var working = 0
+    @Published var pendingAnswers = 0
+    var remainingWaiting: Int { max(0, waiting - pendingAnswers) }
     @Published private(set) var live = false
     @Published private(set) var dismissed = false
     var isEnabled = false {

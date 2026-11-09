@@ -160,6 +160,7 @@ final class WorkspaceFlightLogModel: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var actionMessage: String?
     @Published private(set) var celebration: String?
+    @Published private(set) var earnedPatch: FlightMission?
     var onConversation: ((ConversationIdentity, String?) -> Void)?
     var onActivity: ((FlightSession, String) -> Void)?
     private let command: () -> AMXCommand?
@@ -248,13 +249,21 @@ final class WorkspaceFlightLogModel: ObservableObject {
             args += ["--title", title, "--project", project]
             for reference in references { args += ["--reference", reference] }
         }
+        let firstShipment = status == "shipped" && report?.missions?.first(where: { $0.id == id }).map { $0.shippedAt == nil } == true
         acting = true; actionMessage = nil
         runner.run({ command.json(FlightMission.self, args, mutates: true) }) { [weak self] result in
             guard let self else { return }
             self.acting = false
             switch result {
             case let .failure(error): self.actionMessage = error.message
-            case .success, .partial: self.actionMessage = "Mission saved."; onSaved?(); self.refresh()
+            case let .success(mission), let .partial(mission, _):
+                guard (id == nil || mission.id == id), mission.status == status else {
+                    self.actionMessage = "The mission update could not be confirmed. Refresh before trying again."; self.refresh(); return
+                }
+                self.actionMessage = "Mission saved."
+                if firstShipment, mission.status == "shipped", mission.shippedAt != nil,
+                   self.report?.settings.celebrations == true { self.earnedPatch = mission }
+                onSaved?(); self.refresh()
             }
         }
     }
@@ -309,6 +318,6 @@ final class WorkspaceFlightLogModel: ObservableObject {
             self?.acting = false; self?.actionMessage = error ?? "Flight Log exported."
         }
     }
-    func dismissCelebration() { celebration = nil }
-    func close() { generation += 1; loading = false; seenUnlocks = nil; trackingPeriod = nil; celebration = nil }
+    func dismissCelebration() { celebration = nil; earnedPatch = nil }
+    func close() { generation += 1; loading = false; seenUnlocks = nil; trackingPeriod = nil; celebration = nil; earnedPatch = nil }
 }

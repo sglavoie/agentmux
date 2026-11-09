@@ -30,6 +30,18 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     private var expanded: WorkspaceWaitingRow?
     private var preview = WorkspaceWaitingContext.Reading()
     private var contextSequence = 0
+    private(set) var sentAnswers: [AttentionCycler.Key: WorkspaceWaitingRow] = [:]
+    func answerWasSent(_ row: WorkspaceWaitingRow) -> Bool { sentAnswers[row.key]?.sameContext(as: row) == true }
+    func markAnswerSent(_ row: WorkspaceWaitingRow) {
+        sentAnswers[row.key] = row
+        lastWaiting = row.key
+        rebuild()
+    }
+    func reconcileSentAnswers(_ waiting: [WorkspaceWaitingRow], current: Bool) {
+        guard current else { return }
+        sentAnswers = sentAnswers.filter { _, sent in waiting.contains { $0.sameContext(as: sent) } }
+    }
+    var remainingWaiting: [WorkspaceWaitingRow] { visibleWaiting.filter { !answerWasSent($0) && rowIsCurrent($0) } }
     var lastWaiting: AttentionCycler.Key?
     private var heldWaiting: [WorkspaceWaitingRow]?
     private var pointerInside = false
@@ -124,6 +136,8 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         allGroupsButton.target = self
         allGroupsButton.action = #selector(allWaitingGroupsChanged(_:))
         allGroupsButton.toolTip = "Show waiting sessions from every group. Selecting a hidden session switches the sidebar to All."
+        nextButton.cell?.lineBreakMode = .byTruncatingTail
+        nextButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         nextButton.target = self
         nextButton.action = #selector(nextWaiting(_:))
         // The pane is narrow, so the button keeps the short form of the
@@ -213,6 +227,11 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
             heldWaiting = oldWaiting.map { old in newWaiting.first { $0.sameContext(as: old) } ?? old }
         } else { heldWaiting = nil }
         self.model = model
+        if model.current {
+            sentAnswers = sentAnswers.filter { key, sent in
+                model.waiting.first(where: { $0.key == key }).map { $0.sameContext(as: sent) } ?? true
+            }
+        }
         if let expanded, !model.current || model.tab != .waiting || !model.waiting.contains(where: { $0.sameContext(as: expanded) }) {
             clearContext()
         }
@@ -236,7 +255,9 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         updatesButton.isHidden = heldWaiting == nil
         updatesButton.title = "Update List (\(model.waiting.count))"
         updatesButton.toolTip = "Apply the updated waiting list. Items stay in place while you read."
-        nextButton.isEnabled = model.current && !visibleWaiting.isEmpty
+        nextButton.isEnabled = model.current && !remainingWaiting.isEmpty
+        nextButton.title = remainingWaiting.isEmpty ? "Next Waiting" : "Next waiting · \(remainingWaiting.count) remaining"
+        nextButton.setAccessibilityLabel(nextButton.title)
         let wanted = displayedLines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {
             for (view, line) in zip(lines, wanted) { update(view, to: line) }
@@ -267,7 +288,11 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     private func holdWhileNotCurrent() {
         for case let row as WorkspaceWaitingRowView in lines {
             let current = rowIsCurrent(row.row)
-            row.answerButton?.isEnabled = current
+            let sent = answerWasSent(row.row)
+            row.answerButton?.title = sent ? "Answer sent" : WorkspaceWaitingRowView.answerTitle
+            row.answerButton?.setAccessibilityLabel(sent ? "Answer sent for " + row.row.title : "Answer " + row.row.title)
+            row.answerButton?.isEnabled = current && !sent
+            if sent { row.detailLabel.stringValue = "Answer sent · waiting for agent" }
             row.answerButton?.toolTip = current ? nil : (model.current ? "This item changed. Update the waiting list." : Self.waitForDaemon)
             if !current && model.current { row.detailLabel.stringValue = "Changed · update the waiting list" }
         }
@@ -318,8 +343,8 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
 
     @objc func nextWaiting(_ sender: Any? = nil) {
         applyWaitingUpdates(nil)
-        guard model.current, !visibleWaiting.isEmpty else { return }
-        let rows = visibleWaiting
+        guard model.current, !remainingWaiting.isEmpty else { return }
+        let rows = remainingWaiting
         let next = lastWaiting.flatMap { key in rows.firstIndex { $0.key == key } }.map { ($0 + 1) % rows.count } ?? 0
         lastWaiting = rows[next].key
         onWaiting?(rows[next].key)
@@ -364,7 +389,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         case 126: moveReader(-1)
         case 53: readerHint.isHidden = true; updateReadingLayout(); onLeaveReader?()
         case 36, 76:
-            guard let row = visibleWaiting.first(where: { $0.key == readingKey }), rowIsCurrent(row), let answer = row.answer else { NSSound.beep(); return }
+            guard let row = visibleWaiting.first(where: { $0.key == readingKey }), rowIsCurrent(row), !answerWasSent(row), let answer = row.answer else { NSSound.beep(); return }
             onAnswer?(answer)
         case 116, 121:
             guard let row = lines.compactMap({ $0 as? WorkspaceWaitingRowView }).first(where: { $0.row.key == readingKey }),
@@ -378,9 +403,20 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         case 49:
             if let row = visibleWaiting.first(where: { $0.key == readingKey }) { toggleContext(row) }
         default:
-            if event.charactersIgnoringModifiers?.lowercased() == "n" { moveReader(1) }
+            if event.charactersIgnoringModifiers?.lowercased() == "n" { nextUnansweredInReader() }
             else { super.keyDown(with: event) }
         }
+    }
+
+    func nextUnansweredInReader() {
+        applyWaitingUpdates(nil)
+        let rows = remainingWaiting
+        guard !rows.isEmpty else { return }
+        let next = readingKey.flatMap { key in rows.firstIndex { $0.key == key } }.map { ($0 + 1) % rows.count } ?? 0
+        readingKey = rows[next].key
+        if expanded?.sameContext(as: rows[next]) != true { toggleContext(rows[next]) }
+        updateReadingLayout()
+        if let view = lines.compactMap({ $0 as? WorkspaceWaitingRowView }).first(where: { $0.row.key == readingKey }) { stack.scrollToVisible(view.frame) }
     }
 
     func moveReader(_ delta: Int) {

@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import os
 
 // Naming and pinning sessions.
@@ -58,8 +59,22 @@ extension WorkspaceWindowController {
     }
 
     private func askForName(_ row: WorkspaceRow, _ answer: @escaping @MainActor (String?) -> Void) {
-        askForName(title: row.displayName, name: row.name,
-                   explanation: "The name is shown above the session in the sidebar. Leave it empty to remove it.", answer)
+        let model = WorkspaceTaskName(row: row, command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
+        let alert = NSAlert()
+        alert.messageText = "Name the task"
+        alert.informativeText = row.project
+        let host = NSHostingView(rootView: WorkspaceTaskNameView(model: model))
+        host.frame = NSRect(x: 0, y: 0, width: 340, height: 145)
+        alert.accessoryView = host
+        alert.addButton(withTitle: "Save Name")
+        alert.addButton(withTitle: "Cancel")
+        model.load()
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                model.close()
+                answer(response == .alertFirstButtonReturn ? model.name : nil)
+            }
+        }
     }
 
     func nameTerminal(_ id: String) {
@@ -268,6 +283,8 @@ extension WorkspaceWindowController {
 
     private func sessionMenuItems(_ row: WorkspaceRow) -> [NSMenuItem] {
         guard let id = row.embeddedRuntimeSessionID else { return [] }
+        let peek = NSMenuItem(title: "Peek at Session", action: #selector(peekClickedSession(_:)), keyEquivalent: "")
+        peek.representedObject = row.key; peek.target = self
         let name = NSMenuItem(title: Self.nameSessionTitle, action: #selector(nameClickedSession(_:)), keyEquivalent: "")
         name.representedObject = row.key
         name.target = self
@@ -303,13 +320,13 @@ extension WorkspaceWindowController {
         end.representedObject = row.key
         end.target = self
         end.isEnabled = closing[id] == nil
-        guard detached.contains(id) else { return [name] + looks + [pin, .separator(), terminal, session, handoff, copy, .separator(), end] + reviewMenuItems(rows: [row]) }
+        guard detached.contains(id) else { return [peek, name] + looks + [pin, .separator(), terminal, session, handoff, copy, .separator(), end] + reviewMenuItems(rows: [row]) }
         // What a click or Return on the line does: attach again, taking the
         // session from whichever terminal has it.
         let reattach = NSMenuItem(title: Self.reattachTitle, action: #selector(reattachClickedSession(_:)), keyEquivalent: "")
         reattach.representedObject = row.key
         reattach.target = self
-        return [name] + looks + [pin, .separator(), reattach, terminal, session, handoff, copy, .separator(), end] + reviewMenuItems(rows: [row])
+        return [peek, name] + looks + [pin, .separator(), reattach, terminal, session, handoff, copy, .separator(), end] + reviewMenuItems(rows: [row])
     }
 
     @objc private func clickedSessionAction(_ sender: Any?) {

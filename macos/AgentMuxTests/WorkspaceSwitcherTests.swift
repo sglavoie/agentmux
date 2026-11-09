@@ -86,7 +86,7 @@ final class WorkspaceSwitcherTests: XCTestCase {
         named.name = "release notes"
         let entry = try XCTUnwrap(entries([named]).first)
         XCTAssertEqual(entry.title, "release notes")
-        XCTAssertTrue(entry.detail.hasPrefix("api — work"))
+        XCTAssertTrue(entry.detail.hasPrefix("api · claude · work"))
         XCTAssertEqual(WorkspaceSwitcher.matches("api", in: [entry]), [entry])
         XCTAssertEqual(WorkspaceSwitcher.matches("release", in: [entry]), [entry])
     }

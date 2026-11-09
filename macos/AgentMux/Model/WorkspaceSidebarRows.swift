@@ -69,6 +69,14 @@ struct WorkspaceRow: Equatable {
     var iconState = ""
     var review = SessionReview()
 
+    var taskMetadata: String {
+        var parts = [project, harness.isEmpty ? label : harness]
+        if !profile.isEmpty && profile != harness { parts.append(profile) }
+        if !branch.isEmpty { parts.append(branch) }
+        if !qualifier.isEmpty && qualifier != branch { parts.append(qualifier) }
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     var sessionLabel: String { qualified(label) }
     var namedLabel: String { name.isEmpty ? "" : qualified(name) }
     private func qualified(_ value: String) -> String {

@@ -59,7 +59,7 @@ enum WorkspaceSwitcher {
             if let id = row.embeddedRuntimeSessionID { names[id] = row.displayName }
         }
         let sessions = rows.map { row -> Entry in
-            let place = "\(row.project) — \(row.label)"
+            let place = row.taskMetadata
             return Entry(
                 place: .session(row.key),
                 glyph: row.glyph,

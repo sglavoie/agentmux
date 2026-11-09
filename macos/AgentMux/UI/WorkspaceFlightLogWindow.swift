@@ -36,6 +36,9 @@ struct WorkspaceFlightLogView: View {
     @State private var missionTitle = ""
     @State private var missionProject = ""
     @State private var missionReference = ""
+    @State private var revealedMission: String?
+    @State private var pendingMissionReveal = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     init(model: WorkspaceFlightLogModel, initialTab: String = "overview") {
         self.model = model; _tab = State(initialValue: initialTab)
     }
@@ -76,7 +79,20 @@ struct WorkspaceFlightLogView: View {
             }
             WorkspaceReadFailure(title: "Flight Log", error: model.error, retained: model.report != nil, loading: model.loading, retry: { model.refresh() })
             if let message = model.actionMessage { Text(message).font(.callout).textSelection(.enabled) }
-            if let celebration = model.celebration {
+            if let mission = model.earnedPatch, let at = mission.shippedAt {
+                HStack(spacing: 16) {
+                    WorkspaceMissionPatch(id: mission.id, title: mission.title, project: mission.project, shippedAt: at, compact: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Mission shipped").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text(mission.title).font(.headline)
+                        Text(mission.project).font(.caption)
+                        Button("Revisit mission") { revisitMission(mission.id) }
+                    }
+                    Spacer()
+                    Button("Dismiss") { model.dismissCelebration() }
+                }.padding(12).background(.tint.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+                    .transition(reduceMotion ? .opacity : .scale(scale: 0.97).combined(with: .opacity))
+            } else if let celebration = model.celebration {
                 HStack {
                     Label(celebration, systemImage: "sparkles").foregroundStyle(.tint)
                     Spacer()
@@ -91,6 +107,7 @@ struct WorkspaceFlightLogView: View {
                 switch tab { case "missions": missions; case "sessions": sessions; case "milestones": milestones; default: overview }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.padding(14)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: model.earnedPatch?.id)
             .confirmationDialog("Reset Flight Log history?", isPresented: $confirmingReset) {
                 Button("Reset History", role: .destructive) { model.reset() }
                 Button("Cancel", role: .cancel) {}
@@ -110,6 +127,7 @@ struct WorkspaceFlightLogView: View {
             .onChange(of: value.wrappedValue) { _, _ in model.refresh() }
     }
     private var missions: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Choose an outcome. Ship it. Keep the patch.").font(.title3)
@@ -135,8 +153,9 @@ struct WorkspaceFlightLogView: View {
                     GroupBox {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Image(systemName: mission.shippedAt == nil ? "paperplane.circle" : "seal.fill")
-                                    .font(.largeTitle).foregroundStyle(.tint)
+                                if let at = mission.shippedAt {
+                                    WorkspaceMissionPatch(id: mission.id, title: mission.title, project: mission.project, shippedAt: at, compact: true)
+                                } else { Image(systemName: "paperplane.circle").font(.largeTitle).foregroundStyle(.tint) }
                                 VStack(alignment: .leading) {
                                     Text(mission.title).font(.headline)
                                     Text(mission.project + " · " + mission.statusLabel).foregroundStyle(.secondary)
@@ -156,10 +175,26 @@ struct WorkspaceFlightLogView: View {
                             Text("Shipped is your confirmation that the outcome is complete. Earned patches remain if you reopen a mission.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }.padding(6)
-                    }
+                    }.id(mission.id)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(mission.id == revealedMission ? Color.accentColor : .clear, lineWidth: 2))
                 }
             }.padding(12)
         }.disabled(model.acting || model.report?.settings.enabled == false)
+            .onAppear { revealMission(using: proxy) }
+            .onChange(of: revealedMission) { _, _ in revealMission(using: proxy) }
+            .onChange(of: model.report?.generatedAt) { _, _ in revealMission(using: proxy) }
+        }
+    }
+    private func revealMission(using proxy: ScrollViewProxy) {
+        guard pendingMissionReveal, let revealedMission, model.report?.missions?.contains(where: { $0.id == revealedMission }) == true else { return }
+        proxy.scrollTo(revealedMission, anchor: .center)
+        pendingMissionReveal = false
+    }
+    private func revisitMission(_ id: String) {
+        pendingMissionReveal = true
+        revealedMission = id
+        model.project = ""; model.harness = ""; model.profile = ""
+        model.refresh(); tab = "missions"
     }
     private func missionStatusLabel(_ status: String) -> String {
         switch status {
@@ -324,12 +359,19 @@ struct WorkspaceFlightLogView: View {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 270))], spacing: 14) {
                 ForEach(model.report?.achievements ?? []) { achievement in
                     VStack(alignment: .leading, spacing: 10) {
-                        Label(achievement.title, systemImage: achievement.unlockedAt == nil ? "circle.dashed" : "medal.fill").font(.headline)
-                        Text(achievement.description).foregroundStyle(.secondary)
+                        if achievement.id.hasPrefix("mission:"), let at = achievement.unlockedAt {
+                            Button { revisitMission(String(achievement.id.dropFirst(8))) } label: {
+                                WorkspaceMissionPatch(id: String(achievement.id.dropFirst(8)), title: achievement.title,
+                                    project: achievement.description.replacingOccurrences(of: "Mission patch · ", with: ""), shippedAt: at)
+                            }.buttonStyle(.plain).help("Revisit mission")
+                        } else {
+                            Label(achievement.title, systemImage: achievement.unlockedAt == nil ? "circle.dashed" : "medal.fill").font(.headline)
+                            Text(achievement.description).foregroundStyle(.secondary)
+                        }
                         if let at = achievement.unlockedAt {
                             Text("Unlocked " + (WorkspaceActivityEntry.date(at)?.formatted(date: .abbreviated, time: .omitted) ?? at)).font(.caption)
                             if achievement.id.hasPrefix("mission:") {
-                                Button("Revisit mission") { model.project = ""; model.harness = ""; model.profile = ""; model.refresh(); tab = "missions" }
+                                Button("Revisit mission") { revisitMission(String(achievement.id.dropFirst(8))) }
                             } else {
                                 Button("Revisit session") { model.revealAchievement(achievement); tab = "sessions" }.disabled(achievement.sessionKey.isEmpty)
                             }

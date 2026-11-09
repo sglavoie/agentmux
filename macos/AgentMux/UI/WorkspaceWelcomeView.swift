@@ -35,8 +35,8 @@ struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
                     .lineLimit(2).help(model.attentionText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if model.waiting > 0 && model.live {
-                Button("Next waiting") { model.onAction(.nextWaiting) }
+            if model.remainingWaiting > 0 && model.live {
+                Button("Next waiting · \(model.remainingWaiting) remaining") { model.onAction(.nextWaiting) }
                     .controlSize(.small)
             }
             HStack(spacing: 10) {

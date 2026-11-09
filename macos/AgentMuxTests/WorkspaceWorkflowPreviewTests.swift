@@ -37,7 +37,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
                 expected: ["Answer sent", "Next waiting", "Activity", "Briefing", "Next Waiting Session", "Navigate"])
             model.observe(waiting: 0, working: 3, live: true, celebrate: true)
             try await render(VStack { WorkspaceWelcomeView(model: model); Spacer() },
-                name: "welcome-caught-up-\(dark)", width: 210, height: 230, dark: dark,
+                name: "welcome-caught-up-\(dark)", width: 210, height: 270, dark: dark,
                 expected: ["All caught up", "still working", "Activity", "Briefing"])
         }
     }
@@ -77,7 +77,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         for dark in [false, true] {
             for width in [CGFloat(780), CGFloat(1080)] {
                 try await render(WorkspaceBriefingView(model: model), name: "conversation-thread-briefing-\(Int(width))-\(dark)",
-                                 width: width, height: 760, dark: dark, expected: ["Thread", "2 conversations", "Implement pagination", "Continued in"])
+                                 width: width, height: 760, dark: dark, expected: ["Thread", "2 conversations", "Implement pagination", "Conversation details"])
             }
         }
         model.close()
@@ -115,7 +115,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             for width in [CGFloat(780), CGFloat(1060)] {
                 try await render(WorkspaceBriefingView(model: model), name: "project-briefing-\(Int(width))-\(dark)",
                                  width: width, height: 900, dark: dark,
-                                 expected: ["Project Briefing", "Needs you", "Open Session", "Live sessions", "Recent outcomes", "Conversation Recap", "Supporting messages"])
+                                 expected: ["Project Briefing", "Needs you", "Open Session", "Recent outcomes", "Agent reports", "Review the deployment configuration", "Conversation details"])
             }
         }
         model.close()
@@ -124,7 +124,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         emptyModel.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: true)
         emptyModel.open(preferredProject: nil); emptyModel.refresh()
         try await render(WorkspaceBriefingView(model: emptyModel), name: "project-briefing-empty", width: 780, height: 500,
-                         expected: ["Project Briefing", "No conversations found", "No live sessions"])
+                         expected: ["Project Briefing", "No conversations found", "Live sessions"])
         emptyModel.close()
         let failedModel = WorkspaceBriefingModel(command: { nil }, runner: PreviewRunner())
         failedModel.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: false)
@@ -254,6 +254,36 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             if character.isWhitespace { return nil }
             return "l1|!".contains(character) ? "i" : character
         })
+    }
+
+    func testExperienceSummaryPeekAndMissionPatchesInBothAppearances() async throws {
+        let runner = PreviewRunner()
+        let date = WorkspaceActivityEntry.date("2026-11-01T12:06:00Z")!
+        let command = ExperienceFixture.command { args in
+            if args.contains("recap") { return ExperienceFixture.recap(args.last!) }
+            return ExperienceFixture.report([ExperienceFixture.event("done", runtime: WorkspaceFixture.runtimeID(1), at: "2026-11-01T12:05:00Z")])
+        }
+        var session = WorkspaceFixture.tmux(1, project: "API", icon: "stop", conversation: "one")
+        session.name = "Fix login redirect"; session.branch = "fix/login-redirect"
+        let row = WorkspaceSidebar.row(session, now: date, glyphs: .fallback)
+        let summary = WorkspaceReturnSummary(command: { command }, runner: runner)
+        summary.observe(rows: [row], current: true, active: true, now: date)
+        summary.arrive(at: date.addingTimeInterval(-300), automatically: true)
+        summary.leave(at: date.addingTimeInterval(-300)); summary.arrive(at: date, automatically: true)
+        let peek = WorkspaceSessionPeekModel(command: { command }, runner: runner)
+        peek.show(row, waiting: nil, current: true, lastObserved: date)
+        for dark in [false, true] {
+            try await render(WorkspaceReturnSummaryView(model: summary, close: {}), name: "experience-return-\(dark)",
+                             width: 440, height: 512, dark: dark, expected: ["Since you stepped away", "Fix login redirect", "Review changes"])
+            try await render(WorkspaceSessionPeekView(model: peek, close: {}), name: "experience-peek-\(dark)",
+                             width: 410, height: 462, dark: dark, expected: ["Fix login redirect", "Saved outcome", "Preview only"])
+            try await render(HStack(alignment: .top, spacing: 24) {
+                WorkspaceMissionPatch(id: "mission-auth", title: "Ship authentication", project: "API", shippedAt: "2026-11-01T12:00:00Z")
+                WorkspaceMissionPatch(id: "mission-docs", title: "Publish the new guide", project: "Documentation", shippedAt: "2026-11-02T12:00:00Z")
+            }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity), name: "experience-patches-\(dark)", width: 580, height: 330, dark: dark,
+                expected: ["Ship authentication", "Publish the new guide", "Shipped"])
+        }
+        summary.close(); peek.close()
     }
 
     private func render<V: View>(_ view: V, name: String, width: CGFloat = 1000, height: CGFloat = 680,

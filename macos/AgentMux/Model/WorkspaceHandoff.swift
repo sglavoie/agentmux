@@ -9,6 +9,7 @@ final class WorkspaceHandoffModel: ObservableObject {
     let source: ConversationIdentity
     let preferredProfile: String
     @Published var profile = ""
+    @Published var taskName = ""
     @Published var content = ""
     @Published var instruction = ""
     @Published private(set) var directory = ""
@@ -19,6 +20,7 @@ final class WorkspaceHandoffModel: ObservableObject {
     @Published private(set) var error: String?
     @Published private(set) var artifactPath = ""
     var onLaunched: ((String, String) -> Void)?
+    var onNameFailure: ((String) -> Void)?
     var onSource: (() -> Void)?
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
@@ -88,6 +90,7 @@ final class WorkspaceHandoffModel: ObservableObject {
         guard canLaunch else { return }
         guard let command = command() else { error = AMXWording.current; return }
         let source = source, profile = profile, content = content, instruction = instruction
+        let taskName = taskName.trimmingCharacters(in: .whitespacesAndNewlines)
         launching = true; submitted = true; error = nil
         runner.run({ () -> AMXCommandResult<Reply> in
             // Reviewed context stays out of argv and shell strings. A private temporary
@@ -115,7 +118,21 @@ final class WorkspaceHandoffModel: ObservableObject {
                       reply.data.sourceHarness == source.harness, reply.data.sourceSessionID == source.sessionID else {
                     self.error = "The launch did not confirm the receiving session. Check the session list before trying again."; return
                 }
-                self.onLaunched?(id, self.artifactPath)
+                guard !taskName.isEmpty else { self.onLaunched?(id, self.artifactPath); return }
+                self.launching = true
+                self.runner.run({ command.json(NameSessionResult.self, NameSessionResult.arguments(runtimeSessionID: id, name: taskName), mutates: true) }) { [weak self] result in
+                    guard let self else { return }
+                    self.launching = false
+                    var problem: String?
+                    switch result {
+                    case let .success(named):
+                        if named.name != taskName { problem = "The agent started, but its task name was not confirmed." }
+                    case .partial: problem = "The agent started, but its task name was not confirmed."
+                    case let .failure(error): problem = error.message
+                    }
+                    self.onLaunched?(id, self.artifactPath)
+                    if let problem { self.onNameFailure?(problem) }
+                }
             case let .partial(reply, _):
                 self.artifactPath = reply.data.path ?? ""
                 self.error = (reply.message ?? "The handoff could not confirm a launch.") + " Check the session list before launching again."

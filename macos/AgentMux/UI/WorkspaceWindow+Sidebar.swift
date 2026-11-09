@@ -242,7 +242,7 @@ extension WorkspaceWindowController {
     /// scrolled into view and flashes. The keyboard stays where it is.
     /// False when the list has no line for it.
     @discardableResult
-    func revealInSidebar() -> Bool {
+    func revealInSidebar(emphasized: Bool = true) -> Bool {
         if let key = shownSessionKey, let row = state.row(key), sidebarWaitingOnly, !row.attention {
             setSidebarWaitingOnly(false)
         }
@@ -258,8 +258,8 @@ extension WorkspaceWindowController {
         guard let index = shownLine else { return false }
         syncSidebarSelection()
         sidebar.scrollRowToVisible(index)
-        (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index))
-        if !isInspectorCollapsed, let key = shownSessionKey { inspector.revealWaiting(key) }
+        (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index), pulseDuration: emphasized ? 0.32 : 0.16, pulses: 1)
+        if emphasized, !isInspectorCollapsed, let key = shownSessionKey { inspector.revealWaiting(key) }
         return true
     }
 

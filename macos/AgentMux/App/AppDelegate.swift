@@ -60,6 +60,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// True while a Preferences recorder listens for a shortcut.
     var isRecordingHotKey = false
     var wakeObserver: NSObjectProtocol?
+    var sleepObserver: NSObjectProtocol?
+    var resignedActiveObserver: NSObjectProtocol?
     var becameActiveObserver: NSObjectProtocol?
 
     var projects = ProjectCatalog()
@@ -210,8 +212,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.notifications?.refreshAuthorization()
-                if let workspace = self?.workspace, workspace.isOpen { workspace.welcome.showWelcomeOnce() }
+                if let workspace = self?.workspace, workspace.isOpen { workspace.welcome.showWelcomeOnce(); workspace.workspaceBecameActive() }
             }
+        }
+        resignedActiveObserver = NotificationCenter.default.addObserver(forName: NSApplication.didResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.workspace?.workspaceResignedActive() }
+        }
+        sleepObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.workspace?.workspaceResignedActive() }
         }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
@@ -221,7 +229,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
             // is not ends at its EOF, or by the watchdog, which does not
             // count the sleep). A feed waiting out a retry dials now.
             MainActor.assumeIsolated {
-                guard let self, self.store.feed != .live else { return }
+                guard let self else { return }
+                if NSApp.isActive { self.workspace?.workspaceBecameActive() }
+                guard self.store.feed != .live else { return }
                 Self.logger.notice("woke from sleep; dialing the feed")
                 self.connection.reconnectIfWaiting()
             }
@@ -380,7 +390,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         configWatcher?.stop()
         workspaceConfirmationFile.remove()
         if let wakeObserver { NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver) }
+        if let sleepObserver { NSWorkspace.shared.notificationCenter.removeObserver(sleepObserver) }
         if let becameActiveObserver { NotificationCenter.default.removeObserver(becameActiveObserver) }
+        if let resignedActiveObserver { NotificationCenter.default.removeObserver(resignedActiveObserver) }
     }
 
     // MARK: Embedded terminals

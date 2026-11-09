@@ -163,8 +163,8 @@ enum WorkspaceInspector {
             if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
             return WorkspaceWaitingRow(
                 key: row.key,
-                title: row.name.isEmpty ? row.displayName : "\(row.project) — \(row.namedLabel)",
-                detail: detail.joined(separator: " · "),
+                title: row.displayName,
+                detail: (row.name.isEmpty ? detail : [row.taskMetadata] + detail).joined(separator: " · "),
                 glyph: row.glyph,
                 toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
                 answer: answer,

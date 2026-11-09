@@ -248,8 +248,8 @@ struct PreferencesView: View {
                     note("Agents launched in the workspace run on Agent Mux's own tmux server: they keep running "
                         + "when the window closes, when the app quits, and across app updates.")
                     Toggle("Open the workspace at launch", isOn: $model.preferences.openWorkspaceAtLaunch)
-                    Toggle("Show Welcome back", isOn: $model.preferences.showWelcomeBack)
-                    note("Shows unread activity in the right sidebar once per app launch. Off by default.")
+                    Toggle("Show return summaries", isOn: $model.preferences.showWelcomeBack)
+                    note("Shows recent outcomes and waiting questions after two minutes away, plus unread activity at launch. The title-bar summary button is always available. Off by default.")
                     ForEach(model.snapshot.backend.lines, id: \.0) { row in
                         LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
                     }

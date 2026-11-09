@@ -74,7 +74,7 @@ extension WorkspaceInspectorView {
                 if let key = view?.row.key { self?.onWaiting?(key) }
             }
             view.onAnswer = { [weak self, weak view] answer in
-                guard let self, let view, self.rowIsCurrent(view.row) else { return }
+                guard let self, let view, self.rowIsCurrent(view.row), !self.answerWasSent(view.row) else { return }
                 self.lastWaiting = view.row.key
                 self.onAnswer?(answer)
             }

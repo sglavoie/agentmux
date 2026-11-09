@@ -20,7 +20,7 @@ extension AppDelegate {
         guard let workspace else { return }
         let before = workspace.place
         step(workspace)
-        if workspace.place != before { workspace.revealInSidebar() }
+        if workspace.place != before { workspace.revealInSidebar(emphasized: false) }
     }
     /// The workspace's own Dashboard: the main menu's, as opposed to the
     /// global shortcut, which goes where `amxDashboardPlace` says.

@@ -94,9 +94,8 @@ class WorkspaceRowView: NSTableRowView {
 
     static let flashKey = "amx.row.flash"
 
-    /// Pulses the accent over the line twice, so the eye finds it (once with
-    /// Reduce Motion), then leaves it as it was.
-    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.4, pulses: Int = 2) {
+    /// Briefly highlights the line so the eye finds it, then leaves it as it was.
+    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.32, pulses: Int = 1) {
         if flashView.superview !== self { addSubview(flashView, positioned: .below, relativeTo: selectionBorder) }
         flashView.frame = pillRect(verticalInset: 1)
         flashView.flash(color: color, pulseDuration: pulseDuration, pulses: pulses)
@@ -126,7 +125,7 @@ class WorkspaceRowView: NSTableRowView {
 final class WorkspaceRowFlashView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
-    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.4, pulses: Int = 2) {
+    func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.32, pulses: Int = 1) {
         wantsLayer = true
         layer?.opacity = 0
         effectiveAppearance.performAsCurrentDrawingAppearance {

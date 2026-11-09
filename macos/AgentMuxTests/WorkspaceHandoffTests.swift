@@ -80,6 +80,38 @@ final class WorkspaceHandoffTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: contextPath), "temporary context is removed after amx returns")
     }
 
+    func testHandoffCarriesEditedTaskNameOnlyAfterConfirmedLaunch() throws {
+        for confirmed in [true, false] {
+            let runner = HandoffRunner()
+            var renamed: [[String]] = []
+            let command = command { args in
+                if args.first == "name-session" {
+                    renamed.append(args)
+                    return self.reply(#"{"schema_version":1,"data":{"name":"Fix login redirect","changed":true}}"#)
+                }
+                if args.contains("--content-file") {
+                    let id = confirmed ? F.runtimeID(2) : ""
+                    return self.reply(#"{"schema_version":1,"data":{"data":{"launched":true,"runtime_session_id":"\#(id)","source_harness":"claude","source_session_id":"source-one"}}}"#)
+                }
+                return self.preview(args)
+            }
+            let model = WorkspaceHandoffModel(source: source, command: { command }, runner: runner)
+            model.taskName = "Fix login redirect"
+            var opened: [String] = []
+            model.onLaunched = { id, _ in opened.append(id) }
+            model.load(); runner.release(); model.launch(); runner.release()
+            if confirmed {
+                XCTAssertTrue(model.launching, "Keep submission locked while its name is saved")
+                runner.release()
+                XCTAssertEqual(renamed, [NameSessionResult.arguments(runtimeSessionID: F.runtimeID(2), name: "Fix login redirect")])
+                XCTAssertEqual(opened, [F.runtimeID(2)])
+            } else {
+                XCTAssertTrue(renamed.isEmpty)
+                XCTAssertTrue(opened.isEmpty)
+            }
+        }
+    }
+
     func testClosedOrMismatchedPreviewCannotEnableLaunch() {
         let runner = HandoffRunner()
         let command = command { args in self.preview(args) }

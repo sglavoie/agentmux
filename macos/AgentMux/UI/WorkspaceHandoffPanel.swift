@@ -38,6 +38,7 @@ struct WorkspaceHandoffView: View {
             if !model.artifactPath.isEmpty {
                 Button("Reveal Saved Handoff") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: model.artifactPath)]) }
             }
+            TextField("Task name (optional)", text: $model.taskName).disabled(model.submitted)
             HStack {
                 if model.directory.isEmpty && !model.loading { Button("Retry Preview") { model.load() }.disabled(model.submitted) }
                 Spacer()

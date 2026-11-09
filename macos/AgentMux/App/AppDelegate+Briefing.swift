@@ -16,7 +16,7 @@ extension AppDelegate {
             self?.openHistory(conversation: identity, recapMessage: index, returnTo: controller)
         }
         controller.model.onHandoff = { [weak self, weak controller] conversation in
-            self?.showHandoff(source: conversation.identity, profile: conversation.profile, on: controller?.window)
+            self?.showHandoff(source: conversation.identity, profile: conversation.profile, on: controller?.window, taskName: conversation.title)
         }
         controller.model.onContinue = { [weak self] conversation, done in
             guard let self else { done("The workspace is unavailable."); return }

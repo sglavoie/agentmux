@@ -38,6 +38,7 @@ extension AppDelegate {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
         if old.showWelcomeBack != new.showWelcomeBack {
             workspace?.welcome.isEnabled = new.showWelcomeBack
+            if !new.showWelcomeBack { workspace?.summaryPopover.close(); workspace?.returnSummary.close() }
             if let workspace, workspace.isOpen { workspace.welcome.showWelcomeOnce() }
         }
         workspace?.setSidebarZoom(percent: new.sidebarZoomPercent)
@@ -183,7 +184,9 @@ extension AppDelegate {
             refuse(DaemonPhrase.notConnected + ".")
             return
         }
-        guard let session = cycler.advance(in: store.managedSessions, order: attentionOrder, grouping: preferencesModel.preferences.sidebarGrouping, sorting: preferencesModel.preferences.sidebarSort) else {
+        let answered = Set(workspace?.allWaitingRows.filter { workspace?.inspector.answerWasSent($0) == true }.map(\.key) ?? [])
+        let candidates = store.managedSessions.filter { !answered.contains(AttentionCycler.key($0)) }
+        guard let session = cycler.advance(in: candidates, order: attentionOrder, grouping: preferencesModel.preferences.sidebarGrouping, sorting: preferencesModel.preferences.sidebarSort) else {
             Self.logger.notice("next attention: nothing is waiting")
             NSSound.beep()
             return

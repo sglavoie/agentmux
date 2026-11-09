@@ -168,8 +168,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let flash = try XCTUnwrap(row.contentView?.subviews.first { $0 is WorkspaceRowFlashView })
         XCTAssertNil(flash.hitTest(.zero), "the pulse must not intercept the row's buttons")
         let animation = try XCTUnwrap(flash.layer?.animation(forKey: WorkspaceRowView.flashKey))
-        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : 2
-        XCTAssertEqual(animation.duration, 0.4 * Double(pulses), accuracy: 0.001)
+        XCTAssertEqual(animation.duration, 0.32, accuracy: 0.001)
     }
 
     func testRevealingSessionRespectsHiddenInspectorTabAndWaitingFilter() throws {
@@ -234,8 +233,8 @@ final class WorkspaceInspectorTests: XCTestCase {
         session.reason = "permission"
         session.name = "migrations"
         let waiting = WorkspaceInspector.waiting([session], now: now, glyphs: .fallback)
-        XCTAssertEqual(waiting.map(\.title), ["api — migrations"])
-        XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 5m"])
+        XCTAssertEqual(waiting.map(\.title), ["migrations"])
+        XCTAssertEqual(waiting.map(\.detail), ["api · claude · personal · Needs permission · 5m"])
         XCTAssertTrue(waiting[0].toolTip.hasPrefix("api — personal"), "the name does not hide where the session is")
     }
 

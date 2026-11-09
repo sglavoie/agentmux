@@ -11,14 +11,17 @@ extension AppDelegate {
         showHandoff(source: source, profile: row.label, on: workspace?.window, below: row.key)
     }
 
-    func showHandoff(source: ConversationIdentity, profile: String, on window: NSWindow?, below parent: AttentionCycler.Key? = nil) {
+    func showHandoff(source: ConversationIdentity, profile: String, on window: NSWindow?, below parent: AttentionCycler.Key? = nil, taskName: String = "") {
         guard let window, source.isUsable else { return }
         if let reason = gate.unavailableReason(.sessions) { return refuse(reason) }
         if let panel = handoffPanel, panel.panel.isVisible { panel.panel.makeKeyAndOrderFront(nil); return }
         guard window.attachedSheet == nil else { return }
         let sourceRow = store.feed == .live ? store.managedSessions.first(where: { $0.conversation == source }) : nil
+        let inheritedName = sourceRow.flatMap { $0.name.isEmpty ? nil : $0.name } ?? taskName
         let parent = parent ?? sourceRow.map { AttentionCycler.key($0) }
         let model = WorkspaceHandoffModel(source: source, preferredProfile: profile, command: { [weak self] in self?.command })
+        model.taskName = inheritedName
+        model.onNameFailure = { [weak self] problem in self?.reportFailure(title: "Task name could not be carried forward", problem) }
         let panel = WorkspaceHandoffPanel(model: model)
         handoffPanel = panel
         model.onSource = { [weak self] in self?.openHistory(conversation: source) }

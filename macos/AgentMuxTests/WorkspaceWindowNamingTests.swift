@@ -22,7 +22,8 @@ extension WorkspaceWindowTests {
         let index = try XCTUnwrap(workspace.items.firstIndex { $0 == .view(terminal) })
         let items = workspace.contextMenuItems(forRow: index)
         XCTAssertEqual(items.map(\.title), ["Name Terminal…", "Close"])
-        _ = try XCTUnwrap(items[0].target).perform(try XCTUnwrap(items[0].action), with: items[0])
+        let naming = try XCTUnwrap(items.first { $0.title == "Name Terminal…" })
+        _ = try XCTUnwrap(naming.target).perform(try XCTUnwrap(naming.action), with: naming)
         XCTAssertEqual(asked.first?.0, terminal)
         asked[0].1("  build logs  ")
         XCTAssertEqual(workspace.views.view(terminal.id)?.displayName, "build logs")
@@ -98,7 +99,7 @@ extension WorkspaceWindowTests {
 
         // The right-click menu pins the session under the pointer.
         var items = workspace.contextMenuItems(forRow: try index(of: other.key))
-        _ = try XCTUnwrap(items[4].target).perform(try XCTUnwrap(items[4].action), with: items[4])
+        _ = try XCTUnwrap(items[5].target).perform(try XCTUnwrap(items[5].action), with: items[5])
         XCTAssertEqual(lines(), ["[Pinned]", "web/work", "[Done]", "[api]", "api/personal", "api/work"],
                        "a project with nothing left under it is not listed")
         XCTAssertEqual(workspace.sessionKey(of: other.key), "1", "the digits follow the list")
@@ -121,8 +122,8 @@ extension WorkspaceWindowTests {
         workspace.refresh()
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "web/work", "[Done]", "[api]", "api/personal"])
         items = workspace.contextMenuItems(forRow: try index(of: other.key))
-        XCTAssertEqual(items[4].title, "Unpin")
-        _ = try XCTUnwrap(items[4].target).perform(try XCTUnwrap(items[4].action), with: items[4])
+        XCTAssertEqual(items[5].title, "Unpin")
+        _ = try XCTUnwrap(items[5].target).perform(try XCTUnwrap(items[5].action), with: items[5])
         XCTAssertEqual(lines(), ["[Pinned]", "api/work", "[Done]", "[api]", "api/personal", "[web]", "web/work"])
         XCTAssertTrue(workspace.togglePinOfShownSession())
         XCTAssertEqual(lines(), ["[Done]", "[api]", "api/personal", "api/work", "[web]", "web/work"])

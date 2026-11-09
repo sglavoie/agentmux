@@ -125,6 +125,12 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     let sidebar = WorkspaceSidebarView()
     let groupFilter = WorkspaceGroupFilter()
+    lazy var sessionPeek = WorkspaceSessionPeekModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
+    var presentingPeek = false
+    let peekPopover = WorkspaceContextPopover()
+    lazy var returnSummary = WorkspaceReturnSummary(command: { [weak self] in self?.delegate?.workspaceRecapCommand() }, defaults: AppDelegate.isRunningTests ? nil : .standard)
+    let summaryPopover = WorkspaceContextPopover()
+    let summaryButton = WorkspaceWindowChrome.makeSummaryButton()
     lazy var welcome = WorkspaceWelcomeModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
     lazy var welcomeView: WorkspaceSidebarHostingView<WorkspaceWelcomeView> = {
         let host = WorkspaceSidebarHostingView(rootView: WorkspaceWelcomeView(model: welcome))
@@ -406,9 +412,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         self.glyphs = glyphs
         self.now = now
         super.init()
+        configureReturnSummary()
         welcome.onReceipt = { [weak self] receipt in
             guard let self, self.isOpen, receipt.title == "All caught up" else { return }
-            WorkspaceCopyNotice.announce(receipt.title + ". " + receipt.detail, from: self.window)
+            self.showNotice(receipt.title + " · " + receipt.detail)
         }
         welcome.onAction = { [weak self] command in self?.delegate?.workspacePerform(command) }
         inspector.onSource = { [weak self] identity in self?.delegate?.workspaceOpenHandoffSource(identity) }
