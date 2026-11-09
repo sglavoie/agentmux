@@ -2,6 +2,38 @@ import XCTest
 @testable import AgentMux
 
 extension WorkspaceSidebarTests {
+    func testNewProjectsKeepAlphabeticalPositionsInEveryLayout() {
+        let initial = [F.tmux(1, project: "🧠 BrainNotes"), F.tmux(2, project: "Katana"),
+                       F.tmux(3, project: "sis"), F.tmux(4, project: "↑ ZoomFlow")]
+        var order = WorkspaceOrder()
+        order.setFlat(initial.map(AttentionCycler.key))
+        let added = [F.tmux(5, project: "🐱 amx"), F.tmux(6, project: "📝 Docket"),
+                     F.tmux(7, project: "zzz")]
+        for grouping in WorkspaceSidebarGrouping.allCases {
+            var state = WorkspaceState()
+            state.apply(WorkspaceSidebar.groups(initial, order: order, grouping: grouping))
+            for snapshot in [initial + added, Array((initial + added).reversed())] {
+                state.apply(WorkspaceSidebar.groups(snapshot, order: order, grouping: grouping))
+                XCTAssertEqual(state.rows.map(\.key), [5, 1, 6, 2, 3, 4, 7].map { .embedded(F.runtimeID($0)) },
+                               "new projects sort by name in \(grouping), independently of snapshot order")
+            }
+        }
+    }
+
+    func testNewCompactRowsKeepDefaultSlotsWithoutLosingSavedRelativeOrder() {
+        let sessions = [F.tmux(1, project: "api", profile: "a"), F.tmux(2, project: "api", profile: "c"),
+                        F.tmux(3, project: "web"), F.tmux(4, project: "api", profile: "b"),
+                        F.tmux(5, project: "amx")]
+        var order = WorkspaceOrder()
+        // Include an ended session and a duplicate to exercise persisted preferences.
+        order.setFlat([3, 9, 2, 1, 2].map { .embedded(F.runtimeID($0)) })
+        let rows = WorkspaceSidebar.groups(sessions, order: order, grouping: .compact).flatMap(\.rows)
+        XCTAssertEqual(rows.map(\.key), [5, 3, 4, 2, 1].map { .embedded(F.runtimeID($0)) })
+        XCTAssertEqual(rows.filter { [1, 2, 3].map { AttentionCycler.Key.embedded(F.runtimeID($0)) }.contains($0.key) }.map(\.key),
+                       [3, 2, 1].map { .embedded(F.runtimeID($0)) }, "saved sessions keep their relative order")
+        XCTAssertEqual(order.flat, [3, 9, 2, 1, 2].map(F.runtimeID), "rendering does not rewrite saved preferences")
+    }
+
     func testStableProjectsLiftPinsAndRestoreTheirSavedPlacesOnUnpin() throws {
         var sessions = [F.tmux(1, project: "api", profile: "a", icon: "bolt"),
                         F.tmux(2, project: "api", profile: "b", icon: "key", attention: true),

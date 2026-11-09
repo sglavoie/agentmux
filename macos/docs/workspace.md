@@ -69,7 +69,9 @@ ASL answer panel work the same either way.
   appear under **No branch**. Both list pins above projects and keep unpinned
   waiting sessions in their project, counting them on project headings.
   **Compact list** uses one flat list with project names on every row and its
-  own saved drag order across projects below the pinned sessions. The state
+  own saved drag order across projects below the pinned sessions. New sessions
+  take their default alphabetical project/profile positions while previously
+  arranged sessions keep their saved relative order. The state
   chips above these lists still jump to sessions without moving them out of
   their project.
   **Sort sessions by** is independent of grouping: **Manual order** uses saved

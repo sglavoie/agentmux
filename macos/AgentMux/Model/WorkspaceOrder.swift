@@ -8,6 +8,8 @@ import Foundation
 /// It names sessions, never positions: a session that is not named, one
 /// launched since the drag, follows the named ones in the order
 /// `WorkspaceSidebar` gives it. A project nobody dragged in is not here.
+/// Compact order instead leaves unnamed sessions in their default slots so
+/// a saved list does not send every newly launched project to the bottom.
 struct WorkspaceOrder: Equatable {
     static let defaultsKey = "amxWorkspaceSessionOrder"
     static let pinnedDefaultsKey = "amxWorkspacePinnedSessions"
@@ -61,13 +63,19 @@ struct WorkspaceOrder: Equatable {
         }.map(\.element)
     }
 
+    /// Apply the saved relative order only to slots occupied by saved sessions.
+    /// New sessions keep their default project/profile positions in `rows`.
     func arrangedFlat(_ rows: [WorkspaceRow]) -> [WorkspaceRow] {
         let rank = Dictionary(flat.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
-        return rows.enumerated().sorted {
-            let a = rank[Self.token($0.element.key)] ?? Int.max
-            let b = rank[Self.token($1.element.key)] ?? Int.max
-            return a != b ? a < b : $0.offset < $1.offset
-        }.map(\.element)
+        let slots = rows.indices.filter { rank[Self.token(rows[$0].key)] != nil }
+        let saved = slots.sorted {
+            let a = rank[Self.token(rows[$0].key)]!
+            let b = rank[Self.token(rows[$1].key)]!
+            return a != b ? a < b : $0 < $1
+        }
+        var arranged = rows
+        for (slot, source) in zip(slots, saved) { arranged[slot] = rows[source] }
+        return arranged
     }
 
     /// A project's rows in the order they were dragged into.

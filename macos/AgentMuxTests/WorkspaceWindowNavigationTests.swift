@@ -5,6 +5,42 @@ import XCTest
 @testable import AgentMux
 
 extension WorkspaceWindowTests {
+    func testNewProjectsSortInEveryGroupingAndTerminalPresentation() throws {
+        let initial = [F.tmux(1, project: "🧠 BrainNotes", profile: "a"),
+                       F.tmux(2, project: "🧠 BrainNotes", profile: "b"),
+                       F.tmux(3, project: "↑ ZoomFlow")]
+        let added = [F.tmux(4, project: "🐱 amx"), F.tmux(5, project: "📝 Docket")]
+        let manual = [4, 2, 1, 5, 3].map { AttentionCycler.Key.embedded(F.runtimeID($0)) }
+        func displayedKeys() -> [AttentionCycler.Key] {
+            workspace.items.compactMap { if case let .row(row) = $0 { return row.key }; return nil }
+        }
+        for compact in [false, true] {
+            workspace.setCompactSidebar(compact)
+            for grouping in WorkspaceSidebarGrouping.allCases {
+                workspace.setSidebarSort(.manual)
+                workspace.setSidebarGrouping(grouping)
+                workspace.order = WorkspaceOrder()
+                workspace.order.set([2, 1].map { .embedded(F.runtimeID($0)) }, for: "🧠 BrainNotes")
+                workspace.order.setFlat([2, 1, 3].map { .embedded(F.runtimeID($0)) })
+                app.store.apply(snapshot: F.snapshot(initial))
+                for live in [initial + added, Array((initial + added).reversed())] {
+                    app.store.apply(snapshot: F.snapshot(live))
+                    XCTAssertEqual(displayedKeys(), manual, "\(grouping), compact terminals: \(compact)")
+                    XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), manual)
+                }
+
+                workspace.order.visit(.embedded(F.runtimeID(3)))
+                workspace.setSidebarSort(.recentlyVisited)
+                let recent = grouping == .compact
+                    ? [3, 4, 2, 1, 5].map { AttentionCycler.Key.embedded(F.runtimeID($0)) } : manual
+                XCTAssertEqual(displayedKeys(), recent, "visits reorder rows within their group")
+                XCTAssertEqual(workspace.sessionShortcutRows.map(\.key), recent)
+                workspace.setSidebarSort(.manual)
+                XCTAssertEqual(displayedKeys(), manual, "returning to manual restores alphabetical project placement")
+            }
+        }
+    }
+
     func testStateChangesFlashWithTheirSectionColorAfterReordering() throws {
         var live = sessions
         var pinned = F.tmux(6, project: "api", icon: "stop")
