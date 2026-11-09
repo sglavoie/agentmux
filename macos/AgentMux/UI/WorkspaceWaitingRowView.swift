@@ -60,6 +60,15 @@ final class WorkspaceWaitingRowView: NSBox {
         fillColor = isPressed ? Self.pressedFill : isHovered ? Self.hoveredFill : Self.restingFill
     }
 
+    /// Mirror the session list's profile strip on the inspector card's left edge.
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let color = row.tabColor else { return }
+        NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: 1).setFill()
+        NSRect(x: bounds.minX, y: bounds.minY,
+               width: WorkspaceSidebarView.stripWidth, height: bounds.height).fill()
+    }
+
     init(_ row: WorkspaceWaitingRow) {
         self.row = row
         super.init(frame: .zero)
@@ -159,7 +168,7 @@ final class WorkspaceWaitingRowView: NSBox {
             contextLabel.widthAnchor.constraint(equalTo: contextScroll.contentView.widthAnchor),
             column.topAnchor.constraint(equalTo: content.topAnchor, constant: 6),
             column.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -6),
-            column.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 8),
+            column.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 8 + WorkspaceSidebarView.stripWidth),
             column.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -8),
         ])
         for label in [titleLabel, detailLabel] {
@@ -243,6 +252,7 @@ final class WorkspaceWaitingRowView: NSBox {
     /// an Answer… button is the line's own and does not change.
     func update(_ row: WorkspaceWaitingRow) {
         self.row = row
+        needsDisplay = true
         titleLabel.stringValue = [row.glyph, row.title].filter { !$0.isEmpty }.joined(separator: " ")
         detailLabel.stringValue = row.detail
         // The button's cell is the element VoiceOver reads.

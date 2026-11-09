@@ -36,6 +36,30 @@ final class WorkspaceInspectorTests: XCTestCase {
 
     // MARK: Data
 
+    func testWaitingCardsFollowSessionColorsWithoutReplacingTheirContext() throws {
+        var live = sessions
+        let key = AttentionCycler.Key.embedded(F.runtimeID(2))
+        live[1].tabColor = "#e2d36b"
+        app.store.apply(snapshot: F.snapshot(live))
+        workspace.setInspectorCollapsed(false)
+        func card() throws -> WorkspaceWaitingRowView {
+            try XCTUnwrap(workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == key })
+        }
+        let original = try card()
+        let context = original.row
+        XCTAssertEqual(original.row.tabColor, workspace.state.row(key)?.tabColor)
+        XCTAssertNotNil(original.row.tabColor)
+        for color in ["#90b4e8", "", "invalid"] {
+            live[1].tabColor = color
+            app.store.apply(snapshot: F.snapshot(live))
+            let updated = try card()
+            XCTAssertTrue(updated === original, "color updates reuse the card")
+            XCTAssertTrue(updated.row.sameContext(as: context), "color updates do not invalidate context")
+            XCTAssertEqual(updated.row.tabColor, WorkspaceTabColor(hex: color))
+            XCTAssertEqual(updated.row.tabColor, workspace.state.row(key)?.tabColor)
+        }
+    }
+
     private func loadGroupedSessions() {
         app.workspaceProjects = [
             ProjectEntry(profile: "work", title: "api", groups: ["work"]),

@@ -41,6 +41,8 @@ struct WorkspaceWaitingRow: Equatable {
     var category = WorkspaceWaitingFilter.other
     var changedAt: Date?
     var contextVersion = ""
+    /// The session/profile color used by the workspace session list.
+    var tabColor: WorkspaceTabColor?
 
     /// Unlike the relative age label, this identity changes only when the
     /// waiting item changes. It prevents late context from a previous prompt.
@@ -168,7 +170,8 @@ enum WorkspaceInspector {
                 answer: answer,
                 category: WorkspaceWaitingFilter.category(icon: session.iconState, answer: answer),
                 changedAt: session.changedAt,
-                contextVersion: "\(session.lastEventAt):\(runs[row.key]?.latestQuestionID ?? ""):\(runs[row.key]?.unanswered ?? 0)"
+                contextVersion: "\(session.lastEventAt):\(runs[row.key]?.latestQuestionID ?? ""):\(runs[row.key]?.unanswered ?? 0)",
+                tabColor: row.tabColor
             )
         }
     }

@@ -115,6 +115,8 @@ extension WorkspaceConsistencyPolishTests {
         app.store.apply(snapshot: WorkspaceFixture.snapshot(sessions))
         workspace.groupFilter.pills.first { $0.group == "tradition" }?.performClick(nil)
         workspace.select(.embedded(WorkspaceFixture.runtimeID(2)))
+        workspace.setInspectorCollapsed(false)
+        workspace.setInspectorTab(.waiting)
         workspace.window.setContentSize(NSSize(width: 1000, height: 640))
         workspace.window.orderFront(nil)
         let directory = URL(fileURLWithPath: "/tmp/agentmux-polish-previews")
