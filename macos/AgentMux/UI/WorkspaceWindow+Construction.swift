@@ -145,6 +145,9 @@ extension WorkspaceWindowController {
 
         let window = WorkspaceZoomWindow(contentViewController: split)
         window.onSidebarZoom = { [weak self] change in self?.zoomSidebars(change) }
+        window.onPlaceholderReturn = { [weak self] event in
+            self?.placeholder.button.performKeyEquivalent(with: event) ?? false
+        }
         window.title = "Agent Mux"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false

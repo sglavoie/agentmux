@@ -279,7 +279,7 @@ extension WorkspaceWindowController {
         otherPlaceholder.isHidden = otherShown != nil
         if shown == nil { fillPlaceholder(wanted) }
         if otherShown == nil {
-            otherPlaceholder.show(title: title(for: otherPlace), message: otherExplanation, button: "Focus pane") { [weak self] in
+            otherPlaceholder.show(title: title(for: otherPlace), message: otherExplanation, button: "Focus pane", isDefault: false) { [weak self] in
                 _ = self?.focusOtherPane()
             }
         }

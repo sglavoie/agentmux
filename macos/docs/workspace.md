@@ -139,6 +139,10 @@ ASL answer panel work the same either way.
   closes. None of those ends the agent. A hidden terminal hears of a new
   size, and of a new backing scale, only once it is shown, so tmux is never
   sized for a grid nobody sees.
+- **Placeholder actions.** Return or keypad Enter activates the primary button
+  in the selected pane, including **Reopen**, **Reattach**, and **Try Again**.
+  This works with the sidebar shown or hidden. Text fields, the Waiting reader,
+  and live terminals keep their own Enter behavior, including in split panes.
 - **Accessibility.** A terminal is a text area to VoiceOver
   (`SurfaceView+Accessibility.swift`, ported from upstream): its value is
   the screen's text, reread at most every half second, with the selection

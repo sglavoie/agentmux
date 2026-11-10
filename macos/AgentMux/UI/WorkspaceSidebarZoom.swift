@@ -68,14 +68,18 @@ final class WorkspaceSidebarZoomView: NSView {
 final class WorkspaceZoomWindow: NSWindow {
     enum Zoom { case bigger, smaller, reset }
     var onSidebarZoom: ((Zoom) -> Void)?
+    var onPlaceholderReturn: ((NSEvent) -> Bool)?
 
     override func sendEvent(_ event: NSEvent) {
         if performSidebarZoom(with: event) { return }
+        // Plain Return normally goes straight to the first responder. Give
+        // the active placeholder a chance before the sidebar consumes it.
+        if onPlaceholderReturn?(event) == true { return }
         super.sendEvent(event)
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        performSidebarZoom(with: event) || super.performKeyEquivalent(with: event)
+        performSidebarZoom(with: event) || onPlaceholderReturn?(event) == true || super.performKeyEquivalent(with: event)
     }
 
     private func performSidebarZoom(with event: NSEvent) -> Bool {

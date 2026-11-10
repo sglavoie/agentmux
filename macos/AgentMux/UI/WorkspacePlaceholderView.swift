@@ -1,12 +1,18 @@
 import AppKit
 
-/// The placeholder's button. As the default button it takes Return, but
-/// never from a field being typed in, such as the Go to… list's above it.
+/// The active placeholder's primary action takes Return from the pane or
+/// sidebar, without taking input from text fields, the inspector, or terminals.
 @MainActor
 final class WorkspacePlaceholderButton: NSButton {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if window?.firstResponder is NSText || window?.firstResponder is WorkspaceInspectorView { return false }
-        return super.performKeyEquivalent(with: event)
+        guard event.type == .keyDown, [36, 76].contains(event.keyCode),
+              event.modifierFlags.isDisjoint(with: [.command, .control, .option, .shift]),
+              keyEquivalent == "\r", isEnabled, !isHiddenOrHasHiddenAncestor,
+              let window, window.attachedSheet == nil,
+              window.firstResponder === self || window.firstResponder === window
+                || window.firstResponder is WorkspaceSidebarView else { return false }
+        performClick(nil)
+        return true
     }
 }
 
@@ -27,6 +33,7 @@ final class WorkspacePlaceholderView: NSView {
         messageLabel.textColor = .secondaryLabelColor
         messageLabel.alignment = .center
         button.bezelStyle = .rounded
+        button.keyEquivalentModifierMask = []
         button.target = self
         button.action = #selector(pressed(_:))
         secondaryActions.orientation = .vertical
@@ -49,7 +56,7 @@ final class WorkspacePlaceholderView: NSView {
     }
 
     /// With `isDefault`, Return presses the button, as it does a sheet's.
-    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = false, secondary: [(String, () -> Void)] = [], onPress: (() -> Void)? = nil) {
+    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = true, secondary: [(String, () -> Void)] = [], onPress: (() -> Void)? = nil) {
         showSecondaryActions(secondary)
         titleLabel.stringValue = title
         messageLabel.stringValue = message
