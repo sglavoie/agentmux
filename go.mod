@@ -1,18 +1,18 @@
 module github.com/sglavoie/agentmux
 
-go 1.26.2
+go 1.26.7
 
 require (
 	charm.land/bubbletea/v2 v2.1.1
-	charm.land/lipgloss/v2 v2.0.6
+	charm.land/lipgloss/v2 v2.1.0
 	github.com/BurntSushi/toml v1.6.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/rivo/uniseg v0.4.7
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
-	golang.org/x/sys v0.49.0
+	github.com/spf13/pflag v1.1.0
+	golang.org/x/sys v0.50.0
 )
 
 require (
