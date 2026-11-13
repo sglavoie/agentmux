@@ -15,7 +15,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/diagnostics"
 )
 
-const testASLContractSet = "asl-amx-1.d0c0c70abf623b3e"
+const testASLContractSet = "asl-amx-1.827fc9974d8f37c0"
 
 // aslSecretCanaries are secret-shaped strings. No bundle may carry them in any
 // mode: they are what the redactor's patterns exist for, and a reason string

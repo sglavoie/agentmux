@@ -243,7 +243,7 @@ enum ASLRefusal {
     static let errorCodes: Set<String> = [
         "invalid-plan", "invalid-action", "empty-text", "question-body-too-large", "missing-question-body",
         "malformed-json", "invalid-request", "unsupported-protocol", "unknown-method", "frame-too-large",
-        "internal-error", "mutation-failed", "workbench-unavailable", "contract-set-mismatch",
+        "internal-error", "mutation-failed", "contract-set-mismatch",
     ]
 
     /// The bridge code in a daemon refusal (`<code>: <message>`), or "" for
@@ -273,15 +273,13 @@ enum ASLRefusal {
         case "empty-text":
             return "The answer is empty: type a reply before submitting"
         case "question-body-too-large":
-            return "This question is too large to show here: open it in the agent-session-loop Workbench"
+            return "This question is too large to show here: run asl questions <plan-dir> to read it"
         case "missing-question-body":
-            return "This question carries no readable text: open it in the agent-session-loop Workbench"
+            return "This question carries no readable text: run asl questions <plan-dir> to inspect it"
         case "invalid-plan":
             return "agent-session-loop no longer recognizes this plan directory"
         case "mutation-failed":
             return "agent-session-loop could not record the action; nothing was applied"
-        case "workbench-unavailable":
-            return "The Workbench is unavailable in this bridge session"
         case "invalid-request", "invalid-action":
             return "The daemon refused the request as malformed"
         case "unknown-method", "unsupported-protocol":
@@ -334,7 +332,6 @@ enum ASLRefusal {
         case ASLMethod.runResume: return "resume"
         case ASLMethod.runStopAfterCurrent: return "stop after current"
         case ASLMethod.runAbort: return "abort"
-        case ASLMethod.workbenchEnsure: return "workbench"
         case ASLMethod.runRedirect: return "redirect"
         default: return method
         }

@@ -173,11 +173,6 @@ func hermeticModelBackgroundCommands() modelBackgroundCommands {
 				return aslSnapshotLoadedMsg{seq: seq, status: aslbridge.Status{Reason: "uitest: live agent-session-loop access is disabled"}}
 			}
 		},
-		aslWorkbench: func(_ Model, rowID, _, focus string) tea.Cmd {
-			return func() tea.Msg {
-				return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
-			}
-		},
 		aslQuestion: func(_ Model, seq int, _, _ string) tea.Cmd {
 			return func() tea.Msg {
 				return aslQuestionLoadedMsg{seq: seq, err: errors.New("uitest: live agent-session-loop access is disabled")}

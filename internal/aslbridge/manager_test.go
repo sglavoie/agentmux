@@ -324,10 +324,3 @@ func TestAChildThatFailsItsHandshakeStillReportsItsExecutable(t *testing.T) {
 		t.Fatalf("executable = %q (%s), want the launched path", status.Executable, status.ExecutableSource)
 	}
 }
-
-func TestWorkbenchRejectsUnknownFocus(t *testing.T) {
-	m := New(Options{Mode: ModeAuto, Command: "asl", Logger: discardLogger()})
-	if _, err := m.Workbench(context.Background(), WorkbenchRequest{PlanDir: "/p", Focus: "everything"}); !errors.Is(err, ErrInvalidRequest) {
-		t.Fatalf("Workbench error = %v, want ErrInvalidRequest", err)
-	}
-}

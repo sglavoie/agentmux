@@ -246,8 +246,8 @@ before writing with the same classifiers the daemon uses:
 
 **agent-session-loop.** `amx send` types at a terminal; it is not a reply to
 a run. A supervisor question is answered through the run's mailbox, from the
-Runs view, Agent Mux.app's answer panel, or the Workbench, so that the run
-records the reply. A session the daemon reports as having such a question
+Runs view or Agent Mux.app's answer panel, so that the run records the
+reply. A session the daemon reports as having such a question
 open is therefore refused whatever is passed (`asl_question_open`). A session
 that runs a run with no question open needs `--yes`, because what is typed
 reaches the run's supervisor, and so does any session while the daemon cannot

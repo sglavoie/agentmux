@@ -66,8 +66,6 @@ func MethodLabel(method string) string {
 		return "stop after current"
 	case aslbridge.MethodRunAbort:
 		return "abort"
-	case aslbridge.MethodWorkbenchEnsure:
-		return "workbench"
 	case aslbridge.MethodRunRedirect:
 		return "redirect"
 	default:
@@ -105,7 +103,6 @@ var errorCodes = map[string]bool{
 	"frame-too-large":         true,
 	"internal-error":          true,
 	"mutation-failed":         true,
-	"workbench-unavailable":   true,
 	// Not stale: a refresh cannot fix it. The two sides were built from different
 	// contract sets, so the same pairing reproduces this forever and the operator
 	// needs the sentence to point at the install rather than at the run.
@@ -144,15 +141,13 @@ func RefusalText(err error) string {
 	case "empty-text":
 		return "the answer is empty: type a reply before submitting"
 	case "question-body-too-large":
-		return "this question is too large to show here: open the Workbench with w"
+		return "this question is too large to show here: run asl questions <plan-dir> to read it"
 	case "missing-question-body":
-		return "this question carries no readable text: open the Workbench with w"
+		return "this question carries no readable text: run asl questions <plan-dir> to inspect it"
 	case "invalid-plan":
 		return "agent-session-loop no longer recognizes this plan directory"
 	case "mutation-failed":
 		return "agent-session-loop could not record the action; nothing was applied"
-	case "workbench-unavailable":
-		return "the Workbench is unavailable in this bridge session"
 	case "invalid-request", "invalid-action":
 		return "the daemon refused the request as malformed"
 	case "unknown-method", "unsupported-protocol":

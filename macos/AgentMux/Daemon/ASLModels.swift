@@ -47,7 +47,6 @@ enum ASLMethod {
     static let runResume = "run.resume"
     static let runStopAfterCurrent = "run.stop_after_current"
     static let runAbort = "run.abort"
-    static let workbenchEnsure = "workbench.ensure"
     static let runRedirect = "run.redirect"
 }
 

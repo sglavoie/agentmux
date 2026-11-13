@@ -125,8 +125,7 @@ physical sleep/wake observations.
 `just asl-integration` is separate and opt-in. Every other recipe is hermetic
 and needs no `agent-session-loop` installed; this one launches the real bridge
 against a throwaway plan and state root and checks the handshake, capabilities,
-snapshot decoding, action and receipt shapes, the Workbench URL shape, and a
-clean shutdown. When it is asked for, a missing or protocol-incompatible ASL
+snapshot decoding, action and receipt shapes, and a clean shutdown. When it is asked for, a missing or protocol-incompatible ASL
 fails it rather than skipping — a silent skip would report a compatible pair
 that was never actually checked.
 

@@ -29,10 +29,9 @@ const (
 	// ASL bridge requests. They are answered from daemon memory or forwarded to
 	// the bridge subprocess; every one of them fails cleanly when the optional
 	// integration is disabled or unavailable.
-	TypeASLSnapshot  MessageType = "asl_snapshot"
-	TypeASLQuestion  MessageType = "asl_question"
-	TypeASLAction    MessageType = "asl_action"
-	TypeASLWorkbench MessageType = "asl_workbench"
+	TypeASLSnapshot MessageType = "asl_snapshot"
+	TypeASLQuestion MessageType = "asl_question"
+	TypeASLAction   MessageType = "asl_action"
 
 	// IconStatePreserve signals the client to keep the current icon unchanged.
 	IconStatePreserve = "preserve"
@@ -271,7 +270,6 @@ type ASLRequest struct {
 	ActionToken string               `json:"action_token,omitempty"`
 	Resolution  string               `json:"resolution,omitempty"`
 	Note        string               `json:"note,omitempty"`
-	Focus       string               `json:"focus,omitempty"`
 	Text        aslbridge.SecretText `json:"text,omitempty"`
 }
 
@@ -279,13 +277,12 @@ type ASLRequest struct {
 // Status accompanies every reply so a client can render availability and
 // staleness without a second round trip.
 type ASLResponse struct {
-	Status    aslbridge.Status         `json:"status"`
-	Snapshot  *aslbridge.Snapshot      `json:"snapshot,omitempty"`
-	Meta      *aslbridge.SnapshotMeta  `json:"meta,omitempty"`
-	Receipts  []aslbridge.Operation    `json:"receipts,omitempty"`
-	Question  *aslbridge.QuestionBody  `json:"question,omitempty"`
-	Operation *aslbridge.Operation     `json:"operation,omitempty"`
-	Workbench *aslbridge.WorkbenchLink `json:"workbench,omitempty"`
+	Status    aslbridge.Status        `json:"status"`
+	Snapshot  *aslbridge.Snapshot     `json:"snapshot,omitempty"`
+	Meta      *aslbridge.SnapshotMeta `json:"meta,omitempty"`
+	Receipts  []aslbridge.Operation   `json:"receipts,omitempty"`
+	Question  *aslbridge.QuestionBody `json:"question,omitempty"`
+	Operation *aslbridge.Operation    `json:"operation,omitempty"`
 }
 
 // Response is a JSON message sent by the daemon back to the client.

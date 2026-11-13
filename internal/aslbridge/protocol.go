@@ -144,7 +144,6 @@ const (
 	MethodRunResume           = "run.resume"
 	MethodRunStopAfterCurrent = "run.stop_after_current"
 	MethodRunAbort            = "run.abort"
-	MethodWorkbenchEnsure     = "workbench.ensure"
 	// MethodRunRedirect submits a correction bound to the exact turn a run is
 	// on. MethodRunRedirectStatus and MethodRunRecoverConversation are reads:
 	// the journal's standing for a plan, and which manual recovery a pause is
@@ -197,7 +196,6 @@ const (
 	CodeFrameTooLarge        = "frame-too-large"
 	CodeInternalError        = "internal-error"
 	CodeMutationFailed       = "mutation-failed"
-	CodeWorkbenchUnavailable = "workbench-unavailable"
 	CodeInvalidPlan          = "invalid-plan"
 	CodeNoActiveRun          = "no-active-run"
 	CodeRunMismatch          = "run-mismatch"
@@ -232,7 +230,6 @@ var ErrorCodes = []string{
 	CodeFrameTooLarge,
 	CodeInternalError,
 	CodeMutationFailed,
-	CodeWorkbenchUnavailable,
 	CodeInvalidPlan,
 	CodeNoActiveRun,
 	CodeRunMismatch,
@@ -248,14 +245,6 @@ var ErrorCodes = []string{
 	CodeContractSetMismatch,
 	CodeStaleSnapshot,
 }
-
-// Workbench deep-link focus keys.
-const (
-	FocusReply        = "reply"
-	FocusVerification = "verification"
-	FocusActive       = "active"
-	FocusEvents       = "events"
-)
 
 // Closure resolutions accepted by question.resolve.
 const (

@@ -6,9 +6,8 @@ package session
 //
 // It is not a way to answer an agent-session-loop supervisor question. That
 // answer is the run's, travels by its mailbox, and is given from the Runs
-// view, the app's answer panel, or the Workbench; a session the daemon
-// reports as having such a question open is refused here whatever flags are
-// passed. Only the daemon can say so: when it does not answer, the send is
+// view or the app's answer panel; a session the daemon reports as having such
+// a question open is refused here whatever flags are passed. Only the daemon can say so: when it does not answer, the send is
 // refused unless --yes is passed, and with --yes it goes ahead without that
 // check.
 
@@ -76,8 +75,8 @@ What is sent has to fit what the agent's screen shows, read just before:
 
 A session running an agent-session-loop run needs --yes, since what is typed
 there reaches the run's supervisor. One with a supervisor question open is
-always refused (asl_question_open): answer it from the Runs view, the app, or
-the Workbench, so the run records the reply. When the daemon cannot be asked,
+always refused (asl_question_open): answer it from the Runs view or the app,
+so the run records the reply. When the daemon cannot be asked,
 --yes is needed too, and sends without knowing whether a question is open.
 
 --operation-id names the send so that asking twice writes once: a repeat of a
@@ -419,7 +418,7 @@ func sendASLGuard(record runtimesession.Record, slot sendSlot, known, yes bool) 
 			"the daemon did not answer, so there is no telling whether %s runs an agent-session-loop run; `amx doctor` says why, and --yes sends anyway", record.Project)
 	case known && (slot.state.ASLQuestionOpen || slot.state.IconState == "question" && len(slot.state.ASLRunIDs) > 0):
 		return "asl_question_open", fmt.Errorf(
-			"%s has an agent-session-loop question open; answer it from the Runs view, Agent Mux.app, or the Workbench, so the run records the reply", record.Project)
+			"%s has an agent-session-loop question open; answer it from the Runs view or Agent Mux.app, so the run records the reply", record.Project)
 	case !known || len(slot.state.ASLRunIDs) == 0:
 		return "", nil
 	case !yes:

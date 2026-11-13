@@ -219,9 +219,6 @@ func TestASLSnapshotArrivingOnDashboardDoesNotNavigate(t *testing.T) {
 	if actions := d.TerminalActions("focus"); len(actions) != 0 {
 		t.Fatalf("snapshot focused a terminal session: %v", actions)
 	}
-	if len(d.WorkbenchOpens()) != 0 {
-		t.Fatalf("snapshot opened the Workbench: %v", d.WorkbenchOpens())
-	}
 }
 
 func TestASLRunsStaleBannerThenUnavailable(t *testing.T) {
@@ -424,68 +421,6 @@ func TestASLFocusWithoutAnyCandidateExplainsItself(t *testing.T) {
 	}
 	if !strings.Contains(renderStatusBar(m), "no live session") {
 		t.Fatalf("status bar hides the focus reason: %q", renderStatusBar(m))
-	}
-}
-
-func TestASLWorkbenchOpensStateSpecificLinkWithoutRetainingIt(t *testing.T) {
-	t.Parallel()
-
-	d := enterASLRunsDriver(t)
-	if err := d.Key(keyASLWorkbench); err != nil {
-		t.Fatalf("opening the Workbench: %v", err)
-	}
-	opens := d.WorkbenchOpens()
-	if len(opens) != 1 {
-		t.Fatalf("Workbench opens = %d, want 1", len(opens))
-	}
-	if opens[0].RowID != "row-reply" || opens[0].Focus != aslbridge.FocusReply {
-		t.Fatalf("open = %+v, want row-reply focused on the reply", opens[0])
-	}
-
-	// The verifying run has to map to a different Workbench view.
-	selectASLRun(t, d, "row-verify")
-	if err := d.Key(keyASLWorkbench); err != nil {
-		t.Fatalf("opening the Workbench: %v", err)
-	}
-	opens = d.WorkbenchOpens()
-	if len(opens) != 2 || opens[1].Focus != aslbridge.FocusVerification {
-		t.Fatalf("second open = %+v, want the verification view", opens)
-	}
-}
-
-func TestASLWorkbenchFailureStaysGenericAndLeaksNothing(t *testing.T) {
-	t.Parallel()
-
-	d := enterASLRunsDriver(t)
-	m := d.Model()
-	updated, _ := m.handleASLWorkbenchDone(aslWorkbenchDoneMsg{
-		rowID: "row-reply", focus: aslbridge.FocusReply, err: errASLWorkbenchOpen,
-	})
-	m = updated.(Model)
-	if m.aslErr == nil {
-		t.Fatal("a failed Workbench open reported nothing")
-	}
-	surfaces := []string{m.aslErr.Error(), renderStatusBar(m), renderASLRuns(m)}
-	for _, surface := range surfaces {
-		for _, secret := range []string{"http://", "https://", "token", "Bearer"} {
-			if strings.Contains(surface, secret) {
-				t.Fatalf("surface leaks %q: %s", secret, surface)
-			}
-		}
-	}
-}
-
-func TestOpenBrowserURLRefusesNonHTTPSchemes(t *testing.T) {
-	t.Parallel()
-
-	for _, raw := range []string{"file:///etc/passwd", "javascript:alert(1)", "", "https://", "not a url"} {
-		err := commands.OpenBrowserURL(raw)
-		if err == nil {
-			t.Fatalf("openBrowserURL(%q) accepted the input", raw)
-		}
-		if strings.Contains(err.Error(), raw) && raw != "" {
-			t.Fatalf("openBrowserURL(%q) echoed the input back: %v", raw, err)
-		}
 	}
 }
 

@@ -17,7 +17,6 @@ Inside the runs view:
 - `r`: open the response form for the selected run
 - `s`: stop the run after the current session, after confirmation
 - `X`: abort the run, after confirmation (`a` opens actions elsewhere and does nothing here)
-- `w`: open the run's Workbench page in your browser
 - `Enter` or `f`: focus or attach the session bound to the run
 - `Y`: copy the run's workspace root
 - `?`: show the keymap; `q`, `Esc`, or `A` returns to the dashboard (`A` is a
@@ -38,10 +37,9 @@ and moves session, harness, and workspace into the detail panel underneath.
 
 The cockpit answers questions, resumes, stops, and aborts. Everything else —
 plan authoring, run scheduling, verification detail, per-session logs, and any
-configuration — lives in the Workbench, which `w` opens. Workbench URLs are
-minted per request, carry a single-use token, and are handed straight to the
-browser: Agent Mux never stores, caches, or logs one, so a failed open simply
-asks again rather than reusing a link.
+configuration — stays with the `asl` CLI. A question the response form cannot
+show in full (too large, cut short, or with no readable text) is printed by
+`asl questions <plan-dir>`.
 
 ### Degraded behavior
 
@@ -70,8 +68,7 @@ never retries a mutation on your behalf. Refresh and reissue.
 
 Question and reply text is fetched only to render the form you are looking at.
 It is never written into snapshots, caches, logs, the causal journal, hook
-events, toasts, `amx doctor`, or a debug bundle. The same holds for Workbench
-tokens. What *is* published about the integration is deliberately limited to
+events, toasts, `amx doctor`, or a debug bundle. What *is* published about the integration is deliberately limited to
 counters and identities: whether the bridge is available, its version and
 protocol, its restart count, snapshot age, how many actions were accepted,
 consumed, rejected, expired, or superseded, and a sanitized failure reason that

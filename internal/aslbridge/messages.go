@@ -178,14 +178,6 @@ type Operation struct {
 	Detail      string `json:"detail"`
 }
 
-// WorkbenchLink is a tokenized loopback deep link into one plan's detail view.
-type WorkbenchLink struct {
-	PlanDir string `json:"plan_dir"`
-	RowID   string `json:"row_id"`
-	Focus   string `json:"focus"`
-	URL     string `json:"url"`
-}
-
 // QuestionRequest selects one question body.
 type QuestionRequest struct {
 	PlanDir    string
@@ -204,12 +196,6 @@ type ActionRequest struct {
 	Resolution  string
 	Note        string
 	Text        SecretText
-}
-
-// WorkbenchRequest asks for a deep link into one plan.
-type WorkbenchRequest struct {
-	PlanDir string
-	Focus   string
 }
 
 // frame is the union of every inbound protocol object. Decoding into one

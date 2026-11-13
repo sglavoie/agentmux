@@ -17,8 +17,8 @@ import (
 const responseInnerWidth = 76
 
 // responseBodyLines bounds how much of a question is shown at once. The
-// remainder is reachable by opening the Workbench; the form is for answering,
-// not for reading an entire transcript.
+// remainder is reachable with `asl questions <plan-dir>`; the form is for
+// answering, not for reading an entire transcript.
 const responseBodyLines = 10
 
 // responseEditorLines bounds the visible height of the answer editor.
@@ -126,7 +126,7 @@ func responseBodyBlock(state ResponseState, width int) []string {
 	}
 	if len(wrapped) > responseBodyLines {
 		wrapped = wrapped[:responseBodyLines]
-		wrapped = append(wrapped, styleDim.Render("… open the Workbench with w for the full question"))
+		wrapped = append(wrapped, styleDim.Render("… run asl questions <plan-dir> for the full question"))
 	}
 	return wrapped
 }

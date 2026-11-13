@@ -2,8 +2,8 @@
 // how it reads it.
 //
 // Two directions of evidence meet here. Outbound, the optional bridge
-// subprocess answers snapshot, question, action, and workbench requests, and
-// this package owns the seam, its capability block, the four request handlers,
+// subprocess answers snapshot, question, and action requests, and this package
+// owns the seam, its capability block, the three request handlers,
 // the refusals that carry them, and the client-side decoding of their
 // replies. Inbound, ASL publishes durable per-run state that the daemon reads:
 // the projection phase a discovered run is in, the supervisor mailbox markers

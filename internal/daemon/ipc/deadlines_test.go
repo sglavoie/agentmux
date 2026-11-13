@@ -84,7 +84,6 @@ func TestDeadlineFor(t *testing.T) {
 		want time.Duration
 	}{
 		{protocol.TypeASLAction, asl.ActionDeadline},
-		{protocol.TypeASLWorkbench, asl.ActionDeadline},
 		{protocol.TypeASLQuestion, asl.ReadDeadline},
 		{protocol.TypeASLSnapshot, asl.ReadDeadline},
 		{protocol.TypeFocusSession, FocusSessionDeadline},

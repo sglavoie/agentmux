@@ -26,7 +26,7 @@ const NotificationTestDeadline = 5 * time.Second
 // asl_action would turn a settled mutation into an unknown one.
 func deadlineFor(t protocol.MessageType) time.Duration {
 	switch t {
-	case protocol.TypeASLAction, protocol.TypeASLWorkbench:
+	case protocol.TypeASLAction:
 		return asl.ActionDeadline
 	case protocol.TypeASLQuestion, protocol.TypeASLSnapshot:
 		return asl.ReadDeadline

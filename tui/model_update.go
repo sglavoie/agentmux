@@ -285,9 +285,6 @@ func (m Model) dispatch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case aslSnapshotLoadedMsg:
 		return m.handleASLSnapshotLoaded(msg)
 
-	case aslWorkbenchDoneMsg:
-		return m.handleASLWorkbenchDone(msg)
-
 	case aslQuestionLoadedMsg:
 		return m.handleASLQuestionLoaded(msg)
 

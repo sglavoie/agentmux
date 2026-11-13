@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const testContractSet = "asl-amx-1.d0c0c70abf623b3e"
+const testContractSet = "asl-amx-1.827fc9974d8f37c0"
 
 // fakeRunner installs a scripted subprocess for one test. Every degraded path
 // this package exists to name is unreachable with a real ASL on the box, so the

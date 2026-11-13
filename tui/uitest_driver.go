@@ -62,9 +62,6 @@ type uitestDriver struct {
 	err        error
 	liveAccess uitestLiveAccessGuard
 
-	workbenchMu    sync.Mutex
-	workbenchOpens []uitestWorkbenchOpen
-
 	aslActionMu      sync.Mutex
 	aslActions       []uitestASLAction
 	terminalActionMu sync.Mutex
@@ -117,28 +114,6 @@ func (d *uitestDriver) recordASLAction(action uitestASLAction) {
 	d.aslActionMu.Lock()
 	d.aslActions = append(d.aslActions, action)
 	d.aslActionMu.Unlock()
-}
-
-// uitestWorkbenchOpen records one attempted Workbench deep link. It carries the
-// row and the requested focus but no URL, because a fixture never mints a
-// tokenized link: the recording surface cannot leak a bearer token even if a
-// test prints it.
-type uitestWorkbenchOpen struct {
-	RowID string
-	Focus string
-}
-
-// WorkbenchOpens returns the Workbench deep links the model attempted, in order.
-func (d *uitestDriver) WorkbenchOpens() []uitestWorkbenchOpen {
-	d.workbenchMu.Lock()
-	defer d.workbenchMu.Unlock()
-	return append([]uitestWorkbenchOpen(nil), d.workbenchOpens...)
-}
-
-func (d *uitestDriver) recordWorkbenchOpen(open uitestWorkbenchOpen) {
-	d.workbenchMu.Lock()
-	d.workbenchOpens = append(d.workbenchOpens, open)
-	d.workbenchMu.Unlock()
 }
 
 type uitestLiveAccessGuard struct {

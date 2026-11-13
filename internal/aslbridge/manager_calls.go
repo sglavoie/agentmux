@@ -1,10 +1,10 @@
 package aslbridge
 
-// This file is every request the daemon issues on a caller's behalf: the two
-// reads that must not be cached (a question body, a tokenized Workbench link)
-// and the one mutation entry point. Validation happens before any round trip,
-// and a mutation additionally demands a connection the daemon may currently act
-// on, which is what mutableConn distinguishes from liveConn.
+// This file is every request the daemon issues on a caller's behalf: the read
+// that must not be cached (a question body) and the one mutation entry point.
+// Validation happens before any round trip, and a mutation additionally
+// demands a connection the daemon may currently act on, which is what
+// mutableConn distinguishes from liveConn.
 
 import (
 	"context"
@@ -40,36 +40,6 @@ func (m *Manager) QuestionBody(ctx context.Context, req QuestionRequest) (Questi
 		return QuestionBody{}, ErrUnavailable
 	}
 	return body, nil
-}
-
-// Workbench returns a tokenized deep link for one plan.
-func (m *Manager) Workbench(ctx context.Context, req WorkbenchRequest) (WorkbenchLink, error) {
-	if strings.TrimSpace(req.PlanDir) == "" {
-		return WorkbenchLink{}, fmt.Errorf("%w: plan_dir is required", ErrInvalidRequest)
-	}
-	if req.Focus != "" && !validFocus(req.Focus) {
-		return WorkbenchLink{}, fmt.Errorf("%w: unsupported workbench focus %q", ErrInvalidRequest, req.Focus)
-	}
-	c, err := m.liveConn()
-	if err != nil {
-		return WorkbenchLink{}, err
-	}
-	params := map[string]any{"plan_dir": req.PlanDir}
-	if req.Focus != "" {
-		params["focus"] = req.Focus
-	}
-	callCtx, cancel := context.WithTimeout(ctx, ReadTimeout)
-	defer cancel()
-	raw, err := c.call(callCtx, MethodWorkbenchEnsure, params)
-	if err != nil {
-		return WorkbenchLink{}, err
-	}
-	var link WorkbenchLink
-	if err := json.Unmarshal(raw, &link); err != nil {
-		m.failSession(c, contaminationError("workbench.ensure result"))
-		return WorkbenchLink{}, ErrUnavailable
-	}
-	return link, nil
 }
 
 // ----------------------------------------------------------------
@@ -198,12 +168,4 @@ func (m *Manager) mutableConn() (*conn, error) {
 		return nil, ErrMutationsDisabled
 	}
 	return m.conn, nil
-}
-
-func validFocus(focus string) bool {
-	switch focus {
-	case FocusReply, FocusVerification, FocusActive, FocusEvents:
-		return true
-	}
-	return false
 }

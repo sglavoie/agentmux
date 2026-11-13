@@ -218,15 +218,14 @@ For lifecycle behavior and confirmation preferences, see
   moved. All of them are resolved the same way: let the view refresh and reissue.
   Agent Mux never resubmits a mutation on its own, because a bridge that
   accepted a write and then died leaves an outcome nobody can infer.
-- **`w` does not open the Workbench**: the link is minted per request and never
-  cached, so a failure is always current, not stale. `workbench-unavailable`
-  means ASL could not bind or start the server; check whether another Workbench
-  is already bound. `no supported URL opener on this platform` means Agent Mux
-  found no `open`/`xdg-open` equivalent. Only `http`/`https` URLs are opened.
+- **A question is too large or has no readable text**: the response form
+  refuses it (`question-body-too-large` or `missing-question-body`) rather than
+  showing a fragment. Run `asl questions <plan-dir>` to print the paused
+  question in the terminal.
 - **A debug bundle needs to be shared**: the ASL block in `doctor.json` carries
   availability, version, protocol, restart count, snapshot age, per-method
   request counts, and action outcome counts. It carries no plan path, run ID,
-  question ID, question or reply text, and no Workbench token; bridge-supplied
+  question ID, or question or reply text; bridge-supplied
   failure messages are reduced to their stable error code before publication.
 - **A failure crosses both halves of the pairing**: run
   `amx debug bundle --include-asl`. The bundle then also carries

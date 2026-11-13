@@ -59,7 +59,6 @@ const (
 	// open. Plans, Worktrees, and ASL Runs are palette entries on the dashboard.
 	// Past Sessions keeps its direct `S` shortcut for browsing recent activity.
 	keyASLRuns              = "A"
-	keyASLWorkbench         = "w" // ModeASLRuns: open the run's Workbench deep link
 	keyASLRespond           = "r" // ModeASLRuns: open the response/resume form for the run
 	keyASLStop              = "s" // ModeASLRuns: confirm stop after the current session
 	keyASLAbort             = "X" // ModeASLRuns: confirm aborting the in-flight turn (the dashboard's end-session letter, so `a` keeps meaning actions)

@@ -18,7 +18,6 @@ type Bridge interface {
 	Receipts() []aslbridge.Operation
 	QuestionBody(ctx context.Context, req aslbridge.QuestionRequest) (aslbridge.QuestionBody, error)
 	Act(ctx context.Context, req aslbridge.ActionRequest) (aslbridge.Operation, error)
-	Workbench(ctx context.Context, req aslbridge.WorkbenchRequest) (aslbridge.WorkbenchLink, error)
 }
 
 // BridgeHolder publishes the installed integration to concurrent request
@@ -133,26 +132,4 @@ func HandleAction(bridge Bridge, req protocol.Request) protocol.Response {
 		return failure(bridge, err)
 	}
 	return protocol.Response{OK: true, ASL: &protocol.ASLResponse{Status: bridge.Status(), Operation: &op}}
-}
-
-// HandleWorkbench asks the installed bridge for a deep link into one plan's
-// detail view.
-func HandleWorkbench(bridge Bridge, req protocol.Request) protocol.Response {
-	if bridge == nil {
-		return failure(bridge, aslbridge.ErrDisabled)
-	}
-	params := req.ASL
-	if params == nil {
-		return failure(bridge, aslbridge.ErrInvalidRequest)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), aslbridge.ActionTimeout)
-	defer cancel()
-	link, err := bridge.Workbench(ctx, aslbridge.WorkbenchRequest{
-		PlanDir: params.PlanDir,
-		Focus:   params.Focus,
-	})
-	if err != nil {
-		return failure(bridge, err)
-	}
-	return protocol.Response{OK: true, ASL: &protocol.ASLResponse{Status: bridge.Status(), Workbench: &link}}
 }

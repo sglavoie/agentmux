@@ -5,7 +5,6 @@ import (
 
 	"github.com/sglavoie/agentmux/internal/aslbridge"
 	"github.com/sglavoie/agentmux/tui/asl"
-	"github.com/sglavoie/agentmux/tui/commands"
 	"github.com/sglavoie/agentmux/tui/layout"
 )
 
@@ -276,7 +275,6 @@ var aslRunsFooterPalette = []footerEntry{
 	{"r", "respond", footerSectionRow, aslRespondAvailable, footerPriorityEssential},
 	{"s", "stop", footerSectionRow, aslStopAvailable, footerPriorityPrimary},
 	{keyASLAbort, "abort", footerSectionRow, aslAbortAvailable, footerPriorityPrimary},
-	{"w", "workbench", footerSectionRow, aslWorkbenchAvailable, footerPriorityPrimary},
 	{"Y", "path", footerSectionRow, func(m Model) bool {
 		row, ok := m.selectedASLRow()
 		return ok && row.WorkspaceRoot != ""
@@ -361,11 +359,6 @@ func aslFocusAvailable(m Model) bool {
 		return true
 	}
 	return len(asl.FallbackCandidates(row, m.sessions)) > 0
-}
-
-func aslWorkbenchAvailable(m Model) bool {
-	row, ok := m.selectedASLRow()
-	return ok && row.PlanDir != "" && commands.BrowserSupported()
 }
 
 // footerHintLines renders a static footerEntry palette into physical footer

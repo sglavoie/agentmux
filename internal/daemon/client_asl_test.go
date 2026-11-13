@@ -48,7 +48,6 @@ func TestClientASLRoundTrip(t *testing.T) {
 		receipts:  []aslbridge.Operation{{OperationID: "op1", Status: aslbridge.OperationAccepted}},
 		body:      aslbridge.QuestionBody{QuestionID: "q1", Body: aslbridge.SecretText("which region?")},
 		operation: aslbridge.Operation{OperationID: "op2", Status: aslbridge.OperationAccepted},
-		link:      aslbridge.WorkbenchLink{PlanDir: "/p", URL: "http://127.0.0.1:8765/plans/p"},
 	}
 	client := ipc.NewClientWithSocket(startASLTestServer(t, bridge))
 
@@ -83,14 +82,6 @@ func TestClientASLRoundTrip(t *testing.T) {
 	}
 	if bridge.actions != 1 {
 		t.Fatalf("bridge received %d actions; the client must not retry", bridge.actions)
-	}
-
-	link, err := client.ASLWorkbench(aslbridge.WorkbenchRequest{PlanDir: "/p", Focus: aslbridge.FocusActive})
-	if err != nil {
-		t.Fatalf("ASLWorkbench: %v", err)
-	}
-	if link.Focus != aslbridge.FocusActive {
-		t.Fatalf("link = %+v", link)
 	}
 }
 

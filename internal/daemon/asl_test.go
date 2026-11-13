@@ -23,7 +23,6 @@ type fakeASLBridge struct {
 	receipts  []aslbridge.Operation
 	body      aslbridge.QuestionBody
 	operation aslbridge.Operation
-	link      aslbridge.WorkbenchLink
 	err       error
 
 	lastAction   aslbridge.ActionRequest
@@ -59,14 +58,6 @@ func (f *fakeASLBridge) Act(_ context.Context, req aslbridge.ActionRequest) (asl
 	return f.operation, nil
 }
 
-func (f *fakeASLBridge) Workbench(_ context.Context, req aslbridge.WorkbenchRequest) (aslbridge.WorkbenchLink, error) {
-	if f.err != nil {
-		return aslbridge.WorkbenchLink{}, f.err
-	}
-	f.link.Focus = req.Focus
-	return f.link, nil
-}
-
 func newASLHandler(bridge asl.Bridge) *Handler {
 	h := NewHandler(activity.NewStateGuard(0), nil)
 	if bridge != nil {
@@ -79,7 +70,7 @@ func TestASLRequestsAreRefusedWithoutABridge(t *testing.T) {
 	t.Parallel()
 
 	h := newASLHandler(nil)
-	for _, msgType := range []protocol.MessageType{protocol.TypeASLSnapshot, protocol.TypeASLQuestion, protocol.TypeASLAction, protocol.TypeASLWorkbench} {
+	for _, msgType := range []protocol.MessageType{protocol.TypeASLSnapshot, protocol.TypeASLQuestion, protocol.TypeASLAction} {
 		resp := h.Handle(protocol.Request{Type: msgType, ASL: &protocol.ASLRequest{PlanDir: "/p"}})
 		if resp.OK {
 			t.Fatalf("%s succeeded without a bridge", msgType)
@@ -199,24 +190,6 @@ func TestASLQuestionBodyIsNotLoggedOrCaptured(t *testing.T) {
 	}
 	if !strings.Contains(string(data), secret) {
 		t.Fatal("the wire payload must carry the requested body")
-	}
-}
-
-func TestASLWorkbenchForwardsFocus(t *testing.T) {
-	t.Parallel()
-
-	bridge := &fakeASLBridge{
-		status: aslbridge.Status{Mode: string(aslbridge.ModeAuto), Available: true},
-		link:   aslbridge.WorkbenchLink{PlanDir: "/p", URL: "http://127.0.0.1:1/x"},
-	}
-	resp := newASLHandler(bridge).Handle(protocol.Request{Type: protocol.TypeASLWorkbench, ASL: &protocol.ASLRequest{
-		PlanDir: "/p", Focus: aslbridge.FocusReply,
-	}})
-	if !resp.OK || resp.ASL == nil || resp.ASL.Workbench == nil {
-		t.Fatalf("response = %+v", resp)
-	}
-	if resp.ASL.Workbench.Focus != aslbridge.FocusReply {
-		t.Fatalf("workbench = %+v", resp.ASL.Workbench)
 	}
 }
 

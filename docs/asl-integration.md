@@ -111,7 +111,7 @@ nothing else in that state is interpreted — the loop's turn, verification,
 pause, and lock bookkeeping are private to ASL. This is a hard paired cutover:
 Agent Mux keeps no parser for state that predates the projection.
 
-Agent Mux implements `asl-amx-1.d0c0c70abf623b3e`. The bridge, projection,
+Agent Mux implements `asl-amx-1.827fc9974d8f37c0`. The bridge, projection,
 and lifecycle hook all require that exact contract set; `amx doctor` judges the
 state root by the same rule as the reconciler.
 Unknown contract identities remain
@@ -436,8 +436,8 @@ These are known gaps, not bugs. Nothing in the cockpit is waiting on them:
   does not show it per row.
 - **Worktree-registry binding.** Runs are matched to managed worktrees by
   canonicalized workspace path, not by a shared registry identity.
-- **Assurance inbox.** Verification findings are visible in the Workbench, not
-  as an Agent Mux queue.
+- **Assurance inbox.** Verification findings stay in agent-session-loop's own
+  records and CLI, not in an Agent Mux queue.
 - **Model and profile brokering.** ASL chooses its own harness and model;
   Agent Mux profiles do not override what a run launches. The run form
   forwards `--harness`, `--review-harness`, and the commit mode and nothing

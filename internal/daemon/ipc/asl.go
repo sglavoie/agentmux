@@ -71,19 +71,3 @@ func (c *Client) ASLAct(req aslbridge.ActionRequest) (aslbridge.Operation, error
 	}
 	return *result.Operation, nil
 }
-
-// ASLWorkbench asks for a deep link into one plan's detail view.
-func (c *Client) ASLWorkbench(req aslbridge.WorkbenchRequest) (aslbridge.WorkbenchLink, error) {
-	resp, err := c.sendWithDeadline(protocol.Request{Type: protocol.TypeASLWorkbench, ASL: &protocol.ASLRequest{
-		PlanDir: req.PlanDir,
-		Focus:   req.Focus,
-	}}, asl.ActionDeadline)
-	result, err := asl.Result(resp, err)
-	if err != nil {
-		return aslbridge.WorkbenchLink{}, err
-	}
-	if result.Workbench == nil {
-		return aslbridge.WorkbenchLink{}, errors.New("daemon returned no workbench link")
-	}
-	return *result.Workbench, nil
-}

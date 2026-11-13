@@ -673,7 +673,7 @@ go run -tags tuitest . tui-test run docs/tui-testing/scenarios/*.json
 These scenarios are exercised in-package by
 `tui/uitest_example_scenarios_test.go`, so `just test` fails if a committed
 scenario stops parsing, regresses a guarantee, or differs from this documented
-inventory. Retired palette and Workbench modes are not valid scenario modes.
+inventory. Retired palette modes are not valid scenario modes.
 
 ### Sizing note
 

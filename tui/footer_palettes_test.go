@@ -358,7 +358,7 @@ var footerHintCharacterizations = []struct {
 		entries: aslRunsFooterPalette,
 		width:   200,
 		want: []string{
-			"  enter/f focus · r respond · s stop · X abort · w workbench · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
+			"  enter/f focus · r respond · s stop · X abort · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -366,8 +366,8 @@ var footerHintCharacterizations = []struct {
 		entries: aslRunsFooterPalette,
 		width:   90,
 		want: []string{
-			"  enter/f focus · r respond · s stop · X abort · w workbench · Y path · ? help · esc back",
-			"  j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
+			"  enter/f focus · r respond · s stop · X abort · Y path · ? help · esc back · j/k up/down",
+			"  ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{
@@ -376,7 +376,7 @@ var footerHintCharacterizations = []struct {
 		width:   40,
 		want: []string{
 			"  enter/f focus · r respond · s stop",
-			"  X abort · esc back · ? more",
+			"  X abort · Y path · esc back · ? more",
 		},
 	},
 	{
@@ -384,7 +384,7 @@ var footerHintCharacterizations = []struct {
 		entries: aslRunsFooterPalette,
 		width:   0,
 		want: []string{
-			"  enter/f focus · r respond · s stop · X abort · w workbench · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
+			"  enter/f focus · r respond · s stop · X abort · Y path · ? help · esc back · j/k up/down · ctrl+d/u half · ctrl+f/b page · g/G top/bottom",
 		},
 	},
 	{

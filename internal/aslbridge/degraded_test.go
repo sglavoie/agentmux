@@ -207,36 +207,36 @@ func TestADroppedFirstSnapshotIsRetriedWithoutACorpusChange(t *testing.T) {
 	testutil.Eventually(t, "the retried snapshot", func() bool { return m.Status().MutationsEnabled })
 }
 
-// The bridge owns the Workbench process. If it cannot bind or the server dies,
-// the deep link is unavailable and nothing is cached: the next attempt asks
-// again rather than handing the operator a URL that answers nothing.
-func TestWorkbenchBindFailureLeavesNothingCached(t *testing.T) {
+// A refused read is that read's answer, not a fault in the session: an
+// oversized question body is reported to the one caller, nothing is cached, and
+// the next attempt asks the bridge again.
+func TestQuestionReadRefusalLeavesNothingCached(t *testing.T) {
 	attempts := make(chan struct{}, 4)
 	fake := scriptedBridge(t, func(f *fakeBridge, req map[string]any) {
 		attempts <- struct{}{}
 		f.refuse(req["id"].(string), Error{
-			Code:    CodeWorkbenchUnavailable,
-			Message: "binding 127.0.0.1:0 for /home/op/plans/alpha failed",
+			Code:    CodeQuestionBodyTooLarge,
+			Message: "question body exceeds the frame budget; run asl questions <plan-dir>",
 		})
 	})
 	m := startManager(t, Options{Mode: ModeAuto, Command: "asl", Launcher: fake.launcher()})
 	testutil.Eventually(t, "mutations enabled", func() bool { return m.Status().MutationsEnabled })
 
 	for i := 0; i < 2; i++ {
-		link, err := m.Workbench(context.Background(), WorkbenchRequest{PlanDir: "/p", Focus: FocusReply})
+		body, err := m.QuestionBody(context.Background(), QuestionRequest{PlanDir: "/p", QuestionID: "q1"})
 		var refusal *Error
-		if !errors.As(err, &refusal) || refusal.Code != CodeWorkbenchUnavailable {
-			t.Fatalf("Workbench error = %v, want %s", err, CodeWorkbenchUnavailable)
+		if !errors.As(err, &refusal) || refusal.Code != CodeQuestionBodyTooLarge {
+			t.Fatalf("QuestionBody error = %v, want %s", err, CodeQuestionBodyTooLarge)
 		}
-		if link.URL != "" {
-			t.Errorf("a failed ensure returned a url: %q", link.URL)
+		if body != (QuestionBody{}) {
+			t.Errorf("a refused read returned a body: %+v", body)
 		}
 	}
 	if len(attempts) != 2 {
-		t.Errorf("the bridge saw %d ensure calls, want one per request", len(attempts))
+		t.Errorf("the bridge saw %d question.get calls, want one per request", len(attempts))
 	}
 	if m.Status().Reason != "" {
-		t.Errorf("a Workbench refusal marked the whole integration degraded: %q", m.Status().Reason)
+		t.Errorf("a question.get refusal marked the whole integration degraded: %q", m.Status().Reason)
 	}
 }
 
@@ -311,8 +311,8 @@ func TestRepeatedOperationIDUpdatesOneReceiptInPlace(t *testing.T) {
 }
 
 // An operation the daemon never submitted can still arrive: a previous Agent Mux
-// process issued it, or the operator acted in the Workbench. It is recorded like
-// any other receipt rather than dropped, because it is evidence about a run the
+// process issued it, or the operator acted through the asl CLI. It is recorded
+// like any other receipt rather than dropped, because it is evidence about a run the
 // operator is watching.
 func TestUnknownOperationReceiptIsStillRecorded(t *testing.T) {
 	fake := newFakeBridge(t, func(f *fakeBridge) {

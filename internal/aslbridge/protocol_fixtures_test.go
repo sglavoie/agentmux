@@ -64,7 +64,6 @@ func TestTheGoVocabulariesAreTheDeclaredOnes(t *testing.T) {
 		MethodRunResume,
 		MethodRunStopAfterCurrent,
 		MethodRunAbort,
-		MethodWorkbenchEnsure,
 		MethodRunRedirect,
 		MethodRunRedirectStatus,
 		MethodRunRecoverConversation,
@@ -135,11 +134,6 @@ func TestTheGoVocabulariesAreTheDeclaredOnes(t *testing.T) {
 	}
 	if got := mustEnum(t, schema, "OperationStatus"); fmt.Sprint(wantStatuses) != fmt.Sprint(got) {
 		t.Errorf("Go operation statuses = %v, schema declares %v", wantStatuses, got)
-	}
-
-	wantFocus := []string{FocusReply, FocusVerification, FocusActive, FocusEvents}
-	if got := mustEnum(t, schema, "Focus"); fmt.Sprint(wantFocus) != fmt.Sprint(got) {
-		t.Errorf("Go workbench focus = %v, schema declares %v", wantFocus, got)
 	}
 }
 

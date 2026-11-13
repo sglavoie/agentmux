@@ -80,25 +80,6 @@ func TestTheMismatchReasonIsStableAndSanitized(t *testing.T) {
 	}
 }
 
-func TestWorkbenchLinkFixtureIsALoopbackURL(t *testing.T) {
-	var link WorkbenchLink
-	decodeResponse(t, "workbench-link", &link)
-
-	if link.Focus != FocusReply {
-		t.Errorf("focus = %q, want %q", link.Focus, FocusReply)
-	}
-	if !isLoopbackWorkbenchURL(link.URL) {
-		t.Errorf("url = %q, want a loopback origin", link.URL)
-	}
-	if !strings.Contains(link.URL, "token=") {
-		t.Error("workbench link carries no token")
-	}
-}
-
-func isLoopbackWorkbenchURL(url string) bool {
-	return strings.HasPrefix(url, "http://127.0.0.1:")
-}
-
 // ----------------------------------------------------------------
 // The invalid half of the corpus
 
@@ -107,18 +88,20 @@ func isLoopbackWorkbenchURL(url string) bool {
 //
 // Two reason categories are structural in Go: an unknown field and a body where
 // none belongs both fail DisallowUnknownFields, because this package has no home
-// for either. Three more are vocabulary or shape checks this package makes
-// itself. The remaining two — a string past its bound and an array past its
-// bound — are the schema's to enforce and ASL's suite validates them there; Go's
-// decoder has no opinion on length, so claiming a refusal here would be a test
-// that passes for the wrong reason.
+// for either. Two more are vocabulary checks this package makes itself. The
+// remaining three — a string past its bound, an array past its bound, and a
+// string outside its declared pattern — are the schema's to enforce and ASL's
+// suite validates them there; Go's decoder has no opinion on length or pattern,
+// so claiming a refusal here would be a test that passes for the wrong reason.
 //
 // The point of the closed switch is that a reason category ASL adds later has
 // nowhere to land silently: it fails this test until someone decides which
 // bucket it belongs in.
 func TestEveryInvalidFixtureIsRefusedForItsDeclaredReason(t *testing.T) {
 	set, _ := bridgeContract(t)
-	schemaOnly := map[string]bool{"string-too-long": true, "array-too-long": true}
+	schemaOnly := map[string]bool{
+		"string-too-long": true, "array-too-long": true, "pattern-mismatch": true,
+	}
 
 	seen := make(map[string]bool)
 	for _, fixture := range bridgeFixtures(t, "invalid") {
@@ -143,7 +126,7 @@ func TestEveryInvalidFixtureIsRefusedForItsDeclaredReason(t *testing.T) {
 	}
 
 	for _, reason := range []string{
-		"unknown-field", "body-not-allowed", "const-mismatch", "invalid-enum", "pattern-mismatch",
+		"unknown-field", "body-not-allowed", "const-mismatch", "invalid-enum",
 	} {
 		if !seen[reason] {
 			t.Errorf("no invalid fixture exercises %s", reason)
@@ -152,7 +135,7 @@ func TestEveryInvalidFixtureIsRefusedForItsDeclaredReason(t *testing.T) {
 	for reason := range seen {
 		switch reason {
 		case "unknown-field", "body-not-allowed", "const-mismatch", "invalid-enum",
-			"pattern-mismatch", "string-too-long", "array-too-long":
+			"string-too-long", "array-too-long", "pattern-mismatch":
 		default:
 			t.Errorf("reason %q has no decided Go-side meaning", reason)
 		}
@@ -249,18 +232,6 @@ func refuseFixture(set aslcontract.ContractSet, fixture aslcontract.Fixture) (bo
 			return true, err.Error()
 		}
 		return refuseOperation(set, receipt)
-	case "workbench_link_response":
-		var link WorkbenchLink
-		if _, err := refuseResponse(doc, &link); err != nil {
-			return true, err.Error()
-		}
-		if !validFocus(link.Focus) {
-			return true, "undeclared focus " + link.Focus
-		}
-		if !isLoopbackWorkbenchURL(link.URL) {
-			return true, "non-loopback url"
-		}
-		return false, ""
 	case "operation_updated_event":
 		var updated Operation
 		if err := refuseEvent(doc, EventOperationUpdated, &updated); err != nil {

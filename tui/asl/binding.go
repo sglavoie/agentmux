@@ -94,18 +94,3 @@ func canonicalDir(path string) string {
 	}
 	return abs
 }
-
-// WorkbenchFocus maps a run state to the Workbench section an operator needs
-// next for that state.
-func WorkbenchFocus(state string) string {
-	switch state {
-	case "paused-for-reply":
-		return aslbridge.FocusReply
-	case "verifying":
-		return aslbridge.FocusVerification
-	case "failed", "stale", "invalid":
-		return aslbridge.FocusEvents
-	default:
-		return aslbridge.FocusActive
-	}
-}

@@ -675,9 +675,6 @@ type modelBackgroundCommands struct {
 	worktrees       func(Model, int) tea.Cmd
 	worktreeAction  func(Model, actions.ID, actions.Request) tea.Cmd
 	aslSnapshot     func(Model, int) tea.Cmd
-	// aslWorkbench takes the row, plan directory, and focus rather than a link,
-	// because the tokenized URL is minted and consumed inside the command.
-	aslWorkbench func(Model, string, string, string) tea.Cmd
 	// aslQuestion fetches exactly one question body.
 	aslQuestion func(Model, int, string, string) tea.Cmd
 	// aslAction submits one explicit mutation. The request carries the operator's
@@ -709,9 +706,6 @@ func defaultModelBackgroundCommands() modelBackgroundCommands {
 		},
 		aslSnapshot: func(_ Model, seq int) tea.Cmd {
 			return aslSnapshotCmd(seq)
-		},
-		aslWorkbench: func(_ Model, rowID, planDir, focus string) tea.Cmd {
-			return aslWorkbenchCmd(rowID, planDir, focus)
 		},
 		aslQuestion: func(_ Model, seq int, planDir, questionID string) tea.Cmd {
 			return aslQuestionCmd(seq, planDir, questionID)

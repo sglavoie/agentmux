@@ -37,7 +37,7 @@ const (
 	// it accepts. It is pinned here rather than read from the manifest at init
 	// so that a vendored manifest edited without its corpus fails a test instead
 	// of silently redefining what this daemon claims to speak.
-	ContractSetID = "asl-amx-1.d0c0c70abf623b3e"
+	ContractSetID = "asl-amx-1.827fc9974d8f37c0"
 
 	// Prefix is the family every contract-set ID carries. It is a format check
 	// and nothing more: a peer inside the family whose digest differs is exactly

@@ -98,15 +98,6 @@ func newUITestFixtureDriver(fx uitestFixture, size UITestSize) *uitestDriver {
 			}
 		}
 	}
-	d.model.backgroundCommands.aslWorkbench = func(_ Model, rowID, planDir, focus string) tea.Cmd {
-		return func() tea.Msg {
-			d.recordWorkbenchOpen(uitestWorkbenchOpen{RowID: rowID, Focus: focus})
-			if planDir == "" {
-				return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
-			}
-			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus}
-		}
-	}
 	fixtureBodies := fx.ASLQuestionBodies
 	d.model.backgroundCommands.aslQuestion = func(_ Model, seq int, planDir, questionID string) tea.Cmd {
 		return func() tea.Msg {

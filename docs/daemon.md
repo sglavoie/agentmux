@@ -219,7 +219,7 @@ connection the client is still waiting on:
 | `focus_session` | 3s | with no workspace connected, a tmux survey and a client switch |
 | `notification_test` | 5s | waits up to 3s for the app to confirm delivery |
 | `asl_snapshot`, `asl_question` | 3s | the bridge read timeout (2s) plus 1s |
-| `asl_action`, `asl_workbench` | 6s | the bridge action timeout (5s) plus 1s |
+| `asl_action` | 6s | the bridge action timeout (5s) plus 1s |
 | `subscribe` ack (client side) | 2s | after the ack the stream has no overall deadline |
 
 ### Focus, snooze, and notification delivery

@@ -25,37 +25,10 @@ type aslSnapshotLoadedMsg struct {
 	err      error
 }
 
-// aslWorkbenchDoneMsg reports the outcome of a Workbench deep link. The link
-// itself is deliberately absent: the command fetches the tokenized URL and
-// hands it to the opener inside a single effect, so no bearer URL is ever
-// carried by a message, stored on the model, or rendered.
-type aslWorkbenchDoneMsg struct {
-	rowID string
-	focus string
-	err   error
-}
-
-// errASLWorkbenchOpen is the only failure text shown for a Workbench open. The
-// underlying error can embed the tokenized URL, so it is never surfaced.
-var errASLWorkbenchOpen = errors.New("could not open the Workbench link")
-
 func aslSnapshotCmd(seq int) tea.Cmd {
 	return func() tea.Msg {
 		snapshot, meta, receipts, status, err := ipc.NewClient().ASLSnapshot()
 		return aslSnapshotLoadedMsg{seq: seq, snapshot: snapshot, meta: meta, receipts: receipts, status: status, err: err}
-	}
-}
-
-func aslWorkbenchCmd(rowID, planDir, focus string) tea.Cmd {
-	return func() tea.Msg {
-		link, err := ipc.NewClient().ASLWorkbench(aslbridge.WorkbenchRequest{PlanDir: planDir, Focus: focus})
-		if err != nil {
-			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
-		}
-		if commands.OpenBrowserURL(link.URL) != nil {
-			return aslWorkbenchDoneMsg{rowID: rowID, focus: focus, err: errASLWorkbenchOpen}
-		}
-		return aslWorkbenchDoneMsg{rowID: rowID, focus: focus}
 	}
 }
 
@@ -64,13 +37,6 @@ func (m Model) runASLSnapshotCmd(seq int) tea.Cmd {
 		return m.backgroundCommands.aslSnapshot(m, seq)
 	}
 	return defaultModelBackgroundCommands().aslSnapshot(m, seq)
-}
-
-func (m Model) runASLWorkbenchCmd(rowID, planDir, focus string) tea.Cmd {
-	if m.backgroundCommands.aslWorkbench != nil {
-		return m.backgroundCommands.aslWorkbench(m, rowID, planDir, focus)
-	}
-	return defaultModelBackgroundCommands().aslWorkbench(m, rowID, planDir, focus)
 }
 
 // enterASLRuns opens the Runs view. Dashboard filters, query, and selection are
@@ -164,8 +130,6 @@ func (m Model) handleASLRunsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case keyEnter, keyF:
 		return m.focusSelectedASLRun()
-	case keyASLWorkbench:
-		return m.openSelectedASLWorkbench()
 	case keyASLRespond:
 		return m.openASLResponse()
 	case keyASLStop:
@@ -234,35 +198,6 @@ func (m Model) focusSelectedASLRun() (tea.Model, tea.Cmd) {
 		m.openLiveSessionPicker(LivePickerASLFocus, ModeASLRuns, asl.RowLabel(row), candidates)
 		return m, nil
 	}
-}
-
-// openSelectedASLWorkbench opens the run's Workbench detail view at the section
-// that matches its state, so a run waiting on a reply lands on the reply form
-// rather than on a generic overview.
-func (m Model) openSelectedASLWorkbench() (tea.Model, tea.Cmd) {
-	row, ok := m.selectedASLRow()
-	if !ok {
-		return m, nil
-	}
-	if row.PlanDir == "" {
-		m.aslErr = errors.New("workbench unavailable: this run reports no plan directory")
-		return m, nil
-	}
-	if !commands.BrowserSupported() {
-		m.aslErr = errors.New("workbench unavailable: no supported URL opener on this platform")
-		return m, nil
-	}
-	m.aslErr = nil
-	return m, m.runASLWorkbenchCmd(row.RowID, row.PlanDir, asl.WorkbenchFocus(row.PrimaryState))
-}
-
-func (m Model) handleASLWorkbenchDone(msg aslWorkbenchDoneMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		m.aslErr = msg.err
-		return m, nil
-	}
-	m.aslErr = nil
-	return m, nil
 }
 
 func scrollASLToCursor(m *Model) {

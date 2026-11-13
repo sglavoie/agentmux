@@ -70,8 +70,6 @@ func (h *Handler) Handle(req protocol.Request) protocol.Response {
 		resp = asl.HandleQuestion(h.aslBridge.Current(), req)
 	case protocol.TypeASLAction:
 		resp = asl.HandleAction(h.aslBridge.Current(), req)
-	case protocol.TypeASLWorkbench:
-		resp = asl.HandleWorkbench(h.aslBridge.Current(), req)
 	case protocol.TypeNotificationSnooze:
 		resp = h.handleNotificationSnooze(req)
 	case protocol.TypeNotificationDisposition:

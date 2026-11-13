@@ -103,10 +103,9 @@ func TestInstalledBridgeServesTheContractSet(t *testing.T) {
 	}
 
 	assertSnapshotIsBodyFree(t, snapshot)
-	body := assertQuestionBodyIsFetchedNotProjected(t, ctx, manager, corpus, paused)
+	assertQuestionBodyIsFetchedNotProjected(t, ctx, manager, corpus, paused)
 	assertStaleTokenIsRefusedWithoutWriting(t, ctx, manager, corpus, running)
 	assertAcceptedMutationYieldsABodyFreeReceipt(t, ctx, manager, corpus, running)
-	assertWorkbenchLinkIsLoopbackAndTokenized(t, ctx, manager, corpus, body)
 
 	manager.Close()
 	if code := exitCode.Load(); code != 0 {
@@ -226,7 +225,7 @@ func assertSnapshotIsBodyFree(t *testing.T, snapshot Snapshot) {
 
 func assertQuestionBodyIsFetchedNotProjected(
 	t *testing.T, ctx context.Context, manager *Manager, corpus *aslCorpus, paused Row,
-) QuestionBody {
+) {
 	t.Helper()
 	body, err := manager.QuestionBody(ctx, QuestionRequest{
 		PlanDir:    corpus.paused,
@@ -247,7 +246,6 @@ func assertQuestionBodyIsFetchedNotProjected(
 	if body.ActionToken == "" {
 		t.Error("question.get returned no action token")
 	}
-	return body
 }
 
 func assertStaleTokenIsRefusedWithoutWriting(
@@ -321,33 +319,5 @@ func assertAcceptedMutationYieldsABodyFreeReceipt(
 	}
 	if strings.Contains(string(encoded), "drop the v1 column") {
 		t.Error("the receipt window carries question prose")
-	}
-}
-
-func assertWorkbenchLinkIsLoopbackAndTokenized(
-	t *testing.T, ctx context.Context, manager *Manager, corpus *aslCorpus, body QuestionBody,
-) {
-	t.Helper()
-	link, err := manager.Workbench(ctx, WorkbenchRequest{PlanDir: corpus.paused, Focus: FocusReply})
-	if err != nil {
-		t.Fatalf("workbench.ensure: %v", err)
-	}
-	if !strings.HasPrefix(link.URL, "http://127.0.0.1:") {
-		t.Errorf("workbench url = %q, want a loopback origin", link.URL)
-	}
-	if !strings.Contains(link.URL, "token=") {
-		t.Error("workbench url carries no token")
-	}
-	if link.Focus != FocusReply {
-		t.Errorf("workbench focus = %q, want %q", link.Focus, FocusReply)
-	}
-	if strings.Contains(link.URL, body.Body.Reveal()) {
-		t.Error("workbench url carries the question body")
-	}
-
-	if _, err := manager.Workbench(ctx, WorkbenchRequest{PlanDir: corpus.paused, Focus: "nowhere"}); err == nil {
-		t.Error("an undeclared focus was accepted")
-	} else if !errors.Is(err, ErrInvalidRequest) {
-		t.Errorf("undeclared focus error = %v, want ErrInvalidRequest", err)
 	}
 }

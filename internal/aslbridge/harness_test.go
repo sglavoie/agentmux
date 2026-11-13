@@ -119,7 +119,7 @@ func (f *fakeBridge) helloAs(contractSetID string, capabilities ...string) {
 	if len(capabilities) == 0 {
 		capabilities = []string{
 			MethodSessionHandshake, MethodRunsSnapshot, MethodQuestionGet,
-			MethodQuestionReply, MethodWorkbenchEnsure,
+			MethodQuestionReply,
 		}
 	}
 	f.writeFrame(map[string]any{

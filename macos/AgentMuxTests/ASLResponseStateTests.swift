@@ -528,7 +528,7 @@ final class ASLResponseStateTests: XCTestCase {
     /// `aslbridge.ErrorCodes`, in its declared order.
     private let declaredCodes = [
         "malformed-json", "invalid-request", "unsupported-protocol", "unknown-method", "frame-too-large",
-        "internal-error", "mutation-failed", "workbench-unavailable", "invalid-plan", "no-active-run",
+        "internal-error", "mutation-failed", "invalid-plan", "no-active-run",
         "run-mismatch", "not-paused", "no-open-question", "question-mismatch", "stale-action-token",
         "action-not-permitted", "invalid-action", "empty-text", "question-body-too-large",
         "missing-question-body", "contract-set-mismatch", "stale-snapshot",
@@ -560,7 +560,7 @@ final class ASLResponseStateTests: XCTestCase {
 
     func testEveryRowActionHasAnOperatorLabel() {
         let methods = [ASLMethod.questionReply, ASLMethod.questionResolve, ASLMethod.runResume,
-                       ASLMethod.runStopAfterCurrent, ASLMethod.runAbort, ASLMethod.workbenchEnsure, ASLMethod.runRedirect]
+                       ASLMethod.runStopAfterCurrent, ASLMethod.runAbort, ASLMethod.runRedirect]
         for method in methods {
             XCTAssertNotEqual(ASLRefusal.methodLabel(method), method)
         }
