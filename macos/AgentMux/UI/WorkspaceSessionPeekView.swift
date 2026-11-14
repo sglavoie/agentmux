@@ -16,8 +16,11 @@ struct WorkspaceSessionPeekView: View {
                     Spacer()
                     Button(action: close) { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close preview")
                 }
-                Text((model.current ? "" : "Last known · ") + (model.row?.detail ?? ""))
-                    .font(.callout).foregroundStyle(.secondary)
+                HStack {
+                    WorkspaceStateSymbolView(state: model.row?.iconState ?? "")
+                    Text((model.current ? "" : "Last known · ") + (model.row?.detail ?? ""))
+                        .foregroundStyle(.secondary)
+                }.font(.callout)
                 if let at = model.lastObserved {
                     Text("Last observed activity " + at.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary)
                 }

@@ -423,7 +423,7 @@ extension WorkspaceWindowController {
             view = WorkspaceTerminalRowView()
         } else if case let .row(session) = items[row] {
             let sessionView = WorkspaceSessionRowView()
-            sessionView.hasStateGlyph = !session.glyph.isEmpty
+            sessionView.hasStateGlyph = WorkspaceStateSymbol.name(for: session.iconState) != nil
             view = sessionView
         } else {
             view = WorkspaceRowView()

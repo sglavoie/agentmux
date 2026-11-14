@@ -97,7 +97,7 @@ extension WorkspaceWindowController {
         for index in indexes {
             guard let rowView = sidebar.rowView(atRow: index, makeIfNecessary: false) as? WorkspaceRowView else { continue }
             if let sessionView = rowView as? WorkspaceSessionRowView, case let .row(session) = items[index] {
-                sessionView.hasStateGlyph = !session.glyph.isEmpty
+                sessionView.hasStateGlyph = WorkspaceStateSymbol.name(for: session.iconState) != nil
             }
             rowView.tabColor = profileColor(of: items[index])
             rowView.selectionBorder.color = .controlAccentColor

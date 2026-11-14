@@ -161,8 +161,13 @@ ASL answer panel work the same either way.
 - **Session colors.** `WorkspaceRowView` draws neutral rows with a small
   profile-color marker on the right edge. Child terminals share that marker;
   selection always uses the system accent. Text follows the native appearance.
-  The daemon's `tab_color` still supplies the profile or F6-picked color. Native completed
-  turns use a checkmark; every session row also describes status in words.
+  The daemon's `tab_color` still supplies the profile or F6-picked color. Sidebar
+  rows, inspector Waiting rows, and session peek use SF Symbols for state:
+  orange for permissions and questions, blue for working states, green for completed
+  turns, red for errors, and secondary text color for other states. Idle and unknown
+  states have no symbol. State remains available in words for accessibility. Working
+  symbols pulse on macOS 14 and later when Reduce Motion is off; tests disable
+  motion. Menu-bar titles, menus, tmux titles, and the TUI retain their text glyphs.
   Duplicate display names gain a branch or short runtime suffix consistently
   across sidebar, switcher, Waiting, inspector, and dialogs. In the sidebar the
   qualifier appears only in the title (or custom name), using middle truncation

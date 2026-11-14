@@ -16,7 +16,7 @@ Terminals outside the app retain their own configuration.
 
 **Open Workspace** in the menu shows a window with every live session in a
 sidebar, grouped by state (Waiting, Done, Working, Idle) and then by project,
-labeled by profile, with the same state glyphs the tab titles use and a count
+labeled by profile, with SF Symbol state icons and a count
 of waiting sessions beside each project. Pinned sessions and those needing
 attention lead the list.
 
@@ -90,15 +90,18 @@ window makes it a menu bar app again.
 
 Session rows use neutral backgrounds and a small profile-color marker. The system
 accent identifies selection; status appears in words as well as an icon. A completed
-turn uses a checkmark in the native app. Sessions with duplicate display names gain
-a distinguishing branch or short runtime identity, also used by the switcher,
+turn uses a green checkmark circle in the sidebar, Waiting list, and session peek.
+These surfaces use orange symbols for permission requests and questions, blue for
+working states, red for errors, and secondary color for other states. Working
+symbols pulse on macOS 14 or later unless Reduce Motion is enabled. State stays
+available in words for accessibility; menu-bar and menu text glyphs are unchanged.
+Sessions with duplicate display names gain a distinguishing branch or short runtime identity, also used by the switcher,
 Waiting, the inspector, and session dialogs. Long duplicate names truncate in the
 middle to retain their distinguishing suffix.
 
-Only section headers carry state colors: green for Done, blue for Working, gray
-for Idle, amber for Waiting and Needs attention, and purple for Pinned. The rounded
-header backgrounds adapt to light and dark mode. Project headers and session rows
-stay neutral, with profile colors confined to a narrow marker.
+Section headers carry state colors: green for Done, blue for Working, gray
+for Idle, amber for Waiting and Needs attention, and purple for Pinned. Small
+heading dots adapt to light and dark mode. Project headers and session rows stay neutral, with profile colors confined to a narrow marker.
 Session flashes use their displayed section's same background color and opacity,
 including when revealing a session with ⌘J. A session in Pinned or Needs attention
 uses that section's color, even if its underlying state differs.

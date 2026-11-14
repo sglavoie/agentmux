@@ -41,6 +41,7 @@ final class WorkspaceWaitingRowView: NSBox {
     private var contextHeight: NSLayoutConstraint!
     /// Nil on a row with nothing to answer from here.
     private(set) var answerButton: NSButton?
+    let stateImage = WorkspaceStateImageView()
     let titleLabel = NSTextField(labelWithString: "")
     let detailLabel = NSTextField(labelWithString: "")
     /// Whether the pointer is over the line, and whether it is held down on
@@ -98,7 +99,7 @@ final class WorkspaceWaitingRowView: NSBox {
         let actions = NSStackView()
         actions.orientation = .horizontal
         actions.spacing = 8
-        let stack = NSStackView(views: [text])
+        let stack = NSStackView(views: [stateImage, text])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.spacing = 6
@@ -253,7 +254,8 @@ final class WorkspaceWaitingRowView: NSBox {
     func update(_ row: WorkspaceWaitingRow) {
         self.row = row
         needsDisplay = true
-        titleLabel.stringValue = [row.glyph, row.title].filter { !$0.isEmpty }.joined(separator: " ")
+        titleLabel.stringValue = row.title
+        stateImage.show(row.iconState)
         detailLabel.stringValue = row.detail
         // The button's cell is the element VoiceOver reads.
         answerButton?.setAccessibilityLabel("Answer \(row.title)")

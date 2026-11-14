@@ -215,7 +215,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         let personal = built[1].rows[0]
         XCTAssertEqual(personal.target, .embedded(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(personal.key, .embedded(F.runtimeID(2)))
-        XCTAssertEqual(personal.glyph, "✓")
+        XCTAssertEqual(WorkspaceStateSymbol.name(for: personal.iconState), "checkmark.circle.fill")
         XCTAssertTrue(personal.attention)
         XCTAssertEqual(personal.sidebarDetail, "Turn complete · now")
         XCTAssertEqual(personal.detail, "Turn complete · claude · now", "shared text surfaces retain the harness")

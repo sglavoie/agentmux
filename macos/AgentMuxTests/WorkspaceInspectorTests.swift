@@ -214,6 +214,19 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertNil(workspace.inspector.recap.conversation)
     }
 
+    func testWaitingStateSymbolUpdatesWithoutAddingGlyphToTitle() throws {
+        let rows = WorkspaceInspector.waiting(sessions, now: now, glyphs: .fallback)
+        let view = WorkspaceWaitingRowView(try XCTUnwrap(rows.first))
+        XCTAssertEqual(view.stateImage.accessibilityLabel(), "Needs permission")
+        XCTAssertEqual(view.stateImage.contentTintColor, .systemOrange)
+        XCTAssertNotNil(view.stateImage.image)
+        view.update(try XCTUnwrap(rows.last))
+        XCTAssertEqual(view.titleLabel.stringValue, "api — personal")
+        XCTAssertEqual(view.stateImage.accessibilityLabel(), "Turn complete")
+        XCTAssertEqual(view.stateImage.contentTintColor, WorkspaceStateSymbol.completedColor)
+        XCTAssertTrue(view.accessibilityLabel()?.contains("Turn complete") == true)
+    }
+
     func testWaitingListsTheSessionsThatWaitInSidebarOrder() {
         // The permission request waits under Waiting, above the turn that
         // completed under Done, though it has waited the least.
@@ -222,7 +235,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let waiting = WorkspaceInspector.waiting(listed, now: now, glyphs: .fallback)
         XCTAssertEqual(waiting.map(\.title), ["web — work", "api — personal"], "not the one that waited longest first")
         XCTAssertEqual(waiting.map(\.detail), ["Needs permission · 1m", "Turn complete · 5m"])
-        XCTAssertEqual(waiting.map(\.glyph), ["🔑", "✓"])
+        XCTAssertEqual(waiting.map { WorkspaceStateSymbol.name(for: $0.iconState) }, ["key.fill", "checkmark.circle.fill"])
         XCTAssertEqual(waiting.map(\.key), [
             .embedded(F.runtimeID(4)), .embedded(F.runtimeID(2)),
         ])
@@ -438,7 +451,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.setInspectorCollapsed(false)
         XCTAssertEqual(workspace.inspector.tabs.label(forSegment: 0), "Waiting 2")
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 web — work", "✓ api — personal"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["web — work", "api — personal"])
 
         lines[1].press()
         XCTAssertEqual(workspace.content, .terminal(runtimeSessionID: F.runtimeID(2)))
@@ -467,7 +480,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.window.layoutIfNeeded()
 
         let lines = workspace.inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }
-        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["🔑 api — personal", "🔑 web — work", "✓ docs — work"])
+        XCTAssertEqual(lines.map(\.titleLabel.stringValue), ["api — personal", "web — work", "docs — work"])
         XCTAssertEqual(lines.map { $0.answerButton?.title }, ["Answer…", "Answer…", nil])
 
         let button = try XCTUnwrap(lines[0].answerButton)

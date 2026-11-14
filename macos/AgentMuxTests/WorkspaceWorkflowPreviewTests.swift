@@ -12,6 +12,21 @@ private struct PreviewRunner: ASLWorkRunner {
 
 @MainActor
 final class WorkspaceWorkflowPreviewTests: XCTestCase {
+    func testStateSymbolsAcrossAppearances() async throws {
+        let states = ["bolt", "stop", "key", "question", "warning", "error", "subagent", "compact"]
+        for dark in [false, true] {
+            try await render(VStack(alignment: .leading, spacing: 12) {
+                ForEach(states, id: \.self) { state in
+                    HStack {
+                        WorkspaceStateSymbolView(state: state)
+                        Text(WorkspaceInspector.word(for: state))
+                    }
+                }
+            }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading), name: "workspace-state-symbols-\(dark)", width: 300, height: 360, dark: dark,
+                expected: ["Turn complete", "Needs permission", "Waiting for your answer"])
+        }
+    }
+
     func testWelcomeReceiptsAndPaletteInBothAppearances() async throws {
         for dark in [false, true] {
             let model = WorkspaceWelcomeModel(command: { nil })

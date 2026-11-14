@@ -38,6 +38,7 @@ struct WorkspaceWaitingRow: Equatable {
     /// What can be answered from the row without going to the session; nil
     /// when there is nothing to answer here, and the row only goes there.
     var answer: WorkspaceWaitingAnswer?
+    var iconState = ""
     var category = WorkspaceWaitingFilter.other
     var changedAt: Date?
     var contextVersion = ""
@@ -168,6 +169,7 @@ enum WorkspaceInspector {
                 glyph: row.glyph,
                 toolTip: row.name.isEmpty ? row.toolTip : "\(row.project) — \(row.label) · \(row.toolTip)",
                 answer: answer,
+                iconState: row.iconState,
                 category: WorkspaceWaitingFilter.category(icon: session.iconState, answer: answer),
                 changedAt: session.changedAt,
                 contextVersion: "\(session.lastEventAt):\(runs[row.key]?.latestQuestionID ?? ""):\(runs[row.key]?.unanswered ?? 0)",
