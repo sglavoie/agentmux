@@ -204,6 +204,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         reasoned[1].muted = true
         reasoned[0].branch = "main"
         reasoned[0].dirty = true
+        for index in reasoned.indices { reasoned[index].harnessIcon = "🦊" }
         let built = groups(reasoned)
 
         XCTAssertEqual(built.map(\.project), ["Needs attention", "api", "web", "API tools"], "by state, then by name")
@@ -216,20 +217,25 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(personal.key, .embedded(F.runtimeID(2)))
         XCTAssertEqual(personal.glyph, "✓")
         XCTAssertTrue(personal.attention)
-        XCTAssertEqual(personal.detail, "Turn complete · claude · now")
-        XCTAssertEqual(personal.toolTip, "tmux %2")
+        XCTAssertEqual(personal.sidebarDetail, "Turn complete · now")
+        XCTAssertEqual(personal.detail, "Turn complete · claude · now", "shared text surfaces retain the harness")
+        XCTAssertEqual(personal.toolTip, "tmux %2\napi · claude · personal · Turn complete · now")
 
         let work = built[0].rows[0]
         XCTAssertEqual(work.target, .embedded(runtimeSessionID: F.runtimeID(4)))
         XCTAssertEqual(work.key, .embedded(F.runtimeID(4)))
-        XCTAssertEqual(work.detail, "Needs permission · claude · 4m")
+        XCTAssertEqual(work.sidebarDetail, "Needs permission · 4m")
         XCTAssertTrue(work.muted)
-        XCTAssertEqual(work.toolTip, "tmux %4")
+        XCTAssertEqual(work.toolTip, "tmux %4\napi · claude · work · Needs permission · 4m")
 
         let web = built[2].rows[0]
-        XCTAssertEqual(web.detail, "working · codex · main*")
+        XCTAssertEqual(web.sidebarDetail, "working · main*")
         XCTAssertTrue(web.working)
         XCTAssertFalse(web.attention)
+        XCTAssertTrue(web.toolTip.contains("web · codex · work · working · main*"))
+        reasoned[0].harnessIcon = ""
+        XCTAssertEqual(WorkspaceSidebar.row(reasoned[0], now: now, glyphs: .fallback).sidebarDetail,
+                       "working · codex · main*", "clearing the harness icon restores its name")
     }
 
     func testWaitingCycleUsesProjectFirstOrder() {

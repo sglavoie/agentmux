@@ -20,6 +20,8 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
             let cell = WorkspaceRowCellView()
             cell.show(row, muteGlyph: "")
             XCTAssertTrue(cell.titleLabel.stringValue.contains(row.qualifier))
+            XCTAssertEqual(cell.titleLabel.lineBreakMode, .byTruncatingMiddle)
+            XCTAssertFalse(cell.detailLabel.stringValue.contains(row.qualifier))
             XCTAssertTrue(cell.accessibilityLabel()?.contains(row.qualifier) == true)
         }
         let switcher = WorkspaceSwitcher.entries(rows: rows, views: [])
@@ -27,6 +29,52 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
         XCTAssertEqual(Set(switcher.map(\.title)), Set(rows.map(\.displayName)))
         XCTAssertEqual(Set(waiting.map(\.title)), Set(rows.map(\.displayName)))
         XCTAssertTrue(rows.allSatisfy { $0.detail.hasPrefix("Waiting for your answer") })
+    }
+
+    func testNamedDuplicatesKeepQualifierOnlyInNameAndFullMetadataElsewhere() throws {
+        var sessions = (1...3).map { WorkspaceFixture.tmux($0, project: "api", icon: "key", attention: true) }
+        for index in sessions.indices {
+            sessions[index].name = "Fix authentication"
+            sessions[index].harnessIcon = "🦊"
+            sessions[index].branch = index == 0 ? "fix/auth" : "main"
+        }
+        sessions[0].dirty = true
+        let rows = WorkspaceSidebar.rows(sessions)
+        let cell = WorkspaceRowCellView()
+        for row in rows {
+            cell.show(row, muteGlyph: "")
+            XCTAssertEqual(cell.nameLabel.stringValue, row.namedLabel)
+            XCTAssertEqual(cell.nameLabel.lineBreakMode, .byTruncatingMiddle)
+            XCTAssertFalse(cell.titleLabel.stringValue.contains(row.qualifier))
+            XCTAssertFalse(cell.detailLabel.stringValue.contains(row.qualifier))
+            XCTAssertEqual(cell.titleLabel.stringValue, "🦊 api · work")
+            XCTAssertEqual(cell.nameLabel.font, NSFont.systemFont(ofSize: 13, weight: .semibold))
+            XCTAssertEqual(cell.titleLabel.font, NSFont.systemFont(ofSize: 13, weight: .regular))
+            XCTAssertEqual(cell.detailLabel.font, NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular))
+            XCTAssertTrue(cell.toolTip?.contains("claude") == true)
+            XCTAssertTrue(cell.toolTip?.contains(row.branch) == true)
+            XCTAssertTrue(row.taskMetadata.contains(row.qualifier), "shared metadata keeps the identity for other surfaces")
+        }
+        XCTAssertTrue(rows[0].toolTip.contains("fix/auth*"), "the tooltip retains the full dirty branch")
+        cell.show(rows[0], muteGlyph: "", closing: true)
+        XCTAssertEqual(cell.detailLabel.stringValue, WorkspaceRowCellView.closingDetail)
+    }
+
+    func testBranchQualifierDoesNotRemoveMatchingStatusOrAge() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        for branch in ["working", "now"] {
+            for icon in ["", "🦊"] {
+                var one = WorkspaceFixture.tmux(1, project: "api", icon: "bolt", changedAtMS: 1_000_000)
+                one.branch = branch
+                one.harnessIcon = icon
+                var two = one
+                two.runtime?.sessionID = WorkspaceFixture.runtimeID(2)
+                two.branch = "other"
+                let row = WorkspaceSidebar.rows([one, two], now: now)[0]
+                XCTAssertEqual(row.qualifier, branch)
+                XCTAssertEqual(row.sidebarDetail, icon.isEmpty ? "working · claude · now" : "working · now")
+            }
+        }
     }
 
     func testLongSharedIdentitySuffixesRemainDistinct() {

@@ -214,12 +214,14 @@ enum WorkspaceSidebar {
         let label = !session.profile.isEmpty ? session.profile : (!session.harness.isEmpty ? session.harness : unlabeled)
 
         var detail: [String] = []
-        if !session.harness.isEmpty, session.harness != label { detail.append(session.harness) }
         if !session.branch.isEmpty { detail.append("\(session.branch)\(session.dirty ? "*" : "")") }
         if let changed = session.changedAt { detail.append(AgeFormatter.string(since: changed, now: now, style: .compact)) }
         // State remains readable without interpreting an emoji or profile color.
         if session.review.reviewed && !session.review.accounted { detail.append("Needs review") }
         detail.insert(session.reason.isEmpty ? WorkspaceInspector.word(for: session.iconState) : WorkspaceWording.status(session.reason), at: 0)
+        let metadata = ([MenuBuilder.name(of: session), session.harness, session.profile == session.harness ? "" : session.profile] + detail)
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+        if !session.harness.isEmpty, session.harness != label { detail.insert(session.harness, at: 1) }
 
         return WorkspaceRow(
             key: key,
@@ -231,7 +233,7 @@ enum WorkspaceSidebar {
             attention: session.attention,
             working: session.isWorking,
             muted: session.muted,
-            toolTip: ([MenuBuilder.place(of: session), session.review.label, session.review.note, session.review.projectNote].filter { !$0.isEmpty }).joined(separator: "\n"),
+            toolTip: ([MenuBuilder.place(of: session), metadata, session.review.label, session.review.note, session.review.projectNote].filter { !$0.isEmpty }).joined(separator: "\n"),
             tabColor: WorkspaceTabColor(hex: session.tabColor),
             name: session.name,
             harnessIcon: session.harnessIcon,

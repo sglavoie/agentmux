@@ -361,6 +361,31 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(bands.map(\.band), [.pinned, .attention, .stopped, .running, .idle])
         XCTAssertEqual(WorkspaceSidebarBand(state: "warning"), .attention)
         XCTAssertEqual(WorkspaceSidebarBand(state: "error"), .attention)
+        let cell = WorkspaceGroupCellView()
+        cell.frame = NSRect(x: 0, y: 0, width: 260, height: 34)
+        for item in items {
+            guard case let .group(group) = item else { continue }
+            cell.show(group)
+            cell.layoutSubtreeIfNeeded()
+            let band = WorkspaceSidebarBand(group: group)
+            XCTAssertEqual(cell.stateDot.isHidden, band == nil)
+            XCTAssertEqual(cell.stateDot.contentTintColor, band?.headingColor)
+            XCTAssertEqual(cell.nameLabel.textColor, .secondaryLabelColor)
+            XCTAssertNil(cell.layer?.backgroundColor, "headings use the neutral sidebar surface")
+            if !cell.countLabel.stringValue.isEmpty {
+                XCTAssertLessThanOrEqual(cell.countLabel.frame.minX - cell.nameLabel.frame.maxX, 6.5,
+                                         "counts sit beside the title")
+            }
+        }
+        cell.show(WorkspaceGroup(project: "Needs attention", rows: [], needsAttention: true))
+        XCTAssertEqual(cell.nameLabel.textColor, .systemOrange)
+        XCTAssertFalse(cell.stateDot.isHidden)
+        cell.show(section: "Workspace")
+        XCTAssertTrue(cell.stateDot.isHidden, "reusing a colored heading clears the dot")
+        XCTAssertEqual(cell.nameLabel.textColor, .secondaryLabelColor)
+        cell.show(WorkspaceGroup(project: "Pinned", rows: [row("a", "stop"), row("b", "bolt")], pinned: true))
+        XCTAssertEqual(cell.countLabel.stringValue, "2", "Pinned retains its total when the chips are absent")
+        XCTAssertEqual(cell.accessibilityLabel(), "Pinned, 2 sessions, expanded")
     }
 
     func testOnlyTheSidebarLinesThatChangedAreDrawnAgain() throws {

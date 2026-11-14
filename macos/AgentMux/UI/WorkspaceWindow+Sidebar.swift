@@ -62,7 +62,7 @@ extension WorkspaceWindowController {
             (showOverviewInSidebar || view.kind != .overview)
                 && (view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true)
         }
-        let counts = scoped.sectionCounts
+        let counts = sidebarGrouping == .stateThenProject || sidebarGrouping == .projectThenState ? [] : scoped.sectionCounts
         let paired = pairsWorkspaceNavigation
         let navigation = paired ? [Item.navigation] : []
         let separate = own.filter { !paired || ($0.kind != .dashboard && $0.kind != .overview) }
@@ -123,7 +123,6 @@ extension WorkspaceWindowController {
             items = wanted
             sidebar.projectDividers = sidebarGrouping == .compact ? Item.projectDividers(in: wanted) : []
             sidebar.sessionDividers = sidebarGrouping == .compact ? Item.sessionDividers(in: wanted) : []
-            sidebar.bands = Item.bands(in: wanted)
             drawnDecorations = decorations
             sidebar.alphaValue = dimmed
             if let changed {

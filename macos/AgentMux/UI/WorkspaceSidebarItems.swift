@@ -156,22 +156,11 @@ enum WorkspaceSidebarItem: Equatable {
         return boundaries
     }
 
-    /// Only section headings carry state color. Project headers, session
-    /// rows, and their utility terminals retain the neutral sidebar surface.
+    /// Section colors identify heading dots and the rows' transient flashes.
     static func bands(in items: [Self]) -> [(lines: Range<Int>, band: WorkspaceSidebarBand)] {
         items.enumerated().compactMap { index, item in
             guard case let .group(group) = item else { return nil }
-            let band: WorkspaceSidebarBand
-            if group.needsAttention { band = .attention }
-            else if group.pinned { band = .pinned }
-            else if group.isSectionHeading, let state = group.stateSection {
-                switch state {
-                case .waiting: band = .attention
-                case .done: band = .stopped
-                case .working: band = .running
-                case .idle: band = .idle
-                }
-            } else { return nil }
+            guard let band = WorkspaceSidebarBand(group: group) else { return nil }
             return (index..<index + 1, band)
         }
     }
@@ -183,6 +172,19 @@ enum WorkspaceSidebarItem: Equatable {
 enum WorkspaceSidebarBand: Equatable {
     case attention, pinned, stopped, running, idle
 
+    init?(group: WorkspaceGroup) {
+        if group.needsAttention { self = .attention }
+        else if group.pinned { self = .pinned }
+        else if group.isSectionHeading, let state = group.stateSection {
+            switch state {
+            case .waiting: self = .attention
+            case .done: self = .stopped
+            case .working: self = .running
+            case .idle: self = .idle
+            }
+        } else { return nil }
+    }
+
     init(state: String) {
         switch WorkspaceStateSection(iconState: state) {
         case .idle: self = .idle
@@ -192,15 +194,18 @@ enum WorkspaceSidebarBand: Equatable {
         }
     }
 
-    var color: NSColor {
-        let base: NSColor
+    var headingColor: NSColor {
         switch self {
-        case .attention: base = .systemOrange
-        case .pinned: base = .systemPurple
-        case .stopped: base = .systemGreen
-        case .running: base = .systemBlue
-        case .idle: base = .secondaryLabelColor
+        case .attention: return .systemOrange
+        case .pinned: return .systemPurple
+        case .stopped: return .systemGreen
+        case .running: return .systemBlue
+        case .idle: return .secondaryLabelColor
         }
+    }
+
+    var color: NSColor {
+        let base = headingColor
         return NSColor(name: nil) { appearance in
             let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
             return base.withAlphaComponent(dark ? 0.22 : 0.14)

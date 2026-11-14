@@ -40,9 +40,12 @@ ASL answer panel work the same either way.
   ⌘J or the global attention shortcut) returns to **All** to show its row.
 - **Sidebar.** `Model/WorkspaceSidebar.swift` builds it as data: one group per
   project, sorted by name, and under it one row per session labeled with its
-  profile, sorted by profile. A row shows the state glyph, harness, branch,
-  age, and the reason it waits. A project's line counts its sessions that wait on
-  you. Sessions needing attention temporarily move into **Needs attention**,
+  profile, sorted by profile. A row uses a 13-point semibold title and small,
+  regular secondary detail: state phrase, branch, and age. When a harness icon
+  is present, the detail omits the harness word; clearing the icon restores it.
+  Full project, harness, profile, state, branch (including dirty status), and age
+  metadata remain in the tooltip. Sidebar zoom scales this hierarchy together.
+  A project's line counts its sessions that wait on you. Sessions needing attention temporarily move into **Needs attention**,
   below the **Pinned** group and above every project, even when their project
   is collapsed.
   Like Overview, this includes permission requests, errors, questions, and
@@ -50,7 +53,7 @@ ASL answer panel work the same either way.
   the waiting status, the session returns to its saved position. Its terminal,
   selection, pin, and dragged order are preserved. The temporary section
   always stays expanded, names each session's project, and cannot be dragged.
-  A session's line flashes with its displayed section header's background color
+  A session's line flashes with its displayed section's color
   when its state changes. ⌘J uses the same section color to reveal a session;
   state changes use one 350 ms opacity highlight. Explicit reveal keeps its
   two orientation pulses (one with Reduce Motion).
@@ -62,7 +65,10 @@ ASL answer panel work the same either way.
   keeps unpinned sessions, including those needing attention, inside their
   project, with collapsible Waiting, Done, Working, and Idle sections underneath. Changes
   apply immediately and persist across launches; each project's state sections
-  collapse independently.
+  collapse independently. Headings use small semibold secondary text in sentence
+  case, a state-colored dot, and the count beside the title, without a tinted
+  background. **Needs attention** keeps orange text. These two state layouts
+  omit the state count chips; heading clicks still collapse or expand sections.
   **Projects** omits state headings and keeps sessions in their saved positions
   as states change. **Projects → Branches** adds collapsible branch headings
   only for projects with multiple branches; sessions without a reported branch
@@ -158,7 +164,9 @@ ASL answer panel work the same either way.
   The daemon's `tab_color` still supplies the profile or F6-picked color. Native completed
   turns use a checkmark; every session row also describes status in words.
   Duplicate display names gain a branch or short runtime suffix consistently
-  across sidebar, switcher, Waiting, inspector, and dialogs.
+  across sidebar, switcher, Waiting, inspector, and dialogs. In the sidebar the
+  qualifier appears only in the title (or custom name), using middle truncation
+  to keep it visible; the secondary lines omit the repeat.
 
 - **Harness icons.** An embedded session's line starts with its harness
   icon, ahead of the profile: the `[harness_emojis]` emoji its launch put in
@@ -286,9 +294,10 @@ ASL answer panel work the same either way.
   the pane's `cc_name`; an empty name removes it. The daemon reads it on
   every reconciliation pass and publishes it as the v2 snapshot's `name`, so
   the line changes with the next snapshot and not before. A named row is
-  taller by one line (`WorkspaceRowCellView.nameLabel`, bold, with a blue
-  appropriate to the current appearance). A session is called by
-  its name, else "project — profile" (`WorkspaceRow.displayName`), in the
+  taller by one line (`WorkspaceRowCellView.nameLabel`, 13-point semibold in the
+  native label color). Its project and profile line is regular weight, with
+  branch and qualifier shown only in their existing detail/title positions.
+  A session is called by its name, else "project — profile" (`WorkspaceRow.displayName`), in the
   window title, the inspector, and the end, name, and failure sheets.
 - **Terminal names.** ⌘R and **Name Terminal…** in the sidebar’s right-click
   menu name terminals opened below sessions and standalone shells. The name

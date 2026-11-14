@@ -232,9 +232,11 @@ final class WorkspaceInspectorTests: XCTestCase {
         var session = sessions[1]
         session.reason = "permission"
         session.name = "migrations"
+        session.harnessIcon = "🦊"
         let waiting = WorkspaceInspector.waiting([session], now: now, glyphs: .fallback)
         XCTAssertEqual(waiting.map(\.title), ["migrations"])
         XCTAssertEqual(waiting.map(\.detail), ["api · claude · personal · Needs permission · 5m"])
+        XCTAssertTrue(waiting[0].toolTip.contains("claude"), "full harness metadata remains available")
         XCTAssertTrue(waiting[0].toolTip.hasPrefix("api — personal"), "the name does not hide where the session is")
     }
 

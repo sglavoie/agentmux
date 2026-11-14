@@ -325,13 +325,16 @@ extension WorkspaceWindowTests {
             switch item {
             case .section, .group:
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceGroupCellView)
-                XCTAssertEqual(cell.nameLabel.font?.pointSize, 13, "Heading: \(cell.nameLabel.stringValue)")
+                XCTAssertEqual(cell.nameLabel.font?.pointSize, NSFont.smallSystemFontSize, "Heading: \(cell.nameLabel.stringValue)")
                 let drawnFont = cell.nameLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-                XCTAssertEqual(drawnFont?.pointSize, 13, "Rendered heading: \(cell.nameLabel.stringValue)")
+                XCTAssertEqual(drawnFont?.pointSize, NSFont.smallSystemFontSize, "Rendered heading: \(cell.nameLabel.stringValue)")
             case .row:
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceRowCellView)
                 let drawnFont = cell.titleLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
-                XCTAssertEqual(drawnFont?.pointSize, 12, "Rendered session: \(cell.titleLabel.stringValue)")
+                XCTAssertEqual(drawnFont?.pointSize, 13, "Rendered session: \(cell.titleLabel.stringValue)")
+                XCTAssertEqual(drawnFont, NSFont.systemFont(ofSize: 13, weight: .semibold))
+                let detailFont = cell.detailLabel.attributedStringValue.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                XCTAssertEqual(detailFont, NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular))
             case .overview:
                 let cell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: index, makeIfNecessary: true) as? WorkspaceOverviewCellView)
                 XCTAssertFalse(cell.chips.isEmpty)

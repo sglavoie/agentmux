@@ -40,16 +40,7 @@ final class WorkspaceSidebarView: NSTableView {
         }
     }
     private(set) var pointerInside = false
-    /// Section headings with state-colored backgrounds.
-    var bands: [(lines: Range<Int>, band: WorkspaceSidebarBand)] = [] {
-        didSet {
-            needsDisplay = true
-            enumerateAvailableRowViews { rowView, row in self.syncBandAppearance(rowView, row: row) }
-        }
-    }
-
-    /// Keep native text contrast in both appearances. Status tint belongs to
-    /// the background; labels do not need a second colored surface.
+    /// Keep the sidebar surface and native text contrast neutral in both appearances.
     func syncBandAppearance(_ rowView: NSTableRowView, row: Int) {
         rowView.appearance = nil
         (rowView as? WorkspaceRowView)?.chipColor = nil
@@ -62,18 +53,6 @@ final class WorkspaceSidebarView: NSTableView {
 
     /// Width of the profile-color strip along the right edge of a row.
     static let stripWidth: CGFloat = 6
-
-    override func drawBackground(inClipRect clipRect: NSRect) {
-        super.drawBackground(inClipRect: clipRect)
-        for (lines, band) in bands where !lines.isEmpty && lines.upperBound <= numberOfRows {
-            let rect = rect(ofRow: lines.lowerBound).union(rect(ofRow: lines.upperBound - 1))
-            guard rect.intersects(clipRect) else { continue }
-            let fill = NSRect(x: bounds.minX + 6, y: rect.minY + 2,
-                              width: max(0, bounds.width - 12), height: max(0, rect.height - 4))
-            band.color.setFill()
-            NSBezierPath(roundedRect: fill, xRadius: 6, yRadius: 6).fill()
-        }
-    }
 
     var onPointerChanged: (() -> Void)?
     private var pointerTracking: NSTrackingArea?
@@ -218,8 +197,8 @@ final class WorkspaceNavigationCellView: NSTableCellView {
 
 @MainActor
 final class WorkspaceNavigationButton: NSButton {
-    static let titleFont = NSFont.systemFont(ofSize: 13, weight: .bold)
-    static let detailFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .bold)
+    static let titleFont = NSFont.systemFont(ofSize: 13, weight: .semibold)
+    static let detailFont = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
     let view: WorkspaceUtilityView
     let content = WorkspaceRowCellView()
     var onMenu: (() -> NSMenu?)?

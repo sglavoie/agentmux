@@ -30,7 +30,7 @@ struct WorkspaceRow: Equatable {
     let project: String
     /// What tells the row apart inside its project: the profile it runs as.
     let label: String
-    /// `claude · 4m · permission`.
+    /// Full state, harness, branch, and age for shared text surfaces.
     let detail: String
     /// The state glyph the tab title and the menu use; empty when idle.
     let glyph: String
@@ -75,6 +75,29 @@ struct WorkspaceRow: Equatable {
         if !branch.isEmpty { parts.append(branch) }
         if !qualifier.isEmpty && qualifier != branch { parts.append(qualifier) }
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    /// The line below a custom name. Branch and identity already have a place
+    /// in the detail or qualified name; other surfaces keep taskMetadata.
+    var sidebarMetadata: String {
+        var parts = [project]
+        if harnessIcon.isEmpty, !harness.isEmpty, harness != label { parts.append(harness) }
+        parts.append(label)
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    var sidebarDetail: String {
+        var parts = detail.components(separatedBy: " · ")
+        let hasHarness = !harness.isEmpty && harness != label
+        // Status and an optional harness precede the branch. Remove only that
+        // field: a branch called "working" or "now" must not erase status or age.
+        let index = hasHarness ? 2 : 1
+        if !qualifier.isEmpty, qualifier == branch, parts.indices.contains(index),
+           parts[index] == branch || parts[index] == branch + "*" {
+            parts.remove(at: index)
+        }
+        if !harnessIcon.isEmpty, hasHarness, parts.count > 1, parts[1] == harness { parts.remove(at: 1) }
+        return parts.joined(separator: " · ")
     }
 
     var sessionLabel: String { qualified(label) }

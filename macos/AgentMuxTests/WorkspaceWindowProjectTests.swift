@@ -71,9 +71,8 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(lines(), ["[Pinned]+", "[Done]", "[api]", "api/personal", "api/work"])
     }
 
-    /// The overview above the sessions counts every section listed, Needs
-    /// attention and Pinned included, and a click on one goes to its first
-    /// session, expanding what holds it.
+    /// State layouts count in headings. Other layouts retain count chips
+    /// that jump to a session, expanding its project when necessary.
     func testTheOverviewCountsEachSectionAndGoesToItsFirstSession() throws {
         let live = [
             F.tmux(1, project: "api", profile: "work", icon: "bolt"),
@@ -88,15 +87,24 @@ extension WorkspaceWindowTests {
             guard case let .overview(counts) = workspace.items[index] else { throw XCTSkip("unreachable") }
             return (index, counts)
         }
+        for grouping in [WorkspaceSidebarGrouping.stateThenProject, .projectThenState] {
+            workspace.setSidebarGrouping(grouping)
+            XCTAssertFalse(workspace.items.contains { if case .overview = $0 { return true }; return false })
+            let headings = workspace.items.compactMap { item -> WorkspaceGroup? in
+                if case let .group(group) = item, group.isSectionHeading { return group }; return nil
+            }
+            XCTAssertEqual(headings.reduce(0) { $0 + $1.sessions }, grouping == .stateThenProject ? 4 : 5)
+        }
+        for grouping in [WorkspaceSidebarGrouping.projectThenBranch, .compact, .project] {
+            workspace.setSidebarGrouping(grouping)
+            XCTAssertEqual(try overview().counts.reduce(0) { $0 + $1.count }, 5)
+        }
         var (index, counts) = try overview()
-        XCTAssertEqual(counts.map { "\($0.title) \($0.count)" }, ["Needs attention 1", "Done 1", "Working 2", "Idle 1"])
+        XCTAssertEqual(counts.map { "\($0.title) \($0.count)" }, ["Waiting 1", "Done 1", "Working 2", "Idle 1"])
         guard case .group = workspace.items[index + 1] else { return XCTFail("the overview leads the sessions") }
         XCTAssertEqual(counts[2].first, .embedded(F.runtimeID(1)), "a section's first session as listed")
 
         workspace.setCollapsed(project: "api", pinned: false, true)
-        if let working = workspace.state.groups.first(where: { $0.isSectionHeading && $0.stateSection == .working }) {
-            workspace.setCollapsed(working, true)
-        }
         (index, counts) = try overview()
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: index) as? WorkspaceOverviewCellView)
         XCTAssertEqual(cell.chips.count, 4)
@@ -107,8 +115,8 @@ extension WorkspaceWindowTests {
         let line = try XCTUnwrap(workspace.items.firstIndex { if case let .row(row) = $0 { return row.key == .embedded(F.runtimeID(1)) } else { return false } })
         XCTAssertEqual(workspace.sidebar.selectedRow, line, "its line is selected, as ⌘J leaves it")
         XCTAssertTrue(workspace.sidebar.visibleRect.contains(workspace.sidebar.rect(ofRow: line)), "and scrolled into view")
-        XCTAssertFalse(workspace.state.groups.contains { $0.collapsed && ($0.project == "api" || $0.stateSection == .working && $0.isSectionHeading) },
-                       "going to the session expands its project and its section")
+        XCTAssertFalse(workspace.state.groups.contains { $0.collapsed && $0.project == "api" },
+                       "going to the session expands its project")
 
         XCTAssertGreaterThan(WorkspaceOverviewCellView.height(for: counts, width: 120),
                              WorkspaceOverviewCellView.height(for: counts, width: 600), "narrow, the chips wrap")
@@ -155,7 +163,7 @@ extension WorkspaceWindowTests {
         }
 
         var shown = try cell()
-        XCTAssertEqual(shown.nameLabel.textColor, .labelColor, "a project's name reads as a heading")
+        XCTAssertEqual(shown.nameLabel.textColor, .secondaryLabelColor, "headings stay quieter than session titles")
         XCTAssertFalse(shown.disclosureLabel.isHidden, "an expanded project shows its disclosure too")
         XCTAssertEqual(shown.disclosureLabel.stringValue, WorkspaceGroupCellView.expandedDisclosure)
         XCTAssertTrue(shown.isAccessibilityDisclosed())

@@ -134,15 +134,17 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(app.made, made, "reordering must not attach or acknowledge sessions")
         let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: try index(of: waiting)) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "api — personal")
-        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
+        let heading = try XCTUnwrap(workspace.items.firstIndex {
+            if case let .group(group) = $0 { return group.needsAttention }; return false
+        })
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: heading) as? WorkspaceGroupCellView)
         XCTAssertEqual(header.nameLabel.stringValue, "Needs attention")
         XCTAssertEqual(header.countLabel.stringValue, "2")
         XCTAssertTrue(header.disclosureLabel.isHidden)
-        XCTAssertTrue(workspace.contextMenuItems(forRow: 3).isEmpty, "the overview has no menu")
-        XCTAssertTrue(workspace.contextMenuItems(forRow: 4).isEmpty)
+        XCTAssertTrue(workspace.contextMenuItems(forRow: heading).isEmpty, "the attention heading has no menu")
         XCTAssertEqual(workspace.dropSlots(forItemAt: try index(of: waiting)), [])
         let ordersBeforeClick = app.orders
-        workspace.focusItem(at: 4)
+        workspace.focusItem(at: heading)
         XCTAssertEqual(app.orders, ordersBeforeClick, "attention cannot be collapsed")
 
         live[1].unseen = false
@@ -184,33 +186,30 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting to the daemon…")
 
         app.store.apply(snapshot: F.snapshot(sessions))
-        XCTAssertEqual(workspace.sidebar.numberOfRows, 10)
-        guard case let .overview(counts) = workspace.items[3], case let .group(done) = workspace.items[4],
-              case let .group(api) = workspace.items[5], case let .group(web) = workspace.items[8] else {
-            return XCTFail("expected the overview, then a project line before its sessions: \(workspace.items)")
+        XCTAssertEqual(workspace.sidebar.numberOfRows, 9)
+        guard case let .group(done) = workspace.items[3],
+              case let .group(api) = workspace.items[4], case let .group(web) = workspace.items[7] else {
+            return XCTFail("expected the state heading, then a project line before its sessions: \(workspace.items)")
         }
-        XCTAssertEqual(counts.map(\.title), ["Done"], "the overview counts the sections listed below it")
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, isGroupRow: 3))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "the overview is not a session")
         XCTAssertTrue(done.isSectionHeading && done.stateSection == .done, "the projects are listed under their state")
         XCTAssertEqual([api.project, web.project], ["api", "web"])
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 3))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 3), "a section line is not a session")
         XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 4))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 4), "a section line is not a session")
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, isGroupRow: 5))
-        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 5), "a project line is not a session")
-        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 6))
+        XCTAssertFalse(workspace.tableView(workspace.sidebar, shouldSelectRow: 4), "a project line is not a session")
+        XCTAssertTrue(workspace.tableView(workspace.sidebar, shouldSelectRow: 5))
 
-        let section = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
+        let section = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 3) as? WorkspaceGroupCellView)
         XCTAssertEqual(section.nameLabel.stringValue, "Done")
         XCTAssertEqual(section.countLabel.stringValue, "3", "a section counts its sessions")
         XCTAssertFalse(section.disclosureLabel.isHidden, "and collapses")
-        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 5) as? WorkspaceGroupCellView)
+        let header = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 4) as? WorkspaceGroupCellView)
         XCTAssertEqual(header.nameLabel.stringValue, "api")
         XCTAssertEqual(header.countLabel.stringValue, "1", "one of the project's sessions waits")
-        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 6) as? WorkspaceRowCellView)
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 5) as? WorkspaceRowCellView)
         XCTAssertEqual(cell.titleLabel.stringValue, "personal")
         XCTAssertEqual(cell.glyphLabel.stringValue, "✓")
-        let webCell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 9) as? WorkspaceRowCellView)
+        let webCell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: 8) as? WorkspaceRowCellView)
         XCTAssertEqual(webCell.titleLabel.stringValue, "work")
         XCTAssertFalse(webCell.detailLabel.stringValue.isEmpty)
 

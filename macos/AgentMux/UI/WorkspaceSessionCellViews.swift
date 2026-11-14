@@ -54,7 +54,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         super.init(frame: .zero)
         identifier = Self.identifier
         glyphLabel.alignment = .center
-        nameLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        nameLabel.font = WorkspaceNavigationButton.titleFont
         nameLabel.textColor = .labelColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.isHidden = true
@@ -76,7 +76,7 @@ final class WorkspaceRowCellView: NSTableCellView {
             heading.addArrangedSubview(label)
         }
         nameHeading.isHidden = true
-        detailLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        detailLabel.font = WorkspaceNavigationButton.detailFont
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
         // Not the cell's textField: the source list restyles that outlet,
@@ -272,7 +272,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         titleLabel.lineBreakMode = .byTruncatingTail
         showStateGlyph(view.glyph)
         titleLabel.stringValue = bell ? "\(view.displayName) \(Self.bellGlyph)" : view.displayName
-        titleLabel.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .bold)
+        titleLabel.font = WorkspaceNavigationButton.titleFont
         let detail = view.detail(session: session, program: program)
         let program = program.flatMap { $0.isEmpty ? nil : $0 }
         let progressText = progress.map(Self.progressText)
@@ -300,7 +300,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         nameLabel.stringValue = row.namedLabel
-        nameLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        nameLabel.font = WorkspaceNavigationButton.titleFont
         nameLabel.isHidden = row.name.isEmpty
         nameHeading.isHidden = row.name.isEmpty
         nameReviewIcon.isHidden = !row.review.accounted || row.name.isEmpty
@@ -308,13 +308,13 @@ final class WorkspaceRowCellView: NSTableCellView {
         showStateGlyph(row.glyph, completed: row.iconState == "stop")
         // A pinned or promoted session names the project it is away from.
         let namesProject = projectFirstLine ? row.name.isEmpty : (away ?? (row.pinned || row.needsAttention))
-        let place = !row.name.isEmpty ? row.taskMetadata : namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
+        let place = !row.name.isEmpty ? row.sidebarMetadata : namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
         let badge = row.pinned ? "★ " : ""
         let label = badge + (row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)")
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
-        titleLabel.font = .systemFont(ofSize: 12, weight: row.name.isEmpty ? .semibold : .regular)
-        detailLabel.stringValue = closing ? Self.closingDetail : row.detail
+        titleLabel.font = .systemFont(ofSize: 13, weight: row.name.isEmpty ? .semibold : .regular)
+        detailLabel.stringValue = closing ? Self.closingDetail : row.sidebarDetail
         toolTip = row.displayName + " · " + row.toolTip
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
         setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))

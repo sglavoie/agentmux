@@ -12,6 +12,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
     static let collapseAction = "Collapse"
     let nameLabel = WorkspaceSidebarLabel(labelWithString: "")
     let countLabel = WorkspaceSidebarLabel(labelWithString: "")
+    let stateDot = NSImageView()
     /// ▸ while the project is collapsed to this line, ▾ while it is not; a
     /// heading that is not a project has none.
     let disclosureLabel = WorkspaceSidebarLabel(labelWithString: "")
@@ -28,19 +29,27 @@ final class WorkspaceGroupCellView: NSTableCellView {
         identifier = Self.identifier
         wantsLayer = true
         layer?.cornerRadius = 6
-        disclosureLabel.textColor = .labelColor
+        disclosureLabel.textColor = .secondaryLabelColor
         disclosureLabel.isHidden = true
-        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        nameLabel.textColor = .labelColor
+        nameLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        nameLabel.textColor = .secondaryLabelColor
         nameLabel.lineBreakMode = .byTruncatingTail
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countLabel.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
-        countLabel.textColor = .labelColor
+        countLabel.textColor = .secondaryLabelColor
+        countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        stateDot.image = NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
+        stateDot.setAccessibilityElement(false)
+        stateDot.isHidden = true
+        stateDot.widthAnchor.constraint(equalToConstant: 6).isActive = true
+        stateDot.heightAnchor.constraint(equalToConstant: 6).isActive = true
         // Source-list group rows replace textField's attributed text with
         // an 11-point heading style. Keep this custom-sized label independent
         // of that outlet; the cell exposes its own accessibility label below.
-        let stack = NSStackView(views: [nameLabel, NSView(), countLabel, disclosureLabel])
+        let stack = NSStackView(views: [stateDot, nameLabel, countLabel, NSView(), disclosureLabel])
         stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         labelLeading = stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2)
@@ -57,6 +66,7 @@ final class WorkspaceGroupCellView: NSTableCellView {
 
     /// A heading that is not a project: it counts nothing.
     func show(section title: String) {
+        showState(nil)
         labelLeading.constant = 2
         nameLabel.stringValue = title
         countLabel.stringValue = ""
@@ -69,9 +79,11 @@ final class WorkspaceGroupCellView: NSTableCellView {
     }
 
     func show(_ group: WorkspaceGroup) {
+        showState(WorkspaceSidebarBand(group: group))
         labelLeading.constant = group.isNested ? 14 : 2
         if group.needsAttention {
             show(section: group.title)
+            showState(.attention, needsAttention: true)
             countLabel.stringValue = String(group.rows.count)
             countLabel.toolTip = "\(group.rows.count) waiting on you"
             setAccessibilityLabel("\(group.title), \(group.rows.count) waiting")
@@ -85,11 +97,12 @@ final class WorkspaceGroupCellView: NSTableCellView {
             return
         }
         var label: String
-        if group.isSectionHeading || group.isProjectHeading {
+        if group.pinned || group.isSectionHeading || group.isProjectHeading {
             // A heading counts all the sessions it holds.
+            let sessions = group.pinned ? group.rows.count : group.sessions
             nameLabel.stringValue = group.title
-            countLabel.stringValue = String(group.sessions)
-            countLabel.toolTip = group.sessions == 1 ? "1 session" : "\(group.sessions) sessions"
+            countLabel.stringValue = String(sessions)
+            countLabel.toolTip = sessions == 1 ? "1 session" : "\(sessions) sessions"
             label = "\(group.title), \(countLabel.toolTip ?? "")"
             if group.isProjectHeading, group.attention > 0 {
                 countLabel.stringValue += " · \(group.attention) waiting"
@@ -122,6 +135,14 @@ final class WorkspaceGroupCellView: NSTableCellView {
             return true
         }
         setAccessibilityCustomActions([action])
+    }
+
+    private func showState(_ band: WorkspaceSidebarBand?, needsAttention: Bool = false) {
+        stateDot.isHidden = band == nil
+        stateDot.contentTintColor = band?.headingColor
+        let color: NSColor = needsAttention ? .systemOrange : .secondaryLabelColor
+        nameLabel.textColor = color
+        countLabel.textColor = color
     }
 }
 

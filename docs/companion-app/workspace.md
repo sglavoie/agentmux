@@ -44,10 +44,20 @@ attention lead the list.
   Launching a project outside the group reveals the new session and switches
   the sidebar to All. The command palette remains a search across all projects.
 
-- A line of chips above the sessions counts each section listed below it,
-  Needs attention and Pinned included. A click on one goes to that section's
-  first session and finds its line as **Reveal in Sidebar** (⌘J) does,
-  expanding its section and project if they are collapsed.
+- In **State → Project** and **Project → State**, section headings show their
+  count beside a small label and a colored dot. **Needs attention** keeps its
+  orange text; headings have no tinted background. Clicking a collapsible
+  heading expands or collapses it. **Projects**, **Projects → Branches**, and
+  **Compact list** keep the state count chips above the sessions. Clicking a
+  chip goes to its first session, expanding its project if needed, as
+  **Reveal in Sidebar** (⌘J) does. Group buttons retain their waiting counts.
+- Session titles use 13-point semibold text; detail uses small regular secondary
+  text for status, branch, and age. A harness icon replaces the harness word in
+  that detail; clearing the icon restores the word. Named sessions emphasize
+  only the custom name, with project and profile in regular text below it.
+  Duplicate names show their branch or runtime qualifier once in the title,
+  preserved by middle truncation. Hover for full metadata, including the
+  harness and dirty branch. Sidebar zoom scales the text and controls together.
 
 - A click on a **tmux** session shows its terminal in the window and puts the
   keyboard in it. The terminal is a view of the agent, not the agent: closing
