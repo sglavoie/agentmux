@@ -209,10 +209,12 @@ extension WorkspaceWindowController {
                 scroll.reflectScrolledClipView(scroll.contentView)
             }
         } completionHandler: { [weak self] in
-            guard let self else { return }
-            self.sidebarAnimations -= 1
-            self.syncHover(IndexSet(integersIn: 0..<self.sidebar.numberOfRows))
-            self.flushSidebarFlashes()
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.sidebarAnimations -= 1
+                self.syncHover(IndexSet(integersIn: 0..<self.sidebar.numberOfRows))
+                self.flushSidebarFlashes()
+            }
         }
     }
 

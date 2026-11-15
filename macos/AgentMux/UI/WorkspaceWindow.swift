@@ -421,8 +421,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var ageTimer: Timer?
     var workingTimer: Timer?
 
-    init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init, sidebar: WorkspaceSidebarView = WorkspaceSidebarView()) {
-        self.sidebar = sidebar
+    init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init, sidebar: WorkspaceSidebarView? = nil) {
+        self.sidebar = sidebar ?? WorkspaceSidebarView()
         self.delegate = delegate
         self.glyphs = glyphs
         self.now = now
