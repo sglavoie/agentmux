@@ -528,6 +528,17 @@ its state symbol and status in the attention color, a prominent **Answer…**
 button, and **N more waiting** when other sessions need attention. Answer… opens
 the same panel as the inspector, including from the inactive split pane.
 
+The prompt panel shows the parsed question and full-width numbered option
+buttons when a blocked look contains at least two options, all using digits
+1–9. The highlighted option is prominent. The raw screen stays visible with a
+140 pt minimum; **esc** remains available beside a collapsed **More keys**
+disclosure containing the full key row. An empty question keeps the existing
+caption. Without usable options, the original caption, 200 pt screen minimum,
+and full key row remain. Typed digits, y/n, arrows, and Return use the same
+guarded press flow in either layout, including ASL confirmation. Parsed
+questions, summaries, and option labels stay in memory as `SecretText`, revealed
+only for visible text and accessibility labels.
+
 With `amxContinueToNextWaiting` on (the default, in Settings › Workspace), a
 successful prompt submission or final ASL answer opens the next answerable, unsent
 waiting row in sidebar order, wrapping after the last row. The pane follows the

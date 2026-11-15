@@ -182,6 +182,7 @@ struct PromptAnswerView: View {
     @ObservedObject var flow: PromptAnswerFlow
     var onClose: () -> Void
     @FocusState private var focused: Bool
+    @State private var moreKeysExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -209,7 +210,10 @@ struct PromptAnswerView: View {
         .focused($focused)
         .defaultFocus($focused, true)
         .onAppear { focused = true }
-        .onChange(of: flow.shown) { _, _ in focused = true }
+        .onChange(of: flow.shown) { _, _ in
+            focused = true
+            moreKeysExpanded = false
+        }
         .onChange(of: flow.state?.phase) { _, phase in
             if phase == .open { focused = true }
         }
@@ -235,8 +239,13 @@ struct PromptAnswerView: View {
     }
 
     @ViewBuilder private func form(_ state: PromptAnswerState) -> some View {
+        let choices = state.choices
         Text(state.title).font(.headline).lineLimit(1)
-        Text(state.caption).font(.caption).foregroundStyle(.secondary)
+        if !choices.isEmpty, let question = state.look.prompt?.question, !question.isEmpty {
+            Text(question.reveal()).font(.callout.weight(.semibold))
+        } else {
+            Text(state.caption).font(.caption).foregroundStyle(.secondary)
+        }
         ScrollViewReader { proxy in
             ScrollView([.vertical, .horizontal]) {
                 Text(state.look.lines.joined(separator: "\n"))
@@ -249,21 +258,55 @@ struct PromptAnswerView: View {
             }
             .onChange(of: state.look.lines, initial: true) { _, _ in proxy.scrollTo("screen", anchor: .bottomLeading) }
         }
-        .frame(minHeight: 200, maxHeight: .infinity)
+        .frame(minHeight: choices.isEmpty ? 200 : 140, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 6))
 
+        if choices.isEmpty {
+            keyRow(state)
+        } else {
+            VStack(spacing: 6) {
+                ForEach(choices) { choice in
+                    if choice.selected {
+                        choiceButton(choice, state).buttonStyle(.borderedProminent)
+                    } else {
+                        choiceButton(choice, state).buttonStyle(.bordered)
+                    }
+                }
+            }
+            HStack(alignment: .top, spacing: 10) {
+                keys(PromptKey.answers.filter { $0.name == "escape" }, state)
+                DisclosureGroup("More keys", isExpanded: $moreKeysExpanded) {
+                    keyRow(state)
+                }
+            }
+        }
+        if !state.notice.isEmpty {
+            Text(state.notice).font(.callout).foregroundStyle(state.noticeKind.color)
+        } else if state.inFlight {
+            Text("Working…").font(.callout).foregroundStyle(.secondary)
+        }
+    }
+
+    private func choiceButton(_ choice: PromptChoice, _ state: PromptAnswerState) -> some View {
+        Button { flow.press(choice.key) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(choice.key.label).font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
+                Text(choice.label.reveal()).lineLimit(2).multilineTextAlignment(.leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityLabel("Option \(choice.key.name): \(choice.label.reveal())")
+        .disabled(!state.canPress)
+    }
+
+    private func keyRow(_ state: PromptAnswerState) -> some View {
         HStack(spacing: 6) {
             keys(PromptKey.digits, state)
             Divider().frame(height: 18)
             keys(PromptKey.navigation, state)
             Divider().frame(height: 18)
             keys(PromptKey.answers, state)
-        }
-        if !state.notice.isEmpty {
-            Text(state.notice).font(.callout).foregroundStyle(state.noticeKind.color)
-        } else if state.inFlight {
-            Text("Working…").font(.callout).foregroundStyle(.secondary)
         }
     }
 

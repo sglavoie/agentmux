@@ -62,11 +62,124 @@ final class PromptAnswerTests: XCTestCase {
         """.utf8), status: 0)
         XCTAssertEqual(look.value, PromptLook(project: "api", screen: "blocked", lines: ["a", "b"]))
         XCTAssertEqual(look.value?.asking, true)
+        XCTAssertNil(look.value?.prompt)
         let sent = AMXEnvelope.decode(PromptSent.self, stdout: Data("""
         {"schema_version":1,"data":{"runtime_session_id":"\(id)","operation_id":"send-1","input":"keys","screen":"blocked","delivery":"accepted"}}
         """.utf8), status: 0)
         XCTAssertEqual(sent.value, PromptSent(delivery: "accepted"))
         XCTAssertEqual(PromptLook.arguments(runtimeSessionID: id), ["send", id, "--look"])
+    }
+
+    func testParsedPromptDecodesAndKeepsProseRedacted() throws {
+        let look = try JSONDecoder().decode(PromptLook.self, from: Data("""
+        {"screen":"blocked","prompt":{
+          "question":"sentinel-question","summary":"sentinel-summary",
+          "options":[{"key":"1","label":"sentinel-label","selected":true},
+                     {"key":"2","label":"No"}]}}
+        """.utf8))
+        let prompt = try XCTUnwrap(look.prompt)
+        XCTAssertEqual(prompt.question.reveal(), "sentinel-question")
+        XCTAssertEqual(prompt.summary.reveal(), "sentinel-summary")
+        XCTAssertEqual(prompt.options[0].label.reveal(), "sentinel-label")
+        XCTAssertTrue(prompt.options[0].selected)
+        XCTAssertFalse(prompt.options[1].selected)
+        var (state, _) = PromptAnswerState.open(target)
+        state.looked(seq: 1, .success(look))
+        let choice = try XCTUnwrap(state.choices.first)
+        XCTAssertEqual(choice.label, prompt.options[0].label)
+        XCTAssertEqual(choice.label.reveal(), "sentinel-label")
+
+        func assertRedacted<T>(_ value: T, file: StaticString = #filePath, line: UInt = #line) {
+            var dumped = ""
+            dump(value, to: &dumped)
+            for rendered in [String(describing: value), String(reflecting: value), dumped] {
+                for sentinel in ["sentinel-question", "sentinel-summary", "sentinel-label"] {
+                    XCTAssertFalse(rendered.contains(sentinel), "Prose escaped redaction", file: file, line: line)
+                }
+            }
+        }
+        assertRedacted(prompt)
+        assertRedacted(prompt.options[0])
+        assertRedacted(choice)
+    }
+
+    func testMissingAndNullPromptFieldsUseDefaults() throws {
+        for json in ["{}", #"{"prompt":null}"#] {
+            XCTAssertNil(try JSONDecoder().decode(PromptLook.self, from: Data(json.utf8)).prompt)
+        }
+        for json in ["{}", #"{"question":null,"summary":null,"options":null}"#] {
+            let prompt = try JSONDecoder().decode(PromptLook.Prompt.self, from: Data(json.utf8))
+            XCTAssertEqual(prompt.question, SecretText())
+            XCTAssertEqual(prompt.summary, SecretText())
+            XCTAssertTrue(prompt.options.isEmpty)
+        }
+        for json in ["{}", #"{"key":null,"label":null,"selected":null}"#] {
+            let option = try JSONDecoder().decode(PromptLook.Prompt.Option.self, from: Data(json.utf8))
+            XCTAssertEqual(option.key, "")
+            XCTAssertEqual(option.label, SecretText())
+            XCTAssertFalse(option.selected)
+        }
+    }
+
+    func testChoicesRequireABlockedScreenAndAtLeastTwoSupportedDigits() {
+        let options: [PromptLook.Prompt.Option] = [
+            .init(key: "1", label: "Yes"), .init(key: "2", label: "No", selected: true),
+        ]
+        var look = asking
+        look.prompt = .init(options: options)
+        var (state, _) = PromptAnswerState.open(target)
+        XCTAssertTrue(state.choices.isEmpty)
+        state.looked(seq: 1, .success(look))
+        XCTAssertEqual(state.choices.map(\.key), Array(PromptKey.digits.prefix(2)))
+        XCTAssertEqual(state.choices.map(\.id), ["1", "2"])
+        XCTAssertEqual(state.choices.map(\.label), options.map(\.label))
+        XCTAssertEqual(state.choices.map(\.selected), [false, true])
+
+        for screen in ["working", "idle", "unknown", ""] {
+            look.screen = screen
+            state.looked(seq: 1, .success(look))
+            XCTAssertTrue(state.choices.isEmpty, screen)
+        }
+        look.screen = "blocked"
+        for partial in [[], Array(options.prefix(1))] {
+            look.prompt?.options = partial
+            state.looked(seq: 1, .success(look))
+            XCTAssertTrue(state.choices.isEmpty)
+        }
+        for unsupported in ["y", "enter", "0", "10", "", "01"] {
+            look.prompt?.options = options + [.init(key: unsupported, label: "Other")]
+            state.looked(seq: 1, .success(look))
+            XCTAssertTrue(state.choices.isEmpty, "One unsupported option rejects the entire list")
+        }
+        look.prompt = nil
+        state.looked(seq: 1, .success(look))
+        XCTAssertTrue(state.choices.isEmpty)
+    }
+
+    func testChoicesFollowTheSettleLookAfterAPress() {
+        var first = asking
+        first.prompt = .init(options: [.init(key: "1", label: "Yes", selected: true), .init(key: "2", label: "No")])
+        var next = asking
+        next.prompt = .init(question: "Next question?", options: [
+            .init(key: "1", label: "Continue"), .init(key: "2", label: "Stop", selected: true),
+            .init(key: "3", label: "Later"),
+        ])
+        let service = FakePromptService()
+        service.looks = [.success(first), .success(next)]
+        let reads = HeldRunner()
+        let (flow, pauses) = flow(service, runner: reads, presses: ImmediateRunner())
+        flow.open(target)
+        reads.release()
+        XCTAssertEqual(flow.state?.choices.map(\.label), ["Yes", "No"])
+        flow.press(two)
+        XCTAssertEqual(flow.state?.canPress, false)
+        reads.release()
+        XCTAssertEqual(pauses(), [PromptAnswerFlow.settle])
+        XCTAssertEqual(service.calls, [["send", id, "--look"], ["send", id, "--key", "2"], ["send", id, "--look"]])
+        XCTAssertEqual(flow.state?.look.prompt?.question, "Next question?")
+        XCTAssertEqual(flow.state?.choices.map(\.label), ["Continue", "Stop", "Later"])
+        XCTAssertEqual(flow.state?.choices.map(\.selected), [false, true, false])
+        XCTAssertEqual(flow.state?.canPress, true)
     }
 
     func testEveryKeyIsOneAmxSendTakes() {

@@ -11,18 +11,61 @@ import Foundation
 
 /// The payload of `amx send RUNTIME_SESSION_ID --look --json`.
 struct PromptLook: Decodable, Equatable {
+    struct Prompt: Decodable, Equatable {
+        struct Option: Decodable, Equatable {
+            var key = ""
+            var label: SecretText = ""
+            var selected = false
+
+            enum CodingKeys: String, CodingKey { case key, label, selected }
+
+            init(key: String = "", label: SecretText = "", selected: Bool = false) {
+                self.key = key
+                self.label = label
+                self.selected = selected
+            }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                key = try c.decodeIfPresent(String.self, forKey: .key) ?? ""
+                label = try c.decodeIfPresent(SecretText.self, forKey: .label) ?? ""
+                selected = try c.decodeIfPresent(Bool.self, forKey: .selected) ?? false
+            }
+        }
+
+        var question: SecretText = ""
+        var summary: SecretText = ""
+        var options: [Option] = []
+
+        enum CodingKeys: String, CodingKey { case question, summary, options }
+
+        init(question: SecretText = "", summary: SecretText = "", options: [Option] = []) {
+            self.question = question
+            self.summary = summary
+            self.options = options
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            question = try c.decodeIfPresent(SecretText.self, forKey: .question) ?? ""
+            summary = try c.decodeIfPresent(SecretText.self, forKey: .summary) ?? ""
+            options = try c.decodeIfPresent([Option].self, forKey: .options) ?? []
+        }
+    }
+
     struct Search: Decodable, Equatable {
         var scope: String
         var query: SecretText
     }
     var search: Search?
+    var prompt: Prompt?
     var project = ""
     /// What the screen says: blocked, working, idle, or unknown.
     var screen = ""
     /// The last rows of the session's screen.
     var lines: [String] = []
 
-    enum CodingKeys: String, CodingKey { case project, screen, lines, search }
+    enum CodingKeys: String, CodingKey { case project, screen, lines, search, prompt }
 
     init(project: String = "", screen: String = "", lines: [String] = []) {
         self.project = project
@@ -36,6 +79,7 @@ struct PromptLook: Decodable, Equatable {
         screen = try c.decodeIfPresent(String.self, forKey: .screen) ?? ""
         lines = try c.decodeIfPresent([String].self, forKey: .lines) ?? []
         search = try c.decodeIfPresent(Search.self, forKey: .search)
+        prompt = try c.decodeIfPresent(Prompt.self, forKey: .prompt)
     }
 
     /// The screen is asking something, so a key has a prompt to answer.
@@ -117,6 +161,14 @@ struct PromptKey: Equatable, Identifiable {
     }
 }
 
+/// A parsed option with the key the panel can press, retaining its private prose.
+struct PromptChoice: Equatable, Identifiable {
+    let key: PromptKey
+    let label: SecretText
+    let selected: Bool
+    var id: String { key.name }
+}
+
 /// The session a banner's Answer… was chosen for.
 struct PromptAnswerTarget: Equatable {
     let runtimeSessionID: String
@@ -174,6 +226,17 @@ struct PromptAnswerState: Equatable {
 
     /// Whether a key may be pressed now.
     var canPress: Bool { phase == .open && !inFlight && look.asking }
+
+    /// The prompt's own options, only when every option has a supported digit.
+    var choices: [PromptChoice] {
+        guard look.asking, let options = look.prompt?.options, options.count >= 2 else { return [] }
+        var choices: [PromptChoice] = []
+        for option in options {
+            guard let key = PromptKey.digits.first(where: { $0.name == option.key }) else { return [] }
+            choices.append(PromptChoice(key: key, label: option.label, selected: option.selected))
+        }
+        return choices
+    }
 
     /// One line under the screen saying what it is.
     var caption: String {

@@ -99,6 +99,14 @@ expanded context holds the list, updates wait behind **Update List** so targets
 stay put; changed prompts are disabled immediately. Answer opens the existing
 prompt or supervisor panel and never submits an answer itself.
 
+When a prompt has recognizable numbered options, its answer panel shows the
+question and one full-width button per option, with the highlighted option
+prominent. The raw screen remains visible for context. **esc** sends Escape to
+the session; **More keys** expands the full key row. Typing 1–9, y, n, Up, Down,
+or Return still works. Other screens keep the raw screen and full key row.
+Keys remain disabled until the panel has read a waiting prompt and while a key
+or fresh look is in flight; agent-session-loop sessions still require confirmation.
+
 **Window › Waiting** (⌘⇧I) focuses the reader. Up/Down read items, Return opens
 the answer panel, N advances, Space toggles context, and Page Up/Page Down scroll
 context. Escape restores the previous workspace focus without attaching a session.
