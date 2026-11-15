@@ -84,7 +84,7 @@ func TestWorkspaceSetupReturnsToAppWithoutRequiringAmxOnPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "choose Start Daemon if offered") || !strings.Contains(out, "then choose Launch Project") ||
+	if !strings.Contains(out, "choose Start Daemon if offered") || !strings.Contains(out, "then choose Launch project…") ||
 		strings.Contains(out, "run amx, press l") {
 		t.Fatalf("workspace setup sent the user to a separately installed CLI: %s", out)
 	}

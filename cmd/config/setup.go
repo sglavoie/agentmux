@@ -356,7 +356,7 @@ func setupSummary(out io.Writer, cfg *config.Config, profile string, synced bool
 		fmt.Fprintf(&summary, "  Hooks: not synced during setup. Next: %s\n", setupHookCommand(profile))
 	}
 	if os.Getenv(tmux.WorkspaceHostEnv) == "1" {
-		summary.WriteString("\nReturn to the workspace, choose Start Daemon if offered, then choose Launch Project and select your project.\nThe app includes amx and tmux; no separate installation is needed.\n")
+		summary.WriteString("\nReturn to the workspace, choose Start Daemon if offered, then choose Launch project… and select your project.\nThe app includes amx and tmux; no separate installation is needed.\n")
 	} else {
 		summary.WriteString("\nAfter resolving any missing requirements, run amx, press l, select your project, and press Enter.\nFor a full installation check: amx doctor --strict\n")
 	}
