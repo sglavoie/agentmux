@@ -231,7 +231,7 @@ extension WorkspaceViewsWindowTests {
         workspace.setShowOverviewInSidebar(true)
         app.store.apply(snapshot: F.snapshot([]))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "No live sessions")
-        XCTAssertEqual(workspace.placeholder.button.title, "Launch Project…")
+        XCTAssertEqual(workspace.placeholder.button.title, "Launch project…")
         workspace.placeholder.press()
         XCTAssertEqual(app.launchMenuRequests, 1)
         XCTAssertTrue(app.madeViews.isEmpty)

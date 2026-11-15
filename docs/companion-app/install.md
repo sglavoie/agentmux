@@ -19,7 +19,7 @@ project directories. Select a CLI when several are found, keep the suggested
 project or use **Choose another folder…**, and review the checked **Sync Agent
 Mux hooks into &lt;home&gt; (needed for live status)** option. Click **Set up** to save
 configuration with the existing tmux default. Unchecking the box skips hook sync.
-Then choose **Start Daemon** if offered and **Launch Project**. Setup never
+Then choose **Start Daemon** if offered and **Launch project…**. Setup never
 starts an agent or verifies authentication.
 
 **Set up manually…** is always available in the sheet and opens the embedded

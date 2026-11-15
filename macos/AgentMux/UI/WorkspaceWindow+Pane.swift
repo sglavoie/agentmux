@@ -384,7 +384,7 @@ extension WorkspaceWindowController {
             if state.rows.isEmpty {
                 placeholder.show(title: "No live sessions",
                     message: [delegate?.workspaceProjectGuidance ?? "", delegate?.workspaceLaunchDescription ?? ""].joined(separator: "\n\n"),
-                    button: delegate?.workspaceOffersSetup == true ? "Set up first project…" : "Launch Project…", secondary: [
+                    button: delegate?.workspaceOffersSetup == true ? "Set up first project…" : "Launch project…", secondary: [
                         ("Conversation History", { [weak self] in self?.delegate?.workspacePerform(.history) }),
                         ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
                     ]) { [weak self] in

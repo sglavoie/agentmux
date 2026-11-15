@@ -410,7 +410,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             inspector.onContext = { _, receive in receive(.loaded(SecretText("Which deployment should proceed?\n\nReview the staging results before choosing production."))) }
             inspector.show(.init(waiting: [row])); inspector.toggleContext(row)
             try await render(PreviewNativeView(view: inspector), name: "consistency-waiting-contrast-\(dark)", width: 320, height: 600,
-                dark: dark, highContrast: true, expected: ["Which deployment", "Next Waiting", "Oldest first", "Answer"])
+                dark: dark, highContrast: true, expected: ["Which deployment", "Next waiting", "Oldest first", "Answer"])
             let transcript = WorkspaceTranscriptText(text: "# Deployment review\n\nInspect the failed check before resuming.\n\n```swift\nlet café = \"🦊\"\n```", terms: [], preferences: preferences)
             let read = WorkspaceReadObservation(title: "Transcript", refreshedAt: Date().addingTimeInterval(-125))
             try await render(VStack(alignment: .leading, spacing: 16) {
@@ -466,13 +466,13 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             inspector.onContext = { _, done in done(.loaded(SecretText("Which deployment should proceed?\n\nThe endpoint checks passed. Review the staging results before choosing production.\n\n" + String(repeating: "Keep the current deployment available until verification completes.\n\n", count: 10)))) }
             inspector.show(.init(waiting: [row])); inspector.focusReader()
             try await render(PreviewNativeView(view: inspector), name: "daily-waiting-large-\(dark)", width: 320, height: 600, dark: dark,
-                             expected: ["Answer", "Which deployment", "Next Waiting"])
+                             expected: ["Answer", "Which deployment", "Next waiting"])
             let app = FakeWorkspaceApp()
             app.store.apply(snapshot: WorkspaceFixture.snapshot([]))
             let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
             workspace.openForTesting(); workspace.refresh()
             try await render(PreviewNativeView(view: workspace.placeholder), name: "daily-empty-workspace-\(dark)", width: 720, height: 450,
-                             dark: dark, expected: ["Launch Project", "Conversation History", "Launch in Workspace"])
+                             dark: dark, expected: ["Launch project", "Conversation History", "Launch in Workspace"])
             workspace.window.close()
         }
     }

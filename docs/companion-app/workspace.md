@@ -58,8 +58,9 @@ attention lead the list.
   project refresh. Switching waits for any checkout operation in the review
   pane to finish. Opening a session from a notification or an out-of-group
   launch still takes you to that session.
-- **Launch Project** in the workspace and menu bar follows the selected group,
-  including configured projects with no running sessions. Its **All projects**
+- The empty workspace's **Launch project…** button and the menu bar's
+  **Launch Project** follow the selected group,
+  including configured projects with no running sessions. The **All projects**
   submenu offers the full catalog without changing the group just by opening it.
   Launching a project outside the group reveals the new session and switches
   the sidebar to All. The command palette remains a search across all projects.

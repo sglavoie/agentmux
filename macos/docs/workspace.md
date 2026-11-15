@@ -35,7 +35,7 @@ ASL answer panel work the same either way.
   `--backend keep`, and optionally `--sync-hooks` to non-interactive setup.
   Successful save calls `workspaceSetupFinished()` to refresh the project catalog
   and backend readiness, then closes the sheet. The placeholder offers **Start
-  Daemon** or **Launch Project**; each still requires the operator's click.
+  Daemon** or **Launch project…**; each still requires the operator's click.
   Detection does not verify authentication. No detection results lists the CLIs
   searched. **Set up manually…** always remains available and opens the existing
   `.setup` utility wizard, whose completion still refreshes the workspace.

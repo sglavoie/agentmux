@@ -35,7 +35,7 @@ Checkout review and worktree actions additionally need Git.
 2. Expand the ZIP, move **Agent Mux.app** to **Applications**, and open it.
 3. Choose **Set up first project…**, select the detected agent and project
    folder, review the checked hook-sync option, and click **Set up**.
-4. Choose **Start Daemon** if offered, then **Launch Project**. Your agent opens
+4. Choose **Start Daemon** if offered, then **Launch project…**. Your agent opens
    in the workspace; the sidebar shows when it needs you.
 
 Setup does not check authentication or launch an agent. **Set up manually…**

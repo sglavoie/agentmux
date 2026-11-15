@@ -111,9 +111,11 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.selectGroup("empty")
         XCTAssertTrue(inspector.visibleWaiting.isEmpty)
         XCTAssertFalse(inspector.nextButton.isEnabled)
+        XCTAssertEqual(inspector.nextButton.title, "Next waiting")
         XCTAssertEqual(inspector.tabs.label(forSegment: 0), "Waiting")
         workspace.selectGroup(nil)
         XCTAssertEqual(inspector.visibleWaiting.count, 2)
+        XCTAssertEqual(inspector.nextButton.title, "Next waiting · 2 remaining")
         XCTAssertEqual(inspector.model.inspection?.key, .embedded(F.runtimeID(2)))
     }
 

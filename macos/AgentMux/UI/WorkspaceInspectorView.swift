@@ -22,7 +22,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
     let filterPicker = NSPopUpButton()
     let oldestButton = NSButton(checkboxWithTitle: "Oldest first", target: nil, action: nil)
     let allGroupsButton = NSButton(checkboxWithTitle: "Show all groups", target: nil, action: nil)
-    let nextButton = NSButton(title: "Next Waiting", target: nil, action: nil)
+    let nextButton = NSButton(title: "Next waiting", target: nil, action: nil)
     let updatesButton = NSButton(title: "Update List", target: nil, action: nil)
     private let inboxControls = NSStackView()
     private(set) var waitingFilter = WorkspaceWaitingFilter.all
@@ -256,7 +256,7 @@ final class WorkspaceInspectorView: NSView, WorkspaceSidebarZoomAware {
         updatesButton.title = "Update List (\(model.waiting.count))"
         updatesButton.toolTip = "Apply the updated waiting list. Items stay in place while you read."
         nextButton.isEnabled = model.current && !remainingWaiting.isEmpty
-        nextButton.title = remainingWaiting.isEmpty ? "Next Waiting" : "Next waiting · \(remainingWaiting.count) remaining"
+        nextButton.title = remainingWaiting.isEmpty ? "Next waiting" : "Next waiting · \(remainingWaiting.count) remaining"
         nextButton.setAccessibilityLabel(nextButton.title)
         let wanted = displayedLines
         if let old, lines.count == old.count, WorkspaceInspectorLine.sameLines(old, wanted) {

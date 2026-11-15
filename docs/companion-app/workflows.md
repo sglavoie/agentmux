@@ -71,7 +71,7 @@ opens **Launch projects in**. Following CLI configuration distinguishes an expli
 `config.toml` choice from the tmux default. Preferences lists resolved
 app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configuration.
 
-An empty workspace offers **Launch Project…**, **Conversation History**, and
+An empty workspace offers **Launch project…**, **Conversation History**, and
 **Open Dashboard**, and names the effective launch destination. With no configured
 projects it offers **Set up first project…**, opening a native sheet with detected
 agent CLIs, recent project directories, and **Choose another folder…**. Review the
@@ -91,7 +91,7 @@ group switches the left sidebar to **All** and reveals the session. Group filter
 changes apply immediately, including while reading context.
 
 Waiting in the inspector supports category filters, oldest-first sorting,
-expandable question/output context, and **Next Waiting**. **All** groups decisions
+expandable question/output context, and **Next waiting**. **All** groups decisions
 before other attention and completed turns, with counts. While the pointer or an
 expanded context holds the list, updates wait behind **Update List** so targets
 stay put; changed prompts are disabled immediately. Answer opens the existing

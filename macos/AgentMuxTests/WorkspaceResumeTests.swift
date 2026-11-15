@@ -65,7 +65,7 @@ final class WorkspaceResumeTests: XCTestCase {
         XCTAssertEqual(app.setupFinishes, 1)
         app.workspaceOffersSetup = false
         workspace.refreshCommands()
-        XCTAssertEqual(workspace.placeholder.button.title, "Launch Project…")
+        XCTAssertEqual(workspace.placeholder.button.title, "Launch project…")
         XCTAssertTrue(app.made.isEmpty)
         XCTAssertNil(WorkspaceUtilityView.from(.init(kind: "setup")), "Only the operator opens setup")
     }

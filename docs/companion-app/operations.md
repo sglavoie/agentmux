@@ -167,7 +167,7 @@ retained-read failures appear below the question; failures keep an explicit Retr
 button. The collapsed card keeps its reason text, and accessible labels retain
 session context. Lighter card backgrounds keep the prose prominent.
 
-Waiting keeps category and Oldest first on one row. Next Waiting stays available;
+Waiting keeps category and Oldest first on one row. **Next waiting** stays available;
 Update List appears only when changes are held while you read. The keyboard hint
 appears while the Waiting reader has focus and disappears when focus leaves.
 Changed questions immediately lose their answer actions, even before you apply
