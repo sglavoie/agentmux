@@ -195,6 +195,40 @@ extension AppDelegate {
         return "Launch in \(choice.destination(cliBackend: preferences.backend.cliLaunchBackend)) · \(choice.source(cliSource: preferences.backend.cliLaunchBackendSource))"
     }
 
+    var workspaceQuickStarts: (projects: [(title: String, run: () -> Void)],
+                               recent: [(title: String, run: () -> Void)]) {
+        let input = actionsInput
+        var projectActions: [(title: String, run: () -> Void)] = []
+        var seen: Set<ProjectEntry> = []
+        func collect(_ entries: [MenuEntry]) {
+            for entry in entries {
+                switch entry {
+                case let .action(.launchProject(project), title):
+                    guard projectActions.count < 5, seen.insert(project).inserted else { continue }
+                    projectActions.append((title, { [weak self] in self?.perform(.launchProject(project)) }))
+                case let .actionSubmenu(_, children): collect(children)
+                default: break
+                }
+            }
+        }
+        if gate.unavailableReason(.project) == nil {
+            collect(MenuBuilder.entries(for: .projects, input))
+        }
+        let conversations = gate.unavailableReason(.sessions) == nil
+            ? RecentSessions.top(recent.state.value ?? [], limit: 3) : []
+        let recentActions: [(title: String, run: () -> Void)] = conversations.map { conversation in
+            (MenuBuilder.quickStartTitle(conversation, now: input.now),
+             { [weak self] in self?.perform(.continueConversation(conversation)) })
+        }
+        return (projectActions, recentActions)
+    }
+
+    func workspaceRefreshQuickStarts() {
+        refreshProjects()
+        surveyProjectDirectories()
+        refreshRecent()
+    }
+
     var workspaceOffersSetup: Bool {
         ProjectCatalog.offersSetup(projects.state, unavailable: gate.unavailableReason(.project))
     }

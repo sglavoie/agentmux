@@ -125,6 +125,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var sessionShortcutRows: [WorkspaceRow] = []
     var content: Content = .empty
     /// Whether the window is on screen; terminals exist only while it is.
+    var isShowingQuickStarts = false
     var isOpen = false
 
     let sidebar: WorkspaceSidebarView

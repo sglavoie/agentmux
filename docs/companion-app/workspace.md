@@ -62,6 +62,14 @@ attention lead the list.
   project refresh. Switching waits for any checkout operation in the review
   pane to finish. Opening a session from a notification or an out-of-group
   launch still takes you to that session.
+- With no live sessions, **Projects** lists up to five launchable projects in
+  launch-menu order, and **Recent conversations** lists the three most recently
+  active conversations as **Title · Project · Age**. Click a project to launch
+  it or a conversation to resume it through the same actions as the status menu.
+  Empty groups are hidden. The lists refresh when the empty workspace appears.
+  **Conversation History** and **Open Dashboard** remain below these choices;
+  Return still opens **Launch project…**. First-project setup and daemon-down
+  guidance keep their existing actions.
 - The empty workspace's **Launch project…** button and the menu bar's
   **Launch Project** follow the selected group,
   including configured projects with no running sessions. The **All projects**

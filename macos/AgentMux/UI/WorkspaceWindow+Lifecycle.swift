@@ -141,6 +141,7 @@ extension WorkspaceWindowController {
         pendingLayout = nil
         layoutGeneration += 1
         isOpen = false
+        isShowingQuickStarts = false
         if let paneClickMonitor { NSEvent.removeMonitor(paneClickMonitor) }
         paneClickMonitor = nil
         if reviewSelected {

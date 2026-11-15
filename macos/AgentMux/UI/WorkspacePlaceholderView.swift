@@ -17,9 +17,12 @@ final class WorkspacePlaceholderButton: NSButton {
 }
 
 /// What the pane shows when it has no terminal to show: a title, a line of
-/// explanation, and at most one thing to do about it.
+/// explanation, a primary action, and optional grouped shortcuts.
 @MainActor
 final class WorkspacePlaceholderView: NSView {
+    static let projectsHeading = "Projects"
+    static let recentHeading = "Recent conversations"
+
     let titleLabel = NSTextField(labelWithString: "")
     let messageLabel = NSTextField(wrappingLabelWithString: "")
     let button = WorkspacePlaceholderButton(title: "", target: nil, action: nil)
@@ -56,8 +59,8 @@ final class WorkspacePlaceholderView: NSView {
     }
 
     /// With `isDefault`, Return presses the button, as it does a sheet's.
-    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = true, secondary: [(String, () -> Void)] = [], onPress: (() -> Void)? = nil) {
-        showSecondaryActions(secondary)
+    func show(title: String, message: String, button label: String? = nil, isDefault: Bool = true, secondary: [(String, () -> Void)] = [], groups: [(heading: String?, actions: [(String, () -> Void)])]? = nil, onPress: (() -> Void)? = nil) {
+        if let groups { showGroups(groups) } else { showSecondaryActions(secondary) }
         titleLabel.stringValue = title
         messageLabel.stringValue = message
         button.title = label ?? ""
@@ -67,15 +70,40 @@ final class WorkspacePlaceholderView: NSView {
     }
 
     func showSecondaryActions(_ actions: [(String, () -> Void)]) {
-        secondaryHandlers = actions.map { $0.1 }
-        secondaryActions.isHidden = actions.isEmpty
-        if secondaryActions.arrangedSubviews.compactMap({ ($0 as? NSButton)?.title }) == actions.map({ $0.0 }) { return }
+        showGroups([(heading: nil, actions: actions)])
+    }
+
+    func showGroups(_ groups: [(heading: String?, actions: [(String, () -> Void)])]) {
+        let groups = groups.filter { !$0.actions.isEmpty }
+        secondaryHandlers = groups.flatMap { $0.actions.map { $0.1 } }
+        secondaryActions.isHidden = groups.isEmpty
+        // Preserve the buttons (and keyboard focus) when only handlers change.
+        let signature = groups.flatMap { group in
+            (group.heading.map { ["heading:" + $0] } ?? []) + group.actions.map { "button:" + $0.0 }
+        }
+        if secondaryActions.arrangedSubviews.map({ view in
+            if let button = view as? NSButton { return "button:" + button.title }
+            return "heading:" + ((view as? NSTextField)?.stringValue ?? "")
+        }) == signature { return }
         secondaryActions.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for (index, action) in actions.enumerated() {
-            let button = NSButton(title: action.0, target: self, action: #selector(secondaryPressed(_:)))
-            button.bezelStyle = .rounded
-            button.tag = index
-            secondaryActions.addArrangedSubview(button)
+        var index = 0
+        for group in groups {
+            if let heading = group.heading {
+                let label = NSTextField(labelWithString: heading)
+                label.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+                label.textColor = .secondaryLabelColor
+                secondaryActions.addArrangedSubview(label)
+            }
+            for action in group.actions {
+                let button = NSButton(title: action.0, target: self, action: #selector(secondaryPressed(_:)))
+                button.bezelStyle = .rounded
+                button.lineBreakMode = .byTruncatingTail
+                button.toolTip = action.0
+                button.tag = index
+                index += 1
+                secondaryActions.addArrangedSubview(button)
+                button.widthAnchor.constraint(lessThanOrEqualToConstant: 420).isActive = true
+            }
         }
     }
 

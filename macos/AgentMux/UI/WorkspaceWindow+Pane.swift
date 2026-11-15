@@ -314,6 +314,12 @@ extension WorkspaceWindowController {
         reloadInspector()
         reportPlace()
         reportShowing()
+        let showsQuickStarts = wanted == .empty && state.rows.isEmpty
+            && delegate?.workspaceOffersSetup != true
+            && delegate.map { WorkspaceSidebar.feedExplanation($0.store.feed) == nil } == true
+        let appeared = showsQuickStarts && !isShowingQuickStarts
+        isShowingQuickStarts = showsQuickStarts
+        if appeared { delegate?.workspaceRefreshQuickStarts() }
     }
 
     static let resumeTitle = "Resume Conversation…"
@@ -382,16 +388,25 @@ extension WorkspaceWindowController {
                 break
             }
             if state.rows.isEmpty {
+                let secondary: [(String, () -> Void)] = [
+                    ("Conversation History", { [weak self] in self?.delegate?.workspacePerform(.history) }),
+                    ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
+                ]
+                let choices = delegate?.workspaceQuickStarts ?? (projects: [], recent: [])
+                let groups: [(heading: String?, actions: [(String, () -> Void)])] = [
+                    (WorkspacePlaceholderView.projectsHeading, Array(choices.projects.prefix(5))),
+                    (WorkspacePlaceholderView.recentHeading, Array(choices.recent.prefix(3))),
+                    (nil, secondary),
+                ]
                 placeholder.show(title: "No live sessions",
                     message: [delegate?.workspaceProjectGuidance ?? "", delegate?.workspaceLaunchDescription ?? ""].joined(separator: "\n\n"),
-                    button: delegate?.workspaceOffersSetup == true ? "Set up first project…" : "Launch project…", secondary: [
-                        ("Conversation History", { [weak self] in self?.delegate?.workspacePerform(.history) }),
-                        ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
-                    ]) { [weak self] in
+                    button: delegate?.workspaceOffersSetup == true ? "Set up first project…" : "Launch project…", secondary: secondary,
+                    groups: delegate?.workspaceOffersSetup == true ? nil : groups) { [weak self] in
                         guard let self else { return }
                         if self.delegate?.workspaceOffersSetup == true { self.showSetup() }
                         else { self.delegate?.workspaceLaunchProjects(from: self.placeholder.button) }
                     }
+
                 break
             }
             placeholder.show(

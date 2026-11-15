@@ -42,6 +42,10 @@ Setup does not check authentication or launch an agent. **Set up manually…**
 offers custom profile homes and other choices. See the
 [installation guide](docs/companion-app/install.md) for setup details and recovery.
 
+With no live sessions, the workspace offers up to five configured projects and
+three recent conversations as one-click launch and resume buttons. Return opens
+the full **Launch project…** menu.
+
 Close and reopen the app to return to your running sessions. For a conversation
 whose agent has ended, open **Conversation History** (`⌘Y`) and choose
 **Resume**. To update, quit the app, replace it in Applications with the new

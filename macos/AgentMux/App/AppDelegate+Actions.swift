@@ -248,6 +248,8 @@ extension AppDelegate {
             self.projects.surveying = false
             guard self.projects.missingDirectories != missing else { return }
             self.projects.missingDirectories = missing
+            self.updateWorkspaceProjectMenu()
+            self.workspace?.refreshCommands()
             self.statusItem?.refreshSubmenus()
         })
     }

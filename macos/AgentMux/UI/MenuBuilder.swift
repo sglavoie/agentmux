@@ -444,10 +444,7 @@ enum MenuBuilder {
     /// conversation a session is running now.
     static func recentTitle(_ conversation: RecentConversation, live: Bool, now: Date) -> String {
         var parts: [String] = []
-        let name = conversation.project.isEmpty
-            ? (conversation.cwd as NSString).lastPathComponent
-            : conversation.project
-        parts.append(name.isEmpty ? conversation.id : name)
+        parts.append(recentProjectName(conversation))
         if !conversation.harness.isEmpty { parts.append(conversation.harness) }
         if live {
             parts.append("live")
@@ -461,6 +458,18 @@ enum MenuBuilder {
             parts.append(snippet.count > snippetLimit ? String(snippet.prefix(snippetLimit - 1)) + "…" : snippet)
         }
         return parts.joined(separator: " · ")
+    }
+
+    static func recentProjectName(_ conversation: RecentConversation) -> String {
+        let name = conversation.project.isEmpty
+            ? (conversation.cwd as NSString).lastPathComponent : conversation.project
+        return name.isEmpty ? conversation.id : name
+    }
+
+    static func quickStartTitle(_ conversation: RecentConversation, now: Date) -> String {
+        let title = menuLine(conversation.conversationTitle).title
+        let age = conversation.lastAt.map { AgeFormatter.string(since: $0, now: now, style: .compact) }
+        return ([title, recentProjectName(conversation)] + (age.map { [$0] } ?? [])).joined(separator: " · ")
     }
 
     static let snippetLimit = 48

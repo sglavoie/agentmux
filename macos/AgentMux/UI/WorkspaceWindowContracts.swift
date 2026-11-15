@@ -93,6 +93,11 @@ protocol WorkspaceDelegate: AnyObject {
     var workspaceProjects: [ProjectEntry] { get }
     /// Only a successful catalog read can invalidate a restored group.
     var workspaceProjectsLoaded: Bool { get }
+    /// One-click choices for an empty workspace: up to five configured
+    /// projects, then up to three recent conversations.
+    var workspaceQuickStarts: (projects: [(title: String, run: () -> Void)],
+                               recent: [(title: String, run: () -> Void)]) { get }
+    func workspaceRefreshQuickStarts()
     var workspaceOffersSetup: Bool { get }
     func workspaceSetupFinished()
     func workspaceLaunchProjects(from view: NSView)
@@ -121,6 +126,9 @@ extension WorkspaceDelegate {
     var workspaceProjectsLoaded: Bool { true }
     var workspaceLaunchDescription: String { "Launch in Workspace (tmux)" }
     var workspaceProjectGuidance: String { "Choose a configured project to start, or return to a past conversation." }
+    var workspaceQuickStarts: (projects: [(title: String, run: () -> Void)],
+                               recent: [(title: String, run: () -> Void)]) { ([], []) }
+    func workspaceRefreshQuickStarts() {}
     var workspaceOffersSetup: Bool { false }
     func workspaceSetupFinished() {}
     func workspaceLaunchProjects(from view: NSView) {}

@@ -231,6 +231,13 @@ ASL answer panel work the same either way.
   closes. None of those ends the agent. A hidden terminal hears of a new
   size, and of a new backing scale, only once it is shown, so tmux is never
   sized for a grid nobody sees.
+- **Empty workspace.** With a live feed and no sessions, the placeholder shows
+  up to five **Projects** and three **Recent conversations**, followed by
+  Conversation History and Open Dashboard. `workspaceQuickStarts` maps the
+  existing launch-menu entries and newest conversations to the same `perform`
+  actions. Appearing refreshes both catalogs; catalog callbacks re-render the
+  groups. Missing directories and unavailable capabilities are excluded, and
+  empty groups have no heading. Setup and daemon-down placeholders are unchanged.
 - **Placeholder actions.** Return or keypad Enter activates the primary button
   in the selected pane, including **Reopen**, **Reattach**, and **Try again**.
   This works with the sidebar shown or hidden. Text fields, the Waiting reader,

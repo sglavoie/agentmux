@@ -94,6 +94,14 @@ final class FakeWorkspaceApp: WorkspaceDelegate {
     func workspaceRecapCommand() -> AMXCommand? { recapCommand }
     var resumeRequests: [ConversationIdentity] = []
     func workspaceResumeConversation(_ identity: ConversationIdentity) { resumeRequests.append(identity) }
+    var workspaceQuickStarts: (projects: [(title: String, run: () -> Void)],
+                               recent: [(title: String, run: () -> Void)]) = ([], [])
+    var quickStartRefreshes = 0
+    var onQuickStartRefresh: (() -> Void)?
+    func workspaceRefreshQuickStarts() {
+        quickStartRefreshes += 1
+        onQuickStartRefresh?()
+    }
     var workspaceOffersSetup = false
     var setupFinishes = 0
     func workspaceSetupFinished() { setupFinishes += 1 }
