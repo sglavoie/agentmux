@@ -1,19 +1,6 @@
 import AppKit
 import SwiftUI
 
-@MainActor
-final class WorkspaceActivityWindow: ReviewWindowController {
-    let model: WorkspaceActivityModel
-    init(model: WorkspaceActivityModel) {
-        self.model = model
-        super.init(title: "Since Last Looked", autosaveName: "WorkspaceActivity", size: NSSize(width: 1000, height: 650))
-    }
-    func show() { present() }
-    override func makeContentView() -> NSView { Self.host(WorkspaceActivityView(model: model)) }
-    override func willPresent() { model.refresh() }
-    override func didClose() { model.close() }
-}
-
 struct WorkspaceActivityView: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     @ObservedObject var model: WorkspaceActivityModel

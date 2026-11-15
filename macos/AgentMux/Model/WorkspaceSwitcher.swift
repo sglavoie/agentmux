@@ -3,7 +3,8 @@ import Foundation
 /// The workspace's Go to… list as data: every place the sidebar lists, and
 /// which of them a typed query keeps.
 ///
-/// Ordinary queries name open places. A leading > explicitly switches to
+/// Ordinary queries name open places and can find Briefing by its current or
+/// former names. A leading > explicitly switches to
 /// actions, whose availability is supplied by the application.
 enum WorkspaceSwitcher {
     /// One place to go to.
@@ -85,9 +86,11 @@ enum WorkspaceSwitcher {
         let query = fold(query).trimmingCharacters(in: .whitespacesAndNewlines)
         let actions = query.hasPrefix(">")
         let wanted = (actions ? String(query.dropFirst()) : query).trimmingCharacters(in: .whitespacesAndNewlines)
+        if actions && wanted.isEmpty { return entries.filter(\.isAction) }
         let words = wanted.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         return entries.enumerated().compactMap { index, entry -> (Entry, [Int])? in
-            guard entry.isAction == actions else { return nil }
+            let briefingDestination = !actions && !wanted.isEmpty && entry.place == .command(.briefing)
+            guard entry.isAction == actions || briefingDestination else { return nil }
             let title = fold(entry.title)
             guard words.allSatisfy({ entry.text.contains($0) || !highlightRanges($0, in: entry.title).isEmpty }) else { return nil }
             let quality = title == wanted ? 0 : title.hasPrefix(wanted) ? 1 : title.contains(wanted) ? 2 : words.allSatisfy({ entry.text.contains($0) }) ? 3 : 4
@@ -131,7 +134,7 @@ enum WorkspaceCommand: Equatable {
     case splitShell, splitChanges, focusReview, focusOtherPane, swapPanes, collapsePane
     case launch(ProjectEntry)
     case resume(RecentConversation)
-    case runs, runPlan, activity, flightLog, briefing
+    case runs, runPlan, flightLog, briefing
     case handoff, newTerminal, newSession, newShell, dashboard, overview, pastSessions, nextWaiting, settings, history, changes
 }
 
@@ -144,11 +147,9 @@ extension WorkspaceCommand {
         case .newShell, .newTerminal, .splitShell: return ["terminal", "shell", "console"]
         case .handoff: return ["handoff", "continue", "agent", "harness", "context", "profile"]
         case .newSession: return ["launch", "harness", "agent", "directory"]
-        case .history: return ["transcript", "conversation", "search"]
-        case .pastSessions: return ["history", "transcript", "conversation", "search", "past sessions", "resume", "continue", "fork"]
-        case .activity: return ["unread", "activity", "recent"]
+        case .history, .pastSessions: return ["history", "transcript", "conversation", "search", "past sessions", "resume", "continue", "fork"]
         case .flightLog: return ["stats", "statistics", "milestones", "achievements", "heatmap", "sessions", "gamification"]
-        case .briefing: return ["project", "recap", "outcomes", "unfinished", "catch up", "continue"]
+        case .briefing: return ["project", "recap", "outcomes", "unfinished", "catch up", "continue", "unread", "activity", "recent", "since last looked", "return summary"]
         case .nextWaiting: return ["attention", "inbox", "question", "permission"]
         default: return []
         }

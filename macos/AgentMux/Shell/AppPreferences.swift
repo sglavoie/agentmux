@@ -116,6 +116,11 @@ struct AppPreferences: Equatable {
         preferences.binaryPath = trimmed(defaults.string(forKey: Key.binaryPath))
         preferences.launchAtLogin = bool(defaults, Key.launchAtLogin) ?? false
         preferences.workspaceShortcuts = defaults.dictionary(forKey: Key.workspaceShortcuts)?.compactMapValues { $0 as? String } ?? [:]
+        if let legacy = preferences.workspaceShortcuts.removeValue(forKey: "activity") {
+            if preferences.workspaceShortcuts["briefing"] == nil { preferences.workspaceShortcuts["briefing"] = legacy }
+            defaults.set(preferences.workspaceShortcuts, forKey: Key.workspaceShortcuts)
+        }
+        defaults.removeObject(forKey: "NSWindow Frame WorkspaceActivity")
         preferences.hotKeyDashboard = HotKeyPreference.dashboard.load(from: defaults)
         preferences.hotKeyNextAttention = HotKeyPreference.nextAttention.load(from: defaults)
         preferences.statusStyle = defaults.string(forKey: Key.statusStyle).flatMap(StatusTitleStyle.init(rawValue:)) ?? .glyphs

@@ -12,6 +12,11 @@ with Carbon. Command-only combinations are accepted without weakening the global
 shortcut recorder's restrictions. Existing menu keys (including hidden aliases),
 other configurable commands, and the two global bindings are checked for conflicts.
 Conflicting stored bindings remain visible in Settings but are inactive.
+Legacy `activity` customizations migrate to `briefing`, including an empty
+(disabled) binding. An explicit Briefing customization wins when both are stored;
+the retired action is removed. Migrated conflicts follow the same visible but
+inactive rule. The retired `NSWindow Frame WorkspaceActivity` is removed without
+changing Briefing's saved frame.
 
 The terminal checks configured equivalents before encoding keys, including
 shifted punctuation and Control-Return. It retains Ghostty key sequences and IME
@@ -88,9 +93,10 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
 | `amxLaunchBackend` | `workspace` | `workspace` uses tmux; `follow-cli` reads the CLI configuration before project launches and Recent conversation resumes. A stored legacy `automatic` migrates to `workspace`. Unknown or missing values use `workspace`. |
 | `amxContinueToNextWaiting` | true | Settings › Workspace: “Continue to the next waiting session after answering”. A successful panel answer opens the next unanswered waiting session in sidebar order without giving its terminal the keyboard. Off keeps single-session behavior; terminal input never advances. |
+| `amxShowWelcomeBack` | false | Settings › Workspace: **Show welcome-back card**. Shows unread changes in the inspector at launch and after 120 seconds away, with **Open Briefing**; never opens a popover or changes terminal focus. |
 | `amxOpenWorkspaceAtLaunch` | false | Shows the workspace window when the app starts, even if it was closed last time. |
 | `amxConfirmationPolicy` | `follow-cli` | Whether to ask before closing a running utility view (⌘W) or ending a session (⌘⇧W): `follow-cli` asks what `config.toml` says (`[defaults] confirm_destructive`, read through `amx config confirmation --json`) right before the action and asks when that cannot be read; `always` and `never` override it. Changes apply immediately to shortcuts, menus, sidebar close actions, and the embedded dashboards; app quit confirmation is separate. A stored legacy `amxConfirmBeforeClosing` Boolean is read only when this key is absent (true → `always`, false → `never`) and is removed on the next save. |
-| `amxReadingProseSize` | 13 | Prose size in History, Activity and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
+| `amxReadingProseSize` | 13 | Prose size in History, Briefing and Waiting (11–24 points), independent of code/diff/terminal-preview size. |
 | `amxDefaultFontSize` | none | Default terminal zoom in points (6–72); unset uses the Ghostty config. Changes apply to all open terminals; ⌘⇧- resets to this size. |
 | `amxSidebarZoomPercent` | 100 | Zoom of the workspace's sidebar and inspector in percent (70–200, in 10% steps from ⌥+ and ⌥−). Changes apply to the open window at once; out-of-range stored values read as 100. |
 | `amxSidebarGrouping` | `stateThenProject` | `stateThenProject`, `projectThenState`, `project`, `compact`, or `projectThenBranch`; changes apply immediately. |

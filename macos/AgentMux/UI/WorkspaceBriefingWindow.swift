@@ -49,10 +49,6 @@ struct WorkspaceBriefingView: View {
                 }.padding(4)
             }
         }.padding(14)
-            .background(WorkspaceReviewShortcuts { key, modifiers in
-                guard key == "r", modifiers == .command else { return false }
-                model.refresh(); return true
-            }.frame(width: 0, height: 0))
             .accessibilityIdentifier("briefing")
     }
 

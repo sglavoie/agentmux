@@ -37,7 +37,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var handoffPanel: WorkspaceHandoffPanel?
     let handoffOrigins = WorkspaceHandoffOrigins()
     var conversationSearchSequence = 0
-    var activityWindow: WorkspaceActivityWindow?
     var flightLogWindow: WorkspaceFlightLogWindow?
     var briefingWindow: WorkspaceBriefingWindow?
     var runsWindow: WorkspaceRunsWindow?
@@ -86,7 +85,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var workspaceVisible = false
     var settingsVisible = false
     var historyVisible = false
-    var activityVisible = false
     var flightLogVisible = false
     var briefingVisible = false
     var runsVisible = false
@@ -286,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
         guard !Self.isRunningTests else { return false }
         // With only review windows open, the first of them comes forward.
         if !workspaceVisible && !settingsVisible {
-            let reviews: [(Bool, ReviewWindowController?)] = [(briefingVisible, briefingWindow), (flightLogVisible, flightLogWindow), (activityVisible, activityWindow), (runsVisible, runsWindow),
+            let reviews: [(Bool, ReviewWindowController?)] = [(briefingVisible, briefingWindow), (flightLogVisible, flightLogWindow), (runsVisible, runsWindow),
                                                               (changesVisible, changesWindow), (historyVisible, historyWindow)]
             if let open = reviews.first(where: { $0.0 && $0.1 != nil })?.1 {
                 open.window?.makeKeyAndOrderFront(nil)

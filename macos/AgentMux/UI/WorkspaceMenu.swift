@@ -100,6 +100,20 @@ enum WorkspaceMenu {
         edit.addItem(item("Find Previous", #selector(Ghostty.SurfaceView.findPrevious(_:)), "G"))
 
         let view = submenu("View", in: main)
+        view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
+        for shortcut in [WorkspaceShortcut.briefing, .history, .changes] {
+            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
+        }
+        view.addItem(.separator())
+        view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
+        for shortcut in [WorkspaceShortcut.runs, .flightLog] {
+            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
+        }
+        view.addItem(.separator())
+        for shortcut in [WorkspaceShortcut.splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane] {
+            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
+        }
+        view.addItem(.separator())
         view.addItem(item("Bigger", #selector(Ghostty.SurfaceView.zoomIn(_:)), "+"))
         // Accept the unshifted + key too, as in TT and other Mac terminals.
         let bigger = item("Bigger", #selector(Ghostty.SurfaceView.zoomIn(_:)), "=")
@@ -143,27 +157,12 @@ enum WorkspaceMenu {
         // ⌘J, free in Ghostty, which binds ⌘⇧J.
         view.addItem(item("Reveal in Sidebar", #selector(AppDelegate.revealInWorkspaceSidebar(_:)), "j", target: target))
         view.addItem(.separator())
-        // The digits are all the sessions'.
-        view.addItem(item("Dashboard", #selector(AppDelegate.openDashboardFromMenu(_:)), "d", target: target))
-        view.addItem(item("Overview", #selector(AppDelegate.openOverviewFromMenu(_:)), "o", target: target))
-        view.addItem(item("Find or Resume a Conversation…", #selector(AppDelegate.openPastSessionsFromMenu(_:)), "y", target: target))
+        let historyAlias = item("Conversation History…", #selector(AppDelegate.openPastSessionsFromMenu(_:)), "y", target: target)
+        historyAlias.isHidden = true
+        historyAlias.allowsKeyEquivalentWhenHidden = true
+        view.addItem(historyAlias)
         view.addItem(item("New Shell", #selector(AppDelegate.newShellFromMenu(_:)), "t", target: target))
-        // The review windows: ⌘⇧ and a letter by default
-        // (`WorkspaceShortcut.defaultCombo`), reassignable in Settings.
-        for shortcut in [WorkspaceShortcut.briefing, .runs, .runPlan, .activity, .flightLog, .history, .changes] {
-            let command = item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target)
-            if shortcut == .history {
-                // Keep the configurable older shortcut as an alias to the same
-                // browser, without presenting two competing history entries.
-                command.isHidden = true
-                command.allowsKeyEquivalentWhenHidden = true
-            }
-            view.addItem(command)
-        }
-        view.addItem(.separator())
-        for shortcut in [WorkspaceShortcut.splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane] {
-            view.addItem(item(shortcut.title, shortcut.action, shortcut.defaultMenuKey, target: target))
-        }
+        view.addItem(item(WorkspaceShortcut.runPlan.title, WorkspaceShortcut.runPlan.action, WorkspaceShortcut.runPlan.defaultMenuKey, target: target))
         view.addItem(.separator())
         // ⌘W closes what the pane is on, as it closes a tab elsewhere. Its
         // title follows what that is (`AppDelegate.validateMenuItem`):

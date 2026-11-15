@@ -9,7 +9,6 @@ extension WorkspaceWindowController {
     func showSessionPeek(_ key: AttentionCycler.Key, from anchor: NSView? = nil) {
         guard let row = state.row(key), isOpen else { return }
         sessionPeek.readContext = { [weak self] row, completion in self?.delegate?.workspaceContext(row, completion: completion) }
-        summaryPopover.close()
         sessionPeek.show(row, waiting: allWaitingRows.first { $0.key == key }, current: state.current, lastObserved: lastObservedActivity(key))
         peekPopover.onClose = { [weak self] in self?.sessionPeek.close() }
         presentingPeek = true
@@ -18,7 +17,7 @@ extension WorkspaceWindowController {
         if let anchor { peekPopover.show(view, of: anchor) }
         else if let index = items.firstIndex(where: { if case let .row(row) = $0 { return row.key == key }; return false }), !isSidebarCollapsed {
             peekPopover.show(view, of: sidebar, rect: sidebar.rect(ofRow: index))
-        } else { peekPopover.show(view, of: summaryButton) }
+        } else { peekPopover.show(view, of: inspectorToggle) }
     }
 
     func refreshSessionPeek() {

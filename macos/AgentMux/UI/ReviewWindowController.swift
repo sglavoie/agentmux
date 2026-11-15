@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The window behind Since Last Looked, Conversation History, Checkout
+/// The window behind Briefing, Conversation History, Checkout
 /// Changes, and ASL Runs. One place sets what they share: the style, the
 /// minimum size, ⌘W through `WorkspaceReviewHost`, the saved placement, and
 /// how showing, reactivation, occlusion, and closing reach the review.

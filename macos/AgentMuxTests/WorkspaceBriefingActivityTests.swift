@@ -8,7 +8,7 @@ private final class ActivityRunner: ASLWorkRunner {
 }
 
 @MainActor
-final class WorkspaceActivityTests: XCTestCase {
+final class WorkspaceBriefingActivityTests: XCTestCase {
     private func entry(_ id: String, at: String = "2026-10-15T12:00:00Z") -> String {
         """
         {"id":"\(id)","at":"\(at)","kind":"completed","title":"Turn finished","detail":"Working → Turn finished","event":"Stop","harness":"claude","profile":"work","session_id":"a","runtime_session_id":"runtime","run_id":"","trace_id":"trace"}
@@ -148,16 +148,18 @@ final class WorkspaceActivityTests: XCTestCase {
         XCTAssertNotNil(model.error)
     }
 
-    func testActivityWindowBuildsAndCloseDiscardsReadWork() {
+    func testBriefingWindowBuildsAndCloseDiscardsActivityReadWork() {
         let runner = ActivityRunner()
         let amx = command { _ in self.report([self.entry("one")]) }
         let model = WorkspaceActivityModel(command: { amx }, runner: runner, readStore: memory)
-        let controller = WorkspaceActivityWindow(model: model)
+        let controller = WorkspaceBriefingWindow(model: .init(
+            briefing: .init(command: { nil }, runner: runner), activity: model,
+            summary: .init(command: { nil }, runner: runner)))
         var visible = false
         controller.onVisibilityChanged = { visible = $0 }
         controller.show()
         XCTAssertTrue(visible)
-        XCTAssertEqual(controller.window?.title, "Since Last Looked")
+        XCTAssertEqual(controller.window?.title, "Briefing")
         controller.window?.close()
         runner.release()
         XCTAssertFalse(visible)

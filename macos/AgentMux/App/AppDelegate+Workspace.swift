@@ -160,7 +160,7 @@ extension AppDelegate {
     /// float above every window and need neither.
     func syncActivationPolicy() {
         let previous = NSApp.activationPolicy()
-        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || activityVisible || flightLogVisible || briefingVisible, settings: settingsVisible))
+        NSApp.setActivationPolicy(Self.activationPolicy(workspace: workspaceVisible || historyVisible || changesVisible || runsVisible || flightLogVisible || briefingVisible, settings: settingsVisible))
         if previous != .regular, NSApp.activationPolicy() == .regular {
             // AppKit keeps a badge set while accessory, but does not publish
             // it when the Dock icon appears. Reassigning the same string is

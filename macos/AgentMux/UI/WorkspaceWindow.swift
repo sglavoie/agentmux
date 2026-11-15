@@ -136,10 +136,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     lazy var sessionPeek = WorkspaceSessionPeekModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
     var presentingPeek = false
     let peekPopover = WorkspaceContextPopover()
-    lazy var returnSummary = WorkspaceReturnSummary(command: { [weak self] in self?.delegate?.workspaceRecapCommand() }, defaults: AppDelegate.isRunningTests ? nil : .standard)
-    let summaryPopover = WorkspaceContextPopover()
-    let summaryButton = WorkspaceWindowChrome.makeSummaryButton()
-    lazy var welcome = WorkspaceWelcomeModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
+    lazy var welcome = WorkspaceWelcomeModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() }, defaults: AppDelegate.isRunningTests ? nil : .standard)
     lazy var welcomeView: WorkspaceSidebarHostingView<WorkspaceWelcomeView> = {
         let host = WorkspaceSidebarHostingView(rootView: WorkspaceWelcomeView(model: welcome))
         // The stack needs logical intrinsic height; SwiftUI's automatic
@@ -430,7 +427,6 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
         self.glyphs = glyphs
         self.now = now
         super.init()
-        configureReturnSummary()
         welcome.onReceipt = { [weak self] receipt in
             guard let self, self.isOpen, receipt.title == "All caught up" else { return }
             self.showNotice(receipt.title + " · " + receipt.detail)

@@ -49,11 +49,11 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
                     Spacer()
                 }
             }.padding(16), name: "welcome-palette-\(dark)", width: 800, height: 380, dark: dark,
-                expected: ["Answer sent", "Next waiting", "Activity", "Briefing", "Next Waiting Session", "Navigate"])
+                expected: ["Answer sent", "Next waiting", "Open Briefing", "Next Waiting Session", "Navigate"])
             model.observe(waiting: 0, working: 3, live: true, celebrate: true)
             try await render(VStack { WorkspaceWelcomeView(model: model); Spacer() },
                 name: "welcome-caught-up-\(dark)", width: 210, height: 270, dark: dark,
-                expected: ["All caught up", "still working", "Activity", "Briefing"])
+                expected: ["All caught up", "still working", "Open Briefing"])
         }
     }
 
@@ -309,7 +309,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         })
     }
 
-    func testExperienceSummaryPeekAndMissionPatchesInBothAppearances() async throws {
+    func testExperienceWelcomePeekAndMissionPatchesInBothAppearances() async throws {
         let runner = PreviewRunner()
         let date = WorkspaceActivityEntry.date("2026-11-01T12:06:00Z")!
         let command = ExperienceFixture.command { args in
@@ -319,15 +319,15 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         var session = WorkspaceFixture.tmux(1, project: "API", icon: "stop", conversation: "one")
         session.name = "Fix login redirect"; session.branch = "fix/login-redirect"
         let row = WorkspaceSidebar.row(session, now: date, glyphs: .fallback)
-        let summary = WorkspaceReturnSummary(command: { command }, runner: runner)
-        summary.observe(rows: [row], current: true, active: true, now: date)
-        summary.arrive(at: date.addingTimeInterval(-300), automatically: true)
-        summary.leave(at: date.addingTimeInterval(-300)); summary.arrive(at: date, automatically: true)
+        let welcome = WorkspaceWelcomeModel(command: { command }, runner: runner,
+            readStore: .init(load: { .init() }, save: { _ in }))
+        welcome.isEnabled = true
+        welcome.showWelcomeOnce()
         let peek = WorkspaceSessionPeekModel(command: { command }, runner: runner)
         peek.show(row, waiting: nil, current: true, lastObserved: date)
         for dark in [false, true] {
-            try await render(WorkspaceReturnSummaryView(model: summary, close: {}), name: "experience-return-\(dark)",
-                             width: 440, height: 512, dark: dark, expected: ["Since you stepped away", "Fix login redirect", "Review changes"])
+            try await render(VStack { WorkspaceWelcomeView(model: welcome); Spacer() }, name: "experience-welcome-\(dark)",
+                             width: 300, height: 220, dark: dark, expected: ["Welcome back", "Open Briefing"])
             try await render(WorkspaceSessionPeekView(model: peek, close: {}), name: "experience-peek-\(dark)",
                              width: 410, height: 462, dark: dark, expected: ["Fix login redirect", "Saved outcome", "Preview only"])
             try await render(HStack(alignment: .top, spacing: 24) {
@@ -336,7 +336,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity), name: "experience-patches-\(dark)", width: 580, height: 330, dark: dark,
                 expected: ["Ship authentication", "Publish the new guide", "Shipped"])
         }
-        summary.close(); peek.close()
+        welcome.close(); peek.close()
     }
 
     private func render<V: View>(_ view: V, name: String, width: CGFloat = 1000, height: CGFloat = 680,

@@ -4,18 +4,12 @@
 
 ### Returning to work
 
-The title-bar **Since you stepped away** button opens a compact return summary.
-Enable **Settings › Workspace › Show return summaries** to open it automatically
-after at least two minutes away. This preference also retains the once-per-launch
-unread-activity card in the inspector; it remains off by default.
-
-The summary leads with waiting sessions, then recorded changes and agents still
-working. It shows up to six sessions, with saved outcomes and their timestamps.
-**View question**, **Review changes**, and **Open session** take you directly to
-the relevant work. Without an absence boundary, the button reads the last day.
-Incomplete or older history is labeled partial; **Activity** opens the full reader.
-Only the presence timestamp is saved for this feature. Opening or dismissing a
-summary never marks activity read and never generates a recap.
+Enable **Settings › Workspace › Show welcome-back card** for an unread-activity
+card in the inspector at launch and after at least two minutes away. It remains
+off by default. The card reports unread changes and current waiting status, with
+one link: **Open Briefing**. Returning keeps terminal focus and opens no popover.
+Only the presence timestamp is saved for this feature. Opening or dismissing the
+card never marks activity read and never generates a recap.
 
 Successful prompt submissions and accepted supervisor answers show **Answer sent**
 on the waiting item until its question changes. That item cannot be answered
@@ -227,11 +221,11 @@ stay out of the queue while their matching waiting state is still acknowledged.
 **Since you last looked** groups retained activity by session, with saved outcomes,
 exact event details, supporting output, **Open Conversation**, **Focus Live Session**,
 and **Review changes** for completed live sessions. The unread filter, look-back
-period, **Mark Read**, and **Undo** work as in the Activity reader described below.
+period, **Mark Read**, and **Undo** work as described below.
 Opening, refreshing, and switching scope never mark events read. Project scope
 matches live runtime identities and the CLI's paginated project conversation list;
 events without a known project remain available under **All projects**. Membership
-failures are shown explicitly. Flight Log's **Open Retained Activity** opens this
+failures are shown explicitly. Flight Log's **Open Briefing** opens this
 section for the exact session and event kind, with read events included and a
 90-day look-back. **Clear session filter** removes that restriction.
 
@@ -285,16 +279,12 @@ profile/model or disable generation in `[defaults.recaps]`. See
 
 ### Since Last Looked
 
-The legacy Activity window remains available alongside Briefing and the return
-summary. Both readers share saved read markers; Undo preserves acknowledgements
-made in the other reader.
-
-**View › Since Last Looked…** shows recorded state transitions, process exits,
+Briefing's **Since you last looked** section shows recorded state transitions, process exits,
 and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
 Select an event for details and the last timestamped assistant output at or before
 it; **Load Earlier Messages** searches further back for supporting output.
 Opening its conversation goes to that recorded location, briefly highlights it,
-and returns focus to Activity when closed. Missing evidence is explained; a failed
+and returns focus to Briefing when closed. Missing evidence is explained; a failed
 read can retry the same event. You can also focus the matching live session.
 
 **Mark Read** offers **Mark Selected Read** and **Mark All N Results Read**, including
@@ -349,7 +339,7 @@ runs use the workspace. Submitted or uncertain launches are not repeated by the 
 
 ### Reading, status, and feedback
 
-History and Activity share a **Reading text size** menu, and a Waiting row's
+History and Briefing share a **Reading text size** menu, and a Waiting row's
 context follows it. Prose size is remembered independently from code, diff, and
 terminal-preview size. The same menu contains **Wrap code and diff lines**; open
 readers update immediately. Transcripts
@@ -370,7 +360,7 @@ Initial failures say which content could not be loaded; refresh failures label
 the previously loaded content that remains visible. These read retries do not
 repeat a worktree landing or an ASL operation.
 
-History, Changes, Activity, and Runs restore their saved window position and size.
+History, Changes, Briefing, and Runs restore their saved window position and size.
 When a display is disconnected, the restored window is fitted onto an available
 display; a window without saved placement opens centered.
 

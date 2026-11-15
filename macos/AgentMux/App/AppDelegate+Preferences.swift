@@ -39,7 +39,6 @@ extension AppDelegate {
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
         if old.showWelcomeBack != new.showWelcomeBack {
             workspace?.welcome.isEnabled = new.showWelcomeBack
-            if !new.showWelcomeBack { workspace?.summaryPopover.close(); workspace?.returnSummary.close() }
             if let workspace, workspace.isOpen { workspace.welcome.showWelcomeOnce() }
         }
         workspace?.setSidebarZoom(percent: new.sidebarZoomPercent)

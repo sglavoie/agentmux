@@ -16,7 +16,7 @@ skips the single-instance check and the status item, and it never spawns
 appearances using ScreenCaptureKit's current-process window API (macOS 14.4 or
 newer). It verifies the requested window dimensions and recognizes visible
 labels with Vision, so a blank or unexpectedly enlarged window fails. Captures
-cover History, Changes, Activity, and Runs in populated, empty, loading, and
+cover History, Changes, Briefing’s activity section, and Runs in populated, empty, loading, and
 failed states, plus search highlights, diff navigation, Waiting, and the command
 palette. Fixtures use injected services and never read real conversations or
 operate a real run. PNGs are attached to the XCTest result and written to
@@ -46,12 +46,16 @@ includes queries, paths, session IDs, or conversation text.
 
 ### Everyday experience
 
-`WorkspaceExperienceTests` covers absence boundaries, the return-summary preference,
-read-only recap use, stale question and recap replies, terminal focus/bounds during
-peek, palette query restoration, pending answer receipts, and task-name consistency.
+`WorkspaceBriefingEntryTests` covers welcome-card absence boundaries and preference
+handling, terminal focus on return, shortcut/frame migration, and menu/search routing.
+`WorkspaceBriefingActivityTests` retains exact-ID read markers, Undo, failures,
+supporting output, and close cancellation coverage. `WorkspaceCatchUpTests` covers
+merged sections and cached-only outcomes. `WorkspaceExperienceTests` covers stale
+question and recap replies, terminal focus/bounds during peek, palette query
+restoration, pending answer receipts, and task-name consistency.
 `WorkspaceHandoffTests` verifies naming only after a confirmed launch;
 `WorkspaceFlightLogTests` verifies first-shipment reveals and celebration preferences.
-The workflow preview suite captures return summaries, session peeks, and mission
+The workflow preview suite captures welcome cards, session peeks, and mission
 patches in light and dark appearances alongside the existing Briefing captures.
 
 ### Native agent handoff

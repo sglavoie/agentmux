@@ -1,6 +1,16 @@
 import AppKit
 
 extension WorkspaceWindowController {
+    func workspaceBecameActive() {
+        guard isOpen else { return }
+        welcome.arrive(at: now())
+    }
+
+    func workspaceResignedActive() {
+        welcome.leave(at: now())
+        peekPopover.close()
+    }
+
     /// The runtime sessions that have a terminal right now.
     var attachedRuntimeSessionIDs: Set<String> { Set(terminals.keys) }
 
@@ -121,7 +131,6 @@ extension WorkspaceWindowController {
     func windowWillClose(_ notification: Notification) {
         guard isOpen else { return }
         workspaceResignedActive()
-        returnSummary.close()
         peekPopover.close()
         welcome.close()
         inspector.recap.close()
@@ -235,7 +244,6 @@ extension WorkspaceWindowController {
             detached.formIntersection(listed)
             closing = closing.filter { !$0.value.answered || listed.contains($0.key) }
         }
-        returnSummary.observe(rows: state.rows, current: state.current, active: isOpen && NSApp.isActive, now: now())
         refreshSessionPeek()
         inspector.reconcileSentAnswers(allWaitingRows, current: state.current)
         arrangeNewSessionBelow()

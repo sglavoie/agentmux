@@ -316,7 +316,7 @@ struct WorkspaceFlightLogView: View {
             if session.partial { Text("Partial history: some launch, identity, or observation data is unavailable.").font(.caption).foregroundStyle(.secondary) }
             HStack {
                 Button("Open Conversation") { model.openConversation() }.disabled(session.conversation == nil)
-                Button("Open Retained Activity") { model.onActivity?(session, model.eventKind) }
+                Button("Open Briefing") { model.onActivity?(session, model.eventKind) }
             }
             HStack(spacing: 20) {
                 Text("\(session.metrics.stateChanges) state changes")

@@ -61,8 +61,15 @@ ASL answer panel work the same either way.
   conversation threads, saved recaps, Resume, Fork, and Continue with Another
   Agent actions. Opening/refreshing reads cached recaps only. Flight Log opens
   Briefing with the exact retained session/kind filter, unread-only off, and a
-  90-day look-back; presentation must not reset it. The legacy Activity window
-  and return-summary popover remain available during this transition.
+  90-day look-back; presentation must not reset it. The former Activity window
+  and return-summary popover are removed. `WorkspaceActivityView` remains the
+  event reader inside Briefing; `WorkspaceReturnSummary` supplies cached outcomes.
+  The preference-controlled welcome-back inspector card refreshes after 120 s
+  away, preserves keyboard focus, and links only to **Open Briefing**.
+  View and the empty command palette start with Dashboard, Briefing, Conversation
+  History, Checkout Changes; then Overview, ASL Runs, Flight Log; then pane and
+  sidebar controls. Command search retains activity/since last looked/return
+  summary aliases for Briefing.
 - **Which sessions.** The app subscribes with the `runtime_sessions` feature.
   The daemon sends v2 snapshots with each tmux session's runtime identity
   (`CompanionSession.runtime`). The runtime-session ID identifies a session in

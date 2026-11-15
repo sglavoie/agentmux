@@ -153,6 +153,13 @@ extension AppDelegate {
             shortcut.combo(in: preferencesModel.preferences)?.displayString ?? ""
         }
         var entries = [
+            entry(.dashboard, "Open Dashboard", "⌘D"),
+            entry(.briefing, WorkspaceShortcut.briefing.title, key(.briefing)),
+            entry(.history, WorkspaceShortcut.history.title, key(.history)),
+            entry(.changes, WorkspaceShortcut.changes.title, key(.changes)),
+            entry(.overview, "Open Overview", "⌘O"),
+            entry(.runs, WorkspaceShortcut.runs.title, key(.runs)),
+            entry(.flightLog, WorkspaceShortcut.flightLog.title, key(.flightLog)),
             entry(.newTerminal, "New Terminal Here", "⌘↩", reason: workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first"),
             entry(.handoff, WorkspaceHandoffModel.title, reason: gate.unavailableReason(.sessions) ?? (workspace?.shownSessionRow?.conversation != nil ? nil : "Select a session with a conversation first")),
             entry(.newSession, WorkspaceWindowController.newSessionTitle, "⌘⇧↩", reason: gate.unavailableReason(.project) ?? (workspace?.canOpenTerminalBesideSession == true ? nil : "Select an embedded session first")),
@@ -163,15 +170,7 @@ extension AppDelegate {
             entry(.focusOtherPane, WorkspaceShortcut.focusOtherPane.title, reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.swapPanes, WorkspaceShortcut.swapPanes.title, reason: workspace?.isSplit == true ? nil : "Open a second pane first"),
             entry(.collapsePane, WorkspaceShortcut.hideOtherPane.title, reason: workspace?.isSplit == true ? (workspace?.canHideOtherPane == true ? nil : "Wait for the checkout operation to finish") : "Open a second pane first"),
-            entry(.activity, WorkspaceShortcut.activity.title, key(.activity)),
-            entry(.flightLog, WorkspaceShortcut.flightLog.title, key(.flightLog)),
-            entry(.briefing, WorkspaceShortcut.briefing.title, key(.briefing)),
-            entry(.runs, WorkspaceShortcut.runs.title, key(.runs)),
             entry(.runPlan, WorkspaceShortcut.runPlan.title, key(.runPlan), reason: command == nil ? AMXWording.unavailable(notFound: preferences.binaryMenuProblem) : nil),
-            entry(.changes, WorkspaceShortcut.changes.title, key(.changes)),
-            entry(.dashboard, "Open Dashboard", "⌘D"),
-            entry(.overview, "Open Overview", "⌘O"),
-            entry(.pastSessions, "Find or Resume a Conversation", "⌘Y"),
             entry(.nextWaiting, AttentionCycler.commandTitle, "⌘⇧A", reason: store.feed != .live ? "Waiting for a live session list" : (AttentionCycler.ordered(store.managedSessions).isEmpty ? "No sessions are waiting" : nil)),
             entry(.settings, "Settings…", "⌘,"),
         ]
@@ -279,7 +278,6 @@ extension AppDelegate {
         case .pastSessions: openPastSessionsFromMenu(nil)
         case .nextWaiting: nextAttention(nil)
         case .settings: showPreferences(nil)
-        case .activity: showActivity(nil)
         case .flightLog: showFlightLog(nil)
         case .briefing: showBriefing(nil)
         case .history: showHistory(nil)

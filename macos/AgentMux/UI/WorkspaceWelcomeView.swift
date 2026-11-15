@@ -35,14 +35,12 @@ struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
                     .lineLimit(2).help(model.attentionText)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if model.remainingWaiting > 0 && model.live {
+            if model.receipt != nil && model.remainingWaiting > 0 && model.live {
                 Button("Next waiting · \(model.remainingWaiting) remaining") { model.onAction(.nextWaiting) }
                     .controlSize(.small)
             }
-            HStack(spacing: 10) {
-                Button("Activity") { model.onAction(.activity) }
-                Button("Briefing") { model.onAction(.briefing) }
-            }.buttonStyle(.link).font(.system(size: 11))
+            Button("Open Briefing") { model.onAction(.briefing) }
+                .buttonStyle(.link).font(.system(size: 11)).fixedSize()
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)

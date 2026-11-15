@@ -145,7 +145,7 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | Task | Entry point |
 | --- | --- |
 | Find sessions needing input | Dashboard, or `F4` while attached |
-| Pick up a project across conversations | **View → Briefing…** in the app, or **Briefing** in its command palette |
+| Catch up on waiting sessions, activity, and conversations | **View → Briefing…** (⌘⇧U), **Open Briefing** in the welcome-back card, or **Briefing** in the command palette |
 | Explore statistics and milestones | **Flight Log…** in the app's View menu, **Show Flight Log** in the dashboard command palette, or `amx session flight-log` |
 | See every live pane | `F2` or `amx overview` |
 | Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, native Conversation History with `⌘Y` in the app, or `amx past-sessions` |

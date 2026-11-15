@@ -88,13 +88,12 @@ See [Checkout Changes](companion-app/workflows.md#checkout-changes).
 
 See [Briefing](companion-app/workflows.md#briefing).
 
+Briefing includes [Since you last looked](companion-app/workflows.md#since-last-looked),
+with retained activity, saved outcomes, and explicit read acknowledgements.
+
 ### Conversation recaps
 
 See [Conversation recaps](companion-app/workflows.md#conversation-recaps).
-
-### Since Last Looked
-
-See [Since Last Looked](companion-app/workflows.md#since-last-looked).
 
 ### ASL Runs and Run a Plan
 

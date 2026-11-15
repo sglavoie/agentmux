@@ -214,7 +214,6 @@ final class WorkspaceBriefingTests: XCTestCase {
         XCTAssertTrue(WorkspaceSwitcher.matches(">briefing", in: entries).contains { $0.place == .command(.briefing) })
         XCTAssertEqual(WorkspaceShortcut.briefing.action, #selector(AppDelegate.showBriefing(_:)))
         XCTAssertEqual(WorkspaceShortcut.briefing.defaultMenuKey, "U")
-        XCTAssertNil(WorkspaceShortcut.activity.defaultCombo)
         model.close()
     }
 }

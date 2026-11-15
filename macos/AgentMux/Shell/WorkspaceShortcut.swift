@@ -4,7 +4,7 @@ import AppKit
 /// menu equivalents, never Carbon registrations that capture keys in other apps.
 enum WorkspaceShortcut: String, CaseIterable, Identifiable {
     case splitShell, splitChanges, focusOtherPane, swapPanes, hideOtherPane
-    case runs, runPlan, activity, flightLog, briefing, history, changes, commandPalette
+    case runs, runPlan, flightLog, briefing, history, changes, commandPalette
     case sessionAccounted
     var id: String { rawValue }
     var title: String {
@@ -16,7 +16,6 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .hideOtherPane: return "Hide Other Pane"
         case .runs: return "ASL Runs…"
         case .runPlan: return "Run a Plan…"
-        case .activity: return "Since Last Looked…"
         case .flightLog: return "Flight Log…"
         case .briefing: return "Briefing…"
         case .history: return "Conversation History…"
@@ -34,7 +33,6 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .hideOtherPane: return #selector(AppDelegate.collapseWorkspacePane(_:))
         case .runs: return #selector(AppDelegate.showRuns(_:))
         case .runPlan: return #selector(AppDelegate.runPlan(_:))
-        case .activity: return #selector(AppDelegate.showActivity(_:))
         case .flightLog: return #selector(AppDelegate.showFlightLog(_:))
         case .briefing: return #selector(AppDelegate.showBriefing(_:))
         case .history: return #selector(AppDelegate.showHistory(_:))
@@ -59,7 +57,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .flightLog: return "f"
         case .history: return "h"
         case .changes: return "c"
-        case .activity, .splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane: return nil
+        case .splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane: return nil
         }
     }
     /// The default as a main menu key equivalent with ⌘ (uppercase implies

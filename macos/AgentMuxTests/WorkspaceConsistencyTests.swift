@@ -140,7 +140,7 @@ final class WorkspaceConsistencyTests: XCTestCase {
         XCTAssertEqual(scroll.convert(scroll.bounds, to: host), frame)
     }
 
-    func testActivityAndRunsKeyboardRefreshFocusAndClose() async throws {
+    func testBriefingAndRunsKeyboardRefreshFocusAndClose() async throws {
         let runner = ConsistencyRunner()
         let amx = command { args in
             if args[1] == "show" { return ["session": ["id": "one", "harness": "claude"], "messages_total": 1,
@@ -150,14 +150,16 @@ final class WorkspaceConsistencyTests: XCTestCase {
                 "since": "", "earliest_available": "", "truncated": false, "corrupt_lines": 0, "matched": 1]
         }
         let activity = WorkspaceActivityModel(command: { amx }, runner: runner, readStore: .init(load: { .init() }, save: { _ in }))
-        let controller = WorkspaceActivityWindow(model: activity)
+        let controller = WorkspaceBriefingWindow(model: .init(
+            briefing: .init(command: { nil }, runner: runner), activity: activity,
+            summary: .init(command: { nil }, runner: runner)))
         var focused = 0, opened = 0
         activity.onFocus = { _ in focused += 1 }; activity.onConversation = { _, _ in opened += 1 }
         controller.show(); runner.drain()
         let window = try XCTUnwrap(controller.window)
         defer { window.close() }
         try await settle(window)
-        let host = try XCTUnwrap(window.contentView as? WorkspaceReviewHost<WorkspaceActivityView>)
+        let host = try XCTUnwrap(window.contentView as? WorkspaceReviewHost<WorkspaceBriefingView>)
         XCTAssertTrue(host.performKeyEquivalent(with: try key("r", in: window)))
         XCTAssertTrue(activity.loading); runner.drain()
         XCTAssertTrue(host.performKeyEquivalent(with: try key("\r", in: window)))

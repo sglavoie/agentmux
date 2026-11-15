@@ -127,7 +127,7 @@ final class WorkspacePolishInteractionTests: XCTestCase {
         XCTAssertEqual(WorkspaceSwitcher.matches("> preferences", in: [settings, split]), [settings])
         XCTAssertEqual(WorkspaceSwitcher.matches("> swcc", in: [settings, split]), [split])
         XCTAssertEqual(WorkspaceSwitcher.matches("> diff", in: [split, unavailable]), [unavailable, split], "an exact unavailable name still wins and explains itself")
-        XCTAssertEqual(WorkspaceSwitcher.matches(">", in: [settings, unavailable, split]), [split, settings, unavailable])
+        XCTAssertEqual(WorkspaceSwitcher.matches(">", in: [settings, unavailable, split]), [settings, unavailable, split], "An empty palette preserves the menu destination order")
         let text = "🦊 Révision"
         let ranges = WorkspaceSwitcher.highlightRanges("rv", in: text)
         XCTAssertEqual(ranges.map { (text as NSString).substring(with: $0) }, ["R", "v"])

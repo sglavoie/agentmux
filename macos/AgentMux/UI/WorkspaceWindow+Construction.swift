@@ -190,9 +190,6 @@ extension WorkspaceWindowController {
         inspectorToggle.target = self
         inspectorToggle.action = #selector(toggleInspector(_:))
         window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(inspectorToggle, at: .trailing))
-        summaryButton.target = self
-        summaryButton.action = #selector(showReturnSummary(_:))
-        window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(summaryButton, at: .trailing))
         constructedWindow = window
         refreshTerminalAppearance()
         return window

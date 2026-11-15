@@ -104,16 +104,6 @@ extension AppDelegate {
         controller.show(launch: launch)
     }
 
-    @objc func showActivity(_ sender: Any?) {
-        let controller = activityWindow ?? WorkspaceActivityWindow(model: WorkspaceActivityModel(command: { [weak self] in self?.command }, defaults: .standard))
-        trackVisibility(of: controller, \.activityVisible)
-        controller.model.onConversation = { [weak self] identity, at in self?.openHistory(conversation: identity, eventTime: at) }
-        controller.model.onFocus = { [weak self] entry in self?.focusActivity(entry) }
-        activityWindow = controller
-        controller.model.clearFlightFilter()
-        controller.show()
-    }
-
     func focusActivity(_ entry: WorkspaceActivityEntry) {
         guard store.feed == .live else { return refuse("Waiting for a live session list.") }
         let live = Self.session(runtimeSessionID: entry.runtimeSessionID, in: store.managedSessions)
@@ -187,8 +177,6 @@ extension AppDelegate {
         trackVisibility(of: controller, \.historyVisible) { [weak returnResponder, weak returnTo] app in
             if let window = returnTo?.window, window.isVisible {
                 window.makeKeyAndOrderFront(nil)
-            } else if eventTime != nil, let activity = app.activityWindow?.window, activity.isVisible {
-                activity.makeKeyAndOrderFront(nil)
             } else if app.workspaceVisible {
                 app.workspace?.window.makeKeyAndOrderFront(nil)
                 if let view = returnResponder as? NSView, view.window === app.workspace?.window,

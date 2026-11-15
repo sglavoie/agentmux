@@ -35,66 +35,6 @@ enum ExperienceFixture {
 final class WorkspaceExperienceTests: XCTestCase {
     private typealias F = WorkspaceFixture
 
-    func testReturnSummaryUsesAbsenceBoundaryAndDoesNotGenerateOrAcknowledge() throws {
-        let suite = "experience-" + UUID().uuidString
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let runner = ExperienceRunner()
-        let left = try XCTUnwrap(WorkspaceActivityEntry.date("2026-11-01T12:00:00Z"))
-        defaults.set(left, forKey: WorkspaceReturnSummary.presenceKey)
-        var calls: [[String]] = []
-        let command = ExperienceFixture.command { args in
-            calls.append(args)
-            if args.contains("recap") { return ExperienceFixture.recap(args.last!) }
-            return ExperienceFixture.report([
-                ExperienceFixture.event("before", runtime: "old", at: "2026-11-01T11:59:00Z"),
-                ExperienceFixture.event("after", runtime: F.runtimeID(1), at: "2026-11-01T12:04:00Z")])
-        }
-        let model = WorkspaceReturnSummary(command: { command }, runner: runner, defaults: defaults)
-        let row = WorkspaceSidebar.row(F.tmux(1, project: "API", icon: "stop"), now: left, glyphs: .fallback)
-        model.observe(rows: [row], current: true, active: false, now: left)
-        var arrivals = 0
-        model.onReturn = { arrivals += 1 }
-        model.arrive(at: left.addingTimeInterval(300), automatically: true)
-        model.arrive(at: left.addingTimeInterval(301), automatically: true)
-        runner.drain()
-        XCTAssertEqual(arrivals, 1)
-        XCTAssertEqual(model.since, left)
-        XCTAssertEqual(model.updates.map(\.id), [F.runtimeID(1)])
-        XCTAssertTrue(calls.filter { $0.contains("recap") }.allSatisfy { $0.contains("--cached") })
-        XCTAssertFalse(calls.contains { $0.contains("--refresh") || $0.contains("mark") })
-        var continued = row
-        continued.conversation = .init(harness: "codex", sessionID: "another")
-        model.observe(rows: [continued], current: true, active: true)
-        XCTAssertNil(model.recaps[F.runtimeID(1)]?.report, "An old conversation outcome must not be attached to a new identity")
-        model.leave(at: left.addingTimeInterval(310))
-        model.arrive(at: left.addingTimeInterval(320), automatically: true)
-        XCTAssertEqual(arrivals, 1, "Brief app switching does not interrupt work")
-        model.leave(at: left.addingTimeInterval(330))
-        model.arrive(at: left.addingTimeInterval(600), automatically: true)
-        XCTAssertEqual(arrivals, 2, "Each meaningful absence can produce a new summary")
-        model.close(); runner.drain()
-        XCTAssertFalse(model.loading)
-    }
-
-    func testReturnSummaryHonorsDisabledPreferenceAndInvalidatesLiveActions() {
-        let runner = ExperienceRunner()
-        let command = ExperienceFixture.command { _ in ExperienceFixture.report([]) }
-        let model = WorkspaceReturnSummary(command: { command }, runner: runner)
-        let t = Date()
-        model.arrive(at: t, automatically: false); model.leave(at: t)
-        model.arrive(at: t.addingTimeInterval(300), automatically: false)
-        XCTAssertTrue(runner.pending.isEmpty)
-        let row = WorkspaceSidebar.row(F.tmux(1, project: "API", icon: "key", attention: true), now: t, glyphs: .fallback)
-        model.observe(rows: [row], current: true, active: true)
-        model.refresh(); runner.drain()
-        XCTAssertEqual(model.updates.first?.row?.key, row.key)
-        model.observe(rows: [row], current: false, active: true)
-        XCTAssertFalse(model.current)
-        model.observe(rows: [], current: true, active: true)
-        XCTAssertNil(model.updates.first?.row, "An ended session cannot be opened from an old card")
-    }
-
     func testPeekDiscardsLateQuestionAndRecapReplies() {
         let runner = ExperienceRunner()
         var calls: [[String]] = []

@@ -251,8 +251,8 @@ struct PreferencesView: View {
                         + "when the window closes, when the app quits, and across app updates.")
                     Toggle("Open the workspace at launch", isOn: $model.preferences.openWorkspaceAtLaunch)
                     Toggle("Continue to the next waiting session after answering", isOn: $model.preferences.continueToNextWaiting)
-                    Toggle("Show return summaries", isOn: $model.preferences.showWelcomeBack)
-                    note("Shows recent outcomes and waiting questions after two minutes away, plus unread activity at launch. The title-bar summary button is always available. Off by default.")
+                    Toggle("Show welcome-back card", isOn: $model.preferences.showWelcomeBack)
+                    note("Shows unread activity in the inspector at launch and after two minutes away, with a link to Briefing. Off by default.")
                     ForEach(model.snapshot.backend.lines, id: \.0) { row in
                         LabeledContent(row.0) { Text(row.1).foregroundStyle(.secondary).textSelection(.enabled) }
                     }

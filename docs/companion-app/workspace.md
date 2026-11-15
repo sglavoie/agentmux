@@ -13,6 +13,15 @@ workspace uses stock chrome.
 
 [Back to the companion guide](../companion-app.md)
 
+The **View** menu and command palette lead with **Dashboard**, **Briefing**,
+**Conversation History**, and **Checkout Changes**, followed by **Overview**,
+**ASL Runs**, and **Flight Log**, then pane and sidebar controls. **Briefing**
+(⌘⇧U) combines waiting sessions, retained activity, and project conversations.
+In Go to… search (with or without `>`), “activity”, “since last looked”, and “return summary”
+all find Briefing. The optional welcome-back inspector card has an **Open Briefing**
+link and preserves terminal focus when you return after two minutes away.
+
+
 ## Workspace
 
 Lifecycle labels match the TUI: **Detach Terminal** leaves the agent running,
@@ -152,7 +161,7 @@ terminals of their own beside the agents.
   New agents launch on tmux.
 - **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
   session's view the same way.
-- **Find or Resume a Conversation…** (⌘Y) opens native Conversation History,
+- **Conversation History…** (⌘⇧H or ⌘Y) opens native Conversation History,
   the main place to search, read, resume, or fork a conversation. The older
   configurable ⌘⇧H shortcut is an alias to the same browser. **Handoff / More…**
   opens the existing terminal conversation actions on the selected conversation
