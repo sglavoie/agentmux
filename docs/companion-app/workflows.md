@@ -73,10 +73,13 @@ app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configur
 
 An empty workspace offers **Launch Project…**, **Conversation History**, and
 **Open Dashboard**, and names the effective launch destination. With no configured
-projects it offers **Set Up First Project…**, running the existing `amx config
-setup` guide in an embedded terminal. The guide asks about the profile, directory,
-hooks, and backend. Its summary and any errors stay visible until you press Return;
-then the native workspace refreshes projects and the effective launch destination.
+projects it offers **Set Up First Project…**, opening a native sheet with detected
+agent CLIs, recent project directories, and **Choose Another Folder…**. Review the
+checked hook-sync option and click **Set Up**. Success refreshes projects and the
+effective launch destination; errors keep the sheet open. A saved configuration
+with failed hook sync shows retry instructions and blocks repeat setup.
+**Set Up Manually…** opens the embedded wizard for profile, directory, hooks, and
+backend choices; press Return after its summary to refresh the workspace.
 Setup never launches an agent. Pending configuration reads, failed reads, and
 daemon recovery remain distinct from an empty configuration.
 

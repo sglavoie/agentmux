@@ -24,6 +24,26 @@ Dock icon and a main menu (`UI/WorkspaceMenu.swift`); closing it returns the
 app to the menu bar accessory. The status item, the global shortcuts, and the
 ASL answer panel work the same either way.
 
+- **First project.** **Set Up First Project…** opens `WorkspaceSetupPanel`, a
+  native sheet backed by `WorkspaceSetupModel`. It uses the resolved `AMXCommand`
+  (including the bundled CLI), without requiring a daemon, to read
+  `amx config setup --detect --json`. Detected CLIs or existing homes appear as
+  choices; multiple choices use a picker. Recent directories appear as a list,
+  with **Choose Another Folder…** for a different project. The checked **Sync
+  Agent Mux hooks into &lt;home&gt; (needed for live status)** checkbox makes the write
+  destination explicit. **Set Up** passes the chosen harness, home, directory,
+  `--backend keep`, and optionally `--sync-hooks` to non-interactive setup.
+  Successful save calls `workspaceSetupFinished()` to refresh the project catalog
+  and backend readiness, then closes the sheet. The placeholder offers **Start
+  Daemon** or **Launch Project**; each still requires the operator's click.
+  Detection does not verify authentication. No detection results lists the CLIs
+  searched. **Set Up Manually…** always remains available and opens the existing
+  `.setup` utility wizard, whose completion still refreshes the workspace.
+  Failures keep the sheet open with the command message. A saved configuration
+  with failed hooks refreshes readiness but blocks repeat setup and shows the
+  CLI's hook-sync retry instructions. Unknown save outcomes also block repeats;
+  inspect Settings before further setup. Closing detection discards late results;
+  manual fallback and dismissal are disabled while a save is running.
 - **Which sessions.** The app subscribes with the `runtime_sessions` feature.
   The daemon sends v2 snapshots with each tmux session's runtime identity
   (`CompanionSession.runtime`). The runtime-session ID identifies a session in

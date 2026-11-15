@@ -13,14 +13,24 @@ If no compatible download is listed, build from source below.
 
 The bundle includes `amx`, tmux, and Ghostty. You do not need Go, Xcode,
 Homebrew, or a separately installed `amx` to run it. On a fresh installation,
-the workspace opens with **Set Up First Project** before a daemon is needed.
-The wizard defaults to the only detected agent CLI and offers recent existing
-project directories as numbered choices. Choose the agent's existing
-authenticated home and a project directory, keep
-the tmux default, and explicitly choose whether to sync its hooks. Press
-Enter after the summary, choose **Start Daemon** if offered, then
-**Launch Project**. Invalid or unreadable existing configuration is reported
-as an error rather than replaced by first-project setup.
+the workspace opens with **Set Up First Project…** before a daemon is needed.
+Its native sheet detects agent CLIs and existing profile homes, and lists recent
+project directories. Select a CLI when several are found, keep the suggested
+project or use **Choose Another Folder…**, and review the checked **Sync Agent
+Mux hooks into &lt;home&gt; (needed for live status)** option. Click **Set Up** to save
+configuration with the existing tmux default. Unchecking the box skips hook sync.
+Then choose **Start Daemon** if offered and **Launch Project**. Setup never
+starts an agent or verifies authentication.
+
+**Set Up Manually…** is always available in the sheet and opens the embedded
+wizard for custom homes, profile names, and other choices. When nothing is
+found, the sheet lists the CLIs it looked for: `claude`, `codex`, and `copilot`.
+Command failures stay visible in the sheet. A saved configuration with failed
+hook sync refreshes the project catalog but keeps the sheet open with the
+failure and hook-sync retry instructions; setup cannot be submitted again.
+An unknown save outcome also blocks repeat submission until you inspect Settings.
+Invalid or unreadable existing configuration is reported as an error rather
+than replaced by first-project setup.
 
 Checkout review and worktree actions need Git. When Apple's Git is unavailable,
 background status reads leave Git metadata empty; they do not open the developer
@@ -46,8 +56,8 @@ and `--sync-hooks`. Hooks are not synced without that flag in non-interactive
 mode. A hook failure returns a nonzero exit with `saved: true` in the JSON
 result; retry hook sync instead of setup. See the
 [setup contract](../operations.md#first-project-setup) for defaults, existing
-profile selection, and JSON fields. The embedded **Set Up First Project**
-wizard remains available through `amx workspace-view setup`.
+profile selection, and JSON fields. The embedded wizard
+remains available through **Set Up Manually…** or `amx workspace-view setup`.
 
 ### Building from source
 

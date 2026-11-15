@@ -33,14 +33,19 @@ Checkout review and worktree actions additionally need Git.
    are available. If no compatible download is listed, use the source
    installation below.
 2. Expand the ZIP, move **Agent Mux.app** to **Applications**, and open it.
-3. On a fresh installation the workspace opens with **Set Up First Project**.
-   Choose your agent CLI, its existing authenticated profile home, and an
-   existing project directory. Choose **Keep** for the tmux default and
-   explicitly answer **yes** to sync this profile's hooks. Setup does not
-   authenticate the agent CLI.
-4. Press **Enter** to return to the workspace, choose **Start Daemon** if
-   offered, then **Launch Project** and select your project. The agent opens
-   in the embedded terminal; the sidebar shows when it needs you.
+3. Choose **Set Up First Project…**. The native sheet shows detected agent
+   CLIs and recent project directories. Keep the suggested choices or select
+   another CLI or **Choose Another Folder…**. The visible **Sync Agent Mux hooks
+   into &lt;home&gt; (needed for live status)** checkbox starts checked; review the
+   home and click **Set Up**. Detection does not check authentication.
+4. After setup, choose **Start Daemon** if offered, then **Launch Project** and
+   select your project. The agent opens in the embedded terminal; the sidebar
+   shows when it needs you. Setup itself never launches an agent.
+
+**Set Up Manually…** in the sheet opens the embedded wizard for custom profile
+homes and other choices. If setup fails, the sheet stays open with the command's
+message. If configuration was saved but hook sync failed, follow its hook-sync
+retry instructions; do not repeat setup.
 
 Close and reopen the app to return to your running sessions. For a conversation
 whose agent has ended, open **Conversation History** (`⌘Y`) and choose

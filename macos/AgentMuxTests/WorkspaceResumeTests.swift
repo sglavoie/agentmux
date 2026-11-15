@@ -46,13 +46,18 @@ final class WorkspaceResumeTests: XCTestCase {
     func testFirstProjectSetupStaysInWorkspaceAndRefreshesOnReturn() throws {
         let app = FakeWorkspaceApp()
         app.workspaceOffersSetup = true
+        app.recapCommand = WorkspaceSetupFixture.command()
         let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        workspace.setupRunner = SetupTestRunner()
         defer { workspace.window.close() }
         app.store.onChange = { workspace.refresh() }
         workspace.openForTesting()
         app.store.apply(snapshot: WorkspaceFixture.snapshot([]))
         XCTAssertEqual(workspace.placeholder.button.title, "Set Up First Project…")
         workspace.placeholder.press()
+        XCTAssertTrue(workspace.window.attachedSheet === workspace.setupPanel?.panel)
+        XCTAssertTrue(app.madeViews.isEmpty)
+        workspace.setupPanel?.model.manual()
         XCTAssertEqual(app.madeViews, ["setup"])
         XCTAssertTrue(app.made.isEmpty)
         XCTAssertEqual(WorkspaceUtilityView.setup.arguments, ["workspace-view", "setup"])
@@ -68,13 +73,18 @@ final class WorkspaceResumeTests: XCTestCase {
     func testFreshInstallationCanSetUpBeforeStartingTheDaemon() {
         let app = FakeWorkspaceApp()
         app.workspaceOffersSetup = true
+        app.recapCommand = WorkspaceSetupFixture.command()
         let workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback)
+        workspace.setupRunner = SetupTestRunner()
         defer { workspace.window.close() }
         workspace.openForTesting()
         app.store.apply(health: .notRunning)
         workspace.refresh()
         XCTAssertEqual(workspace.placeholder.button.title, "Set Up First Project…")
         workspace.placeholder.press()
+        XCTAssertTrue(workspace.window.attachedSheet === workspace.setupPanel?.panel)
+        XCTAssertTrue(app.madeViews.isEmpty)
+        workspace.setupPanel?.model.manual()
         XCTAssertEqual(app.madeViews, ["setup"])
         workspace.utilityEnded("setup")
         app.workspaceOffersSetup = false

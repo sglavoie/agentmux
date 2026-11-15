@@ -130,6 +130,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var sidebarMotionEnabled: () -> Bool = { WorkspaceMotion.enabled }
     var sidebarAnimations = 0
     var pendingSidebarFlashes: [AttentionCycler.Key: String] = [:]
+    var setupPanel: WorkspaceSetupPanel?
+    var setupRunner: ASLWorkRunner = QueueWorkRunner.concurrent()
     let groupFilter = WorkspaceGroupFilter()
     lazy var sessionPeek = WorkspaceSessionPeekModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
     var presentingPeek = false

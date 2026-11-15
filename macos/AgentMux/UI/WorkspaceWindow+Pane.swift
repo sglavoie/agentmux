@@ -389,7 +389,7 @@ extension WorkspaceWindowController {
                         ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
                     ]) { [weak self] in
                         guard let self else { return }
-                        if self.delegate?.workspaceOffersSetup == true { self.open(.setup) }
+                        if self.delegate?.workspaceOffersSetup == true { self.showSetup() }
                         else { self.delegate?.workspaceLaunchProjects(from: self.placeholder.button) }
                     }
                 break
