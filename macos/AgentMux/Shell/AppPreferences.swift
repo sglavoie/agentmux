@@ -10,6 +10,7 @@ struct AppPreferences: Equatable {
         static let binaryPath = AMXBinaryResolver.overrideDefaultsKey
         static let launchAtLogin = "amxLaunchAtLogin"
         static let workspaceShortcuts = "amxWorkspaceShortcuts"
+        static let briefingShortcutMigrated = "amxBriefingShortcutMigrated"
         static let hotKeyDashboard = HotKeyPreference.dashboard.defaultsKey
         static let hotKeyNextAttention = HotKeyPreference.nextAttention.defaultsKey
         static let statusStyle = "amxStatusStyle"
@@ -40,7 +41,7 @@ struct AppPreferences: Equatable {
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, playSounds, snoozeUntil, environment,
             launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, sidebarSort, dashboardPlace, terminalTheme, matchWindowToTerminal, workspaceShortcuts,
-            confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar, continueToNextWaiting,
+            confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar, continueToNextWaiting, briefingShortcutMigrated,
         ]
     }
 
@@ -116,9 +117,15 @@ struct AppPreferences: Equatable {
         preferences.binaryPath = trimmed(defaults.string(forKey: Key.binaryPath))
         preferences.launchAtLogin = bool(defaults, Key.launchAtLogin) ?? false
         preferences.workspaceShortcuts = defaults.dictionary(forKey: Key.workspaceShortcuts)?.compactMapValues { $0 as? String } ?? [:]
-        if let legacy = preferences.workspaceShortcuts.removeValue(forKey: "activity") {
-            if preferences.workspaceShortcuts["briefing"] == nil { preferences.workspaceShortcuts["briefing"] = legacy }
+        if bool(defaults, Key.briefingShortcutMigrated) != true {
+            let legacy = preferences.workspaceShortcuts.removeValue(forKey: "activity")
+            // Project Briefing had no default: its empty value was not a
+            // request to disable the merged Briefing shortcut.
+            if preferences.workspaceShortcuts["briefing", default: ""].isEmpty {
+                preferences.workspaceShortcuts["briefing"] = legacy
+            }
             defaults.set(preferences.workspaceShortcuts, forKey: Key.workspaceShortcuts)
+            defaults.set(true, forKey: Key.briefingShortcutMigrated)
         }
         defaults.removeObject(forKey: "NSWindow Frame WorkspaceActivity")
         preferences.hotKeyDashboard = HotKeyPreference.dashboard.load(from: defaults)
@@ -159,6 +166,7 @@ struct AppPreferences: Equatable {
         Self.setString(binaryPath, Key.binaryPath, defaults)
         defaults.set(launchAtLogin, forKey: Key.launchAtLogin)
         defaults.set(workspaceShortcuts, forKey: Key.workspaceShortcuts)
+        defaults.set(true, forKey: Key.briefingShortcutMigrated)
         HotKeyPreference.dashboard.save(hotKeyDashboard, to: defaults)
         HotKeyPreference.nextAttention.save(hotKeyNextAttention, to: defaults)
         defaults.set(statusStyle.rawValue, forKey: Key.statusStyle)

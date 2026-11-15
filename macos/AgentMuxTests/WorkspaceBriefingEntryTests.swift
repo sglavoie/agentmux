@@ -9,6 +9,7 @@ final class WorkspaceBriefingEntryTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         for legacy in ["", "ctrl+cmd+u"] {
+            defaults.removePersistentDomain(forName: suite)
             defaults.set(["activity": legacy], forKey: AppPreferences.Key.workspaceShortcuts)
             defaults.set("retired frame", forKey: "NSWindow Frame WorkspaceActivity")
             defaults.set("keep frame", forKey: "NSWindow Frame WorkspaceBriefing")
@@ -18,11 +19,50 @@ final class WorkspaceBriefingEntryTests: XCTestCase {
             XCTAssertNil(defaults.object(forKey: "NSWindow Frame WorkspaceActivity"))
             XCTAssertEqual(defaults.string(forKey: "NSWindow Frame WorkspaceBriefing"), "keep frame")
         }
-        for destination in ["", "shift+cmd+b"] {
-            defaults.set(["activity": "ctrl+cmd+u", "briefing": destination], forKey: AppPreferences.Key.workspaceShortcuts)
-            let preferences = AppPreferences.load(from: defaults)
-            XCTAssertEqual(preferences.workspaceShortcuts, ["briefing": destination])
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(["activity": "ctrl+cmd+u", "briefing": "shift+cmd+b"], forKey: AppPreferences.Key.workspaceShortcuts)
+        let preferences = AppPreferences.load(from: defaults)
+        XCTAssertEqual(preferences.workspaceShortcuts, ["briefing": "shift+cmd+b"])
+        XCTAssertEqual(WorkspaceShortcut.briefing.combo(in: preferences), HotKeyCombo(string: "shift+cmd+b", scope: .application))
+        XCTAssertEqual(AppPreferences.load(from: defaults).workspaceShortcuts, preferences.workspaceShortcuts)
+    }
+
+    func testEmptyLegacyBriefingBindingMigratesToActivityOrDefault() throws {
+        let suite = "briefing-empty-migration-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for activity in ["ctrl+cmd+u", nil] as [String?] {
+            defaults.removePersistentDomain(forName: suite)
+            var shortcuts = ["briefing": "", "splitShell": "ctrl+cmd+s"]
+            shortcuts["activity"] = activity
+            defaults.set(shortcuts, forKey: AppPreferences.Key.workspaceShortcuts)
+            var preferences = AppPreferences.load(from: defaults)
+            let expected = try XCTUnwrap(HotKeyCombo(string: activity ?? "shift+cmd+u", scope: .application))
+            XCTAssertEqual(WorkspaceShortcut.briefing.combo(in: preferences), expected)
+            XCTAssertEqual(preferences.workspaceShortcuts["briefing"], activity)
+            XCTAssertNil(preferences.workspaceShortcuts["activity"])
+            XCTAssertEqual(preferences.workspaceShortcuts["splitShell"], "ctrl+cmd+s")
+            XCTAssertEqual(AppPreferences.load(from: defaults).workspaceShortcuts, preferences.workspaceShortcuts)
+
+            // Clear after upgrading, then save and reload as Settings does.
+            preferences.workspaceShortcuts["briefing"] = ""
+            preferences.save(to: defaults)
+            for _ in 0..<2 {
+                let reloaded = AppPreferences.load(from: defaults)
+                XCTAssertEqual(reloaded.workspaceShortcuts["briefing"], "")
+                XCTAssertNil(WorkspaceShortcut.briefing.combo(in: reloaded))
+            }
         }
+    }
+
+    func testNewBriefingDisableSurvivesFirstLoad() throws {
+        let suite = "briefing-new-disable-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var preferences = AppPreferences()
+        preferences.workspaceShortcuts["briefing"] = ""
+        preferences.save(to: defaults)
+        XCTAssertNil(WorkspaceShortcut.briefing.combo(in: AppPreferences.load(from: defaults)))
     }
 
     func testMigratedConflictsRemainVisibleButInactive() throws {

@@ -128,7 +128,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxPlaySounds", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxMatchWindowToTerminal", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy", "amxShowWelcomeBack", "amxShowOverviewInSidebar", "amxContinueToNextWaiting",
+            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxMatchWindowToTerminal", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy", "amxShowWelcomeBack", "amxShowOverviewInSidebar", "amxContinueToNextWaiting", "amxBriefingShortcutMigrated",
         ])
     }
 

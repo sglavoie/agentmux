@@ -13,9 +13,11 @@ shortcut recorder's restrictions. Existing menu keys (including hidden aliases),
 other configurable commands, and the two global bindings are checked for conflicts.
 Conflicting stored bindings remain visible in Settings but are inactive.
 Legacy `activity` customizations migrate to `briefing`, including an empty
-(disabled) binding. An explicit Briefing customization wins when both are stored;
-the retired action is removed. Migrated conflicts follow the same visible but
-inactive rule. The retired `NSWindow Frame WorkspaceActivity` is removed without
+(disabled) binding. A non-empty legacy Briefing customization wins when both are stored.
+An empty legacy Briefing value falls back to Activity, or to ⌘⇧U when Activity
+has no saved binding; the retired action is removed. The one-time migration
+records `amxBriefingShortcutMigrated`, so clearing Briefing afterward stays disabled.
+Migrated conflicts follow the same visible but inactive rule. The retired `NSWindow Frame WorkspaceActivity` is removed without
 changing Briefing's saved frame.
 
 The terminal checks configured equivalents before encoding keys, including
@@ -83,6 +85,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxHotKeyDashboard` | `ctrl+opt+cmd+a` | Empty turns it off. |
 | `amxHotKeyNextAttention` | `ctrl+opt+cmd+n` | Empty turns it off. |
 | `amxWorkspaceShortcuts` | `{}` | Command ID → combo string; absent uses the command default, empty clears it. |
+| `amxBriefingShortcutMigrated` | `false` | Internal migration marker, set on load or save; preserves subsequent explicit disables of Briefing. |
 | `amxStatusStyle` | `glyphs` | `glyphs` (`⚡2 🔑1`), `compact` (the attention total), or `iconOnly`. |
 | `amxShowWorkingCount` | true | Includes `⚡N` in the glyph title. |
 | `amxRecentDays` | 7 | How far back the Recent submenu looks (1–90). |
