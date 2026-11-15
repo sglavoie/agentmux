@@ -94,8 +94,11 @@ configs, and missing or non-directory project paths.
 Detection JSON is `{"schema_version":1,"data":{"harnesses":[],"recent_projects":[],"warnings":[]}}`.
 Harness entries have `harness`, `cli_available`, optional `cli_path`, `home`, and
 `home_exists`. Project entries have `directory`, `harness`, and `last_used`
-(RFC 3339 UTC). Unreadable homes or metadata roots are reported in `warnings`;
-unreadable individual conversations follow the metadata readers' skip behavior.
+(RFC 3339 UTC). Home lookup errors other than missing paths and errors returned
+by metadata readers appear in `warnings`. Codex skips directory traversal errors,
+so an unreadable Codex metadata root can produce no recent projects without a
+warning. Unreadable individual conversations follow the metadata readers' skip
+behavior.
 
 Setup JSON uses the same envelope with `config_path`, `saved`, `profile`,
 `harness`, `home` (tilde expanded), `directory`, `title`, effective `backend`,

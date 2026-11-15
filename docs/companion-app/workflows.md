@@ -36,8 +36,10 @@ still work.
 Disconnected status never implies that questions were resolved.
 
 Palette entrances, hover feedback, and sidebar/inspector disclosure respect
-Reduce Motion. Status glyphs fade briefly when they change. Routine navigation
-uses a quiet 160 ms highlight; explicit **Reveal in Sidebar** uses one 320 ms
+Reduce Motion. Workspace state symbols update immediately when state changes.
+On macOS 14 and later, working, subagent, and compacting symbols pulse while
+Reduce Motion is off. Routine navigation uses a quiet 160 ms highlight;
+explicit **Reveal in Sidebar** uses one 320 ms
 highlight. Small sidebar changes slide sessions into their new sections and
 then highlight state changes in the destination section's color. Selection,
 keyboard focus, scroll position, collapsed groups, and hover/menu/drag holds

@@ -146,9 +146,9 @@ See [Single instance and tests](docs/testing.md#single-instance-and-tests).
 
 See [Native agent handoff](docs/testing.md#native-agent-handoff).
 
-### Project Briefing
+### Briefing
 
-See [Project Briefing](docs/testing.md#project-briefing).
+See [Briefing](docs/testing.md#briefing).
 
 ### Running the UI on another Mac
 
