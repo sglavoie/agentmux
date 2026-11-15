@@ -357,6 +357,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 
     func askToQuit(_ question: String, _ message: String) -> Bool {
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.alertStyle = .warning
         alert.messageText = question
         alert.informativeText = message

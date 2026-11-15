@@ -61,6 +61,7 @@ extension WorkspaceWindowController {
     private func askForName(_ row: WorkspaceRow, _ answer: @escaping @MainActor (String?) -> Void) {
         let model = WorkspaceTaskName(row: row, command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.messageText = "Name the task"
         alert.informativeText = row.project
         let host = NSHostingView(rootView: WorkspaceTaskNameView(model: model))
@@ -103,6 +104,7 @@ extension WorkspaceWindowController {
         field.placeholderString = "No name"
         field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.messageText = "Name \(title)"
         alert.informativeText = explanation
         alert.accessoryView = field
@@ -768,6 +770,7 @@ extension WorkspaceWindowController {
 
     func askToCloseView(_ title: String, _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.alertStyle = .warning
         alert.messageText = "Close the view \(title)?"
         alert.informativeText = "Closing the view ends that process. No session is affected."
@@ -780,6 +783,7 @@ extension WorkspaceWindowController {
 
     func askToQuit(_ titles: [String], _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.alertStyle = .warning
         alert.messageText = WorkspaceViews.quitQuestion(titles)
         alert.informativeText = "Quitting ends those processes. Sessions live on and are shown again at the next launch."

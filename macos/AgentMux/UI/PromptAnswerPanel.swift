@@ -409,6 +409,7 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: true
         )
+        WorkspaceWindowChrome.adopt(panel)
         panel.title = "Agent Mux — Answer a Prompt"
         panel.isFloatingPanel = true
         panel.level = .floating

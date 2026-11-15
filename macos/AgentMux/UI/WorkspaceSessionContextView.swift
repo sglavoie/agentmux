@@ -113,6 +113,7 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
         guard let context, context.conversation != nil else { return }
         previewRead?.cancel()
         recap.select(context.conversation, revision: context.revision, canGenerate: false)
+        popover.appearance = WorkspaceWindowChrome.themedAppearance
         popover.show(relativeTo: outcome.bounds, of: outcome, preferredEdge: .minY)
     }
 

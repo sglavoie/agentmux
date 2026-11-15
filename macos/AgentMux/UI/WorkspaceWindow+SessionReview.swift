@@ -92,6 +92,7 @@ extension WorkspaceWindowController {
         sessionReviewPopover = popover
         let row = sidebar.clickedRow
         let rect = row >= 0 ? sidebar.rect(ofRow: row) : sidebar.visibleRect
+        popover.appearance = WorkspaceWindowChrome.themedAppearance
         popover.show(relativeTo: rect, of: sidebar, preferredEdge: .maxX)
     }
 }

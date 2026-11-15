@@ -385,6 +385,8 @@ extension Ghostty {
 
         private static func askToOpen(_ url: URL, _ answer: @escaping (Bool) -> Void) {
             let alert = NSAlert()
+            // Ghostty dispatches alert presentation to the main thread.
+            MainActor.assumeIsolated { WorkspaceWindowChrome.adopt(alert.window) }
             alert.alertStyle = .warning
             alert.messageText = "Open this \(url.scheme ?? "") link?"
             alert.informativeText = "A program in the terminal asked to open:\n\(url.absoluteString)\n\nIt may start another app."
@@ -585,6 +587,8 @@ extension Ghostty {
         /// is pasted is exactly what can be read here.
         static func clipboardAlert(_ question: ClipboardQuestion) -> NSAlert {
             let alert = NSAlert()
+            // Ghostty dispatches alert presentation to the main thread.
+            MainActor.assumeIsolated { WorkspaceWindowChrome.adopt(alert.window) }
             let who = question.requester.isEmpty ? "the program" : question.requester
             switch question.request {
             case GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ:

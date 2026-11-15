@@ -387,7 +387,9 @@ struct WorkspaceFlightLogView: View {
         }
     }
     private func export() {
-        let panel = NSSavePanel(); panel.nameFieldStringValue = "flight-log.json"; panel.allowedContentTypes = [.json]
+        let panel = NSSavePanel()
+        WorkspaceWindowChrome.adopt(panel)
+        panel.nameFieldStringValue = "flight-log.json"; panel.allowedContentTypes = [.json]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         model.export(to: url)
     }

@@ -5,6 +5,22 @@ import AppKit
 /// constraints, which do not depend on the current session.
 @MainActor
 enum WorkspaceWindowChrome {
+    /// The light or dark appearance taken from the terminal theme;
+    /// nil when matching is off, which follows the system.
+    static private(set) var themedAppearance: NSAppearance?
+    private static let adopted = NSHashTable<NSWindow>.weakObjects()
+
+    /// Makes the window follow the workspace's themed appearance from now on.
+    static func adopt(_ window: NSWindow) {
+        adopted.add(window)
+        window.appearance = themedAppearance
+    }
+
+    static func setThemedAppearance(_ appearance: NSAppearance?) {
+        themedAppearance = appearance
+        adopted.allObjects.forEach { $0.appearance = appearance }
+    }
+
     static func makeSidebarToggle() -> NSButton {
         makeTitlebarToggle(symbol: "sidebar.left", title: "Toggle Sidebar", shortcut: "⌘B")
     }

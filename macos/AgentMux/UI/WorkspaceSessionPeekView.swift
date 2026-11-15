@@ -86,6 +86,7 @@ final class WorkspaceContextPopover: NSObject, NSPopoverDelegate {
         let field = editor?.isFieldEditor == true ? editor?.delegate as? NSTextField : nil
         let selection = editor?.selectedRange()
         popover.contentViewController = NSHostingController(rootView: content)
+        popover.appearance = WorkspaceWindowChrome.themedAppearance
         popover.show(relativeTo: rect ?? anchor.bounds, of: anchor, preferredEdge: .maxX)
         if let field {
             anchor.window?.makeFirstResponder(field)

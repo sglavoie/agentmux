@@ -655,6 +655,7 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: true
         )
+        WorkspaceWindowChrome.adopt(panel)
         panel.title = "Agent Mux — Supervisor Question"
         panel.isFloatingPanel = true
         panel.level = .floating

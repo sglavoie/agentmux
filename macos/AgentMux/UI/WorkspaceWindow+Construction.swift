@@ -201,6 +201,7 @@ extension WorkspaceWindowController {
         window.titlebarAppearsTransparent = background != nil
         window.backgroundColor = background ?? .windowBackgroundColor
         window.appearance = background.flatMap { NSAppearance(named: Self.appearance(for: $0)) }
+        WorkspaceWindowChrome.setThemedAppearance(window.appearance)
         // The headers and both sidebars draw over the same configured color.
         // Keep the stock light sidebar correction only when matching is off
         // or Ghostty could not supply a color.

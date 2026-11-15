@@ -254,6 +254,7 @@ struct WorkspaceRunPlanView: View {
                     TextField("Plan directory or configured plan name", text: $model.plan)
                     Button("Choose…") {
                         let picker = NSOpenPanel()
+                        WorkspaceWindowChrome.adopt(picker)
                         picker.canChooseFiles = false; picker.canChooseDirectories = true; picker.allowsMultipleSelection = false
                         if picker.runModal() == .OK, let url = picker.url { model.plan = url.path }
                     }

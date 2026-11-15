@@ -92,6 +92,7 @@ class ReviewWindowController: NSObject, NSWindowDelegate {
     private func makeWindow() -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: initialSize),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        WorkspaceWindowChrome.adopt(window)
         window.title = title
         window.minSize = Self.minimumSize
         window.isReleasedWhenClosed = false

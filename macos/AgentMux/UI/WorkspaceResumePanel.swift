@@ -36,6 +36,7 @@ final class WorkspaceResumePanel {
     let panel = NSPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
     init(model: WorkspaceResumeModel) {
         self.model = model
+        WorkspaceWindowChrome.adopt(panel)
         panel.isReleasedWhenClosed = false
         panel.title = "Resume Conversation"
         panel.contentView = NSHostingView(rootView: WorkspaceResumeView(model: model, cancel: { [weak self] in self?.close() }))

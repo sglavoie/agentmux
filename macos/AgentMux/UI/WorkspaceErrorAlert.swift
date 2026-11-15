@@ -64,6 +64,7 @@ struct WorkspaceError: Equatable {
 enum WorkspaceErrorAlert {
     static func make(_ error: WorkspaceError) -> NSAlert {
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.alertStyle = .warning
         alert.messageText = error.title
         alert.informativeText = error.message

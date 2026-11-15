@@ -65,6 +65,7 @@ struct WorkspaceSetupView: View {
 
     private func chooseDirectory() {
         let panel = NSOpenPanel()
+        WorkspaceWindowChrome.adopt(panel)
         panel.canChooseFiles = false; panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false; panel.prompt = "Choose"
         if !model.directory.isEmpty { panel.directoryURL = URL(fileURLWithPath: model.directory, isDirectory: true) }
@@ -80,6 +81,7 @@ final class WorkspaceSetupPanel {
 
     init(model: WorkspaceSetupModel) {
         self.model = model
+        WorkspaceWindowChrome.adopt(panel)
         panel.title = "Set up first project"
         panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(rootView: WorkspaceSetupView(model: model, cancel: { [weak self] in self?.close() }))

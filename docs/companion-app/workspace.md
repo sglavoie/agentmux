@@ -5,11 +5,15 @@ background by default. Both sidebars share that color, and title text and
 controls use a light or dark appearance chosen from its luminance. Settings ›
 Appearance › Terminal appearance › **Match the window to the terminal theme**
 turns this off and restores stock window chrome. Theme preferences, Ghostty
-config reloads, and system light/dark changes update the window immediately;
+config reloads, and system light/dark changes update the windows immediately;
 program OSC 11 background changes do not. Conditional themes follow system
-appearance even when the workspace's own appearance differs. Other windows
-keep the system appearance. If Ghostty cannot supply a background, the
-workspace uses stock chrome.
+appearance even when the workspace's own appearance differs. Every other
+Agent Mux window and workspace popover follows the same light or dark appearance,
+including History, Briefing, Checkout Changes, ASL Runs, Flight Log, and answer,
+launch, resume, setup, and handoff panels. These keep their standard background
+colors. Settings keeps the system appearance. Turning matching off makes every
+window follow the system. If Ghostty cannot supply a background, the workspace
+uses stock chrome and the other windows follow the system.
 
 [Back to the companion guide](../companion-app.md)
 

@@ -55,6 +55,7 @@ final class WorkspaceHandoffPanel: NSObject, NSWindowDelegate {
     let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 680, height: 700), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
     init(model: WorkspaceHandoffModel) {
         self.model = model
+        WorkspaceWindowChrome.adopt(panel)
         super.init()
         panel.delegate = self
         panel.isReleasedWhenClosed = false

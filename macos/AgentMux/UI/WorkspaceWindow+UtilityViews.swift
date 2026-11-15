@@ -269,6 +269,7 @@ extension WorkspaceWindowController {
 
     private func askToClose(_ row: WorkspaceRow, _ answer: @escaping @MainActor (Bool) -> Void) {
         let alert = NSAlert()
+        WorkspaceWindowChrome.adopt(alert.window)
         alert.alertStyle = .warning
         alert.messageText = "End \(row.displayName)?"
         if row.attention || row.working {

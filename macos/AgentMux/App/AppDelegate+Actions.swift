@@ -314,6 +314,7 @@ extension AppDelegate {
     /// launches nothing.
     func launchInChosenFolder(_ project: ProjectEntry) {
         let panel = NSOpenPanel()
+        WorkspaceWindowChrome.adopt(panel)
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true

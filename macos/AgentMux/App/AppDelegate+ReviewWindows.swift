@@ -50,6 +50,7 @@ extension AppDelegate {
             controller.model.open(runtimeSessionID: id)
         } else {
             let picker = NSOpenPanel()
+            WorkspaceWindowChrome.adopt(picker)
             picker.canChooseFiles = false
             picker.canChooseDirectories = true
             picker.allowsMultipleSelection = false

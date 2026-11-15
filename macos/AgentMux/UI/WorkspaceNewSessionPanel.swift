@@ -40,6 +40,7 @@ struct WorkspaceNewSessionView: View {
 
     private func chooseDirectory() {
         let panel = NSOpenPanel()
+        WorkspaceWindowChrome.adopt(panel)
         panel.canChooseFiles = false; panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = "Choose"
@@ -56,6 +57,7 @@ final class WorkspaceNewSessionPanel {
 
     init(model: WorkspaceNewSessionModel) {
         self.model = model
+        WorkspaceWindowChrome.adopt(panel)
         panel.isReleasedWhenClosed = false
         panel.title = "New Session Below"
         panel.contentView = NSHostingView(rootView: WorkspaceNewSessionView(model: model, cancel: { [weak self] in self?.close() }))

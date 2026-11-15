@@ -12,8 +12,11 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
     private var directory: URL!
     private var systemAppearance: NSAppearance?
     private var mainMenu: NSMenu?
+    private var themedAppearance: NSAppearance?
 
     override func setUp() async throws {
+        themedAppearance = WorkspaceWindowChrome.themedAppearance
+        WorkspaceWindowChrome.setThemedAppearance(nil)
         systemAppearance = NSApp.appearance
         mainMenu = NSApp.mainMenu
         NSApp.appearance = NSAppearance(named: .aqua)
@@ -44,6 +47,7 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
         workspace = nil; runtime = nil; app = nil
         NSApp.appearance = systemAppearance
         NSApp.mainMenu = mainMenu
+        WorkspaceWindowChrome.setThemedAppearance(themedAppearance)
         try FileManager.default.removeItem(at: directory)
     }
 
@@ -60,6 +64,63 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
         for host in [workspace.paneLayout.active, workspace.paneLayout.other] {
             XCTAssertEqual(host.layer?.backgroundColor, window.backgroundColor.cgColor, file: file, line: line)
         }
+    }
+
+    func testAdoptedWindowsFollowThemeChangesAndResetWithoutChangingBackgrounds() throws {
+        let early = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        early.isReleasedWhenClosed = false
+        early.backgroundColor = .red
+        defer { early.close() }
+        WorkspaceWindowChrome.adopt(early)
+        XCTAssertNil(early.appearance)
+
+        try assertChrome([0x1E, 0x1E, 0x2E], appearance: .darkAqua)
+        XCTAssertEqual(early.appearance?.name, .darkAqua)
+        let late = NSPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        late.isReleasedWhenClosed = false
+        let panelBackground = late.backgroundColor
+        defer { late.close() }
+        WorkspaceWindowChrome.adopt(late)
+        XCTAssertEqual(late.appearance?.name, .darkAqua)
+
+        app.preferencesModel.preferences.terminalTheme = TerminalTheme("Catppuccin Latte")
+        for window in [early, late] { XCTAssertEqual(window.appearance?.name, .aqua) }
+        app.preferencesModel.preferences.matchWindowToTerminal = false
+        XCTAssertNil(WorkspaceWindowChrome.themedAppearance)
+        for window in [early, late] { XCTAssertNil(window.appearance) }
+        app.preferencesModel.preferences.terminalTheme = TerminalTheme("Catppuccin Mocha")
+        for window in [early, late] { XCTAssertNil(window.appearance) }
+        app.preferencesModel.preferences.matchWindowToTerminal = true
+        for window in [early, late] { XCTAssertEqual(window.appearance?.name, .darkAqua) }
+        XCTAssertEqual(early.backgroundColor, .red)
+        XCTAssertEqual(late.backgroundColor, panelBackground)
+        XCTAssertEqual(NSApp.appearance?.name, .aqua)
+    }
+
+    func testReviewAndSetupConstructorsAdoptThemeWhileSettingsFollowsSystem() throws {
+        try assertChrome([0x1E, 0x1E, 0x2E], appearance: .darkAqua)
+        let review = AppearanceReviewWindow(title: "Appearance test", autosaveName: suite,
+                                            size: NSSize(width: 800, height: 600))
+        review.present()
+        let reviewWindow = try XCTUnwrap(review.window)
+        let setup = WorkspaceSetupPanel(model: WorkspaceSetupModel(command: { nil }))
+        let settings = PreferencesWindowController(model: app.preferencesModel)
+        defer {
+            reviewWindow.close()
+            setup.panel.close()
+            settings.window.close()
+            NSWindow.removeFrame(usingName: suite)
+        }
+        for window in [reviewWindow, setup.panel] {
+            XCTAssertEqual(window.appearance?.name, .darkAqua)
+            XCTAssertEqual(window.backgroundColor, .windowBackgroundColor)
+        }
+        XCTAssertNil(settings.window.appearance)
+        XCTAssertEqual(settings.window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .aqua)
+        app.preferencesModel.preferences.terminalTheme = TerminalTheme("Catppuccin Latte")
+        for window in [reviewWindow, setup.panel] { XCTAssertEqual(window.appearance?.name, .aqua) }
+        app.preferencesModel.preferences.matchWindowToTerminal = false
+        for window in [reviewWindow, setup.panel, settings.window] { XCTAssertNil(window.appearance) }
     }
 
     func testInitialDarkThemeAndPreferenceChangeToLightKeepGeometryAndResponder() throws {
@@ -147,4 +208,9 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
         XCTAssertNil(workspace.window.appearance)
         XCTAssertEqual(workspace.window.backgroundColor, .windowBackgroundColor)
     }
+}
+
+@MainActor
+private final class AppearanceReviewWindow: ReviewWindowController {
+    override func makeContentView() -> NSView { NSView() }
 }
