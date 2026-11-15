@@ -31,6 +31,8 @@ extension AppDelegate {
     func workspaceController() -> WorkspaceWindowController {
         if let workspace { return workspace }
         let controller = WorkspaceWindowController(delegate: self)
+        if !Self.isRunningTests { controller.sounds = WorkspaceSound() }
+        controller.playSounds = preferencesModel.preferences.playSounds
         controller.matchWindowToTerminal = preferencesModel.preferences.matchWindowToTerminal
         controller.terminalBackground = { [weak self] in self?.terminalRuntime()?.config.backgroundColor }
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing

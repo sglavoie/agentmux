@@ -31,8 +31,9 @@ usually ends up on Alerter.
 
 **Banners.** Each banner's identifier is the daemon's `notification_id`, and
 its thread is the session's runtime session ID, so one session's banners group together.
-Permission and question (`elicitation`) banners play the default sound, also
-while the app is in the foreground (its menu open); other banners are silent. The
+Permission and question (`elicitation`) banners are silent while app sounds are
+on, avoiding a second sound. With app sounds off, those banners retain the default
+sound, including in the foreground; other banners are silent. The
 category depends on the actions the daemon offered, and a banner never shows
 an action that was not offered:
 
@@ -76,6 +77,22 @@ and the app withdraws that thread's notices when the pane moves to it or the
 workspace window becomes key on it. Clicking one from a session shows that
 session; from a utility view, it opens the workspace on that view, if it is
 still open (navigation only: a view never counts toward attention).
+
+## Workspace sounds
+
+Settings › General offers **Play a sound when an agent needs you or finishes**
+(`amxPlaySounds`, on by default). `WorkspaceSound` plays the built-in Glass sound
+when a session enters permission, question, or error, and a softer Pop when a turn
+finishes. Changes within the needs-you class do not repeat the sound. Sounds work
+while the workspace is closed as well as open, independently of banner permission.
+
+The same snapshot comparison as row flashes drives sounds. Muted sessions,
+notification snooze (including an indefinite snooze set outside the app), and
+sessions visible in either pane of the key workspace window are silent. The first
+snapshot after launch or reconnect establishes a silent baseline; newly discovered
+sessions also need a prior state before they can sound. At most one sound plays
+every two seconds across all sessions. Needs-you wins when both kinds are due in
+one snapshot. Suppressed sounds are discarded, never replayed after the gate clears.
 
 ## ASL answer panel
 

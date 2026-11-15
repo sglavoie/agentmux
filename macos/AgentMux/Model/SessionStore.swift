@@ -65,6 +65,8 @@ enum FeedState: Equatable {
 @MainActor
 final class SessionStore {
     private(set) var feed: FeedState = .connecting
+    /// A subscribe acknowledgement may still expose the previous connection's snapshot.
+    private(set) var hasFreshSnapshot = false
     private(set) var snapshot: CompanionSnapshot?
     /// The last health result, which is what the daemon line shows whenever
     /// the feed is not live.
@@ -115,6 +117,7 @@ final class SessionStore {
             apply(snapshot: snapshot)
             return
         case let .disconnected(reason, _):
+            hasFreshSnapshot = false
             switch reason {
             case .reconnectRequested:
                 // The app asked for a fresh connection (the notification
@@ -172,6 +175,7 @@ final class SessionStore {
     }
 
     func apply(snapshot: CompanionSnapshot) {
+        hasFreshSnapshot = true
         feed = .live
         byeAt = nil
         self.snapshot = snapshot

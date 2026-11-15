@@ -45,6 +45,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.recentDays, 7)
         XCTAssertEqual(preferences.recentLimit, 15)
         XCTAssertTrue(preferences.useAppNotifications)
+        XCTAssertTrue(preferences.playSounds)
         XCTAssertNil(preferences.snoozeUntil)
         XCTAssertEqual(preferences.environment, [:])
         XCTAssertEqual(preferences.launchBackend, .workspace)
@@ -55,6 +56,22 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
         XCTAssertTrue(preferences.confirmBeforeClosing)
         XCTAssertNil(preferences.defaultFontSize)
+    }
+
+    func testSoundPreferencePersistsAndRejectsMistypedValues() {
+        let defaults = freshDefaults()
+        XCTAssertTrue(AppPreferences.load(from: defaults).playSounds)
+        var preferences = AppPreferences()
+        preferences.playSounds = false
+        preferences.save(to: defaults)
+        XCTAssertFalse(AppPreferences.load(from: defaults).playSounds)
+        XCTAssertFalse(defaults.bool(forKey: "amxPlaySounds"))
+        defaults.set("false", forKey: AppPreferences.Key.playSounds)
+        XCTAssertTrue(AppPreferences.load(from: defaults).playSounds)
+        preferences.playSounds = true
+        preferences.save(to: defaults)
+        XCTAssertTrue(AppPreferences.load(from: defaults).playSounds)
+        XCTAssertTrue(AppPreferences.Key.all.contains("amxPlaySounds"))
     }
 
     func testSidebarSortingPersistsSeparatelyFromGrouping() {
@@ -109,7 +126,7 @@ final class AppPreferencesTests: XCTestCase {
     func testKeysAreThePlannedNames() {
         XCTAssertEqual(AppPreferences.Key.all, [
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
-            "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
+            "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxPlaySounds", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
             "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxMatchWindowToTerminal", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy", "amxShowWelcomeBack", "amxShowOverviewInSidebar", "amxContinueToNextWaiting",
         ])

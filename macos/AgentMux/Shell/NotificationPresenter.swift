@@ -377,6 +377,8 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
         didSet { if enabled != oldValue { publishClaim() } }
     }
 
+    var playSounds = true
+
     private(set) var authorization: NotificationAuthorization = .notDetermined
     private(set) var claim: NotificationClaim
     /// Notices waiting on the permission prompt.
@@ -475,7 +477,7 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     private func add(_ notice: AppNotice) {
         let id = notice.notificationID
         adding.insert(id)
-        center.add(Self.request(for: notice)) { [weak self] error in
+        center.add(Self.request(for: notice, playSounds: playSounds)) { [weak self] error in
             self?.schedule { self?.finishAdd(id, error: error) }
         }
     }
@@ -635,13 +637,13 @@ final class NotificationPresenter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     /// The request a notice is shown with.
-    static func request(for notice: AppNotice) -> UNNotificationRequest {
+    static func request(for notice: AppNotice, playSounds: Bool = true) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         content.title = notice.title
         if !notice.subtitle.isEmpty { content.subtitle = notice.subtitle }
         content.categoryIdentifier = NotificationCategories.category(for: notice)
         content.threadIdentifier = threadIdentifier(for: notice)
-        if soundedActions.contains(notice.action) { content.sound = .default }
+        if !playSounds, soundedActions.contains(notice.action) { content.sound = .default }
         content.userInfo = [
             UserInfoKey.windowID: notice.windowID,
             UserInfoKey.navigable: notice.navigable,

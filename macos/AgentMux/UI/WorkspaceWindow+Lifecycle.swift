@@ -241,6 +241,18 @@ extension WorkspaceWindowController {
         arrangeNewSessionBelow()
         reloadSidebar()
         if state.current { flashStateChanges(from: previousRows) }
+        let soundCurrent = state.current && store.hasFreshSnapshot
+        let onScreen: Set<AttentionCycler.Key> = isOpen && window.isKeyWindow
+            ? Set([showing, otherShowing].compactMap { origin in
+                if case let .session(id)? = origin { return .embedded(id) }
+                return nil
+            }) : []
+        sounds?.transition(from: previousRows, to: state.rows,
+                           wasCurrent: wasCurrent && soundSnapshotCurrent, current: soundCurrent,
+                           enabled: playSounds,
+                           snoozed: store.snapshot.map { SnoozeState($0.notification).isSnoozed(now: now()) } ?? false,
+                           onScreen: onScreen)
+        soundSnapshotCurrent = soundCurrent
         welcome.pendingAnswers = inspector.sentAnswers.count
         welcome.observe(waiting: AttentionCycler.ordered(store.managedSessions).count,
                         working: state.rows.filter(\.working).count,

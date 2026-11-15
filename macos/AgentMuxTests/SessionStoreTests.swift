@@ -89,6 +89,11 @@ final class SessionStoreTests: XCTestCase {
         XCTAssertEqual(store.feed, .live)
         XCTAssertEqual(store.title(glyphs: .fallback), "🔑1", "the counts do not blink")
         XCTAssertEqual(changes, 0)
+        XCTAssertFalse(store.hasFreshSnapshot)
+        store.apply(.subscribed(SubscriptionAck()))
+        XCTAssertFalse(store.hasFreshSnapshot, "an acknowledgement still exposes cached rows")
+        store.apply(snapshot: snapshot([1], key: 1))
+        XCTAssertTrue(store.hasFreshSnapshot)
     }
 
     func testDisconnectsReadAsOperatorPhrases() {

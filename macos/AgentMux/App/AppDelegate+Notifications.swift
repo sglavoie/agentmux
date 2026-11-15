@@ -10,6 +10,7 @@ extension AppDelegate {
             center: SystemNotificationCenter(),
             enabled: preferencesModel.preferences.useAppNotifications
         )
+        presenter.playSounds = preferencesModel.preferences.playSounds
         UNUserNotificationCenter.current().delegate = presenter
         if !Self.isRunningTests { presenter.removeEarlierLaunches() }
         subscribeRequest.claim = presenter.claim

@@ -61,6 +61,7 @@ struct PreferencesView: View {
                         Button("Open System Settings") { NSWorkspace.shared.open(PreferencesModel.notificationSettingsURL) }
                     }
                 }
+                Toggle("Play a sound when an agent needs you or finishes", isOn: $model.preferences.playSounds)
                 LabeledContent("Snooze") {
                     HStack {
                         Text(model.snoozeDescription).foregroundStyle(.secondary)

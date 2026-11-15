@@ -74,7 +74,8 @@ extension AppDelegate: DaemonConnectionDelegate {
         refreshBriefing()
         snoozes.reconcile()
         statusItem?.refresh()
-        workspace?.refresh()
+        // Keep snapshot transitions audible even before the workspace is opened.
+        workspaceController().refresh()
         sharePinsOnce()
         // Only a live snapshot can say a question is no longer open.
         if store.feed == .live, let snapshot = store.snapshot {

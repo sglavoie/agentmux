@@ -85,6 +85,8 @@ extension AppDelegate {
             lookup.scheduleResolve()
         }
         notifications?.enabled = new.useAppNotifications
+        notifications?.playSounds = new.playSounds
+        workspace?.playSounds = new.playSounds
     }
 
     /// What Settings forces on every terminal's Ghostty config.

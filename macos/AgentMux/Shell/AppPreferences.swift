@@ -17,6 +17,7 @@ struct AppPreferences: Equatable {
         static let recentDays = "amxRecentDays"
         static let recentLimit = "amxRecentLimit"
         static let useAppNotifications = "amxUseAppNotifications"
+        static let playSounds = "amxPlaySounds"
         static let snoozeUntil = "amxSnoozeUntil"
         static let environment = "amxEnvironment"
         static let launchBackend = "amxLaunchBackend"
@@ -37,7 +38,7 @@ struct AppPreferences: Equatable {
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
-            recentDays, recentLimit, useAppNotifications, snoozeUntil, environment,
+            recentDays, recentLimit, useAppNotifications, playSounds, snoozeUntil, environment,
             launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, sidebarSort, dashboardPlace, terminalTheme, matchWindowToTerminal, workspaceShortcuts,
             confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar, continueToNextWaiting,
         ]
@@ -67,6 +68,8 @@ struct AppPreferences: Equatable {
     var recentLimit = 15
     /// Whether the app offers itself as the daemon's notification backend.
     var useAppNotifications = true
+    /// Distinct workspace state sounds, independent of banner delivery.
+    var playSounds = true
     /// When the snooze the app last asked for runs out; nil when it asked for
     /// none. The daemon owns the snooze; this only remembers the request.
     var snoozeUntil: Date?
@@ -120,6 +123,7 @@ struct AppPreferences: Equatable {
         preferences.recentDays = int(defaults, Key.recentDays, in: recentDaysRange) ?? 7
         preferences.recentLimit = int(defaults, Key.recentLimit, in: recentLimitRange) ?? 15
         preferences.useAppNotifications = bool(defaults, Key.useAppNotifications) ?? true
+        preferences.playSounds = bool(defaults, Key.playSounds) ?? true
         preferences.snoozeUntil = defaults.object(forKey: Key.snoozeUntil) as? Date
         preferences.environment = EnvironmentOverrides.load(from: defaults)
         preferences.launchBackend = LaunchBackendPreference.stored(defaults.string(forKey: Key.launchBackend))
@@ -157,6 +161,7 @@ struct AppPreferences: Equatable {
         defaults.set(Self.clamp(recentDays, Self.recentDaysRange), forKey: Key.recentDays)
         defaults.set(Self.clamp(recentLimit, Self.recentLimitRange), forKey: Key.recentLimit)
         defaults.set(useAppNotifications, forKey: Key.useAppNotifications)
+        defaults.set(playSounds, forKey: Key.playSounds)
         if let snoozeUntil {
             defaults.set(snoozeUntil, forKey: Key.snoozeUntil)
         } else {

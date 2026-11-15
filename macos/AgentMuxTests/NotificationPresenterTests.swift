@@ -186,7 +186,7 @@ final class NotificationPresenterTests: XCTestCase {
 
     func testOnlyNoticesWaitingOnTheOperatorMakeASound() {
         for action in ["permission", "elicitation"] {
-            let request = NotificationPresenter.request(for: AppNotice(notificationID: "n-\(action)", action: action))
+            let request = NotificationPresenter.request(for: AppNotice(notificationID: "n-\(action)", action: action), playSounds: false)
             XCTAssertNotNil(request.content.sound, action)
         }
         XCTAssertNil(NotificationPresenter.request(for: stop).content.sound)
@@ -194,13 +194,28 @@ final class NotificationPresenterTests: XCTestCase {
 
     func testForegroundPresentationAllowsRequestedSound() {
         for action in ["permission", "elicitation"] {
-            let request = NotificationPresenter.request(for: AppNotice(notificationID: "n-\(action)", action: action))
+            let request = NotificationPresenter.request(for: AppNotice(notificationID: "n-\(action)", action: action), playSounds: false)
             XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: request.content), [.banner, .list, .sound], action)
         }
         let silent = NotificationPresenter.request(for: stop)
         XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: silent.content), [.banner, .list])
         let terminal = NotificationPresenter.terminalRequest(TerminalNotice(title: "t", body: "b", source: "s", origin: .view(id: "dashboard")))
         XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: terminal.content), [.banner, .list])
+    }
+
+    func testAppSoundsSilenceBannersAndSwitchLive() {
+        let presenter = presenter()
+        for enabled in [true, false, true] {
+            presenter.playSounds = enabled
+            for action in ["permission", "elicitation", "stop", "error"] {
+                presenter.present(AppNotice(notificationID: UUID().uuidString, action: action))
+                let content = center.added.last!.content
+                let audible = !enabled && ["permission", "elicitation"].contains(action)
+                XCTAssertEqual(content.sound != nil, audible)
+                XCTAssertEqual(NotificationPresenter.foregroundPresentation(for: content).contains(.sound), audible)
+            }
+        }
+        XCTAssertNil(NotificationPresenter.request(for: AppNotice(notificationID: "default", action: "permission")).content.sound)
     }
 
     func testFrameDecodes() throws {
