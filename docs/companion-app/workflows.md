@@ -19,7 +19,9 @@ from a prompt or supervisor panel continues to the next unanswered session in
 sidebar order, wrapping to earlier items as needed. Its pane appears and its
 answer panel takes the keyboard; its terminal never takes focus. A prompt panel
 must read that session's own prompt before accepting any key. When no answerable
-items remain, the panel closes with an **All caught up** receipt.
+items remain, the panel closes with an **All caught up** receipt. If the waiting
+context changes before the submission receipt arrives, the panel stays on its
+original session; use **Next Waiting Session** to continue explicitly.
 
 Turn off **Continue to the next waiting session after answering** in Settings ›
 Workspace to keep the existing single-session panel behavior. Typing directly
@@ -133,7 +135,7 @@ Saved packs can be revealed from a failed launch panel.
 
 ### Conversation History
 
-**View › Find or Resume a Conversation…** (⌘Y, also ⌘⇧H) searches full transcripts, scoped to all history,
+**View › Conversation History…** (⌘Y, also ⌘⇧H) searches full transcripts, scoped to all history,
 the selected session's project, or its conversation. Resume, fork, or focus a live
 session from the preview. Search opens around its first matching prose message,
 even outside the latest 50 messages. Highlighted terms and previous/next match

@@ -4,11 +4,63 @@ import AppKit
 import ApplicationServices
 import ImageIO
 import ScreenCaptureKit
+import AVFoundation
 
 enum DemoError: Error, CustomStringConvertible {
     case message(String)
     var description: String {
         switch self { case let .message(text): return text }
+    }
+}
+
+// ScreenCaptureKit delivers actual display updates at up to 30 fps. Encoding
+// runs off the UI driver queue, so menu actions never stall frame collection.
+final class MovieOutput: NSObject, SCStreamOutput {
+    let queue = DispatchQueue(label: "demo.movie")
+    let writer: AVAssetWriter
+    let input: AVAssetWriterInput
+    var started = false
+    var frames = 0
+    var failure: String?
+
+    init(url: URL, width: Int, height: Int) throws {
+        writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: width, AVVideoHeightKey: height,
+            AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: 8_000_000]])
+        input.expectsMediaDataInRealTime = true
+        super.init()
+        writer.add(input)
+        guard writer.startWriting() else { throw DemoError.message("Could not start movie writer") }
+    }
+
+    func stream(_ stream: SCStream, didOutputSampleBuffer sample: CMSampleBuffer,
+                of type: SCStreamOutputType) {
+        guard type == .screen, sample.isValid,
+              let attachments = CMSampleBufferGetSampleAttachmentsArray(sample, createIfNecessary: false)
+                as? [[SCStreamFrameInfo: Any]],
+              let status = attachments.first?[.status] as? Int,
+              status == SCFrameStatus.complete.rawValue else { return }
+        if !started {
+            writer.startSession(atSourceTime: sample.presentationTimeStamp)
+            started = true
+        }
+        guard input.isReadyForMoreMediaData else {
+            failure = "Movie encoder could not keep up with capture"
+            return
+        }
+        if input.append(sample) { frames += 1 }
+        else { failure = writer.error?.localizedDescription ?? "Could not append frame" }
+    }
+
+    func finish() async throws {
+        queue.sync { input.markAsFinished() }
+        await writer.finishWriting()
+        if let failure { throw DemoError.message(failure) }
+        guard writer.status == .completed, frames > 0 else {
+            throw DemoError.message("Movie did not finish: \(String(describing: writer.error))")
+        }
     }
 }
 
@@ -88,7 +140,9 @@ struct Recorder {
     static func pressButton(_ description: String, pid: pid_t) throws {
         guard let button = find(AXUIElementCreateApplication(pid), matching: {
             attribute($0, kAXRoleAttribute) as? String == kAXButtonRole &&
-                attribute($0, kAXDescriptionAttribute) as? String == description
+                attribute($0, kAXEnabledAttribute) as? Bool == true &&
+                (attribute($0, kAXDescriptionAttribute) as? String == description ||
+                 attribute($0, kAXTitleAttribute) as? String == description)
         }), AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else {
             throw DemoError.message("Could not press demo button: \(description)")
         }
@@ -167,10 +221,13 @@ struct Recorder {
         app.activate(options: [])
         try await pause(1)
 
+        try await selectProject("api-service", pid: app.processIdentifier)
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(axApp, kAXWindowsAttribute as CFString, &value) == .success,
-              let windows = value as? [AXUIElement], let window = windows.first else {
+              let windows = value as? [AXUIElement], let window = windows.first(where: {
+                  (attribute($0, kAXTitleAttribute) as? String ?? "").contains("—")
+              }) else {
             throw DemoError.message("The demo workspace has no accessible window")
         }
         var position = CGPoint(x: 60, y: 60)
@@ -186,7 +243,13 @@ struct Recorder {
             .max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }) else {
             throw DemoError.message("Could not find the demo workspace for capture")
         }
-        let filter = SCContentFilter(desktopIndependentWindow: target)
+        guard let display = content.displays.first(where: { $0.frame.contains(target.frame) }),
+              let capturedApp = content.applications.first(where: { $0.processID == app.processIdentifier }) else {
+            throw DemoError.message("Demo window must fit on one display")
+        }
+        // Include the demo's answer panels and Briefing, excluding every other
+        // application. Crop to the workspace, never the operator's desktop.
+        let filter = SCContentFilter(display: display, including: [capturedApp], exceptingWindows: [])
         // Keep focus-follows-pointer window managers on the demo too. This
         // moves the pointer over its title bar without clicking anything.
         let pointer = CGPoint(x: target.frame.midX, y: target.frame.minY + 14)
@@ -200,102 +263,124 @@ struct Recorder {
         config.height = Int(target.frame.height)
         config.showsCursor = false
         config.captureResolution = .nominal
+        config.sourceRect = target.frame.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 30)
+        config.queueDepth = 6
 
         try await selectProject("api-service", pid: app.processIdentifier)
-        try pressMenu("splitWorkspaceChanges:", pid: app.processIdentifier)
         try await pause(1)
-        // Give the patch the full review pane at README size. This is the
-        // app's own presentation toggle, saved only in the isolated demo.
-        try pressButton("Hide changed files", pid: app.processIdentifier)
-        try await pause(0.3)
-
-        // One image of the actual window every 200 ms. Actions use only the
-        // demo process's menu equivalents; no input reaches another app.
-        let fps = 5
-        let seconds = 46
+        let movie = try MovieOutput(url: out.appendingPathComponent("capture.mov"),
+                                   width: config.width, height: config.height)
+        let stream = SCStream(filter: filter, configuration: config, delegate: nil)
+        try stream.addStreamOutput(movie, type: .screen, sampleHandlerQueue: movie.queue)
+        try await stream.startCapture()
         var events: [[String: Any]] = []
         let begin = Date()
-        for frame in 0..<(fps * seconds) {
-            guard !app.isTerminated else {
-                throw DemoError.message("Demo app exited; recording stopped")
-            }
-            var scene: String?
-            var expectedTitle: String?
-            switch frame {
-            case 0:
-                scene = "Native checkout diff beside the agent"
-                expectedTitle = "Checkout Changes"
-            case 7 * fps:
-                try pressMenu("swapWorkspacePanes:", pid: app.processIdentifier)
-                scene = "Swap the native diff and terminal panes"
-                expectedTitle = "Checkout Changes"
-            case 11 * fps:
-                try pressMenu("collapseWorkspacePane:", pid: app.processIdentifier)
-                try await selectProject("release-page", pid: app.processIdentifier)
-                scene = "Switch to the working release-page session"
-                expectedTitle = "release-page"
-            case 16 * fps:
-                try await selectProject("documentation", pid: app.processIdentifier)
-                scene = "Documentation session waiting for approval"
-                expectedTitle = "documentation"
-            case 20 * fps:
-                try pressButton("Toggle Inspector", pid: app.processIdentifier)
-                scene = "Native waiting inspector beside the session"
-                expectedTitle = "documentation"
-            case 25 * fps:
-                try pressButton("Toggle Inspector", pid: app.processIdentifier)
-                try type("approve", pid: app.processIdentifier)
-                try key(36, pid: app.processIdentifier)
-                scene = "Approve the scripted documentation check"
-                expectedTitle = "documentation"
-            case 30 * fps:
-                try await selectProject("api-service", pid: app.processIdentifier)
-                try pressMenu("showSwitcher:", pid: app.processIdentifier)
-                scene = "Native session and view switcher"
-                expectedTitle = "api-service"
-            case 35 * fps:
-                try key(53, pid: app.processIdentifier)
-                try pressMenu("showCommandPalette:", pid: app.processIdentifier)
-                scene = "Native command palette"
-                expectedTitle = "api-service"
-            case 40 * fps:
-                try key(53, pid: app.processIdentifier)
-                try pressMenu("splitWorkspaceChanges:", pid: app.processIdentifier)
-                scene = "Return to the native checkout review"
-                expectedTitle = "Checkout Changes"
-            default: break
-            }
-            if let scene {
-                app.activate(options: [])
-                AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-                try await pause(0.35)
-                let title = attribute(window, kAXTitleAttribute) as? String ?? ""
-                guard app.isActive, let expectedTitle, title.hasPrefix(expectedTitle) else {
-                    throw DemoError.message("Scene did not reach the expected foreground view: \(scene), title=\(title)")
+        do {
+            for second in [0, 4, 8, 12, 16, 20, 26] {
+                let delay = Double(second) - Date().timeIntervalSince(begin)
+                if delay > 0 { try await pause(delay) }
+                guard !app.isTerminated else { throw DemoError.message("Demo app exited") }
+                let scene: String
+                switch second {
+                case 0:
+                    scene = "Working sidebar row with live tool and elapsed time"
+                case 4:
+                    try type("r", pid: app.processIdentifier)
+                    scene = "API service moves to Needs attention"
+                case 8:
+                    try pressButton("Answer…", pid: app.processIdentifier)
+                    scene = "Answer queue: api-service prompt"
+                case 12:
+                    try pressButton("y", pid: app.processIdentifier)
+                    scene = "Answer sent; queue advances to documentation"
+                case 16:
+                    try pressButton("y", pid: app.processIdentifier)
+                    try await pause(1.5)
+                    try pressButton("Toggle Inspector", pid: app.processIdentifier)
+                    scene = "Second answer sent; all caught up"
+                case 20:
+                    try pressMenu("showBriefing:", pid: app.processIdentifier)
+                    scene = "Briefing: retained activity across projects"
+                default:
+                    try key(13, flags: .maskCommand, pid: app.processIdentifier)
+                    try pressButton("Toggle Inspector", pid: app.processIdentifier)
+                    try await selectProject("api-service", pid: app.processIdentifier)
+                    try pressMenu("splitWorkspaceChanges:", pid: app.processIdentifier)
+                    try await pause(0.5)
+                    try pressButton("Hide changed files", pid: app.processIdentifier)
+                    scene = "Review checkout changes beside the agent"
                 }
-                events.append(["frame": frame, "scene": scene,
-                               "window_title": title,
-                               "foreground": app.isActive])
+                try await pause(0.8)
+                // Keep standalone views inside the fixed app-only crop.
+                if let current = attribute(axApp, kAXFocusedWindowAttribute) as! AXUIElement? {
+                    var origin = position
+                    if second == 20 {
+                        var viewSize = size
+                        if let value = AXValueCreate(.cgSize, &viewSize) {
+                            AXUIElementSetAttributeValue(current, kAXSizeAttribute as CFString, value)
+                        }
+                    } else if second == 8 || second == 12 {
+                        origin = CGPoint(x: position.x + 310, y: position.y + 100)
+                    }
+                    if let value = AXValueCreate(.cgPoint, &origin) {
+                        AXUIElementSetAttributeValue(current, kAXPositionAttribute as CFString, value)
+                    }
+                }
+                guard app.isActive else { throw DemoError.message("Demo lost foreground: \(scene)") }
+                try await pause(0.3)
+                let expectedTitle: String
+                switch second {
+                case 0, 4, 8: expectedTitle = "api-service"
+                case 12, 16: expectedTitle = "documentation"
+                case 20: expectedTitle = "Briefing"
+                default: expectedTitle = "Checkout Changes"
+                }
+                let sceneWindow = second == 20
+                    ? find(axApp, matching: { attribute($0, kAXRoleAttribute) as? String == kAXWindowRole &&
+                        attribute($0, kAXTitleAttribute) as? String == "Briefing" }) : window
+                let title = sceneWindow.flatMap { attribute($0, kAXTitleAttribute) as? String } ?? ""
+                guard title.hasPrefix(expectedTitle) else {
+                    throw DemoError.message("Wrong scene after \(scene): \(title)")
+                }
+                let panel = find(axApp, matching: { attribute($0, kAXRoleAttribute) as? String == kAXWindowRole &&
+                    attribute($0, kAXTitleAttribute) as? String == "Agent Mux — Answer a Prompt" })
+                if second == 8 || second == 12 {
+                    guard let panel,
+                          find(panel, matching: { attribute($0, kAXDescriptionAttribute) as? String == "y" &&
+                              attribute($0, kAXEnabledAttribute) as? Bool == true }) != nil else {
+                        throw DemoError.message("Expected an authorized answer panel for \(expectedTitle)")
+                    }
+                } else if second >= 16, panel != nil {
+                    throw DemoError.message("Answer queue did not close")
+                }
+                let tree = describe(axApp)
+                try JSONSerialization.data(withJSONObject: tree, options: [.prettyPrinted, .sortedKeys])
+                    .write(to: out.appendingPathComponent("scene-\(second).json"))
+                let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+                let path = out.appendingPathComponent("scene-\(second).png")
+                guard let destination = CGImageDestinationCreateWithURL(path as CFURL, "public.png" as CFString, 1, nil) else {
+                    throw DemoError.message("Could not write scene frame")
+                }
+                CGImageDestinationAddImage(destination, image, nil)
+                guard CGImageDestinationFinalize(destination) else { throw DemoError.message("Could not finish scene frame") }
+                events.append(["second": second, "scene": scene, "foreground": app.isActive, "window_title": title])
                 print(scene)
             }
-            let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
-            let path = out.appendingPathComponent(String(format: "%04d.png", frame))
-            guard let destination = CGImageDestinationCreateWithURL(path as CFURL, "public.png" as CFString, 1, nil) else {
-                throw DemoError.message("Could not write frame \(frame)")
-            }
-            CGImageDestinationAddImage(destination, image, nil)
-            guard CGImageDestinationFinalize(destination) else {
-                throw DemoError.message("Could not finish frame \(frame)")
-            }
-            let remaining = Double(frame + 1) / Double(fps) - Date().timeIntervalSince(begin)
-            if remaining > 0 { try await pause(remaining) }
+            let delay = 32 - Date().timeIntervalSince(begin)
+            if delay > 0 { try await pause(delay) }
+        } catch {
+            try? await stream.stopCapture()
+            try? await movie.finish()
+            throw error
         }
-        let metadata: [String: Any] = ["fps": fps, "frames": fps * seconds,
-            "tour": "native-desktop-v2",
-            "scripted_agent_output": true, "events": events,
+        try await stream.stopCapture()
+        try await movie.finish()
+        let metadata: [String: Any] = ["capture_fps_limit": 30, "captured_frames": movie.frames,
+            "tour": "native-desktop-v3", "scripted_agent_output": true, "events": events,
             "elapsed_seconds": Date().timeIntervalSince(begin)]
         try JSONSerialization.data(withJSONObject: metadata, options: [.prettyPrinted, .sortedKeys])
             .write(to: out.appendingPathComponent("recording.json"))
-        print("Captured \(fps * seconds) frames of the isolated demo window")
+        print("Captured \(movie.frames) display updates of the isolated demo app")
     }
 }

@@ -9,10 +9,10 @@
 | History | ⌘F search; Down from search reveals results; ⌘G / ⌘⇧G next/previous match; ⌘R refresh transcript; ⌘Return resume/focus; ⌘⇧Return fork; ⌘⌥S toggle results |
 | Changes | ⌘G / ⌘⇧G next/previous hunk; ⌘R refresh comparison; ⌘E open file; ⌘⌥F reveal/focus files; ⌘⇧E edit base; ⌘⌥S toggle files |
 | Runs | ⌘R refresh; ⌘⌥F reveal/focus runs; ⌘Return open session; ⌘⇧I inspect failed check; ⌘⌥S toggle runs |
-| Activity | ⌘R refresh; ⌘⌥F reveal/focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation; ⌘⌥S toggle events |
+| Briefing’s activity reader | ⌘R refresh; ⌘⌥F reveal/focus events; ⌘Return focus live session; ⌘⇧Return open recorded conversation; ⌘⌥S toggle events |
 
 **⌘W** closes a standalone review window and returns to the workspace when open.
-The four review windows share one minimum size and remember their placement. Each
+History, Changes, Runs, and Briefing share one minimum size and remember their placement. Each
 reads again when it is shown; Checkout Changes also compares again when you come
 back to the app, since an agent may have edited files meanwhile, and Runs polls only
 while its window can be seen.
@@ -45,6 +45,13 @@ the key that answers it (`1`–`9`, `y`, `n`, arrows, Return, or the `esc`
 button), without bringing the workspace forward. If the app does not confirm delivery
 within 3 seconds, or reports a failure, the daemon withdraws it and Alerter
 shows it instead. Quitting the app falls back to Alerter at once.
+
+Settings › General › **Play a sound when an agent needs you or finishes** is on
+by default. Permission requests, questions, and errors use Glass; completed turns
+use a softer Pop. Muted or snoozed sessions and sessions visible in the key
+workspace window stay silent. Launch and reconnect establish a silent baseline,
+and at most one sound plays every two seconds. Permission/question app banners
+are silent while this setting is on; turning it off restores their banner sound.
 
 ```bash
 amx notifications test   # "confirmed via app" when the app showed it

@@ -189,3 +189,16 @@ The daemon offers `respond` only on a `permission` notice whose target is a
 tmux runtime session, and the app shows Answer… only when that was offered
 and the notice names such a session. The logs (category `prompt`) name
 sessions, key names, and refusal codes, never screen text.
+
+## Continuing through waiting sessions
+
+Both panel types use the workspace’s [answer queue](workspace.md#waiting-header-and-answer-queue).
+With **Settings › Workspace › Continue to the next waiting session after answering**
+on (the default), an accepted answer opens the next answerable, unsent session in
+sidebar order. The next panel owns the keyboard; its terminal never takes focus.
+Each prompt requires a fresh successful look, and ASL questions retain their own
+authorization. When no answerable items remain, the panel closes with **All caught
+up**. Switching panels discards stale callbacks without redirecting their keys.
+Turning the setting off retains each panel’s single-session behavior described
+above. Direct terminal input and incoming waiting snapshots never start or advance
+the queue.

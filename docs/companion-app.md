@@ -88,7 +88,7 @@ See [Checkout Changes](companion-app/workflows.md#checkout-changes).
 
 See [Briefing](companion-app/workflows.md#briefing).
 
-Briefing includes [Since you last looked](companion-app/workflows.md#since-last-looked),
+Briefing includes [Since you last looked](companion-app/workflows.md#since-you-last-looked),
 with retained activity, saved outcomes, and explicit read acknowledgements.
 
 ### Conversation recaps

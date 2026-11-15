@@ -17,7 +17,7 @@ from the clearly labeled stand-ins, not live AI services.
 
 ## Prepare without opening windows
 
-Requires macOS 14+, Xcode, Python 3, the repository's Go/just toolchain, and
+Requires macOS 14.4+, Xcode, Python 3, the repository's Go/just toolchain, and
 `ffmpeg` for encoding. Build from the repository root:
 
 ```sh
@@ -37,10 +37,12 @@ python3 scripts/demo/world.py start WORLD
 python3 scripts/demo/world.py status WORLD
 ```
 
-`start` waits for the actual daemon to report a completed Claude session,
-a working Codex session, and a Copilot session waiting for approval. The
+`start` waits for the actual daemon to report a working Claude session,
+a completed Codex session, and a Copilot session waiting for approval. The
 stand-ins emit real managed hooks and receive terminal input through tmux.
-Their terminal output explicitly identifies itself as scripted demo data.
+Their terminal output and saved transcripts explicitly identify themselves as
+scripted demo data. Recap generation is disabled in the demo configuration;
+Briefing reads these synthetic transcripts and real local activity records.
 
 ## Use a separate Mac over SSH
 
@@ -115,17 +117,22 @@ before activating the app and fails without silently requesting them. If the rec
 fails, it writes an adjacent `FRAME_DIRECTORY.error.txt`; `open` alone does not
 reliably communicate the app's exit status.
 
-The recorder captures only the demo workspace window, at five frames per
-second for a 46-second walkthrough. It opens with native Checkout Changes
-beside the agent with the changed-file list hidden for readability, swaps
-panes, switches sessions, shows the waiting inspector,
-and approves the scripted documentation check. It then opens the native
-session switcher and command palette before returning to the split diff.
-Input targets the demo process. The recorder raises its window at scene
-changes, so reserve the chosen desktop for the duration of the run.
-Each scene checks the foreground app and expected window title; a mismatch
-aborts the capture instead of reporting a successful walkthrough.
-`recording.json` lists the actions and elapsed capture time. A partial run
+The recorder captures only the demo app and its floating panels in a fixed
+1280 × 800 region. A continuous
+ScreenCaptureKit stream captures display updates at up to 30 fps. The tour is
+scheduled over 32 seconds; UI reads and validation can extend it: the working sidebar tool/timer, a move into Needs attention, two answers
+through the native queue, Briefing, then checkout review beside the agent. The
+changed-file list is hidden for readability. The stand-ins accept single-key
+answers like real terminal agents; the api-service stand-in’s `r` key triggers
+its scripted permission request.
+Input targets the demo process; reserve the chosen desktop for the duration.
+Each scene checks the foreground app and expected view, and queue stages require
+an enabled answer panel for the next session or a closed panel after the second
+answer. Scene screenshots and accessibility trees are saved for review. A failed
+control action or scene check aborts the capture.
+`capture.mov` contains the source video; `recording.json` lists the actions,
+captured update count, and elapsed time. `scene-N.png` and `scene-N.json` retain
+visual and accessibility evidence at each transition. A partial run
 does not produce that completion record.
 
 For SSH runs, expand the absolute output path in the remote shell, then retrieve
@@ -136,8 +143,8 @@ sh macos/scripts/remote-ui.sh sh 'open -n -W "macos/build/Agent Mux Demo Recorde
 sh macos/scripts/remote-ui.sh get macos/build/demo-frames /tmp/agentmux-capture
 ```
 
-After capture, verify that the documentation session reached `icon_state:
-stop` using `world.py status`. Review frames at each scene transition for
+After capture, verify that both api-service and documentation reached
+`icon_state: stop` using `world.py status`. Review frames at each scene transition for
 correct focus, readable text, and unexpected personal information. A completed
 capture alone does not prove that every UI action succeeded.
 
@@ -146,13 +153,26 @@ capture alone does not prove that every UI action succeeded.
 After reviewing the captured frames, encode locally:
 
 ```sh
-ffmpeg -framerate 5 -i /tmp/agentmux-demo-frames/%04d.png \
-  -filter_complex 'fps=2,scale=1120:-2:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse=dither=none:diff_mode=rectangle' \
+# Preserve the whole capture and hold checkout review for four more seconds.
+duration=$(python3 -c 'import json, math; print(math.ceil(json.load(open("/tmp/agentmux-demo-frames/recording.json"))["elapsed_seconds"]) + 4)')
+ffmpeg -i /tmp/agentmux-demo-frames/capture.mov -t "$duration" \
+  -filter_complex "tpad=stop_mode=clone:stop_duration=${duration},fps=10,scale=1120:-2:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse=dither=none:diff_mode=rectangle" \
   -loop 0 /tmp/agentmux-desktop-demo.gif
-ffmpeg -framerate 5 -i /tmp/agentmux-demo-frames/%04d.png \
+ffmpeg -i /tmp/agentmux-demo-frames/capture.mov -t "$duration" -vf "tpad=stop_mode=clone:stop_duration=${duration},fps=30" \
   -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart \
   /tmp/agentmux-desktop-demo.mp4
+ffprobe -v error -select_streams v:0 \
+  -show_entries stream=width,height,avg_frame_rate:format=duration,size \
+  -of json /tmp/agentmux-desktop-demo.gif
+ffprobe -v error -select_streams v:0 \
+  -show_entries stream=width,height,avg_frame_rate:format=duration,size \
+  -of json /tmp/agentmux-desktop-demo.mp4
 ```
+
+Keep the GIF below 8 MB and at least 10 fps. Trim duration or reduce dimensions
+before considering a frame-rate change; retain all five required tour stages.
+The MP4 must be 30 fps. The stream records real motion during transitions;
+constant-rate encoding repeats stationary frames when the display does not change.
 
 Inspect the resulting animation before copying selected media to `docs/media/`
 and embedding it in the README. Label the agent output as scripted demo data.

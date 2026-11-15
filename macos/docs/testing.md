@@ -67,7 +67,7 @@ It submits private temporary context through `--content-file`, removes the
 file after the CLI returns, and opens the reported receiving runtime session.
 Unconfirmed outcomes retain the preview and disable repeated launch.
 
-Session menu, sidebar context menu, command palette, History and Project
+Session menu, sidebar context menu, command palette, History and
 Briefing share this panel. `WorkspaceHandoffOrigins` persists source links by
 runtime identity and, once observed, by harness-qualified conversation identity.
 The Session inspector and History expose the source conversation. Generated
@@ -82,7 +82,7 @@ Workflow previews exercise light/dark, narrow/wide and unavailable states.
 View › Briefing…, ⌘⇧U, and the command palette open `WorkspaceBriefingWindow`.
 `WorkspaceCatchUpTests` cover all/project scope, paginated archived membership,
 late replies, pending answers, grouped saved outcomes, exact read IDs and Undo
-across the two readers, empty sections, and Flight Log filter preservation.
+across independent reader instances, empty sections, and Flight Log filter preservation.
 Rendered previews cover the merged empty state and the conversation section.
 `WorkspaceBriefingModel` joins the companion snapshot with `session list --all
 --project <title> --limit 10`; project membership follows the same CLI filter as

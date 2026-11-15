@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import termios
+import tty
+import time
+from datetime import datetime, timezone
 
 if any(arg in ("--version", "-V", "-v") for arg in sys.argv[1:]):
     print("1.0.0 (Agent Mux demo fixture)")
@@ -35,43 +39,103 @@ def hook(event, **fields):
         raise SystemExit(result.returncode)
 
 
+def heading():
+    print("\033[2J\033[H", end="")
+    print(f"\033[1;36m{harness.title()}  /  {project}\033[0m")
+    print("\033[2mScripted demo data · no live AI requests\033[0m\n")
+
+
+def waiting():
+    heading()
+    print("  ✓ Reviewed the release changes\n")
+    question = ("Would you like to run the following command?" if harness == "codex"
+                else "Do you want to proceed?" if harness == "claude"
+                else "Do you want to run this command?")
+    print(f"│ {question}")
+    print("│ make check   (scripted; no command is executed)")
+    print("│ ❯ 1. Yes")
+    print("│   2. No")
+    print("│ Press enter to confirm · y to approve", flush=True)
+    hook("PermissionRequest", tool_name="Bash")
+
+
+# Saved, clearly labeled evidence lets Briefing exercise the real transcript
+# readers without discovering anything outside this world's private HOME.
+def timestamp():
+    return datetime.now(timezone.utc).isoformat()
+
+
+home = Path.home() / ("." + harness)
+if harness == "claude":
+    transcript = home / "projects" / str(Path.cwd()).replace("/", "-") / (session_id + ".jsonl")
+    records = []
+elif harness == "codex":
+    transcript = home / "sessions" / ("rollout-demo-" + session_id + ".jsonl")
+    records = [{"type": "session_meta", "timestamp": timestamp(), "payload": {
+        "id": session_id, "timestamp": timestamp(), "cwd": str(Path.cwd())}}]
+else:
+    transcript = home / "session-state" / session_id / "events.jsonl"
+    records = [{"type": "session.start", "timestamp": timestamp(), "data": {
+        "sessionId": session_id, "startTime": timestamp(), "context": {"cwd": str(Path.cwd())}}}]
+transcript.parent.mkdir(parents=True, exist_ok=True)
+transcript.write_text("".join(json.dumps(record) + "\n" for record in records))
+
+
+def message(role, text):
+    text = "Scripted demo data · " + text
+    if harness == "claude":
+        record = {"type": role, "timestamp": timestamp(), "cwd": str(Path.cwd()),
+                  "sessionId": session_id, "message": {"role": role, "content": text}}
+    elif harness == "codex":
+        record = {"type": "response_item", "timestamp": timestamp(), "payload": {
+            "type": "message", "role": role, "content": [{"type": "output_text", "text": text}]}}
+    else:
+        record = {"type": role + ".message", "timestamp": timestamp(), "data": {"content": text}}
+    with transcript.open("a") as stream:
+        stream.write(json.dumps(record) + "\n")
+
+
+message("user", "Prepare this project for release.")
+message("assistant", "Reviewed the release changes. The health endpoint and regression test are ready for checkout review."
+        if harness == "claude" else "Reviewed the release changes; checks need approval.")
 hook("SessionStart", source="startup")
 hook("UserPromptSubmit", prompt="Prepare this project for release.")
-print("\033[2J\033[H", end="")
-print(f"\033[1;36m{harness.title()}  /  {project}\033[0m")
-print("\033[2mScripted demo data · no live AI requests\033[0m\n")
-
+heading()
 if harness == "claude":
     print("> Add a health endpoint to the service.\n")
     print("  ✓ Reviewed the request handler")
     print("  ✓ Added GET /health")
-    print("  ✓ Added a regression test\n")
-    print("Ready for review. Open Checkout Changes to inspect the patch.")
-    hook("Stop")
+    print("  → Checking the regression test…", flush=True)
+    hook("PreToolUse", tool_name="Bash")
 elif harness == "codex":
     print("> Polish the release page.\n")
     print("  ✓ Added installation instructions")
     print("  ✓ Simplified the feature list")
-    print("  → Checking the layout at narrow widths…")
+    print("  ✓ Checked the layout at narrow widths\n")
+    print("Ready for review.", flush=True)
+    hook("Stop")
 else:
-    print("> Review the documentation before release.\n")
-    print("  ✓ Checked links and command examples")
-    print("  ✓ Added a troubleshooting section\n")
-    print("May I run the documentation checks? Type approve to continue.")
-    hook("PermissionRequest", tool_name="Bash", tool_input={"command": "make check-docs"})
+    waiting()
 
-print("\n\033[2mDemo commands: approve · review · work\033[0m", flush=True)
-for line in sys.stdin:
-    command = line.strip().lower()
-    if command == "approve":
-        hook("UserPromptSubmit", prompt="Run the checks.")
-        print("\n  ✓ Documentation checks passed\n  Ready for review.", flush=True)
-        hook("Stop")
-    elif command == "review":
-        hook("PermissionRequest", tool_name="Bash", tool_input={"command": "make test"})
-        print("\nMay I run the checks? Type approve to continue.", flush=True)
-    elif command == "work":
-        hook("UserPromptSubmit", prompt="Continue the review.")
-        print("\n  → Reviewing the next change…", flush=True)
-    else:
-        print("Use approve, review, or work (scripted demo).", flush=True)
+# Real answer panels send one key, without a following newline. Keep this
+# stand-in in cbreak mode just like a terminal agent; restore it on exit.
+previous = termios.tcgetattr(sys.stdin)
+try:
+    tty.setcbreak(sys.stdin.fileno())
+    while True:
+        command = sys.stdin.read(1)
+        if not command:
+            break
+        if command.lower() in ("y", "1", "\n", "\r"):
+            # Keep the prompt stable long enough for the key-delivery receipt;
+            # then model the short check, rather than completing synchronously.
+            time.sleep(1)
+            hook("UserPromptSubmit", prompt="Run the checks.")
+            heading()
+            print("  ✓ Release checks passed\n  Ready for review.", flush=True)
+            message("assistant", "Release checks passed. Ready for review.")
+            hook("Stop")
+        elif command == "r":
+            waiting()
+finally:
+    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, previous)

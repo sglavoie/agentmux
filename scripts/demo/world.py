@@ -97,7 +97,7 @@ def prepare(args):
     agent.write_text(f"#!{sys.executable}\n" + (HERE / "agent.py").read_text().split("\n", 1)[1])
     agent.chmod(0o755)
     config = ['[defaults]', 'launch_backend = "tmux"', 'sort = "alpha"',
-              '[defaults.asl]', 'enabled = false', '[defaults.notifications]']
+              '[defaults.asl]', 'enabled = false', '[defaults.recaps]', 'enabled = false', '[defaults.notifications]']
     config += [f'{key} = false' for key in (
         'error', 'permission', 'elicitation', 'stop', 'stop_failure', 'stale_active', 'hook_silence')]
     config += ['[harness_emojis]', 'claude = "🟠"', 'codex = "🔵"', 'copilot = "🟣"']
@@ -168,7 +168,7 @@ def start(root):
             state = snapshot(root)
             states = {session.get("project"): session.get("icon_state")
                       for session in state.get("sessions", [])}
-            if states == {"api-service": "stop", "release-page": "bolt", "documentation": "key"}:
+            if states == {"api-service": "bolt", "release-page": "stop", "documentation": "key"}:
                 print(json.dumps(state, indent=2))
                 return
             time.sleep(0.25)
@@ -206,6 +206,7 @@ def launch_app(root, data):
         run(["defaults", "write", data["bundle_id"], key, "-string", value])
     for key, value in {"amxUseAppNotifications": "false", "amxOpenWorkspaceAtLaunch": "true"}.items():
         run(["defaults", "write", data["bundle_id"], key, "-bool", value])
+    run(["defaults", "write", data["bundle_id"], "amxWorkspaceSidebarWidth", "-float", "320"])
     run(["defaults", "write", data["bundle_id"], "amxEnvironment", "-dict",
          *[item for pair in environment(root).items() for item in pair]])
     with (root / "logs/app.log").open("a") as log:

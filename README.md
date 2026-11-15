@@ -10,11 +10,11 @@ searches past conversations and plans, and supports resume, fork, handoff,
 and managed Git worktrees. It can also start and supervise prepared
 `agent-session-loop` plans.
 
-![Agent Mux desktop app: review a native split diff, swap panes, switch between Claude, Codex, and Copilot sessions, inspect waiting agents, and browse the native command palette.](docs/media/desktop-demo.gif)
+![Agent Mux desktop app: follow live work, answer two waiting agents, catch up in Briefing, and review checkout changes.](docs/media/desktop-demo.gif)
 
-The real macOS workspace with scripted demo data. Review checkout changes
-beside an embedded terminal, handle approvals in context, and navigate with
-the native session switcher, inspector, and command palette.
+The real macOS workspace with scripted demo data. Follow a working session’s
+live tool and timer, watch it move to Needs attention, clear two prompts through
+the answer queue, catch up in Briefing, and review checkout changes.
 [Watch the full-resolution video](docs/media/desktop-demo.mp4) ·
 [Record the desktop demo](scripts/demo/README.md#desktop-recording-on-a-physical-mac)
 
@@ -33,19 +33,14 @@ Checkout review and worktree actions additionally need Git.
    are available. If no compatible download is listed, use the source
    installation below.
 2. Expand the ZIP, move **Agent Mux.app** to **Applications**, and open it.
-3. Choose **Set up first project…**. The native sheet shows detected agent
-   CLIs and recent project directories. Keep the suggested choices or select
-   another CLI or **Choose another folder…**. The visible **Sync Agent Mux hooks
-   into &lt;home&gt; (needed for live status)** checkbox starts checked; review the
-   home and click **Set up**. Detection does not check authentication.
-4. After setup, choose **Start Daemon** if offered, then **Launch Project** and
-   select your project. The agent opens in the embedded terminal; the sidebar
-   shows when it needs you. Setup itself never launches an agent.
+3. Choose **Set up first project…**, select the detected agent and project
+   folder, review the checked hook-sync option, and click **Set up**.
+4. Choose **Start Daemon** if offered, then **Launch Project**. Your agent opens
+   in the workspace; the sidebar shows when it needs you.
 
-**Set up manually…** in the sheet opens the embedded wizard for custom profile
-homes and other choices. If setup fails, the sheet stays open with the command's
-message. If configuration was saved but hook sync failed, follow its hook-sync
-retry instructions; do not repeat setup.
+Setup does not check authentication or launch an agent. **Set up manually…**
+offers custom profile homes and other choices. See the
+[installation guide](docs/companion-app/install.md) for setup details and recovery.
 
 Close and reopen the app to return to your running sessions. For a conversation
 whose agent has ended, open **Conversation History** (`⌘Y`) and choose
@@ -145,6 +140,7 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | Task | Entry point |
 | --- | --- |
 | Find sessions needing input | Dashboard, or `F4` while attached |
+| Answer several waiting agents | **Answer…** in the workspace header or Waiting inspector; successful panel answers continue to the next prompt |
 | Catch up on waiting sessions, activity, and conversations | **View → Briefing…** (⌘⇧U), **Open Briefing** in the welcome-back card, or **Briefing** in the command palette |
 | Explore statistics and milestones | **Flight Log…** in the app's View menu, **Show Flight Log** in the dashboard command palette, or `amx session flight-log` |
 | See every live pane | `F2` or `amx overview` |
@@ -172,8 +168,10 @@ just mac-install
 
 Agent Mux.app shows sessions in a native workspace with embedded terminals,
 conversation history, checkout changes, and run controls. Closing the app
-leaves agents running. See [the companion guide](docs/companion-app.md) for
-setup and [macOS build instructions](macos/README.md) for development.
+leaves agents running. Settings controls the answer queue (Workspace), agent
+sounds (General), and matching window chrome to the terminal theme (Appearance).
+All three start enabled; the welcome-back card is optional. See
+[the companion guide](docs/companion-app.md) for setup and [macOS build instructions](macos/README.md) for development.
 
 ## Maintenance and reference
 

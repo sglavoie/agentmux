@@ -1,5 +1,9 @@
 # Usage
 
+The terminal dashboard and macOS workspace share managed sessions. For the app’s
+native setup, answer queue, Briefing, and appearance/sound settings, see the
+[companion guide](companion-app.md).
+
 ## Contents
 
 - [Dashboard](usage/dashboard.md#dashboard): keys, triage order, layout, project switcher,

@@ -133,9 +133,11 @@ including when revealing a session with ⌘J. A session in Pinned or Needs atten
 uses that section's color, even if its underlying state differs.
 
 Each session pane has a compact context strip with its name, project/branch, and
-current status. Its height stays fixed as status changes. **View question** opens
+current status. Its height stays fixed as status changes. **Answer…** opens
 the existing answer panel for that session, including from the other split pane,
-without changing the active terminal. Disconnected status is labeled **Last known**
+with its own prompt read before any answer key is enabled. The header highlights
+the waiting state and shows **N more waiting**; successful panel answers follow
+the [answer queue](workflows.md#returning-to-work). Disconnected status is labeled **Last known**
 and question actions are unavailable until the feed returns.
 
 After you pause on a session, **Last outcome** previews its saved outcome in the
@@ -162,8 +164,8 @@ terminals of their own beside the agents.
 - **Overview** (⌘O) is the live session overview. Enter on a tile goes to the
   session's view the same way.
 - **Conversation History…** (⌘⇧H or ⌘Y) opens native Conversation History,
-  the main place to search, read, resume, or fork a conversation. The older
-  configurable ⌘⇧H shortcut is an alias to the same browser. **Handoff / More…**
+  the main place to search, read, resume, or fork a conversation. The configurable
+  ⌘⇧H shortcut and the fixed ⌘Y alias open the same browser. **Handoff / More…**
   opens the existing terminal conversation actions on the selected conversation
   and committed search. ⌘Y returns to History with its selection and reading
   position retained. Past Sessions remains available inside the Dashboard and

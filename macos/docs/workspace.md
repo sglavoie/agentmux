@@ -58,8 +58,8 @@ ASL answer panel work the same either way.
   project membership uses live runtime IDs plus all pages of the CLI's canonical
   project-filtered conversation list. Unknown membership stays in All projects;
   failed/partial membership reads are visible. Each project retains its recent
-  conversation threads, saved recaps, Resume, Fork, and Continue with Another
-  Agent actions. Opening/refreshing reads cached recaps only. Flight Log opens
+  conversation threads, saved recaps, Resume, Fork, and Continue with another
+  agent actions. Opening/refreshing reads cached recaps only. Flight Log opens
   Briefing with the exact retained session/kind filter, unread-only off, and a
   90-day look-back; presentation must not reset it. The former Activity window
   and return-summary popover are removed. `WorkspaceActivityView` remains the
@@ -304,11 +304,12 @@ ASL answer panel work the same either way.
   lost** (`runtime_session_lost`: its pane or server is gone). A session whose
   conversation is known (`WorkspaceRow.conversation`, and for the session the
   pane was on at the last quit the `amxWorkspaceConversation` preference)
-  offers **Resume from Past Sessions**, which opens a `history` view:
-  `amx workspace-view history HARNESS:SESSION_ID`, the TUI started in Past
-  Sessions with that conversation selected, where the operator presses `c`.
-  Any other is offered the Dashboard. No code path in the workspace launches
-  an agent: the view only lists, and the key is the operator's.
+  offers **Resume Conversation…**, opening the native resume preview for that
+  exact conversation. The preview reads its saved profile and checkout and shows
+  the Workspace destination. Submission rechecks the source and focuses an already
+  running conversation; changed details require review. An unknown launch outcome
+  stays visible and cannot be retried automatically. Other ended sessions offer
+  the Dashboard. Restoration itself never launches an agent.
 - **Main menu.** The terminals offer every key equivalent to the main menu
   before encoding it for their program, so the menu is the list of shortcuts
   the workspace keeps: ⌘C/⌘V/⌘A, ⌘+/⌘-/⌘⇧-, ⌘⇧A (next needing attention),
