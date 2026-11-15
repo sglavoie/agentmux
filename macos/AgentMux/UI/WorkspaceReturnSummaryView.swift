@@ -48,7 +48,7 @@ struct WorkspaceReturnSummaryView: View {
     }
 }
 
-private struct WorkspaceReturnOutcome: View {
+struct WorkspaceReturnOutcome: View {
     @ObservedObject var model: WorkspaceRecapModel
     var body: some View {
         if let recap = model.report?.recap {

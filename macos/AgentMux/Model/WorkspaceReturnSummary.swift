@@ -122,6 +122,25 @@ final class WorkspaceReturnSummary: ObservableObject {
         }
     }
 
+    /// The merged reader supplies the journal it already loaded. This shares
+    /// saved-outcome presentation without changing the legacy absence boundary.
+    func showActivity(_ entries: [WorkspaceActivityEntry], rows: [WorkspaceRow], current: Bool) {
+        self.current = current
+        var seen = Set<String>()
+        let next = entries.filter { seen.insert($0.groupID).inserted }.map { entry in
+            Update(id: entry.groupID, row: rows.first { !$0.key.runtimeSessionID.isEmpty && $0.key.runtimeSessionID == entry.runtimeSessionID }, event: entry)
+        }
+        let keep = Set(next.map(\.id))
+        for (id, recap) in recaps where !keep.contains(id) { recap.close(); recaps.removeValue(forKey: id) }
+        for update in next {
+            guard let identity = update.event?.conversation ?? update.row?.conversation else { continue }
+            let recap = recaps[update.id] ?? WorkspaceRecapModel(command: command, runner: runner, automaticallyGenerate: false)
+            recaps[update.id] = recap
+            recap.select(identity, revision: update.event?.id ?? "", canGenerate: false)
+        }
+        updates = next
+    }
+
     func close() {
         generation += 1; loading = false
         recaps.values.forEach { $0.close() }

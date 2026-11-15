@@ -18,7 +18,7 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .runPlan: return "Run a Plan…"
         case .activity: return "Since Last Looked…"
         case .flightLog: return "Flight Log…"
-        case .briefing: return "Project Briefing…"
+        case .briefing: return "Briefing…"
         case .history: return "Conversation History…"
         case .changes: return "Checkout Changes…"
         case .commandPalette: return "Command Palette…"
@@ -55,11 +55,11 @@ enum WorkspaceShortcut: String, CaseIterable, Identifiable {
         case .sessionAccounted: return "k"
         case .runs: return "r"
         case .runPlan: return "n"
-        case .activity: return "u"
+        case .briefing: return "u"
         case .flightLog: return "f"
         case .history: return "h"
         case .changes: return "c"
-        case .briefing, .splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane: return nil
+        case .activity, .splitShell, .splitChanges, .focusOtherPane, .swapPanes, .hideOtherPane: return nil
         }
     }
     /// The default as a main menu key equivalent with ⌘ (uppercase implies

@@ -115,7 +115,7 @@ final class WorkspaceShortcutTests: XCTestCase {
             (.command("w", keyCode: 13), "Close"),
             (.command("r", keyCode: 15, shifted: "R"), "ASL Runs…"),
             (.command("n", keyCode: 45, shifted: "N"), "Run a Plan…"),
-            (.command("u", keyCode: 32, shifted: "U"), "Since Last Looked…"),
+            (.command("u", keyCode: 32, shifted: "U"), "Briefing…"),
             (.command("f", keyCode: 3, shifted: "F"), "Flight Log…"),
             (.command("h", keyCode: 4, shifted: "H"), "Conversation History…"),
             (.command("c", keyCode: 8, shifted: "C"), "Checkout Changes…"),

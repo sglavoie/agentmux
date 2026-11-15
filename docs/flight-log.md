@@ -21,8 +21,8 @@ time, a state breakdown, and a timeline. Gray timeline intervals are unknown.
 
 Select a question or permission counter to inspect matching recorded events.
 **Conversation at this event** opens Conversation History at the event's time.
-**Open Retained Activity** opens Since Last Looked for that session and event
-kind; its diagnostic journal may retain less history than Flight Log.
+**Open Retained Activity** opens Briefing’s **Since you last looked** section for that
+session and event kind, including read events with a 90-day look-back; its diagnostic journal may retain less history than Flight Log.
 
 The terminal view uses `1`/`2`/`3` for Overview, Sessions, and Milestones;
 `p` cycles the period, `f` the project, `h` the harness, and `a` the profile.

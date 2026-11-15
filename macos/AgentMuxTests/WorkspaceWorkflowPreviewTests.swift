@@ -91,7 +91,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         XCTAssertEqual(model.threads.count, 1)
         for dark in [false, true] {
             for width in [CGFloat(780), CGFloat(1080)] {
-                try await render(WorkspaceBriefingView(model: model), name: "conversation-thread-briefing-\(Int(width))-\(dark)",
+                try await render(ScrollView { WorkspaceBriefingConversationsView(model: model).padding(14) }, name: "conversation-thread-briefing-\(Int(width))-\(dark)",
                                  width: width, height: 760, dark: dark, expected: ["Thread", "2 conversations", "Implement pagination", "Conversation details"])
             }
         }
@@ -119,6 +119,44 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
                          expected: ["Continue with Another Agent", "Retry Preview", "Cancel", "Launch Agent"])
     }
 
+    func testMergedBriefingPopulatedSections() async throws {
+        let command = BriefingFixture.command { args in
+            if args[1] == "recap" { return BriefingFixture.recap(args.last!) }
+            if args[1] == "activity" {
+                return ["entries": [["id": "one", "at": "2026-11-14T12:00:00Z", "kind": "completed", "title": "Turn finished",
+                    "detail": "Working → Turn finished", "event": "Stop", "harness": "codex", "profile": "work", "session_id": "shared",
+                    "runtime_session_id": "api", "run_id": "", "trace_id": "trace"]],
+                    "since": "", "earliest_available": "", "truncated": false, "corrupt_lines": 0, "matched": 1]
+            }
+            if args[1] == "show" { return ["session": ["id": "shared", "harness": "codex"], "messages_total": 0, "messages": []] }
+            return ["sessions": [["id": "shared", "harness": "codex", "project": "API"]]]
+        }
+        let model = WorkspaceCatchUpModel(briefing: .init(command: { command }, runner: PreviewRunner()),
+            activity: .init(command: { command }, runner: PreviewRunner(), readStore: .init(load: { .init() }, save: { _ in })),
+            summary: .init(command: { command }, runner: PreviewRunner()))
+        model.update(projects: [.init(profile: "work", title: "API")],
+            sessions: [BriefingFixture.session("api", icon: "question")], asl: [], live: true, order: WorkspaceOrder())
+        model.open(project: "API"); model.refresh()
+        for dark in [false, true] {
+            try await render(WorkspaceBriefingView(model: model), name: "briefing-populated-\(dark)", width: 1000, height: 1000, dark: dark,
+                expected: ["Waiting now", "Answer", "Since you last looked", "Turn finished", "Agent reports", "Mark Read", "Recent conversations"])
+        }
+        model.close()
+    }
+
+    func testMergedBriefingEmptySectionsAndScopeAtMinimumSize() async throws {
+        let briefing = WorkspaceBriefingModel(command: { nil })
+        briefing.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: true)
+        briefing.open(preferredProject: "API"); briefing.select("", refresh: false)
+        let model = WorkspaceCatchUpModel(briefing: briefing,
+            activity: WorkspaceActivityModel(command: { nil }, readStore: .init(load: { .init() }, save: { _ in })),
+            summary: WorkspaceReturnSummary(command: { nil }))
+        for dark in [false, true] {
+            try await render(WorkspaceBriefingView(model: model), name: "briefing-empty-\(dark)", width: 780, height: 740, dark: dark,
+                expected: ["Briefing", "All projects", "Waiting now", "No questions", "Since you last looked", "All caught up"])
+        }
+    }
+
     func testProjectBriefingAtMinimumAndWideSizes() async throws {
         let command = BriefingFixture.command()
         let model = WorkspaceBriefingModel(command: { command }, runner: PreviewRunner())
@@ -128,9 +166,9 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         XCTAssertNil(model.error)
         for dark in [false, true] {
             for width in [CGFloat(780), CGFloat(1060)] {
-                try await render(WorkspaceBriefingView(model: model), name: "project-briefing-\(Int(width))-\(dark)",
+                try await render(ScrollView { WorkspaceBriefingConversationsView(model: model).padding(14) }, name: "project-briefing-\(Int(width))-\(dark)",
                                  width: width, height: 900, dark: dark,
-                                 expected: ["Project Briefing", "Needs you", "Open Session", "Recent outcomes", "Agent reports", "Review the deployment configuration", "Conversation details"])
+                                 expected: ["Recent conversations", "Agent reports", "Review the deployment configuration", "Conversation details"])
             }
         }
         model.close()
@@ -138,14 +176,14 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         let emptyModel = WorkspaceBriefingModel(command: { empty }, runner: PreviewRunner())
         emptyModel.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: true)
         emptyModel.open(preferredProject: nil); emptyModel.refresh()
-        try await render(WorkspaceBriefingView(model: emptyModel), name: "project-briefing-empty", width: 780, height: 500,
-                         expected: ["Project Briefing", "No conversations found", "Live sessions"])
+        try await render(ScrollView { WorkspaceBriefingConversationsView(model: emptyModel).padding(14) }, name: "project-briefing-empty", width: 780, height: 500,
+                         expected: ["Recent conversations", "No conversations found", "Live sessions"])
         emptyModel.close()
         let failedModel = WorkspaceBriefingModel(command: { nil }, runner: PreviewRunner())
         failedModel.update(projects: [.init(profile: "work", title: "API")], sessions: [], live: false)
         failedModel.open(preferredProject: nil); failedModel.refresh()
-        try await render(WorkspaceBriefingView(model: failedModel), name: "project-briefing-offline", width: 780, height: 500,
-                         expected: ["Project Briefing", "Live status is unavailable", "Retry"])
+        try await render(ScrollView { WorkspaceBriefingConversationsView(model: failedModel).padding(14) }, name: "project-briefing-offline", width: 780, height: 500,
+                         expected: ["Recent conversations", "Retry"])
         failedModel.close()
     }
 

@@ -44,6 +44,25 @@ ASL answer panel work the same either way.
   CLI's hook-sync retry instructions. Unknown save outcomes also block repeats;
   inspect Settings before further setup. Closing detection discards late results;
   manual fallback and dismissal are disabled while a save is running.
+- **Briefing.** View › Briefing… and ⌘⇧U open `WorkspaceBriefingWindow` with
+  **All projects** selected. `WorkspaceCatchUpModel` coordinates the existing
+  `WorkspaceBriefingModel`, `WorkspaceActivityModel`, and `WorkspaceReturnSummary`.
+  The sections are **Waiting now**, **Since you last looked**, then **Recent
+  conversations** for a single project. Waiting uses the existing answer panels,
+  queue, and pending-answer identities. Activity groups exact journal events by
+  runtime session (conversation identity when runtime identity is absent), with
+  cached outcomes, supporting output, retained-data errors, focus/conversation
+  actions, and completed-session checkout review. Reading and scope changes do
+  not acknowledge events. Mark Read writes only loaded visible IDs; Undo preserves
+  other reader acknowledgements. Since journal records have no project field,
+  project membership uses live runtime IDs plus all pages of the CLI's canonical
+  project-filtered conversation list. Unknown membership stays in All projects;
+  failed/partial membership reads are visible. Each project retains its recent
+  conversation threads, saved recaps, Resume, Fork, and Continue with Another
+  Agent actions. Opening/refreshing reads cached recaps only. Flight Log opens
+  Briefing with the exact retained session/kind filter, unread-only off, and a
+  90-day look-back; presentation must not reset it. The legacy Activity window
+  and return-summary popover remain available during this transition.
 - **Which sessions.** The app subscribes with the `runtime_sessions` feature.
   The daemon sends v2 snapshots with each tmux session's runtime identity
   (`CompanionSession.runtime`). The runtime-session ID identifies a session in

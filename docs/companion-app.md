@@ -84,9 +84,9 @@ See [Conversation History](companion-app/workflows.md#conversation-history).
 
 See [Checkout Changes](companion-app/workflows.md#checkout-changes).
 
-### Project Briefing
+### Briefing
 
-See [Project Briefing](companion-app/workflows.md#project-briefing).
+See [Briefing](companion-app/workflows.md#briefing).
 
 ### Conversation recaps
 

@@ -106,6 +106,7 @@ extension AppDelegate {
             return false
         })
         if let answered { workspace.inspector.markAnswerSent(answered) }
+        refreshBriefing()
         workspace.welcome.pendingAnswers = workspace.inspector.sentAnswers.count
         workspace.welcome.answerSent()
         workspace.showNotice("Answer sent")

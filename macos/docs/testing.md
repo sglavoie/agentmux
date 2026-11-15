@@ -73,9 +73,13 @@ handoff packs remain durable user assets owned by the Go handoff workflow.
 file permissions and cleanup, launch receipts, stale reads and saved links.
 Workflow previews exercise light/dark, narrow/wide and unavailable states.
 
-### Project Briefing
+### Briefing
 
-View › Project Briefing… and the command palette open `WorkspaceBriefingWindow`.
+View › Briefing…, ⌘⇧U, and the command palette open `WorkspaceBriefingWindow`.
+`WorkspaceCatchUpTests` cover all/project scope, paginated archived membership,
+late replies, pending answers, grouped saved outcomes, exact read IDs and Undo
+across the two readers, empty sections, and Flight Log filter preservation.
+Rendered previews cover the merged empty state and the conversation section.
 `WorkspaceBriefingModel` joins the companion snapshot with `session list --all
 --project <title> --limit 10`; project membership follows the same CLI filter as
 History, across profiles and harnesses. All live conversation identities remain
@@ -87,7 +91,7 @@ Opening, refreshing, missing/stale results, and pending-request polls only read
 saved recaps. Generation is an explicit per-conversation action, gated on a live
 feed and no working instance of that conversation. Focus and resume reuse the
 existing exact-identity actions; source links open History at the cited message.
-The View menu shortcut is assignable and has no default. Closing cancels pending
+The View menu shortcut defaults to ⌘⇧U. Closing cancels pending
 UI work, while a model request already started may finish into the shared cache.
 
 `WorkspaceBriefingTests` covers scope, the history bound, live/history merging,
@@ -145,7 +149,7 @@ feed and never uses a recycled terminal window ID to identify an agent.
 
 The app reads Go-owned handoff relationships from `session list/show --json`
 and `session threads --json`. History and the inspector expose both directions;
-Project Briefing groups connected conversations and reads cached recaps for
+Briefing groups connected conversations and reads cached recaps for
 older indexed members returned as `related_conversations`. These reads launch
 no agents or model requests. `WorkspaceThreadsModel` discards replies after a
 selection change or close. Source links in old `workspace.handoffOrigins.v1`

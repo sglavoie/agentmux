@@ -3,77 +3,67 @@ import SwiftUI
 
 @MainActor
 final class WorkspaceBriefingWindow: ReviewWindowController {
-    let model: WorkspaceBriefingModel
-    init(model: WorkspaceBriefingModel) {
+    let model: WorkspaceCatchUpModel
+    init(model: WorkspaceCatchUpModel) {
         self.model = model
-        super.init(title: "Project Briefing", autosaveName: "WorkspaceBriefing", size: NSSize(width: 920, height: 760))
+        super.init(title: "Briefing", autosaveName: "WorkspaceBriefing", size: NSSize(width: 1000, height: 900))
     }
-    func show(project: String?) { model.open(preferredProject: project); present() }
+    func show(project: String? = nil) { model.open(project: project); present() }
+    func showFlight(_ session: FlightSession, kind: String) {
+        guard !model.briefing.acting else { return }
+        model.openFlight(session, kind: kind); present()
+    }
     override func makeContentView() -> NSView { Self.host(WorkspaceBriefingView(model: model)) }
     override func willPresent() { model.refresh() }
-    override var canClose: Bool { !model.acting }
+    override var canClose: Bool { !model.briefing.acting }
     override func didClose() { model.close() }
 }
 
 struct WorkspaceBriefingView: View {
-    @ObservedObject var model: WorkspaceBriefingModel
+    @ObservedObject var model: WorkspaceCatchUpModel
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Label("Project Briefing", systemImage: "text.book.closed").font(.title2)
+                Label("Briefing", systemImage: "text.book.closed").font(.title2)
+                Picker("Scope", selection: Binding(get: { model.briefing.project }, set: { model.select($0) })) {
+                    Text("All projects").tag("")
+                    ForEach(model.briefing.projects, id: \.self) { Text($0).tag($0) }
+                }.frame(maxWidth: 400).disabled(model.briefing.acting)
                 Spacer()
-                if model.acting { ProgressView().controlSize(.small); Text("Resuming conversation…").font(.caption) }
-                if model.loading { ProgressView().controlSize(.small).accessibilityLabel("Refreshing project briefing") }
-                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .help("Refresh conversations and saved recaps (⌘R)")
-                    .accessibilityLabel("Refresh project briefing")
-                    .disabled(model.loading || model.acting || model.project.isEmpty)
+                Button("Refresh") { model.refresh() }.disabled(model.briefing.acting)
             }
-            HStack {
-                Picker("Project", selection: Binding(get: { model.project }, set: { model.select($0) })) {
-                    if model.projects.isEmpty { Text("No projects").tag("") }
-                    ForEach(model.projects, id: \.self) { Text($0).tag($0) }
-                }.frame(maxWidth: 400).disabled(model.acting)
-                Spacer()
-                if let at = model.updatedAt {
-                    Text("Conversations updated " + at.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            if !model.feedLive {
+            if !model.briefing.feedLive {
                 Label("Live status is unavailable. Session actions and recap generation will return when the daemon reconnects.", systemImage: "wifi.slash")
                     .font(.callout).foregroundStyle(.secondary)
             }
-            WorkspaceReadFailure(title: "Project conversations", error: model.error, retained: model.updatedAt != nil,
-                                 loading: model.loading, retry: { model.refresh() })
-            if let error = model.actionError { Text(error).foregroundStyle(.red).textSelection(.enabled) }
-            if model.project.isEmpty {
-                WorkspaceEmpty(title: "Choose a project", detail: "Configured projects and projects with live sessions appear here.", symbol: "folder")
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 20) {
-                        needsYou
-                        conversationCards
-                        DisclosureGroup("Live sessions · \(model.rows.count)") { liveSessions }
-                    }.padding(4)
-                }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    waiting
+                    WorkspaceActivityView(model: model.activity, title: "Since you last looked", grouped: true,
+                        outcomes: model.summary.recaps, sessionRows: model.briefing.rows,
+                        onRefresh: { model.refresh() }, onReview: { model.briefing.review($0) })
+                        .frame(height: 460)
+                    if !model.briefing.project.isEmpty {
+                        WorkspaceBriefingConversationsView(model: model.briefing)
+                    }
+                }.padding(4)
             }
         }.padding(14)
             .background(WorkspaceReviewShortcuts { key, modifiers in
                 guard key == "r", modifiers == .command else { return false }
                 model.refresh(); return true
             }.frame(width: 0, height: 0))
-            .accessibilityIdentifier("project-briefing")
+            .accessibilityIdentifier("briefing")
     }
 
-    private var needsYou: some View {
+    private var waiting: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Needs you · \(model.waiting.count)").font(.headline)
-            if model.waiting.isEmpty {
-                Text(model.feedLive ? "No questions, approvals, or other attention are waiting in this project." : "Waiting status cannot be checked yet.")
+            Text("Waiting now · \(model.briefing.waiting.count)").font(.headline)
+            if model.briefing.waiting.isEmpty {
+                Text(model.briefing.feedLive ? "No questions, approvals, or other attention are waiting." : "Waiting status cannot be checked yet.")
                     .foregroundStyle(.secondary).font(.callout)
             }
-            ForEach(model.waiting, id: \.key) { row in
+            ForEach(model.briefing.waiting, id: \.key) { row in
                 HStack(alignment: .top) {
                     Text(row.glyph)
                     VStack(alignment: .leading, spacing: 3) {
@@ -81,9 +71,27 @@ struct WorkspaceBriefingView: View {
                         Text(row.detail).font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Open Session") { model.focus(row.key) }.disabled(!model.feedLive || model.acting)
+                    if row.answer != nil {
+                        Button("Answer…") { model.briefing.answer(row.key) }.disabled(!model.briefing.feedLive || model.briefing.acting)
+                    }
+                    Button("Open Session") { model.briefing.focus(row.key) }.disabled(!model.briefing.feedLive || model.briefing.acting)
                 }.padding(10).background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
             }
+        }
+    }
+}
+
+struct WorkspaceBriefingConversationsView: View {
+    @ObservedObject var model: WorkspaceBriefingModel
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if model.loading { ProgressView("Refreshing conversations…") }
+            if model.acting { ProgressView("Opening conversation…") }
+            WorkspaceReadFailure(title: "Project conversations", error: model.error, retained: model.updatedAt != nil,
+                                 loading: model.loading, retry: { model.refresh() })
+            if let error = model.actionError { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            conversationCards
+            DisclosureGroup("Live sessions · \(model.rows.count)") { liveSessions }
         }
     }
 
@@ -108,7 +116,7 @@ struct WorkspaceBriefingView: View {
 
     private var conversationCards: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Recent outcomes and unfinished work").font(.headline)
+            Text("Recent conversations").font(.headline)
             DisclosureGroup("About this briefing") {
                 Text("Includes live conversations, the ten most recent, and their recorded continuations. Outcomes use saved recaps; generating a recap is an explicit action. Older unfinished work may be outside this briefing.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -175,6 +183,9 @@ struct WorkspaceBriefingView: View {
     @ViewBuilder private func conversationActions(_ item: RecentConversation) -> some View {
         Button(model.liveRows(for: item).isEmpty ? "Resume" : "Focus Session") { model.continueConversation(item) }
             .disabled(!model.feedLive || model.acting)
+        Button("Fork") { model.fork(item) }.disabled(!model.feedLive || model.acting || model.onFork == nil)
+        Button(WorkspaceHandoffModel.title) { model.onHandoff?(item) }
+            .disabled(!model.feedLive || model.acting || model.onHandoff == nil)
         Button("Read Conversation") { model.onConversation?(item.identity, nil) }.disabled(model.acting)
     }
 }

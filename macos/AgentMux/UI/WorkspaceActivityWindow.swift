@@ -17,6 +17,12 @@ final class WorkspaceActivityWindow: ReviewWindowController {
 struct WorkspaceActivityView: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     @ObservedObject var model: WorkspaceActivityModel
+    var title = "Since Last Looked"
+    var grouped = false
+    var outcomes: [String: WorkspaceRecapModel] = [:]
+    var sessionRows: [WorkspaceRow] = []
+    var onRefresh: (() -> Void)?
+    var onReview: ((AttentionCycler.Key) -> Void)?
     private enum Focus: Hashable { case list, details }
     @FocusState private var focus: Focus?
     var body: some View {
@@ -25,11 +31,11 @@ struct WorkspaceActivityView: View {
                 Button(action: toggleEvents) { Image(systemName: "sidebar.left") }
                     .help("Show or hide events (⌘⌥S)")
                     .accessibilityLabel(model.layout.collapsed ? "Show events" : "Hide events")
-                Text("Since Last Looked").font(.title2).fixedSize()
+                Text(title).font(.title2)
                 Spacer(minLength: 0)
                 WorkspaceReviewStatus(reads: [
                     .init(title: "Activity", loading: model.loading, retained: model.report != nil, refreshedAt: model.reportRefreshedAt,
-                          feedback: activityFeedback, retry: { model.refresh() }),
+                          feedback: activityFeedback, retry: { refresh() }),
                     .init(title: "Supporting output", loading: model.reading, retained: model.transcript != nil, refreshedAt: model.transcriptRefreshedAt,
                           feedback: model.transcriptError.map { WorkspaceFeedback(target: "Supporting output", message: $0) }, retry: { model.loadTranscript() })
                 ])
@@ -39,9 +45,9 @@ struct WorkspaceActivityView: View {
                 Toggle("Unread only", isOn: $model.unreadOnly).onChange(of: model.unreadOnly) { _, _ in model.filterChanged() }
                 Picker("Look back", selection: $model.days) {
                     Text("1 day").tag(1); Text("7 days").tag(7); Text("30 days").tag(30); Text("90 days").tag(90)
-                }.frame(width: 180).onChange(of: model.days) { _, _ in model.refresh() }
+                }.frame(width: 180).onChange(of: model.days) { _, _ in refresh() }
                 Spacer()
-                Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
+                Button { refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .help("Refresh activity (⌘R)").accessibilityLabel("Refresh activity").disabled(model.loading)
                 Menu("Mark Read") {
                     Button("Mark Selected Read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
@@ -61,7 +67,10 @@ struct WorkspaceActivityView: View {
                 }.menuStyle(.borderlessButton).fixedSize().font(.caption)
             }.frame(height: 20)
             WorkspaceReadFailure(title: "Activity", error: model.error, retained: model.report != nil,
-                                 loading: model.loading, retry: { model.refresh() })
+                                 loading: model.loading, retry: { refresh() })
+            if model.scopeLoading { ProgressView("Finding project activity…").controlSize(.small) }
+            WorkspaceReadFailure(title: "Project activity", error: model.scopeError, retained: !model.visible.isEmpty,
+                                 loading: model.scopeLoading, retry: { model.setProject(model.project, rows: sessionRows) })
             if let session = model.flightSession {
                 HStack {
                     Text("Flight Log: \(session.title) · \(model.flightKind == "all" ? "all events" : FlightEvent.stateName(model.flightKind))").font(.caption)
@@ -72,22 +81,22 @@ struct WorkspaceActivityView: View {
             }
             WorkspaceReviewSplit(layout: $model.layout, title: "Events", minimum: 220, detailMinimum: 360) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
-                    ForEach(model.visible) { entry in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                if model.readState.read[entry.id] == nil {
-                                    Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(WorkspaceReviewColors.unread)
-                                        .help("Unread").accessibilityLabel("Unread")
+                    if grouped {
+                        ForEach(model.groups) { group in
+                            Section {
+                                ForEach(group.entries) { entry in eventRow(entry) }
+                            } header: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(groupTitle(group)).font(.headline)
+                                    if let recap = outcomes[group.id] { WorkspaceReturnOutcome(model: recap) }
                                 }
-                                Text(entry.title).font(.headline)
                             }
-                            Text(entry.date?.formatted() ?? entry.at).font(.caption).foregroundStyle(.secondary)
-                            Text([entry.harness, entry.profile].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption)
-                            Text(entry.detail).font(.caption).lineLimit(2)
-                        }.padding(.vertical, 3).tag(entry.id)
+                        }
+                    } else {
+                        ForEach(model.visible) { entry in eventRow(entry) }
                     }
                 }.focused($focus, equals: .list)
-                    .overlay { if model.visible.isEmpty && !model.loading && model.error == nil {
+                    .overlay { if model.visible.isEmpty && !model.loading && !model.scopeLoading && model.error == nil && model.scopeError == nil {
                         WorkspaceEmpty(title: model.unreadOnly ? "All caught up" : "No activity found",
                                        detail: "No \(model.unreadOnly ? "unread" : "recorded") events in this period. Try a longer look-back period.")
                     } }
@@ -103,6 +112,10 @@ struct WorkspaceActivityView: View {
                                     Button("Focus Live Session") { model.onFocus?(entry) }.help("Focus Live Session (⌘Return)")
                                 }
                                 if entry.conversation != nil { Button("Open Conversation") { model.openConversation() }.help("Open Conversation (⌘⇧Return)") }
+                            }
+                            if let recap = outcomes[entry.groupID] { WorkspaceReturnOutcome(model: recap) }
+                            if let row = sessionRows.first(where: { !$0.key.runtimeSessionID.isEmpty && $0.key.runtimeSessionID == entry.runtimeSessionID }), row.iconState == "stop", let onReview {
+                                Button("Review changes") { onReview(row.key) }
                             }
                             Divider()
                             Text("Supporting output").font(.headline)
@@ -134,6 +147,27 @@ struct WorkspaceActivityView: View {
             .onAppear { focus = model.layout.collapsed ? .details : .list }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
     }
+    private func refresh() { if let onRefresh { onRefresh() } else { model.refresh() } }
+
+    private func eventRow(_ entry: WorkspaceActivityEntry) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                if model.readState.read[entry.id] == nil {
+                    Image(systemName: "circle.fill").font(.system(size: 6)).foregroundStyle(WorkspaceReviewColors.unread)
+                        .help("Unread").accessibilityLabel("Unread")
+                }
+                Text(entry.title).font(.headline)
+            }
+            Text(entry.date?.formatted() ?? entry.at).font(.caption).foregroundStyle(.secondary)
+            Text([entry.harness, entry.profile].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption)
+            Text(entry.detail).font(.caption).lineLimit(2)
+        }.padding(.vertical, 3).tag(entry.id)
+    }
+    private func groupTitle(_ group: WorkspaceActivityModel.SessionGroup) -> String {
+        guard let entry = group.entries.first else { return "Session" }
+        return sessionRows.first { !$0.key.runtimeSessionID.isEmpty && $0.key.runtimeSessionID == entry.runtimeSessionID }?.displayName
+            ?? entry.conversation?.encoded ?? (entry.runtimeSessionID.isEmpty ? entry.title : entry.runtimeSessionID)
+    }
     private var activityFeedback: WorkspaceFeedback? {
         if let error = model.error { return WorkspaceFeedback(target: "Activity", message: error,
             nextStep: "Previous events remain visible. Check Settings if amx is unavailable, then refresh.") }
@@ -149,7 +183,7 @@ struct WorkspaceActivityView: View {
     private func handleShortcut(_ key: String, _ modifiers: NSEvent.ModifierFlags) -> Bool {
         if modifiers == .command {
             switch key {
-            case "r": if !model.loading { model.refresh() }
+            case "r": if !model.loading { refresh() }
             case "\r": if let entry = model.selected, entry.conversation != nil || !entry.runtimeSessionID.isEmpty { model.onFocus?(entry) }
             default: return false
             }

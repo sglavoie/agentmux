@@ -205,13 +205,16 @@ final class WorkspaceBriefingTests: XCTestCase {
         model.open(preferredProject: nil); model.refresh()
         XCTAssertTrue(runner.pending.isEmpty)
         model.update(projects: [.init(profile: "p", title: "API")], sessions: [], live: true)
-        XCTAssertEqual(model.project, "API"); runner.drain()
+        XCTAssertEqual(model.project, ""); runner.drain()
+        XCTAssertTrue(model.recent.isEmpty, "A late catalog must preserve All projects")
+        model.select("API"); runner.drain()
         XCTAssertFalse(model.recent.isEmpty)
         let app = AppDelegate()
         let entries = app.workspaceCommands
-        XCTAssertTrue(WorkspaceSwitcher.matches(">project briefing", in: entries).contains { $0.place == .command(.briefing) })
+        XCTAssertTrue(WorkspaceSwitcher.matches(">briefing", in: entries).contains { $0.place == .command(.briefing) })
         XCTAssertEqual(WorkspaceShortcut.briefing.action, #selector(AppDelegate.showBriefing(_:)))
-        XCTAssertNil(WorkspaceShortcut.briefing.defaultCombo)
+        XCTAssertEqual(WorkspaceShortcut.briefing.defaultMenuKey, "U")
+        XCTAssertNil(WorkspaceShortcut.activity.defaultCombo)
         model.close()
     }
 }

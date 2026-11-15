@@ -108,17 +108,18 @@ extension AppDelegate {
         let controller = activityWindow ?? WorkspaceActivityWindow(model: WorkspaceActivityModel(command: { [weak self] in self?.command }, defaults: .standard))
         trackVisibility(of: controller, \.activityVisible)
         controller.model.onConversation = { [weak self] identity, at in self?.openHistory(conversation: identity, eventTime: at) }
-        controller.model.onFocus = { [weak self] entry in
-            guard let self else { return }
-            guard self.store.feed == .live else { return self.refuse("Waiting for a live session list.") }
-            let live = Self.session(runtimeSessionID: entry.runtimeSessionID, in: self.store.managedSessions)
-                ?? self.store.managedSessions.first { entry.conversation != nil && $0.conversation == entry.conversation }
-            guard let live else { return self.refuse("No live session matches this recorded event. Open its conversation to inspect or resume it.") }
-            self.focus(.focusing(live, title: entry.title))
-        }
+        controller.model.onFocus = { [weak self] entry in self?.focusActivity(entry) }
         activityWindow = controller
         controller.model.clearFlightFilter()
         controller.show()
+    }
+
+    func focusActivity(_ entry: WorkspaceActivityEntry) {
+        guard store.feed == .live else { return refuse("Waiting for a live session list.") }
+        let live = Self.session(runtimeSessionID: entry.runtimeSessionID, in: store.managedSessions)
+            ?? store.managedSessions.first { entry.conversation != nil && $0.conversation == entry.conversation }
+        guard let live else { return refuse("No live session matches this recorded event. Open its conversation to inspect or resume it.") }
+        focus(.focusing(live, title: entry.title))
     }
 
     @objc func showFlightLog(_ sender: Any?) {
@@ -126,8 +127,7 @@ extension AppDelegate {
         trackVisibility(of: controller, \.flightLogVisible)
         controller.model.onConversation = { [weak self] identity, at in self?.openHistory(conversation: identity, eventTime: at) }
         controller.model.onActivity = { [weak self] session, kind in
-            self?.showActivity(nil)
-            self?.activityWindow?.model.filterFlightSession(session, kind: kind)
+            self?.presentBriefing(flight: session, kind: kind)
         }
         flightLogWindow = controller
         controller.show()

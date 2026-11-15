@@ -18,6 +18,10 @@ struct WorkspaceActivityEntry: Decodable, Identifiable, Equatable {
         case id, at, kind, title, detail, event, harness, profile
         case sessionID = "session_id", runtimeSessionID = "runtime_session_id", runID = "run_id", traceID = "trace_id"
     }
+    var groupID: String {
+        if !runtimeSessionID.isEmpty { return "runtime:" + runtimeSessionID }
+        return conversation.map { "conversation:" + $0.encoded } ?? "event:" + id
+    }
     var conversation: ConversationIdentity? { ConversationIdentity(encoded: "\(harness):\(sessionID)") }
     var date: Date? { Self.date(at) }
     static func date(_ text: String) -> Date? {
@@ -72,6 +76,12 @@ final class WorkspaceActivityModel: ObservableObject {
     @Published var layout: WorkspaceReviewState.SidebarLayout { didSet { reviewState.activityLayout = layout } }
     @Published var unreadOnly = true
     @Published var days = 7
+    @Published private(set) var project = ""
+    @Published private(set) var scopeLoading = false
+    @Published private(set) var scopeError: String?
+    private var scopeGeneration = 0
+    private var scopeConversations = Set<String>()
+    private var scopeRuntimes = Set<String>()
     @Published private(set) var flightSession: FlightSession?
     @Published private(set) var flightKind = "all"
     @Published private(set) var reportRefreshedAt: Date?
@@ -100,6 +110,8 @@ final class WorkspaceActivityModel: ObservableObject {
     private struct ReadUndo {
         let state: WorkspaceActivityReadState
         let selection: String?
+        let marked: [String]
+        let markedAt: Date
     }
     private var readUndo: ReadUndo?
     @Published private(set) var canUndoRead = false
@@ -121,6 +133,8 @@ final class WorkspaceActivityModel: ObservableObject {
 
     var visible: [WorkspaceActivityEntry] {
         (report?.entries ?? []).filter { entry in
+            if !project.isEmpty && !scopeRuntimes.contains(entry.runtimeSessionID)
+                && !(entry.conversation.map { scopeConversations.contains($0.encoded) } ?? false) { return false }
             guard !unreadOnly || readState.read[entry.id] == nil else { return false }
             guard let session = flightSession else { return true }
             if !session.runtimeSessionID.isEmpty {
@@ -132,6 +146,61 @@ final class WorkspaceActivityModel: ObservableObject {
             }
             let kind = ["question": "question", "key": "permission", "stop": "completed", "error": "error"][flightKind]
             return kind == nil || entry.kind == kind
+        }
+    }
+
+    struct SessionGroup: Identifiable {
+        let id: String
+        var entries: [WorkspaceActivityEntry]
+    }
+    var groups: [SessionGroup] {
+        var groups: [SessionGroup] = [], indices: [String: Int] = [:]
+        for entry in visible {
+            if let index = indices[entry.groupID] { groups[index].entries.append(entry) }
+            else { indices[entry.groupID] = groups.count; groups.append(.init(id: entry.groupID, entries: [entry])) }
+        }
+        return groups
+    }
+
+    /// Activity has no project field. Resolve archived conversation membership
+    /// using the CLI's canonical project filter, including all result pages.
+    func setProject(_ name: String, rows: [WorkspaceRow]) {
+        scopeGeneration += 1
+        project = name; scopeError = nil; scopeLoading = false
+        scopeRuntimes = Set(rows.filter { $0.project == name }.map { $0.key.runtimeSessionID })
+        scopeRuntimes.remove("")
+        scopeConversations = Set(rows.filter { $0.project == name }.compactMap { $0.conversation?.encoded })
+        filterChanged()
+        guard !name.isEmpty else { return }
+        scopeLoading = true
+        loadProjectPage(offset: 0, request: scopeGeneration)
+    }
+
+    func updateLiveScope(rows: [WorkspaceRow]) {
+        scopeRuntimes = Set(rows.filter { $0.project == project }.map { $0.key.runtimeSessionID })
+        scopeRuntimes.remove("")
+        filterChanged()
+    }
+
+    private func loadProjectPage(offset: Int, request: Int) {
+        guard let command = command() else { scopeLoading = false; scopeError = AMXWording.current; return }
+        let args = WorkspaceHistoryModel.arguments(query: "", project: project, includeAutomated: true, offset: offset, limit: 200)
+        runner.run({ command.json(WorkspaceHistorySearch.self, args, timeout: 60) }) { [weak self] result in
+            guard let self, request == self.scopeGeneration else { return }
+            switch result {
+            case let .failure(error): self.scopeLoading = false; self.scopeError = error.message
+            case let .success(page), let .partial(page, _):
+                self.scopeConversations.formUnion(page.results.map { $0.conversation.selector })
+                self.filterChanged()
+                if case .partial = result {
+                    self.scopeLoading = false; self.scopeError = "Project membership is incomplete. Refresh to try again."
+                } else if page.hasMore && !page.results.isEmpty {
+                    self.loadProjectPage(offset: offset + page.results.count, request: request)
+                } else {
+                    self.scopeLoading = false
+                    if page.hasMore { self.scopeError = "Project membership is incomplete. Refresh to try again." }
+                }
+            }
         }
     }
 
@@ -151,6 +220,9 @@ final class WorkspaceActivityModel: ObservableObject {
     }
 
     func refresh() {
+        // Both the legacy Activity window and Briefing can acknowledge events.
+        // Reopening either reader must pick up acknowledgements from the other.
+        reloadReadState()
         generation += 1
         let expected = generation
         guard let command = command() else { loading = false; error = AMXWording.current; return }
@@ -181,10 +253,16 @@ final class WorkspaceActivityModel: ObservableObject {
         markRead([selection], now: now)
     }
 
+    @discardableResult private func reloadReadState() -> Bool {
+        do { readState = try readStore.load(); readError = nil; return true }
+        catch { readError = "Could not load read markers: \(error.localizedDescription)"; return false }
+    }
+
     private func markRead(_ ids: [String], now: Date) {
+        guard reloadReadState() else { readError = "Read markers were not saved: " + (readError ?? "Unknown read failure"); return }
         let unread = ids.filter { readState.read[$0] == nil }
         guard !loading, error == nil, !unread.isEmpty else { return }
-        let undo = ReadUndo(state: readState, selection: selection)
+        let undo = ReadUndo(state: readState, selection: selection, marked: unread, markedAt: now)
         var next = readState
         // The backend supports at most 90 days. Retain IDs for that whole window;
         // pruning by mark time cannot hide a newly arriving old event.
@@ -204,8 +282,11 @@ final class WorkspaceActivityModel: ObservableObject {
     func undoMarkRead() {
         guard let undo = readUndo else { return }
         do {
-            try readStore.save(undo.state)
-            readState = undo.state
+            var restored = try readStore.load()
+            for id in undo.marked where restored.read[id] == undo.markedAt { restored.read[id] = undo.state.read[id] }
+            if restored.lastMarkedAt == undo.markedAt { restored.lastMarkedAt = undo.state.lastMarkedAt }
+            try readStore.save(restored)
+            readState = restored
             readUndo = nil
             canUndoRead = false
             readError = nil
@@ -247,6 +328,7 @@ final class WorkspaceActivityModel: ObservableObject {
     }
 
     func close() {
+        scopeGeneration += 1; scopeLoading = false
         generation += 1
         transcriptGeneration += 1
         loading = false

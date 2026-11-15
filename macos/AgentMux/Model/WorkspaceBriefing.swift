@@ -23,6 +23,10 @@ final class WorkspaceBriefingModel: ObservableObject {
     @Published private(set) var actionError: String?
     @Published private(set) var recaps: [String: WorkspaceRecapModel] = [:]
 
+    private(set) var allProjects = false
+    var onAnswer: ((WorkspaceWaitingAnswer) -> Void)?
+    var onReview: ((AttentionCycler.Key) -> Void)?
+    var onFork: ((RecentConversation, @escaping (String?) -> Void) -> Void)?
     var onFocus: ((AttentionCycler.Key) -> Void)?
     var onConversation: ((ConversationIdentity, Int?) -> Void)?
     var onHandoff: ((RecentConversation) -> Void)?
@@ -30,6 +34,7 @@ final class WorkspaceBriefingModel: ObservableObject {
     private let command: () -> AMXCommand?
     private let runner: ASLWorkRunner
     private var allRows: [WorkspaceRow] = []
+    private var pendingAnswers: [WorkspaceWaitingRow] = []
     private var allWaiting: [WorkspaceWaitingRow] = []
     private var generation = 0
     private var active = false
@@ -50,7 +55,7 @@ final class WorkspaceBriefingModel: ObservableObject {
         names.formUnion(allRows.map(\.project))
         if !project.isEmpty { names.insert(project) }
         projects = names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-        if active, project.isEmpty, let first = projects.first { select(first); return }
+        if active, !allProjects, project.isEmpty, let first = projects.first { select(first); return }
         updateRows()
         if active { reconcileRecaps() }
     }
@@ -63,7 +68,8 @@ final class WorkspaceBriefingModel: ObservableObject {
     }
 
     func select(_ name: String, refresh: Bool = true) {
-        guard !acting, projects.contains(name) else { return }
+        guard !acting, name.isEmpty || projects.contains(name) else { return }
+        allProjects = name.isEmpty
         if name != project {
             generation += 1; loading = false
             recaps.values.forEach { $0.close() }; recaps = [:]
@@ -75,14 +81,16 @@ final class WorkspaceBriefingModel: ObservableObject {
     }
 
     private func updateRows() {
-        rows = allRows.filter { $0.project == project }
+        rows = allRows.filter { allProjects || $0.project == project }
         let keys = Set(rows.map(\.key))
         waiting = allWaiting.filter { keys.contains($0.key) && $0.category != .completed }
+        waiting.removeAll { row in pendingAnswers.contains { $0.sameContext(as: row) } }
     }
 
     /// All known live conversation identities, then up to ten recent
     /// conversations, deduplicated by harness AND session ID.
     var conversations: [RecentConversation] {
+        guard !allProjects else { return [] }
         var result: [RecentConversation] = [], seen: Set<String> = []
         for row in rows {
             guard let identity = row.conversation, seen.insert(identity.encoded).inserted else { continue }
@@ -148,7 +156,7 @@ final class WorkspaceBriefingModel: ObservableObject {
 
     func focus(_ key: AttentionCycler.Key) {
         guard feedLive, let row = allRows.first(where: { $0.key == key }),
-              row.project == project || related.contains(where: { $0.identity == row.conversation }) else { return }
+              allProjects || row.project == project || related.contains(where: { $0.identity == row.conversation }) else { return }
         actionError = nil
         onFocus?(key)
     }
@@ -159,6 +167,29 @@ final class WorkspaceBriefingModel: ObservableObject {
         guard let onContinue else { return }
         acting = true; actionError = nil
         onContinue(conversation) { [weak self] error in
+            self?.acting = false; self?.actionError = error
+        }
+    }
+
+    func excludePendingAnswers(_ pending: [WorkspaceWaitingRow]) {
+        pendingAnswers = pending
+        updateRows()
+    }
+
+    func answer(_ key: AttentionCycler.Key) {
+        guard feedLive, !acting, let answer = waiting.first(where: { $0.key == key })?.answer else { return }
+        onAnswer?(answer)
+    }
+
+    func review(_ key: AttentionCycler.Key) {
+        guard feedLive, !acting, rows.contains(where: { $0.key == key && $0.iconState == "stop" }) else { return }
+        onReview?(key)
+    }
+
+    func fork(_ conversation: RecentConversation) {
+        guard !acting, feedLive, conversations.contains(where: { $0.identity == conversation.identity }), let onFork else { return }
+        acting = true; actionError = nil
+        onFork(conversation) { [weak self] error in
             self?.acting = false; self?.actionError = error
         }
     }

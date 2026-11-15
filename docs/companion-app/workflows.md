@@ -113,7 +113,7 @@ labels; raw protocol reasons remain in the session inspector.
 
 **Session › Continue with Another Agent…**, a session's right-click menu, and
 its command-palette entry open a native handoff preview. The action is also
-available for the selected conversation in History and on Project Briefing's
+available for the selected conversation in History and on Briefing's
 conversation cards.
 
 Choose any configured Claude, Codex, or Copilot profile, review and edit the
@@ -213,17 +213,32 @@ with the CLI's clean/inactive checks. A details button expands warnings and
 conflicts without pushing the diff or landing controls out of view. A retained
 review cannot authorize landing while its replacement is being read.
 
-### Project Briefing
+### Briefing
 
-**View › Project Briefing…** gathers one project's live sessions and ten most
-recent conversations across agents and profiles, including automated and
-unclassified sessions. Choose another project in the window's picker. It starts
-on the workspace's selected project when possible, and is also available from
-the command palette; assign a shortcut in Settings if desired.
+**View › Briefing…** (⌘⇧U) is the catch-up window. Its scope starts at **All
+projects**; choose a project to narrow waiting sessions and activity and show
+that project's recent conversations. The command palette opens the same window.
 
-**Needs you** links to sessions with questions, permission requests, or other
-attention. **Recent outcomes and unfinished work** leads with the task, latest
-saved outcome, and next step, followed by Focus/Resume and Read actions.
+**Waiting now** lists sessions with questions, permission requests, or other
+attention. **Answer…** opens the existing answer panel where available, including
+its continue-to-next queue; **Open Session** focuses the session. Submitted answers
+stay out of the queue while their matching waiting state is still acknowledged.
+
+**Since you last looked** groups retained activity by session, with saved outcomes,
+exact event details, supporting output, **Open Conversation**, **Focus Live Session**,
+and **Review changes** for completed live sessions. The unread filter, look-back
+period, **Mark Read**, and **Undo** work as in the Activity reader described below.
+Opening, refreshing, and switching scope never mark events read. Project scope
+matches live runtime identities and the CLI's paginated project conversation list;
+events without a known project remain available under **All projects**. Membership
+failures are shown explicitly. Flight Log's **Open Retained Activity** opens this
+section for the exact session and event kind, with read events included and a
+90-day look-back. **Clear session filter** removes that restriction.
+
+**Recent conversations** appears only for a project. It gathers live conversations
+and the ten most recent across agents and profiles, including automated and
+unclassified sessions, with saved outcomes and next steps. **Resume**, **Fork**,
+**Continue with Another Agent…**, and **Read Conversation** remain available.
 **Goal, sources & recap controls** expands the goal, provenance, supporting-message
 links, and generation controls. **Conversation details** holds identifiers,
 timestamps, handoff links, and the handoff action. Saved-context warnings remain
@@ -270,7 +285,11 @@ profile/model or disable generation in `[defaults.recaps]`. See
 
 ### Since Last Looked
 
-**View › Since Last Looked…** (⌘⇧U) shows recorded state transitions, process exits,
+The legacy Activity window remains available alongside Briefing and the return
+summary. Both readers share saved read markers; Undo preserves acknowledgements
+made in the other reader.
+
+**View › Since Last Looked…** shows recorded state transitions, process exits,
 and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
 Select an event for details and the last timestamped assistant output at or before
 it; **Load Earlier Messages** searches further back for supporting output.
@@ -386,7 +405,7 @@ attached elsewhere stay detached. Restored utility programs require explicit Reo
 Assign keys in **Settings › Workspace shortcuts** with **Record Shortcut**. Bindings
 apply immediately and persist. **Clear** removes a binding; **Restore Default**
 restores its original key: ⌘⇧P for Command Palette, ⌘⇧R for ASL Runs…, ⌘⇧N for
-Run a Plan…, ⌘⇧U for Since Last Looked…, ⌘⇧H for Conversation History…, and ⌘⇧C
+Run a Plan…, ⌘⇧U for Briefing…, ⌘⇧H for Conversation History…, and ⌘⇧C
 for Checkout Changes…; the pane commands have none. None of these holds Option, and
 none is a key Ghostty binds with ⌘⇧.
 The recorder checks menu/global conflicts; Escape cancels. These keys work while
