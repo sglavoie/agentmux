@@ -4,7 +4,7 @@ import AppKit
 /// to go into the selected row, and ← and → to collapse and expand its
 /// project — and nothing typed here reaches a program.
 @MainActor
-final class WorkspaceSidebarView: NSTableView {
+class WorkspaceSidebarView: NSTableView {
     var onPeek: (() -> Void)?
     var onWidthChanged: (() -> Void)?
     var projectDividers = IndexSet() {

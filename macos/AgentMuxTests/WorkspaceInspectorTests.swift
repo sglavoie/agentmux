@@ -167,8 +167,8 @@ final class WorkspaceInspectorTests: XCTestCase {
         let row = try XCTUnwrap(rows.first { $0.row.key == key })
         let flash = try XCTUnwrap(row.contentView?.subviews.first { $0 is WorkspaceRowFlashView })
         XCTAssertNil(flash.hitTest(.zero), "the pulse must not intercept the row's buttons")
-        let animation = try XCTUnwrap(flash.layer?.animation(forKey: WorkspaceRowView.flashKey))
-        XCTAssertEqual(animation.duration, 0.32, accuracy: 0.001)
+        XCTAssertNil(flash.layer?.animation(forKey: WorkspaceRowView.flashKey))
+        XCTAssertEqual(flash.layer?.opacity, 1)
     }
 
     func testRevealingSessionRespectsHiddenInspectorTabAndWaitingFilter() throws {

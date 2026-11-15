@@ -262,7 +262,7 @@ extension WorkspaceWindowTests {
             for flashing in [true, false] {
                 if !flashing {
                     // Completing the animation leaves its transparent view installed.
-                    for view in rowView.subviews { view.layer?.removeAnimation(forKey: WorkspaceRowView.flashKey) }
+                    for view in rowView.subviews { (view as? WorkspaceRowFlashView)?.stop() }
                 }
                 XCTAssertEqual(rowView.isFlashing, flashing)
                 for terminal in terminals {

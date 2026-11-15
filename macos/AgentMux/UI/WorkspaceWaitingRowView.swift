@@ -22,7 +22,7 @@ final class WorkspaceWaitingRowView: NSBox {
         flashView.layer?.cornerRadius = cornerRadius
     }
 
-    var isFlashing: Bool { flashView.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }
+    var isFlashing: Bool { flashView.isFlashing }
 
     private(set) var row: WorkspaceWaitingRow
     var onPress: (() -> Void)?

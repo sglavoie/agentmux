@@ -38,7 +38,12 @@ Disconnected status never implies that questions were resolved.
 Palette entrances, hover feedback, and sidebar/inspector disclosure respect
 Reduce Motion. Status glyphs fade briefly when they change. Routine navigation
 uses a quiet 160 ms highlight; explicit **Reveal in Sidebar** uses one 320 ms
-highlight. Terminal input and navigation never wait for animation.
+highlight. Small sidebar changes slide sessions into their new sections and
+then highlight state changes in the destination section's color. Selection,
+keyboard focus, scroll position, collapsed groups, and hover/menu/drag holds
+stay intact. Large changes and forced refreshes update immediately. Reduce
+Motion disables these moves and uses a brief static highlight instead of a
+pulse. Terminal input and navigation never wait for animation.
 
 ### Peek at another agent
 

@@ -123,7 +123,10 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// Whether the window is on screen; terminals exist only while it is.
     var isOpen = false
 
-    let sidebar = WorkspaceSidebarView()
+    let sidebar: WorkspaceSidebarView
+    var sidebarMotionEnabled: () -> Bool = { WorkspaceMotion.enabled }
+    var sidebarAnimations = 0
+    var pendingSidebarFlashes: [AttentionCycler.Key: String] = [:]
     let groupFilter = WorkspaceGroupFilter()
     lazy var sessionPeek = WorkspaceSessionPeekModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
     var presentingPeek = false
@@ -416,7 +419,8 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var ageTimer: Timer?
     var workingTimer: Timer?
 
-    init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init) {
+    init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init, sidebar: WorkspaceSidebarView = WorkspaceSidebarView()) {
+        self.sidebar = sidebar
         self.delegate = delegate
         self.glyphs = glyphs
         self.now = now

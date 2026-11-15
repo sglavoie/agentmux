@@ -73,10 +73,15 @@ ASL answer panel work the same either way.
   the waiting status, the session returns to its saved position. Its terminal,
   selection, pin, and dragged order are preserved. The temporary section
   always stays expanded, names each session's project, and cannot be dragged.
-  A session's line flashes with its displayed section's color
-  when its state changes. ⌘J uses the same section color to reveal a session;
-  state changes use one 350 ms opacity highlight. Explicit reveal keeps its
-  two orientation pulses (one with Reduce Motion).
+  Small sidebar changes animate sessions into their new sections, retaining
+  selection, keyboard focus, and scroll position. Hover, menu, and drag holds
+  still keep physical targets steady until reordering is released. Large changes
+  (more than 12 row operations), forced refreshes, detached tables, and Reduce
+  Motion use an immediate reload.
+  A session's line flashes with its displayed section's color when its state
+  changes, after any move finishes. ⌘J uses the same section color to reveal a
+  session; state changes use one 350 ms opacity highlight and explicit reveal
+  uses one 320 ms highlight. With Reduce Motion these are brief static highlights.
   These flashes leave focus, scrolling, and collapsed groups alone; first
   sightings and updates to names or ages do not flash.
   Preferences › Appearance › Group sessions by selects **State → Project**

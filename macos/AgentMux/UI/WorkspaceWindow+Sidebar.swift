@@ -120,6 +120,9 @@ extension WorkspaceWindowController {
             if changed != nil, decorations.count == drawnDecorations.count {
                 changed?.formUnion(IndexSet(decorations.indices.filter { decorations[$0] != drawnDecorations[$0] }))
             }
+            let previous = items
+            let changes = changed == nil && !force && sidebarMotionEnabled() && sidebar.window != nil
+                ? Item.structuralChanges(from: previous, to: wanted) : nil
             items = wanted
             sidebar.projectDividers = sidebarGrouping == .compact ? Item.projectDividers(in: wanted) : []
             sidebar.sessionDividers = sidebarGrouping == .compact ? Item.sessionDividers(in: wanted) : []
@@ -127,6 +130,8 @@ extension WorkspaceWindowController {
             sidebar.alphaValue = dimmed
             if let changed {
                 if !changed.isEmpty { reload(changed) }
+            } else if let changes, !changes.isEmpty, changes.count <= 12 {
+                animateSidebar(from: previous, to: wanted, changes: changes)
             } else {
                 applying = true
                 sidebar.reloadData()
@@ -146,9 +151,65 @@ extension WorkspaceWindowController {
     /// changes to names, ages, or other metadata do not flash.
     func flashStateChanges(from previous: [WorkspaceRow]) {
         let states = Dictionary(previous.map { ($0.key, $0.iconState) }, uniquingKeysWith: { first, _ in first })
-        for (index, item) in items.enumerated() {
+        for item in items {
             guard case let .row(row) = item, let before = states[row.key], before != row.iconState else { continue }
+            pendingSidebarFlashes[row.key] = row.iconState
+        }
+        flushSidebarFlashes()
+    }
+
+    private func flushSidebarFlashes() {
+        guard sidebarAnimations == 0 else { return }
+        let pending = pendingSidebarFlashes
+        pendingSidebarFlashes.removeAll()
+        for (index, item) in items.enumerated() {
+            guard case let .row(row) = item, pending[row.key] == row.iconState else { continue }
             (sidebar.rowView(atRow: index, makeIfNecessary: true) as? WorkspaceRowView)?.flash(color: sidebarFlashColor(at: index), pulseDuration: 0.35, pulses: 1)
+        }
+    }
+
+    private func animateSidebar(from previous: [Item], to wanted: [Item], changes: [Item.Change]) {
+        let position = sidebar.enclosingScrollView?.contentView.bounds.origin
+        // A row can inherit a different project label after a move even when
+        // its own content is unchanged. Refresh shifted rows and group counts.
+        let changed = IndexSet(wanted.indices.filter { index in
+            index >= previous.count || previous[index] != wanted[index]
+        })
+        sidebarAnimations += 1
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = WorkspaceMotion.disclosure
+            applying = true
+            items = previous
+            sidebar.beginUpdates()
+            for change in changes {
+                switch change {
+                case let .remove(index):
+                    items.remove(at: index)
+                    sidebar.removeRows(at: IndexSet(integer: index), withAnimation: .effectFade)
+                case let .insert(index, target):
+                    items.insert(wanted[target], at: index)
+                    sidebar.insertRows(at: IndexSet(integer: index), withAnimation: .effectFade)
+                case let .move(source, destination):
+                    items.insert(items.remove(at: source), at: destination)
+                    sidebar.moveRow(at: source, to: destination)
+                }
+            }
+            items = wanted
+            sidebar.endUpdates()
+            sidebar.projectDividers = sidebarGrouping == .compact ? Item.projectDividers(in: wanted) : []
+            sidebar.sessionDividers = sidebarGrouping == .compact ? Item.sessionDividers(in: wanted) : []
+            applying = false
+            if !changed.isEmpty { reload(changed) }
+            syncSidebarSelection()
+            if let position, let scroll = sidebar.enclosingScrollView {
+                scroll.contentView.scroll(to: position)
+                scroll.reflectScrolledClipView(scroll.contentView)
+            }
+        } completionHandler: { [weak self] in
+            guard let self else { return }
+            self.sidebarAnimations -= 1
+            self.syncHover(IndexSet(integersIn: 0..<self.sidebar.numberOfRows))
+            self.flushSidebarFlashes()
         }
     }
 

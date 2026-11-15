@@ -34,6 +34,54 @@ enum WorkspaceSidebarItem: Equatable {
         return IndexSet(old.indices.filter { old[$0] != new[$0] })
     }
 
+    /// Sequential table operations. Tokens name old lines independently of
+    /// their content; inferred moves retain the existing row views.
+    enum Change: Equatable {
+        case remove(Int)
+        case insert(Int, Int) // current table index, final model index
+        case move(Int, Int)
+    }
+
+    static func structuralChanges(from old: [Self], to new: [Self]) -> [Change]? {
+        // Ambiguous identities cannot safely retain a particular row view.
+        func unique(_ items: [Self]) -> Bool {
+            items.indices.allSatisfy { index in
+                !items[..<index].contains { $0.isSameLine(as: items[index]) }
+            }
+        }
+        guard unique(old), unique(new) else { return nil }
+        let target = new.enumerated().map { index, item in
+            old.firstIndex { $0.isSameLine(as: item) } ?? old.count + index
+        }
+        let difference = target.difference(from: Array(old.indices)).inferringMoves()
+        var current = Array(old.indices)
+        var changes: [Change] = []
+        for removal in difference.removals.reversed() {
+            guard case let .remove(index, _, associated) = removal, associated == nil else { continue }
+            current.remove(at: index)
+            changes.append(.remove(index))
+        }
+        let inserted = Set(difference.insertions.compactMap { change -> Int? in
+            if case let .insert(_, token, _) = change { return token }
+            return nil
+        })
+        // Work backwards, placing each inserted/moved line before its next
+        // neighbor. Coordinates follow the table after every operation.
+        for index in target.indices.reversed() where inserted.contains(target[index]) {
+            let source = current.firstIndex(of: target[index])
+            if let source { current.remove(at: source) }
+            let destination = index + 1 < target.count
+                ? current.firstIndex(of: target[index + 1])! : current.count
+            current.insert(target[index], at: destination)
+            if let source {
+                if source != destination { changes.append(.move(source, destination)) }
+            } else {
+                changes.append(.insert(destination, index))
+            }
+        }
+        return changes
+    }
+
     /// Keep physical targets steady during hover or a menu interaction while
     /// refreshing each target's latest values.
     static func holding(_ old: [Self], latest: [Self]) -> [Self] {

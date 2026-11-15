@@ -76,10 +76,9 @@ extension WorkspaceWindowTests {
             let changed = [1, 4, 6, 7].contains { row.key == .embedded(F.runtimeID($0)) }
             XCTAssertEqual(view.isFlashing, changed)
             if changed {
-                let layer = try XCTUnwrap(view.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
-                let animation = try XCTUnwrap(layer.animation(forKey: WorkspaceRowView.flashKey) as? CAKeyframeAnimation)
-                XCTAssertEqual(animation.duration, 0.35, accuracy: 0.001)
-                XCTAssertEqual(animation.values?.count, 3, "One brief state-change highlight")
+                let layer = try XCTUnwrap(view.subviews.first { $0 is WorkspaceRowFlashView }?.layer)
+                XCTAssertNil(layer.animation(forKey: WorkspaceRowView.flashKey), "tests use the motion-disabled static highlight")
+                XCTAssertEqual(layer.opacity, 1)
                 let band: WorkspaceSidebarBand = row.key == .embedded(F.runtimeID(6)) ? .pinned
                     : row.key == .embedded(F.runtimeID(7)) ? .attention : .running
                 view.effectiveAppearance.performAsCurrentDrawingAppearance {
@@ -127,9 +126,9 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(workspace.sidebar.selectedRow, line)
         let rowView = try XCTUnwrap(workspace.sidebar.rowView(atRow: line, makeIfNecessary: false) as? WorkspaceRowView)
         XCTAssertTrue(rowView.isFlashing)
-        let flashLayer = try XCTUnwrap(rowView.subviews.first { $0.layer?.animation(forKey: WorkspaceRowView.flashKey) != nil }?.layer)
-        let animation = try XCTUnwrap(flashLayer.animation(forKey: WorkspaceRowView.flashKey))
-        XCTAssertEqual(animation.duration, 0.32, accuracy: 0.001)
+        let flashLayer = try XCTUnwrap(rowView.subviews.first { $0 is WorkspaceRowFlashView }?.layer)
+        XCTAssertNil(flashLayer.animation(forKey: WorkspaceRowView.flashKey))
+        XCTAssertEqual(flashLayer.opacity, 1)
         rowView.effectiveAppearance.performAsCurrentDrawingAppearance {
             XCTAssertEqual(flashLayer.backgroundColor, WorkspaceSidebarBand.stopped.color.cgColor)
         }

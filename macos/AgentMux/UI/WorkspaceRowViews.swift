@@ -102,7 +102,7 @@ class WorkspaceRowView: NSTableRowView {
     }
 
     /// Whether the line is flashing now.
-    var isFlashing: Bool { flashView.layer?.animation(forKey: Self.flashKey) != nil }
+    var isFlashing: Bool { flashView.isFlashing }
 
     /// The shape a line's color follows: the selection's, a point shorter so
     /// two colored lines do not run together.
@@ -123,15 +123,35 @@ class WorkspaceRowView: NSTableRowView {
 /// the row's terminal tabs or close buttons for mouse hit testing.
 @MainActor
 final class WorkspaceRowFlashView: NSView {
+    var motionEnabled: () -> Bool = { WorkspaceMotion.enabled }
+    private var clearHighlight: DispatchWorkItem?
+    var isFlashing: Bool { layer?.animation(forKey: WorkspaceRowView.flashKey) != nil || layer?.opacity == 1 }
+
+    func stop() {
+        clearHighlight?.cancel()
+        clearHighlight = nil
+        layer?.removeAnimation(forKey: WorkspaceRowView.flashKey)
+        layer?.opacity = 0
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func flash(color: NSColor = .controlAccentColor.withAlphaComponent(0.35), pulseDuration: TimeInterval = 0.32, pulses: Int = 1) {
+        stop()
         wantsLayer = true
         layer?.opacity = 0
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer?.backgroundColor = color.cgColor
         }
-        let pulses = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 1 : pulses
+        guard motionEnabled() else {
+            // Keep orientation feedback with Reduce Motion, without a fade
+            // or repeated pulses. A later flash cancels the previous expiry.
+            layer?.opacity = 1
+            let clear = DispatchWorkItem { [weak self] in self?.layer?.opacity = 0 }
+            clearHighlight = clear
+            DispatchQueue.main.asyncAfter(deadline: .now() + pulseDuration, execute: clear)
+            return
+        }
         let animation = CAKeyframeAnimation(keyPath: "opacity")
         animation.values = [0] + Array(repeating: [1, 0], count: pulses).flatMap { $0 }
         animation.duration = pulseDuration * Double(pulses)
