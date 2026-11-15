@@ -244,6 +244,20 @@ func (h *Handler) reduceStateUpdate(req protocol.Request, outcome applyOutcome, 
 	changed := effective != st.Effective
 	// Cutover: the reduced effective state is the visible state.
 	h.publishEffectiveLocked(req.WindowID, st, effective)
+	// Only an accepted event may change the live tool. The reducer, not the
+	// legacy guard, owns acceptance (including duplicate/trailing suppression).
+	if decision == protocol.DecisionApplied && !st.BusySince.IsZero() {
+		switch req.Event {
+		case "PreToolUse", "preToolUse":
+			if n.Action == "active" {
+				st.ActiveTool = req.ToolName
+			}
+		case "PostToolUse", "postToolUse", "PostToolUseFailure", "postToolUseFailure", "PostToolBatch":
+			if req.ToolName == "" || req.ToolName == st.ActiveTool {
+				st.ActiveTool = ""
+			}
+		}
+	}
 	if n.Action == "user_clear" {
 		// A manual wipe also dismisses a restored or externally stranded loop
 		// marker. Only a live reducer lease keeps the marker authoritative.
@@ -409,6 +423,7 @@ func stampBusySinceLocked(st *state.WindowState, icon string, now time.Time) {
 		}
 	default:
 		st.BusySince = time.Time{}
+		st.ActiveTool = ""
 	}
 }
 

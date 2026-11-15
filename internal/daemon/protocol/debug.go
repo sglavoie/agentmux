@@ -41,7 +41,8 @@ type WindowStateSnapshot struct {
 	// BusySinceAt is when the window's current active-class stretch began (unix
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.
-	BusySinceAt int64 `json:"busy_since_at,omitempty"`
+	BusySinceAt int64  `json:"busy_since_at,omitempty"`
+	ActiveTool  string `json:"active_tool,omitempty"`
 	// PresentationChangedAtMS is the last dashboard-visible icon or unseen
 	// transition in unix milliseconds. Its absence is the backward-compatible
 	// zero value for state restored or served by a daemon predating the field.
@@ -203,7 +204,8 @@ type WindowDebugShadow struct {
 	// BusySinceAt is when the window's current active-class stretch began (unix
 	// seconds). Absent while the window is not busy, which also preserves the
 	// former response shape for clients that do not render the stretch.
-	BusySinceAt int64 `json:"busy_since_at,omitempty"`
+	BusySinceAt int64  `json:"busy_since_at,omitempty"`
+	ActiveTool  string `json:"active_tool,omitempty"`
 }
 
 // Stop-hold class names are the stable spelling of a hold's release rule in

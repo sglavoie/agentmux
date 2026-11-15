@@ -25,6 +25,7 @@ type RunningSession struct {
 	Looping               bool                        // daemon-owned loop marker; title-derived only when the daemon is unreachable
 	AgentTurn             *protocol.AgentTurnSnapshot // agent work independently of ASL; nil with older/unavailable daemons
 	ASLPhases             []string                    // distinct live run phases, independent of AgentTurn
+	ActiveTool            string                      // daemon-owned current tool name; empty outside a live tool call
 	BusySince             time.Time                   // daemon-owned start of the current active-class stretch; zero when the row is not busy
 	PresentationChangedAt time.Time                   // daemon-owned last visible icon/unseen transition; zero when unknown
 	Unseen                bool                        // daemon-owned: the row came to rest on a turn the user has not looked at; false (seen) with no daemon

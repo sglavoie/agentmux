@@ -86,6 +86,7 @@ func (h *Handler) copyStateLocked(now int64) (map[int]protocol.WindowStateSnapsh
 			identityCopy := identity
 			state.Conversation = &identityCopy
 		}
+		state.ActiveTool = st.ActiveTool
 		if !st.BusySince.IsZero() {
 			state.BusySinceAt = st.BusySince.Unix()
 		}
@@ -226,6 +227,7 @@ func (h *Handler) exportEnrichLocked(windowID int, meta protocol.WindowDebugMeta
 		meta.Shadow.Facts = st.Reducer.Facts()
 	}
 	meta.Shadow.PendingTerminalStop = h.pendingTerminalStopSnapshotLocked(windowID)
+	meta.Shadow.ActiveTool = st.ActiveTool
 	if !st.BusySince.IsZero() {
 		meta.Shadow.BusySinceAt = st.BusySince.Unix()
 	}

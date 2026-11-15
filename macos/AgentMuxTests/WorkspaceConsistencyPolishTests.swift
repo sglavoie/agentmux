@@ -62,17 +62,24 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
 
     func testBranchQualifierDoesNotRemoveMatchingStatusOrAge() {
         let now = Date(timeIntervalSince1970: 1_000)
-        for branch in ["working", "now"] {
-            for icon in ["", "🦊"] {
-                var one = WorkspaceFixture.tmux(1, project: "api", icon: "bolt", changedAtMS: 1_000_000)
-                one.branch = branch
-                one.harnessIcon = icon
-                var two = one
-                two.runtime?.sessionID = WorkspaceFixture.runtimeID(2)
-                two.branch = "other"
-                let row = WorkspaceSidebar.rows([one, two], now: now)[0]
-                XCTAssertEqual(row.qualifier, branch)
-                XCTAssertEqual(row.sidebarDetail, icon.isEmpty ? "working · claude · now" : "working · now")
+        for state in ["bolt", ""] {
+            for branch in ["Working", "idle", "now", "Bash", "0:00"] {
+                for icon in ["", "🦊"] {
+                    var one = WorkspaceFixture.tmux(1, project: "api", icon: state, changedAtMS: 1_000_000)
+                    one.branch = branch
+                    one.harnessIcon = icon
+                    one.busySinceAt = 1000
+                    one.activeTool = branch == "Bash" ? "Bash" : ""
+                    var two = one
+                    two.runtime?.sessionID = WorkspaceFixture.runtimeID(2)
+                    two.branch = "other"
+                    let row = WorkspaceSidebar.rows([one, two], now: now)[0]
+                    XCTAssertEqual(row.qualifier, branch)
+                    let expected = state == "bolt"
+                        ? "\(one.activeTool.isEmpty ? "Working" : one.activeTool) · 0:00"
+                        : (icon.isEmpty ? "idle · claude · now" : "idle · now")
+                    XCTAssertEqual(row.sidebarDetail, expected)
+                }
             }
         }
     }

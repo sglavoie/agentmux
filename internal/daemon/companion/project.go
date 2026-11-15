@@ -276,6 +276,7 @@ func applyState(s *protocol.CompanionSession, st protocol.WindowStateSnapshot) {
 	s.Unseen = st.Unseen
 	s.Looping = s.Looping || st.Looping
 	s.BusySinceAt = st.BusySinceAt
+	s.ActiveTool = display(st.ActiveTool)
 	s.LastEventAt = st.LastEventAt
 	s.PresentationChangedAtMS = st.PresentationChangedAtMS
 	s.Branch = display(st.Branch)

@@ -292,7 +292,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// `away` says the line is listed under Pinned or Needs attention rather
     /// than its project; nil reads it from the row, as where it would be listed.
     func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil, bell: Bool = false,
-              away: Bool? = nil, projectFirstLine: Bool = false) {
+              away: Bool? = nil, projectFirstLine: Bool = false, now: Date = Date()) {
         nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         nameLabel.stringValue = row.namedLabel
@@ -313,7 +313,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         let muted = row.muted ? "\(label) \(muteGlyph)" : label
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
         titleLabel.font = .systemFont(ofSize: 13, weight: row.name.isEmpty ? .semibold : .regular)
-        detailLabel.stringValue = closing ? Self.closingDetail : row.sidebarDetail
+        detailLabel.stringValue = closing ? Self.closingDetail : row.sidebarDetail(now: now)
         toolTip = row.displayName + " · " + row.toolTip
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
         setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))

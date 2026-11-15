@@ -51,9 +51,15 @@ attention lead the list.
   **Compact list** keep the state count chips above the sessions. Clicking a
   chip goes to its first session, expanding its project if needed, as
   **Reveal in Sidebar** (⌘J) does. Group buttons retain their waiting counts.
+- Working session details show the tool name and elapsed busy time, then the
+  branch: `Bash · 1:35 · main`, or `Working · 1:35` when no tool is reported.
+  The clock updates each second while the window is visible and a working row
+  is listed. It measures the continuous busy stretch and switches to hours and
+  days for long runs; an unknown start time shows `—`. Only tool names are
+  shown, never commands or arguments.
 - Session titles use 13-point semibold text; detail uses small regular secondary
-  text for status, branch, and age. A harness icon replaces the harness word in
-  that detail; clearing the icon restores the word. Named sessions emphasize
+  text. Nonworking rows show status, branch, and age; a harness icon replaces
+  the harness word in that detail, and clearing the icon restores the word. Named sessions emphasize
   only the custom name, with project and profile in regular text below it.
   Duplicate names show their branch or runtime qualifier once in the title,
   preserved by middle truncation. Hover for full metadata, including the

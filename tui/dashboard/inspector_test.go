@@ -331,3 +331,15 @@ func TestInspectorWatchdogWarningMatchesTheActivityColumn(t *testing.T) {
 		t.Errorf("a window with no watchdog entry reported an age: %q", lines[4])
 	}
 }
+
+func TestInspectorWorkingToolBesideElapsed(t *testing.T) {
+	in := InspectorInput{Session: session.RunningSession{State: "bolt", ActiveTool: "Bash", BusySince: inspectorNow.Add(-95 * time.Second)}, Now: inspectorNow, Width: 100}
+	got := inspectorStatusLine(in, in.Session, activeGroup)
+	if !strings.Contains(got, "Bash") || !strings.Contains(got, "1:35") {
+		t.Fatalf("working state line = %q", got)
+	}
+	in.Session.State = "stop"
+	if got := inspectorStatusLine(in, in.Session, idleGroup); strings.Contains(got, "Bash") {
+		t.Fatalf("idle state shows tool: %q", got)
+	}
+}

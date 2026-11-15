@@ -100,6 +100,7 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 			sessions[i].ASLPhases = nil
 			sessions[i].Looping = false
 			sessions[i].BusySince = time.Time{}
+			sessions[i].ActiveTool = ""
 			sessions[i].PresentationChangedAt = time.Time{}
 			sessions[i].Unseen = false
 			sessions[i].Review = protocol.SessionReview{}
@@ -121,6 +122,7 @@ func ApplyDaemonStates(sessions []session.RunningSession, states map[int]protoco
 		sessions[i].Reason = state.Reason
 		sessions[i].Branch = state.Branch
 		sessions[i].Dirty = state.Dirty
+		sessions[i].ActiveTool = state.ActiveTool
 		sessions[i].BusySince = time.Time{}
 		if state.BusySinceAt > 0 {
 			sessions[i].BusySince = time.Unix(state.BusySinceAt, 0)

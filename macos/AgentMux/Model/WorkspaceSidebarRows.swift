@@ -68,6 +68,31 @@ struct WorkspaceRow: Equatable {
     /// the line's background under a project says.
     var iconState = ""
     var review = SessionReview()
+    var busySinceAt: Int64 = 0
+    var activeTool = ""
+    var dirty = false
+    var activityElapsed = "—"
+
+    /// Same bands and saturation as the dashboard's formatRunElapsed.
+    static func runElapsed(since anchor: Int64, now: Date) -> String {
+        guard anchor > 0 else { return "—" }
+        let seconds = max(0, now.timeIntervalSince1970 - Double(anchor))
+        guard seconds < 100 * 24 * 3600 else { return "99d+" }
+        let elapsed = Int(seconds)
+        if elapsed < 3600 { return String(format: "%d:%02d", elapsed / 60, elapsed % 60) }
+        if elapsed < 100 * 3600 { return String(format: "%dh%02d", elapsed / 3600, elapsed / 60 % 60) }
+        return String(format: "%dd%02d", elapsed / 86400, elapsed / 3600 % 24)
+    }
+
+    func sidebarDetail(now: Date) -> String {
+        working ? workingDetail(elapsed: Self.runElapsed(since: busySinceAt, now: now)) : sidebarDetail
+    }
+
+    private func workingDetail(elapsed: String) -> String {
+        var parts = [activeTool.isEmpty ? "Working" : activeTool, elapsed]
+        if !branch.isEmpty, qualifier != branch { parts.append(branch + (dirty ? "*" : "")) }
+        return parts.joined(separator: " · ")
+    }
 
     var taskMetadata: String {
         var parts = [project, harness.isEmpty ? label : harness]
@@ -87,6 +112,7 @@ struct WorkspaceRow: Equatable {
     }
 
     var sidebarDetail: String {
+        if working { return workingDetail(elapsed: activityElapsed) }
         var parts = detail.components(separatedBy: " · ")
         let hasHarness = !harness.isEmpty && harness != label
         // Status and an optional harness precede the branch. Remove only that

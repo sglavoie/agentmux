@@ -135,6 +135,7 @@ extension WorkspaceWindowController {
             }
         }
         syncSidebarSelection()
+        updateWorkingTimer()
         reloadInspector()
         if isSwitching { switcher.update(switcherEntries()) }
         continueChoosingGroupPlace()
@@ -392,7 +393,7 @@ extension WorkspaceWindowController {
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
                       sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false,
-                      away: Item.isAway(at: line, in: items), projectFirstLine: sidebarGrouping == .compact)
+                      away: Item.isAway(at: line, in: items), projectFirstLine: sidebarGrouping == .compact, now: now())
             if compactSidebar {
                 configureCompactTabs(in: cell, for: row)
             } else {

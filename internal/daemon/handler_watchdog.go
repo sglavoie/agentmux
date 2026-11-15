@@ -318,6 +318,7 @@ func (h *Handler) sweepStale(now time.Time, credit time.Duration, gapTick bool, 
 				// A nil-reducer window never reaches publishEffectiveLocked, so
 				// the anchor would otherwise stay live on a swept window.
 				st.BusySince = time.Time{}
+				st.ActiveTool = ""
 			}
 			h.appendWatchdogEventLocked(windowID, windowID, now, eventWatchdogStale, "stale", "",
 				"no activity for "+st.IdleDuration().Truncate(time.Second).String()+

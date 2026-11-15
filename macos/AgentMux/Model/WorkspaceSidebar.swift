@@ -244,7 +244,11 @@ enum WorkspaceSidebar {
             conversation: session.conversation.flatMap { $0.isUsable ? $0 : nil },
             branch: session.branch,
             iconState: session.iconState,
-            review: session.review
+            review: session.review,
+            busySinceAt: session.busySinceAt,
+            activeTool: session.activeTool,
+            dirty: session.dirty,
+            activityElapsed: session.isWorking ? WorkspaceRow.runElapsed(since: session.busySinceAt, now: now) : "—"
         )
     }
 

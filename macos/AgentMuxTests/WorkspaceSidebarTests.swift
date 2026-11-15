@@ -229,13 +229,13 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(work.toolTip, "tmux %4\napi · claude · work · Needs permission · 4m")
 
         let web = built[2].rows[0]
-        XCTAssertEqual(web.sidebarDetail, "working · main*")
+        XCTAssertEqual(web.sidebarDetail, "Working · — · main*")
         XCTAssertTrue(web.working)
         XCTAssertFalse(web.attention)
         XCTAssertTrue(web.toolTip.contains("web · codex · work · working · main*"))
         reasoned[0].harnessIcon = ""
         XCTAssertEqual(WorkspaceSidebar.row(reasoned[0], now: now, glyphs: .fallback).sidebarDetail,
-                       "working · codex · main*", "clearing the harness icon restores its name")
+                       "Working · — · main*", "working rows reserve the detail for tool, elapsed time, and branch")
     }
 
     func testWaitingCycleUsesProjectFirstOrder() {

@@ -76,6 +76,46 @@ extension WorkspaceWindowController {
         refresh()
     }
 
+    func updateWorkingTimer() {
+        let needed = isOpen && window.isVisible && !window.isMiniaturized && !NSApp.isHidden && items.contains {
+            if case let .row(row) = $0 { return row.working && state.row(row.key) != nil }
+            return false
+        }
+        guard needed else {
+            workingTimer?.invalidate()
+            workingTimer = nil
+            return
+        }
+        guard workingTimer == nil else { return }
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshWorkingDetails() }
+        }
+        timer.tolerance = 0.1
+        RunLoop.main.add(timer, forMode: .common)
+        workingTimer = timer
+        refreshWorkingDetails()
+    }
+
+    /// Updates existing labels only: no table reload, reorder, or focus change.
+    func refreshWorkingDetails() {
+        guard isOpen, window.isVisible, !window.isMiniaturized, !NSApp.isHidden else {
+            workingTimer?.invalidate()
+            workingTimer = nil
+            return
+        }
+        let date = now()
+        for (index, item) in items.enumerated() {
+            guard case let .row(row) = item, row.working, state.row(row.key) != nil,
+                  row.embeddedRuntimeSessionID.map({ closing[$0] == nil }) ?? true,
+                  let cell = sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceRowCellView else { continue }
+            cell.detailLabel.stringValue = row.sidebarDetail(now: date)
+        }
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) { updateWorkingTimer() }
+    func windowDidMiniaturize(_ notification: Notification) { updateWorkingTimer() }
+    func windowDidDeminiaturize(_ notification: Notification) { updateWorkingTimer() }
+
     func windowShouldClose(_ sender: NSWindow) -> Bool { reviewCanClose() }
 
     func windowWillClose(_ notification: Notification) {
@@ -112,6 +152,8 @@ extension WorkspaceWindowController {
         paneLayout.arrange(split: false, activeOnRight: false)
         ageTimer?.invalidate()
         ageTimer = nil
+        workingTimer?.invalidate()
+        workingTimer = nil
         Self.logger.notice("workspace: closed, detaching \(self.terminals.count) terminal(s)")
         for id in Array(terminals.keys) { discardTerminal(id) }
         detached.removeAll()

@@ -131,7 +131,7 @@ func TestProjectFrameStaysUnderCap(t *testing.T) {
 		r := in.Runtime[slot]
 		r.Project, r.Profile, r.Name = hostile, hostile, hostile
 		in.Runtime[slot] = r
-		in.States[slot] = protocol.WindowStateSnapshot{IconState: hostile, Reason: hostile, Branch: hostile}
+		in.States[slot] = protocol.WindowStateSnapshot{IconState: hostile, Reason: hostile, Branch: hostile, ActiveTool: hostile}
 	}
 	snap := Project(in)
 	data, err := json.Marshal(snap)
@@ -226,5 +226,28 @@ func TestReviewAnnotationPreservesAgentStateAndAttentionCounts(t *testing.T) {
 		if s.Attention != (s.IconState != "stop") {
 			t.Fatalf("attention hidden or retained incorrectly: %+v", s)
 		}
+	}
+}
+
+func TestProjectActiveToolBoundedOptionalAndAffectsDigest(t *testing.T) {
+	in := runtimeInput(1)
+	first := Digest(Project(in))
+	in.States[1] = protocol.WindowStateSnapshot{ActiveTool: "Bash"}
+	snap := Project(in)
+	if snap.Sessions[0].ActiveTool != "Bash" || Digest(snap) == first {
+		t.Fatal("tool was not projected into the digest")
+	}
+	data, err := json.Marshal(snap)
+	if err != nil || !strings.Contains(string(data), `"active_tool":"Bash"`) {
+		t.Fatalf("wire = %s, error = %v", data, err)
+	}
+	in.States[1] = protocol.WindowStateSnapshot{ActiveTool: strings.Repeat("界", 100)}
+	if got := Project(in).Sessions[0].ActiveTool; got != strings.Repeat("界", displayMax/3) {
+		t.Fatalf("unbounded tool = %q", got)
+	}
+	in.States[1] = protocol.WindowStateSnapshot{}
+	data, err = json.Marshal(Project(in))
+	if err != nil || strings.Contains(string(data), "active_tool") || Digest(Project(in)) != first {
+		t.Fatalf("cleared tool still published: %s, %v", data, err)
 	}
 }

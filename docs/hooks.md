@@ -259,3 +259,12 @@ If the managed hook binary is newer than the running daemon, the next hook event
 from that binary automatically restarts the daemon so new indicator/daemon logic
 takes effect without a manual restart. Use `amx daemon restart` when you want to
 force that refresh immediately, or when debugging a hook path mismatch.
+
+### Live tool activity
+
+Accepted pre-tool hooks that resolve to active retain the tool name only for
+live activity displays. The matching post-tool hook, a tool failure or batch
+completion, and clearing the busy stretch remove it. The name is transient
+across daemon restarts; commands, tool input, and prompt text are not decoded
+or retained. The companion's `active_tool` and the TUI inspector expose this
+name beside elapsed busy time.

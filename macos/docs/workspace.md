@@ -41,8 +41,17 @@ ASL answer panel work the same either way.
 - **Sidebar.** `Model/WorkspaceSidebar.swift` builds it as data: one group per
   project, sorted by name, and under it one row per session labeled with its
   profile, sorted by profile. A row uses a 13-point semibold title and small,
-  regular secondary detail: state phrase, branch, and age. When a harness icon
-  is present, the detail omits the harness word; clearing the icon restores it.
+  regular secondary detail: state phrase, branch, and age. Working rows instead
+  show the current tool name (or **Working**), elapsed busy time, and branch,
+  for example `Bash · 1:35 · main`. The time measures the uninterrupted busy
+  stretch, not the individual tool call. It uses `M:SS` below one hour, `hMM`
+  below 100 hours, `dHH` below 100 days, then `99d+`; an unknown anchor is `—`.
+  A one-second timer runs only while the window is visible and a working row
+  is listed, updating existing detail labels without reloading the table.
+  Closing, hiding, minimizing, collapsing, or filtering out all working rows
+  stops it; the independent 30-second age refresh remains.
+  For other states, a harness icon replaces the harness word in the detail;
+  clearing the icon restores it.
   Full project, harness, profile, state, branch (including dirty status), and age
   metadata remain in the tooltip. Sidebar zoom scales this hierarchy together.
   A project's line counts its sessions that wait on you. Sessions needing attention temporarily move into **Needs attention**,

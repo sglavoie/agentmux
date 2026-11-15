@@ -265,6 +265,9 @@ func styledStatusLine(s session.RunningSession, group int, now time.Time, style 
 	} else {
 		line += style.Render(status)
 	}
+	if group == activeGroup && s.ActiveTool != "" {
+		line += styleDim.Render(metaSeparator + s.ActiveTool)
+	}
 	return line + styleDim.Render(metaSeparator+ElapsedText(s, group, now))
 }
 

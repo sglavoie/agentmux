@@ -58,6 +58,7 @@ func TestWatchdogSweepsStaleTmuxSlots(t *testing.T) {
 		h.stateMu.Lock()
 		st := h.store[w.slot]
 		st.LastAction = "active"
+		st.ActiveTool = "Bash"
 		st.Activity = base
 		h.stateMu.Unlock()
 		seedReducerFact(h, w.slot, base, protocol.ReducerEvent{
@@ -77,6 +78,9 @@ func TestWatchdogSweepsStaleTmuxSlots(t *testing.T) {
 
 		if got := effectiveState(h, w.slot).Icon; got != "" {
 			t.Fatalf("icon after the threshold = %q; the tmux session stayed stale", got)
+		}
+		if got := h.Handle(protocol.Request{Type: protocol.TypeStateQuery}).States[w.slot]; got.ActiveTool != "" {
+			t.Fatalf("stale tool survived watchdog: %+v", got)
 		}
 		if !containsEvent(windowEventNames(h, w.slot), eventWatchdogStale) {
 			t.Fatalf("events = %v; want %s", windowEventNames(h, w.slot), eventWatchdogStale)

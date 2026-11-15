@@ -41,6 +41,8 @@ type WindowState struct {
 	// the moment the reduced effective icon entered bolt/subagent/compact —
 	// and is zero whenever the window is not busy.
 	BusySince time.Time
+	// ActiveTool is the current tool name only; transient and never persisted.
+	ActiveTool string
 
 	// PresentationChangedAt is the last time the dashboard-visible icon or unseen
 	// bit changed. It is deliberately independent of Activity and BusySince: a

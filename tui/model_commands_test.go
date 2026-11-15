@@ -264,3 +264,13 @@ func TestApplyDaemonStatesDecodesAnOlderDaemonAsSeen(t *testing.T) {
 		t.Error("Unseen = true from a response with no unseen key, want false (seen)")
 	}
 }
+
+func TestApplyDaemonStatesOverlaysAndClearsActiveTool(t *testing.T) {
+	sessions := []session.RunningSession{{WindowID: 1}, {WindowID: 2, ActiveTool: "stale"}, {WindowID: 3, ActiveTool: "stale"}}
+	commands.ApplyDaemonStates(sessions, map[int]protocol.WindowStateSnapshot{1: {ActiveTool: "Bash"}, 2: {}})
+	for i, want := range []string{"Bash", "", ""} {
+		if sessions[i].ActiveTool != want {
+			t.Fatalf("session %d tool = %q, want %q", i, sessions[i].ActiveTool, want)
+		}
+	}
+}

@@ -350,6 +350,7 @@ type CompanionSession struct {
 	// Pinned is the ★ in front of the session's group title
 	// (`amx pin-session`): the operator listed it above every other session.
 	Pinned                  bool   `json:"pinned,omitempty"`
+	ActiveTool              string `json:"active_tool,omitempty"`
 	BusySinceAt             int64  `json:"busy_since_at,omitempty"`
 	LastEventAt             int64  `json:"last_event_at,omitempty"`
 	PresentationChangedAtMS int64  `json:"presentation_changed_at_ms,omitempty"`

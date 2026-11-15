@@ -406,6 +406,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     static let ageRefreshInterval: TimeInterval = 30
     /// Runs while the window is open, and only then.
     var ageTimer: Timer?
+    var workingTimer: Timer?
 
     init(delegate: WorkspaceDelegate, glyphs: Glyphs = .bundled, now: @escaping () -> Date = Date.init) {
         self.delegate = delegate

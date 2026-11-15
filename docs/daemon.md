@@ -254,6 +254,15 @@ tmux client by its tty and nothing about the emulator that draws it, so it
 cannot bring that terminal's window forward: with no app running, a click
 leaves the right session selected and raising the window to the operator.
 
+Session snapshots and the debug metadata shadow carry optional `active_tool`:
+only the tool name from an accepted pre-tool hook resolving to `active`. A
+matching post-tool hook (including failures and batch completion), or clearing
+the busy anchor, clears it. It is omitted when empty and is not restored across
+daemon restarts. Companion projection bounds it to 128 UTF-8 bytes, like other
+display fields. The workspace uses it beside `busy_since_at` elapsed time, and
+the TUI inspector includes it in the working state line. Tool arguments,
+commands, and prompt text are never decoded, stored, or published by this path.
+
 A companion snoozes notifications with one `notification_snooze` request whose
 `snooze.mode` is `until` (with a Unix-second `until` that must lie in the
 future), `indefinite`, or `clear`; an empty mode reads the snooze back. The

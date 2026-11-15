@@ -25,6 +25,7 @@ func TestStatePayloadV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 		EffectiveGen: 7,
 		ShadowSeq:    9,
 		BusySince:    busySince,
+		ActiveTool:   "Bash",
 	}
 
 	encoded, err := state.MarshalStatePayload()
@@ -55,6 +56,9 @@ func TestStatePayloadV4RoundTripPersistsFactsProcessAndEffective(t *testing.T) {
 	}
 	if got.EffectiveGen != 7 || got.ShadowSeq != 9 {
 		t.Fatalf("EffectiveGen/ShadowSeq = %d/%d, want 7/9", got.EffectiveGen, got.ShadowSeq)
+	}
+	if got.ActiveTool != "" {
+		t.Fatal("transient active tool survived restore")
 	}
 	if !got.BusySince.Equal(busySince) {
 		t.Fatalf("BusySince = %v, want %v", got.BusySince, busySince)

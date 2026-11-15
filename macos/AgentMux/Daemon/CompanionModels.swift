@@ -326,6 +326,7 @@ struct CompanionSession: Decodable, Equatable {
     /// The ★ in front of the session's group title (`amx pin-session`):
     /// listed above every other session, here and in the dashboard.
     var pinned = false
+    var activeTool = ""
     var busySinceAt: Int64 = 0
     var lastEventAt: Int64 = 0
     var presentationChangedAtMS: Int64 = 0
@@ -363,6 +364,7 @@ struct CompanionSession: Decodable, Equatable {
         case runtime
         case aslRunID = "asl_run_id"
         case iconState = "icon_state"
+        case activeTool = "active_tool"
         case busySinceAt = "busy_since_at"
         case lastEventAt = "last_event_at"
         case presentationChangedAtMS = "presentation_changed_at_ms"
@@ -387,6 +389,7 @@ struct CompanionSession: Decodable, Equatable {
         locked = c.lenient(.locked, false)
         looping = c.lenient(.looping, false)
         pinned = c.lenient(.pinned, false)
+        activeTool = c.lenient(.activeTool, "")
         busySinceAt = c.lenient(.busySinceAt, 0)
         lastEventAt = c.lenient(.lastEventAt, 0)
         presentationChangedAtMS = c.lenient(.presentationChangedAtMS, 0)
