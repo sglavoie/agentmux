@@ -50,7 +50,7 @@ final class ASLQuestionFlow: ObservableObject {
     /// The form closed itself: its last answer was accepted, or the run
     /// resumed. The notice says so.
     var onClose: (_ notice: String?) -> Void = { _ in }
-    var onAnswerSent: (String, _ isCurrent: Bool) -> Void = { _, _ in }
+    var onAnswerSent: (String, _ isCurrent: Bool, _ hasRemainingQuestions: Bool) -> Void = { _, _, _ in }
     /// A submission sent before the operator closed the form, or opened
     /// another run, has answered; the notice says how it went.
     var onLateResult: (_ notice: String) -> Void = { _ in }
@@ -256,6 +256,10 @@ final class ASLQuestionFlow: ObservableObject {
             let open = openSeq
             let label = state.target.label
             let answerSent = onAnswerSent
+            // Capture this with the submission, including for a late result.
+            // A live reply closes one question; a paused reply resumes the run.
+            let hasRemainingQuestions = state.kind == .live
+                && state.questionIDs.contains { $0 != params.questionID }
             runner.run({ service.act(params) }) { [weak self] result in
                 MainActor.assumeIsolated {
                     switch result {
@@ -268,7 +272,7 @@ final class ASLQuestionFlow: ObservableObject {
                     let isCurrent = open == self.openSeq && self.phase == .open
                     let next = isCurrent ? self.state.actionFinished(seq: seq, result) : nil
                     if case let .success(operation) = result, ASLResponse.answered(operation.status) {
-                        answerSent(params.runID, isCurrent)
+                        answerSent(params.runID, isCurrent, hasRemainingQuestions)
                     }
                     guard open == self.openSeq else {
                         if !isCurrent { self.lateResult(params, label: label, result) }

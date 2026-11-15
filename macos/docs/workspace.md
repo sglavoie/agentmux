@@ -527,13 +527,17 @@ button, and **N more waiting** when other sessions need attention. Answer… ope
 the same panel as the inspector, including from the inactive split pane.
 
 With `amxContinueToNextWaiting` on (the default, in Settings › Workspace), a
-successful prompt or ASL panel submission opens the next answerable, unsent
+successful prompt submission or final ASL answer opens the next answerable, unsent
 waiting row in sidebar order, wrapping after the last row. The pane follows the
 panel without making its terminal first responder, including with the sidebar
 collapsed or the next session already in the other split pane. Each prompt
 requires its own completed look reporting a prompt before accepting keys. Old
 submission callbacks retain their question identity and cannot move a newer
-panel. When the queue is empty the panel closes and shows **All caught up**.
+panel. An ASL run with multiple open questions stays in its panel through the
+remaining questions. Its Waiting row is marked **Answer sent** and the queue
+advances only after its last question is answered, even while the snapshot still
+lists the earlier unanswered count. When the queue is empty the panel closes
+and shows **All caught up**.
 Waiting-question identity follows presentation time, icon and prompt kind, plus
 the supervisor question ID and unanswered count. Routine activity refreshes of
 the same Codex prompt do not invalidate an answer; a changed question still

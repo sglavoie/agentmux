@@ -11,13 +11,15 @@ one link: **Open Briefing**. Returning keeps terminal focus and opens no popover
 Only the presence timestamp is saved for this feature. Opening or dismissing the
 card never marks activity read and never generates a recap.
 
-Successful prompt submissions and accepted supervisor answers show **Answer sent**
-on the waiting item until its question changes. That item cannot be answered
+Successful prompt submissions and the last accepted supervisor answer in a run
+show **Answer sent** on the waiting item until its question changes. That item cannot be answered
 again from Waiting while acknowledgment is pending. **Next waiting · N remaining**
 and the reader's N key skip submitted questions. By default, sending an answer
 from a prompt or supervisor panel continues to the next unanswered session in
-sidebar order, wrapping to earlier items as needed. Its pane appears and its
-answer panel takes the keyboard; its terminal never takes focus. A prompt panel
+sidebar order, wrapping to earlier items as needed. A supervisor run with multiple
+open questions stays in its panel until all its questions are answered; its
+Waiting item remains answerable until the last answer. The next session's pane
+appears and its answer panel takes the keyboard; its terminal never takes focus. A prompt panel
 must read that session's own prompt before accepting any key. When no answerable
 items remain, the panel closes with an **All caught up** receipt. If the waiting
 context changes before the submission receipt arrives, the panel stays on its

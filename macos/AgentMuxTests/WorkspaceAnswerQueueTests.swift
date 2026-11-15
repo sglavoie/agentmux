@@ -39,7 +39,7 @@ private final class QueueASLService: ASLService {
         .success(ASLResult(status: ASLFixtures.liveStatus, snapshot: ASLSnapshot(rows: [row]), meta: ASLSnapshotMeta()))
     }
     func question(planDir: String, questionID: String) -> Result<ASLQuestionBody, ASLRequestError> {
-        .success(ASLFixtures.body(row, questionID, "Continue?"))
+        .success(ASLFixtures.body(row, questionID, "Continue?", token: "token-\(questionID)"))
     }
     func act(_ params: ASLRequestParams) -> Result<ASLOperation, ASLRequestError> {
         actions.append(params)
@@ -96,7 +96,8 @@ final class WorkspaceAnswerQueueTests: XCTestCase {
             var waiting = CompanionASLWaiting()
             waiting.runID = asl.row.runID; waiting.planDir = asl.row.planDir
             waiting.runtimeSessionID = F.runtimeID(aslIndex)
-            waiting.latestQuestionID = "q-api-1"; waiting.unanswered = 1
+            waiting.latestQuestionID = asl.row.question?.questionID ?? ""
+            waiting.unanswered = asl.row.question?.unansweredCount ?? 0
             snapshot.asl.waiting = [waiting]
         }
         apply(snapshot)
@@ -210,6 +211,84 @@ final class WorkspaceAnswerQueueTests: XCTestCase {
         XCTAssertFalse(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(3)))
         sendPrompt()
         XCTAssertEqual(workspace.welcome.receipt?.title, "All caught up")
+    }
+
+    func testMultiQuestionASLRunFinishesBeforeQueueAdvances() throws {
+        try finishMultiQuestionRun(waitingSessions: 2)
+        XCTAssertTrue(app.promptPanel!.isVisible)
+        XCTAssertEqual(prompt.state?.target.runtimeSessionID, F.runtimeID(2))
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        XCTAssertFalse(workspace.window.firstResponder === workspace.terminalView(for: F.runtimeID(2)))
+        XCTAssertFalse(prompt.state?.canPress == true)
+        sendPrompt()
+        XCTAssertEqual(workspace.welcome.receipt?.title, "All caught up")
+    }
+
+    func testMultiQuestionASLRunShowsCaughtUpOnlyAfterLastAnswer() throws {
+        try finishMultiQuestionRun(waitingSessions: 1)
+        XCTAssertNil(prompt.state)
+        XCTAssertEqual(workspace.welcome.receipt?.title, "All caught up")
+    }
+
+    private func finishMultiQuestionRun(waitingSessions: Int) throws {
+        asl.row.question?.questionIDs = ["q-api-1", "q-api-2"]
+        asl.row.question?.unansweredCount = 2
+        load(waitingSessions, aslIndex: 1)
+        try open(1)
+        let row = try XCTUnwrap(workspace.allWaitingRows.first { $0.key == .embedded(F.runtimeID(1)) })
+        let flow = app.aslPanel!.flow
+        flow.setDraft("First answer")
+        flow.submit(try XCTUnwrap(flow.state.buttons.first))
+
+        XCTAssertEqual(asl.actions.map(\.questionID), ["q-api-1"])
+        XCTAssertEqual(flow.phase, .open)
+        XCTAssertTrue(app.aslPanel!.isVisible)
+        XCTAssertEqual(flow.answering?.runID, asl.row.runID)
+        XCTAssertEqual(flow.state.target.questionID, "q-api-2")
+        XCTAssertEqual(flow.state.target.actionToken, "token-q-api-2")
+        XCTAssertEqual(flow.state.notice, "Answer sent — question 2 of 2")
+        XCTAssertEqual(flow.editorFocus?.questionID, "q-api-2")
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+        XCTAssertNil(prompt.state)
+        XCTAssertFalse(workspace.inspector.answerWasSent(row))
+        XCTAssertTrue(workspace.inspector.sentAnswers.isEmpty)
+        XCTAssertEqual(workspace.welcome.receipt?.title, "Answer sent")
+
+        // Neither the companion nor ASL snapshot acknowledges the first
+        // answer yet. The panel's captured question set drives completion.
+        workspace.refresh()
+        XCTAssertEqual(terminals.store.snapshot?.asl.waiting.first?.unanswered, 2)
+        XCTAssertFalse(workspace.inspector.answerWasSent(row))
+        flow.setDraft("Second answer")
+        flow.submit(try XCTUnwrap(flow.state.buttons.first))
+        XCTAssertEqual(asl.actions.map(\.questionID), ["q-api-1", "q-api-2"])
+        XCTAssertEqual(asl.actions.map(\.actionToken), [asl.row.actionToken, "token-q-api-2"])
+        XCTAssertTrue(workspace.inspector.answerWasSent(row))
+        XCTAssertEqual(workspace.inspector.sentAnswers.count, 1)
+        XCTAssertEqual(flow.phase, .idle)
+        XCTAssertEqual(flow.unsent.drafts, 0)
+        XCTAssertFalse(app.aslPanel!.isVisible)
+    }
+
+    func testLateASLAnswerWithRemainingQuestionsDoesNotMarkRunSent() throws {
+        asl.row.question?.questionIDs = ["q-api-1", "q-api-2"]
+        asl.row.question?.unansweredCount = 2
+        let runner = QueueHeldRunner()
+        app.aslPanel = ASLQuestionPanelController(flow: ASLQuestionFlow(service: asl, runner: runner))
+        load(2, aslIndex: 1)
+        try open(1)
+        runner.drain() // snapshot
+        runner.drain() // first question
+        let flow = app.aslPanel!.flow
+        flow.setDraft("First answer")
+        flow.submit(try XCTUnwrap(flow.state.buttons.first))
+        app.aslPanel!.dismissForQueue()
+        try open(2)
+        runner.drain() // accepted after the ASL panel closed
+        XCTAssertEqual(asl.actions.map(\.questionID), ["q-api-1"])
+        XCTAssertTrue(workspace.inspector.sentAnswers.isEmpty)
+        XCTAssertEqual(prompt.state?.target.runtimeSessionID, F.runtimeID(2))
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
     }
 
     func testSkipsAnsweredAndUnanswerableRowsAndWrapsInSidebarOrder() throws {

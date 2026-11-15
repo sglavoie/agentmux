@@ -62,8 +62,9 @@ extension AppDelegate {
             if case let .asl(answer)? = $0.answer { return answer.runID == target.runID }
             return false
         }
-        controller.flow.onAnswerSent = { [weak self] run, isCurrent in
-            self?.workspaceAnswerSent(runID: run, question: question, continueQueue: isCurrent)
+        controller.flow.onAnswerSent = { [weak self] run, isCurrent, hasRemainingQuestions in
+            self?.workspaceAnswerSent(runID: run, question: question, continueQueue: isCurrent,
+                                      hasRemainingQuestions: hasRemainingQuestions)
         }
         if aslPanel == nil {
             controller.onFinish = { [weak self] notice in self?.finishAnswer(notice) }
@@ -89,7 +90,8 @@ extension AppDelegate {
         statusItem?.rebuildMenu()
     }
 
-    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil, question: WorkspaceWaitingRow? = nil, continueQueue: Bool = true) {
+    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil, question: WorkspaceWaitingRow? = nil, continueQueue: Bool = true,
+                             hasRemainingQuestions: Bool = false) {
         if let session = store.managedSessions.first(where: {
             (runtimeSessionID != nil && $0.embeddedRuntimeSessionID == runtimeSessionID)
                 || (runID?.isEmpty == false && $0.aslRunID == runID)
@@ -105,12 +107,12 @@ extension AppDelegate {
             if case let .asl(target)? = row.answer { return target.runID == runID }
             return false
         })
-        if let answered { workspace.inspector.markAnswerSent(answered) }
+        if let answered, !hasRemainingQuestions { workspace.inspector.markAnswerSent(answered) }
         refreshBriefing()
         workspace.welcome.pendingAnswers = workspace.inspector.sentAnswers.count
         workspace.welcome.answerSent()
         workspace.showNotice("Answer sent")
-        guard preferencesModel.preferences.continueToNextWaiting, continueQueue,
+        guard !hasRemainingQuestions, preferencesModel.preferences.continueToNextWaiting, continueQueue,
               workspace.state.current, let answered,
               let index = waiting.firstIndex(where: { $0.key == answered.key }) else { return }
         // Start after the submission, wrapping to earlier unanswered rows.
