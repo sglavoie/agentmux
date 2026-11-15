@@ -36,6 +36,7 @@ configuration is older than the file.
 | Command | Description |
 | --- | --- |
 | `amx config init` | create the example config |
+| `amx config setup` | configure the first project interactively, or without prompts with `--harness` and `--directory`; `--detect` only reports local availability and recent directories |
 | `amx config edit` | open the config in `$EDITOR` |
 | `amx config show` | print the config file exactly as written |
 | `amx config profiles --json` | list all configured profile names and harnesses, including profiles with no project |
@@ -44,6 +45,66 @@ configuration is older than the file.
 | `amx config hooks-sync` | sync hooks into all configured profiles |
 | `amx config hooks-status` | show hook sync status per profile |
 | `amx config confirmation` | report whether destructive actions (End Session, restart, and restart under another profile) ask for confirmation. `--policy follow-cli` (the default) reads `[defaults] confirm_destructive` from `config.toml` each time; `always` and `never` answer without reading it. `--json` reports `{required}`. Under **Follow config.toml**, the desktop app runs it just before a destructive action |
+
+## First-project setup
+
+`amx config setup --detect [--json]` changes nothing, even if a config already
+has projects or cannot be loaded. It reports `claude`, `copilot`, and `codex`:
+CLI availability on `PATH` and whether each default home exists. It inspects
+conversation identity metadata in those default homes, ignoring home environment
+overrides and configured profiles. It never decodes message content or writes a
+transcript index. The result includes at most eight unique, existing directories,
+newest first; each carries the harness of its latest conversation and a
+`last_used` time from the transcript file's modification time.
+
+The interactive wizard preselects the only harness detected by its CLI or default
+home. With none or several it keeps Claude as the default. Before the project
+path prompt it lists recent directories by number; enter a number, a path, or
+press Enter to use the current directory. With no recent directories, the usual
+free-form path prompt remains. The embedded `amx workspace-view setup` uses the
+same wizard and returns to the workspace after its summary.
+
+```sh
+amx config setup --detect --json
+amx config setup --harness codex --directory ~/projects/my-app \
+  --home ~/.codex --profile-name codex-local --title 'My app' \
+  --backend keep --json
+```
+
+Giving both `--harness` and `--directory` disables all prompts. Optional flags:
+
+| Flag | Default and behavior |
+| --- | --- |
+| `--home` | `~/.<harness>` for a new profile; need not exist yet |
+| `--profile-name` | `<harness>-local` for a new profile; selects an existing profile when profiles already exist |
+| `--title` | project directory's basename |
+| `--backend keep\|tmux` | `keep` preserves the current setting; an unset setting uses tmux; `tmux` pins it |
+| `--sync-hooks` | off without prompts; explicitly opts into writing the selected profile's hook settings after config is saved |
+| `--json` | schema-v1 output on stdout; interactive prompts and progress go to stderr |
+
+With only one of `--harness` and `--directory`, setup stays interactive and uses
+provided flags as answers. Without flags, hook sync still requires an explicit
+answer. Setup reuses the sole existing profile matching the requested harness;
+if several match, supply `--profile-name`. A supplied home or harness must match
+that existing profile. Setup preserves profiles and comments, validates the
+candidate config, checks for edits made during setup, and saves atomically. It
+refuses configs that already contain projects or legacy sessions, invalid
+configs, and missing or non-directory project paths.
+
+Detection JSON is `{"schema_version":1,"data":{"harnesses":[],"recent_projects":[],"warnings":[]}}`.
+Harness entries have `harness`, `cli_available`, optional `cli_path`, `home`, and
+`home_exists`. Project entries have `directory`, `harness`, and `last_used`
+(RFC 3339 UTC). Unreadable homes or metadata roots are reported in `warnings`;
+unreadable individual conversations follow the metadata readers' skip behavior.
+
+Setup JSON uses the same envelope with `config_path`, `saved`, `profile`,
+`harness`, `home` (tilde expanded), `directory`, `title`, effective `backend`,
+`hooks_status` (`not_synced`, `synced`, or `failed`), and a readable `summary`.
+If hook sync fails, config is already saved: the command exits nonzero but still
+returns this data with `saved: true`, `hooks_status: "failed"`, and `hooks_error`.
+Retry `amx config hooks-sync -- PROFILE`, rather than setup. Failures before a
+save use the standard `error` envelope with code `setup_failed`. Setup does not
+check authentication or launch an agent.
 
 ## Upgrading the pair
 

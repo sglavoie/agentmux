@@ -14,7 +14,9 @@ If no compatible download is listed, build from source below.
 The bundle includes `amx`, tmux, and Ghostty. You do not need Go, Xcode,
 Homebrew, or a separately installed `amx` to run it. On a fresh installation,
 the workspace opens with **Set Up First Project** before a daemon is needed.
-Choose the agent's existing authenticated home and a project directory, keep
+The wizard defaults to the only detected agent CLI and offers recent existing
+project directories as numbered choices. Choose the agent's existing
+authenticated home and a project directory, keep
 the tmux default, and explicitly choose whether to sync its hooks. Press
 Enter after the summary, choose **Start Daemon** if offered, then
 **Launch Project**. Invalid or unreadable existing configuration is reported
@@ -29,6 +31,23 @@ For command-line access without a separate installation, the bundled binary is:
 ```bash
 "/Applications/Agent Mux.app/Contents/Resources/bin/amx" --version
 ```
+
+The bundled CLI can also preview setup without changing files, or configure the
+first project without prompts:
+
+```bash
+"/Applications/Agent Mux.app/Contents/Resources/bin/amx" config setup --detect --json
+"/Applications/Agent Mux.app/Contents/Resources/bin/amx" config setup \
+  --harness codex --directory ~/projects/my-app --json
+```
+
+Optional flags are `--home`, `--title`, `--profile-name`, `--backend keep|tmux`,
+and `--sync-hooks`. Hooks are not synced without that flag in non-interactive
+mode. A hook failure returns a nonzero exit with `saved: true` in the JSON
+result; retry hook sync instead of setup. See the
+[setup contract](../operations.md#first-project-setup) for defaults, existing
+profile selection, and JSON fields. The embedded **Set Up First Project**
+wizard remains available through `amx workspace-view setup`.
 
 ### Building from source
 

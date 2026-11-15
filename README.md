@@ -66,11 +66,22 @@ CLI. On macOS, native notifications additionally need
    It puts `amx` in
    `~/.local/bin` (put that on your `PATH`) and creates a starter
    `~/.config/agent-mux/config.toml` if none exists.
-2. **Configure.** Run `amx config setup`. It asks for the agent CLI, its
-   profile home, an existing project directory, and a default backend, adds
+2. **Configure.** Run `amx config setup`. It defaults to the only detected
+   agent CLI and offers recent existing project directories as numbered choices.
+   It asks for the profile home and a default backend, adds
    the first project without touching other settings, and offers to sync the
    profile's hooks (answer explicitly; **no** prints the command to finish
    later). Choose **Keep** to use the tmux default or **tmux** to pin it explicitly.
+   For a read-only preview, use `amx config setup --detect --json`. To skip
+   prompts, give both `--harness` and `--directory`:
+
+   ```sh
+   amx config setup --harness codex --directory ~/projects/my-app --json
+   ```
+
+   Optional flags are `--home`, `--title`, `--profile-name`, `--backend keep|tmux`,
+   and `--sync-hooks` (off by default without prompts). See
+   [setup details and JSON results](docs/operations.md#first-project-setup).
    Authentication is not checked. To write
    the configuration by hand, see [Manual configuration](#manual-configuration).
 3. **Check.**

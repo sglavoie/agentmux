@@ -36,7 +36,13 @@ Existing comments and optional settings are preserved. Setup refuses a config
 that already has projects; use amx config edit to add more. The project directory
 must exist. Setup offers to sync this profile's hooks, checks launch requirements,
 and summarizes effective destinations. Keep leaves the launch destination unset:
-CLI launch commands and terminal dashboards use the private tmux server.`,
+CLI launch commands and terminal dashboards use the private tmux server.
+
+--detect reports CLI availability, default homes and up to eight recent existing
+project directories without writing anything. With --harness and --directory,
+setup runs without prompts. Other flags override wizard answers; hooks are only
+synced when explicitly requested. --json emits the schema-v1 result on stdout
+(prompts go to stderr).`,
 	RunE: runConfigSetup,
 }
 
@@ -52,9 +58,68 @@ var setupSyncHooks = func(cmd *cobra.Command, profile string) error {
 	return hooks.SyncCommand().RunE(cmd, []string{profile})
 }
 
+func init() {
+	addSetupFlags(configSetupCmd)
+}
+
+func addSetupFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("detect", false, "report installed harnesses and recent projects without changes")
+	cmd.Flags().String("harness", "", "agent CLI: claude, copilot, codex")
+	cmd.Flags().String("home", "", "profile home (defaults to the harness home)")
+	cmd.Flags().String("directory", "", "existing project directory")
+	cmd.Flags().String("title", "", "project title (defaults to directory name)")
+	cmd.Flags().String("profile-name", "", "new profile name or existing profile to use")
+	cmd.Flags().String("backend", "keep", "default backend: keep or tmux")
+	cmd.Flags().Bool("sync-hooks", false, "sync the selected profile's hooks after saving")
+	cli.AddJSONFlag(cmd, nil)
+}
+
+type setupResult struct {
+	ConfigPath  string `json:"config_path"`
+	Saved       bool   `json:"saved"`
+	Profile     string `json:"profile"`
+	Harness     string `json:"harness"`
+	Home        string `json:"home"`
+	Directory   string `json:"directory"`
+	Title       string `json:"title"`
+	Backend     string `json:"backend"`
+	HooksStatus string `json:"hooks_status"`
+	HooksError  string `json:"hooks_error,omitempty"`
+	Summary     string `json:"summary"`
+}
+
 func runConfigSetup(cmd *cobra.Command, _ []string) error {
-	path := config.DefaultConfigPath()
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	detect, _ := cmd.Flags().GetBool("detect")
+	if detect {
+		result := detectSetup()
+		if jsonOutput {
+			return cli.WriteJSON(cmd, result)
+		}
+		return result.writeText(cmd.OutOrStdout())
+	}
+	input := newSetupInput(cmd)
+	if jsonOutput {
+		input.out = cmd.ErrOrStderr()
+	}
+	result := setupResult{ConfigPath: config.DefaultConfigPath(), HooksStatus: "not_synced"}
+	err := applyConfigSetup(cmd, input, &result)
+	if jsonOutput {
+		if err != nil {
+			if result.Saved {
+				return cli.WriteJSONPartial(cmd, result, err)
+			}
+			return cli.CommandFailure(cmd, true, "setup_failed", err)
+		}
+		return cli.WriteJSON(cmd, result)
+	}
+	return err
+}
+
+func applyConfigSetup(cmd *cobra.Command, input *setupInput, result *setupResult) error {
+	path := result.ConfigPath
 	previous, err := os.ReadFile(path)
+	originalExists := err == nil
 	if errors.Is(err, os.ErrNotExist) {
 		previous = []byte(config.ExampleConfig)
 	} else if err != nil {
@@ -72,21 +137,27 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("projects already exist; use `amx config edit` to add another")
 	}
 
-	reader := bufio.NewReader(cmd.InOrStdin())
-	out := cmd.OutOrStdout()
+	out := input.out
+	if err := input.validate(); err != nil {
+		return err
+	}
+	detection := setupDetection{}
+	if !input.noninteractive {
+		detection = detectSetup()
+	}
 	var addition strings.Builder
 	profile := ""
 	switch len(current.Profiles) {
 	case 0:
-		chosen, err := setupChoice(reader, out, "Agent CLI (claude, copilot, codex)", "claude", harness.Names()...)
+		chosen, err := input.answer("harness", "Agent CLI (claude, copilot, codex)", detection.defaultHarness(), harness.Names()...)
 		if err != nil {
 			return err
 		}
-		profile, err = setupPrompt(reader, out, "Profile name", chosen+"-local")
+		profile, err = input.answer("profile-name", "Profile name", chosen+"-local")
 		if err != nil {
 			return err
 		}
-		home, err := setupPrompt(reader, out, "Profile home", "~/."+chosen)
+		home, err := input.answer("home", "Profile home", "~/."+chosen)
 		if err != nil {
 			return err
 		}
@@ -105,29 +176,11 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 		setupField(&addition, "harness", chosen)
 		setupField(&addition, "home_dir", home)
 		setupField(&addition, "color", color)
-	case 1:
-		profile = current.Profiles[0].Name
-		if _, err := fmt.Fprintf(out, "Using existing profile %s\n", profile); err != nil {
-			return err
-		}
 	default:
-		for {
-			chosen, err := setupPrompt(reader, out, "Existing profile name", current.Profiles[0].Name)
-			if err != nil {
-				return err
-			}
-			for _, candidate := range current.Profiles {
-				if strings.EqualFold(candidate.Name, chosen) {
-					profile = candidate.Name
-					break
-				}
-			}
-			if profile != "" {
-				break
-			}
-			if _, err := fmt.Fprintf(out, "Unknown profile %q. Choose %s.\n", chosen, setupProfileNames(current.Profiles)); err != nil {
-				return err
-			}
+		var err error
+		profile, err = input.existingProfile(current.Profiles)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -135,11 +188,28 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("finding current directory: %w", err)
 	}
+	if !input.noninteractive && !input.has("directory") {
+		for i, project := range detection.RecentProjects {
+			if _, err := fmt.Fprintf(out, "  %d. %s (%s)\n", i+1, project.Directory, project.Harness); err != nil {
+				return err
+			}
+		}
+		if len(detection.RecentProjects) > 0 {
+			if _, err := fmt.Fprintln(out, "Choose a recent project number or enter a path."); err != nil {
+				return err
+			}
+		}
+	}
 	var directory string
 	for {
-		entered, err := setupPrompt(reader, out, "Project directory", cwd)
+		entered, err := input.answer("directory", "Project directory", cwd)
 		if err != nil {
 			return err
+		}
+		if !input.noninteractive && !input.has("directory") {
+			if number, parseErr := strconv.Atoi(entered); parseErr == nil && number > 0 && number <= len(detection.RecentProjects) {
+				entered = detection.RecentProjects[number-1].Directory
+			}
 		}
 		directory, err = filepath.Abs(config.ExpandTilde(entered))
 		if err == nil {
@@ -152,19 +222,22 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 				err = fmt.Errorf("not a directory")
 			}
 		}
+		if input.noninteractive || input.has("directory") {
+			return fmt.Errorf("project directory %q: %w", entered, err)
+		}
 		if _, writeErr := fmt.Fprintf(out, "Project directory %q: %v. Enter an existing directory.\n", entered, err); writeErr != nil {
 			return writeErr
 		}
 	}
-	title, err := setupPrompt(reader, out, "Project title", filepath.Base(directory))
+	title, err := input.answer("title", "Project title", filepath.Base(directory))
 	if err != nil {
 		return err
 	}
-	if strings.TrimSpace(current.Defaults.LaunchBackend) == "" {
+	if strings.TrimSpace(current.Defaults.LaunchBackend) == "" || input.has("backend") {
 		if _, err := fmt.Fprintln(out, "Keep uses the tmux default in every terminal."); err != nil {
 			return err
 		}
-		backend, err := setupChoice(reader, out, "Default backend (keep or tmux)", "keep", "keep", config.LaunchBackendTmux)
+		backend, err := input.answer("backend", "Default backend (keep or tmux)", "keep", "keep", config.LaunchBackendTmux)
 		if err != nil {
 			return err
 		}
@@ -186,11 +259,11 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 	if err := config.Validate(&candidate); err != nil {
 		return fmt.Errorf("setup would create invalid config: %w", err)
 	}
-	syncChoice, err := setupChoice(reader, out, "Sync Agent Mux hooks for "+profile+" now? (yes/no)", "no", "yes", "no")
+	syncChoice, err := input.hookAnswer(profile)
 	if err != nil {
 		return err
 	}
-	if before, readErr := os.ReadFile(path); readErr == nil && !bytes.Equal(before, original) {
+	if before, readErr := os.ReadFile(path); (readErr == nil && (!originalExists || !bytes.Equal(before, original))) || (errors.Is(readErr, os.ErrNotExist) && originalExists) {
 		return fmt.Errorf("config changed during setup; rerun `amx config setup` against the current file")
 	} else if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
 		return fmt.Errorf("rechecking config: %w", readErr)
@@ -198,18 +271,39 @@ func runConfigSetup(cmd *cobra.Command, _ []string) error {
 	if err := atomicfile.Replace(path, updated, 0o644); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
+	result.Saved = true
+	result.Profile, result.Directory, result.Title = profile, directory, title
+	result.Backend = candidate.LaunchBackendOrDefault()
+	for _, account := range candidate.Profiles {
+		if account.Name == profile {
+			result.Harness, result.Home = account.EffectiveHarness(), config.ExpandTilde(account.EffectiveHomeDir())
+		}
+	}
 	if _, err := fmt.Fprintf(out, "Configured %s with profile %s in %s\n", title, profile, path); err != nil {
 		return err
 	}
 	var syncErr error
 	if syncChoice == "yes" {
-		syncErr = setupSyncHooks(cmd, profile)
+		// Keep hook progress off the JSON result stream, including partial failures.
+		hookCmd := &cobra.Command{}
+		hookCmd.SetOut(out)
+		hookCmd.SetErr(cmd.ErrOrStderr())
+		syncErr = setupSyncHooks(hookCmd, profile)
+		result.HooksStatus = "synced"
+		if syncErr != nil {
+			result.HooksStatus, result.HooksError = "failed", syncErr.Error()
+		}
 	}
 	cfg, err := config.Load(path)
 	if err != nil {
 		return fmt.Errorf("configuration saved, but readiness checks could not load it: %w", err)
 	}
-	if err := setupSummary(out, cfg, profile, syncChoice == "yes", syncErr); err != nil {
+	var summary strings.Builder
+	if err := setupSummary(&summary, cfg, profile, syncChoice == "yes", syncErr); err != nil {
+		return err
+	}
+	result.Summary = summary.String()
+	if _, err := io.WriteString(out, result.Summary); err != nil {
 		return err
 	}
 	if syncErr != nil {

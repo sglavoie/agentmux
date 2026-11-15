@@ -15,6 +15,7 @@ import (
 
 func runSetupWithInput(t *testing.T, input string) (string, error) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	oldLook, oldStatus := setupLookPath, setupBackendStatus
 	setupLookPath = func(name string) (string, error) { return "/fixture/bin/" + name, nil }
 	setupBackendStatus = func(*config.Config) cli.BackendStatus {
