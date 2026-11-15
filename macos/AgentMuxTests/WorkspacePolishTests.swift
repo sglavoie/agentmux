@@ -51,6 +51,110 @@ final class WorkspacePolishTests: XCTestCase {
         (workspace.inspector.lines.first as? NSTextField)?.stringValue
     }
 
+    func testStoryCellVisibilityAccessibilityAndUtilityReuse() {
+        let cell = WorkspaceRowCellView()
+        let row = WorkspaceSidebar.row(sessions[0], now: .now, glyphs: .fallback)
+        cell.show(row, muteGlyph: "")
+        XCTAssertTrue(cell.storyLabel.isHidden)
+        cell.show(row, muteGlyph: "", story: "Allow creating notes?")
+        XCTAssertFalse(cell.storyLabel.isHidden)
+        XCTAssertEqual(cell.storyLabel.stringValue, "Allow creating notes?")
+        XCTAssertEqual(cell.storyLabel.font, cell.detailLabel.font)
+        XCTAssertEqual(cell.storyLabel.maximumNumberOfLines, 1)
+        XCTAssertTrue(cell.toolTip?.contains("Allow creating notes?") == true)
+        XCTAssertTrue(cell.accessibilityLabel()?.contains("Allow creating notes?") == true)
+        cell.show(row, muteGlyph: "")
+        XCTAssertTrue(cell.storyLabel.isHidden)
+        XCTAssertFalse(cell.toolTip?.contains("Allow creating notes?") == true)
+        cell.show(row, muteGlyph: "", story: "Done")
+        cell.show(WorkspaceUtilityView.dashboard)
+        XCTAssertTrue(cell.storyLabel.isHidden)
+        XCTAssertEqual(cell.storyLabel.stringValue, "")
+    }
+
+    func testStoriesGrowOnlyExpandedSessionRowsAndUseDelegateCommand() throws {
+        workspace.window.close()
+        let sidebar = PolishStoriesSidebar()
+        workspace = WorkspaceWindowController(delegate: app, glyphs: .fallback, sidebar: sidebar)
+        workspace.openForTesting()
+        let runner = PolishStoriesRunner()
+        workspace.stories = WorkspaceStories(runner: runner)
+        var calls: [[String]] = []
+        var command = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/fixture", path: "/bin"))
+        command.runner = { _, args, _, _ in
+            calls.append(args)
+            let payload = Data(#"{"schema_version":1,"data":{"screen":"blocked","prompt":{"summary":"Allow creating notes?"}}}"#.utf8)
+            return .finished(.init(status: 0, stdout: payload, stderr: Data()))
+        }
+        app.recapCommand = command
+        var session = F.tmux(1, project: "api", icon: "key")
+        app.store.apply(snapshot: F.snapshot([session]))
+        var line = try index(of: .embedded(F.runtimeID(1)))
+        XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 38)
+        sidebar.fullReloads = 0
+        sidebar.reloadedRows = []
+        sidebar.heightChanges = []
+        runner.release()
+        XCTAssertEqual(sidebar.fullReloads, 0)
+        XCTAssertEqual(sidebar.reloadedRows, [IndexSet(integer: line)])
+        XCTAssertTrue(sidebar.heightChanges.contains(IndexSet(integer: line)))
+        XCTAssertEqual(calls, [["send", F.runtimeID(1), "--look", "--json"]])
+        XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 54)
+        let cell = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: line) as? WorkspaceRowCellView)
+        XCTAssertEqual(cell.storyLabel.stringValue, "Allow creating notes?")
+        session.name = "Named session"
+        app.store.apply(snapshot: F.snapshot([session]))
+        line = try index(of: .embedded(F.runtimeID(1)))
+        XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 70)
+        workspace.setCompactSidebar(true)
+        line = try index(of: .embedded(F.runtimeID(1)))
+        XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 54)
+        let compact = try XCTUnwrap(workspace.tableView(workspace.sidebar, viewFor: nil, row: line) as? WorkspaceRowCellView)
+        XCTAssertTrue(compact.storyLabel.isHidden)
+        workspace.setCompactSidebar(false)
+        session.iconState = "bolt"
+        app.store.apply(snapshot: F.snapshot([session]))
+        line = try index(of: .embedded(F.runtimeID(1)))
+        XCTAssertEqual(workspace.tableView(workspace.sidebar, heightOfRow: line), 54)
+        XCTAssertEqual(workspace.stories.text(for: .embedded(F.runtimeID(1))), "")
+        XCTAssertTrue(runner.pending.isEmpty)
+    }
+
+    func testFinishedStoryReadsLastFourMessagesThroughDelegate() {
+        let runner = PolishStoriesRunner()
+        workspace.stories = WorkspaceStories(runner: runner)
+        var calls: [[String]] = []
+        var command = AMXCommand(binary: URL(fileURLWithPath: "/amx"), launchEnvironment: LaunchEnvironment(home: "/fixture", path: "/bin"))
+        command.runner = { _, args, _, _ in
+            calls.append(args)
+            let payload = Data(###"{"schema_version":1,"data":{"session":{"id":"conversation","harness":"codex"},"messages":[{"role":"assistant","text":"## Tests passed"}]}}"###.utf8)
+            return .finished(.init(status: 0, stdout: payload, stderr: Data()))
+        }
+        app.recapCommand = command
+        let session = F.tmux(1, project: "api", harness: "codex", icon: "stop", conversation: "conversation")
+        app.store.apply(snapshot: F.snapshot([session]))
+        runner.release()
+        XCTAssertEqual(calls, [["session", "show", "--last", "4", "--json", "--", "codex:conversation"]])
+        XCTAssertEqual(workspace.stories.text(for: .embedded(F.runtimeID(1))), "Tests passed")
+    }
+
+    func testASLQuestionsRemoveStoriesWithoutStartingReads() throws {
+        let runner = PolishStoriesRunner()
+        workspace.stories = WorkspaceStories(runner: runner)
+        var session = F.tmux(1, project: "api", icon: "question")
+        session.aslRunID = "run"
+        var snapshot = F.snapshot([session])
+        var waiting = CompanionASLWaiting()
+        waiting.runID = "run"
+        waiting.runtimeSessionID = F.runtimeID(1)
+        waiting.latestQuestionID = "question"
+        waiting.unanswered = 1
+        snapshot.asl.waiting = [waiting]
+        app.store.apply(snapshot: snapshot)
+        XCTAssertTrue(runner.pending.isEmpty)
+        XCTAssertEqual(workspace.stories.text(for: .embedded(F.runtimeID(1))), "")
+    }
+
     // MARK: A daemon that is away
 
     func testADownDaemonIsWhatThePaneAndTheInspectorSay() throws {
@@ -275,5 +379,29 @@ final class WorkspacePolishTests: XCTestCase {
         row.isPressed = false
         row.isHovered = false
         XCTAssertEqual(row.fillColor, WorkspaceWaitingRowView.restingFill)
+    }
+}
+
+private final class PolishStoriesRunner: ASLWorkRunner {
+    var pending: [() -> Void] = []
+    func run<T>(_ work: @escaping () -> T, then: @escaping (T) -> Void) {
+        pending.append { then(work()) }
+    }
+    func release() { pending.removeFirst()() }
+}
+
+@MainActor
+private final class PolishStoriesSidebar: WorkspaceSidebarView {
+    var fullReloads = 0
+    var reloadedRows: [IndexSet] = []
+    var heightChanges: [IndexSet] = []
+    override func reloadData() { fullReloads += 1; super.reloadData() }
+    override func reloadData(forRowIndexes rows: IndexSet, columnIndexes columns: IndexSet) {
+        reloadedRows.append(rows)
+        super.reloadData(forRowIndexes: rows, columnIndexes: columns)
+    }
+    override func noteHeightOfRows(withIndexesChanged indexes: IndexSet) {
+        heightChanges.append(indexes)
+        super.noteHeightOfRows(withIndexesChanged: indexes)
     }
 }

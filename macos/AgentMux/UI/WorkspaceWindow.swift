@@ -98,6 +98,7 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
 
     weak var delegate: WorkspaceDelegate?
     var state = WorkspaceState()
+    var stories = WorkspaceStories()
     var sounds: WorkspaceSound?
     var playSounds = true
     var soundSnapshotCurrent = false

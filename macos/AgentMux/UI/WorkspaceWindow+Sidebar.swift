@@ -140,6 +140,7 @@ extension WorkspaceWindowController {
                 syncHover(IndexSet(integersIn: 0..<sidebar.numberOfRows))
             }
         }
+        updateStories()
         syncSidebarSelection()
         updateWorkingTimer()
         reloadInspector()
@@ -393,6 +394,32 @@ extension WorkspaceWindowController {
         }
     }
 
+    /// Snapshot the command on the main actor; only the CLI reads run in the background.
+    private func updateStories() {
+        let command = delegate?.workspaceRecapCommand()
+        let unavailable = AMXWording.current
+        stories.look = { id in
+            guard let command else { return .failure(.launchFailed(binary: "amx", reason: unavailable)) }
+            return command.json(PromptLook.self, PromptLook.arguments(runtimeSessionID: id))
+        }
+        stories.lastMessages = { identity in
+            guard let command else { return .failure(.launchFailed(binary: "amx", reason: unavailable)) }
+            return command.json(WorkspaceTranscript.self, ["session", "show", "--last", "4", "--json", "--", identity.encoded])
+        }
+        stories.onChange = { [weak self] key in
+            guard let self, let index = self.items.firstIndex(where: {
+                if case let .row(row) = $0 { return row.key == key }
+                return false
+            }), index < self.sidebar.numberOfRows else { return }
+            let indexes = IndexSet(integer: index)
+            self.reload(indexes)
+            self.sidebar.noteHeightOfRows(withIndexesChanged: indexes)
+        }
+        let sessions = delegate?.store.managedSessions ?? []
+        let asl = MenuBuilder.waitingBySession(delegate?.store.snapshot?.asl.waiting ?? [], sessions: sessions).bySession
+        stories.update(sessions.filter { asl[AttentionCycler.key($0)] == nil }, live: delegate?.store.feed == .live)
+    }
+
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         switch items[row] {
         case .section, .group: return 34
@@ -400,8 +427,9 @@ extension WorkspaceWindowController {
             return WorkspaceOverviewCellView.height(for: counts, width: tableView.tableColumns.first?.width ?? tableView.bounds.width)
         case let .view(view) where compactSidebar && view.kind == .terminal && view.besideRuntimeSessionID != nil:
             return 1
-        case let .row(row) where !row.name.isEmpty: return 54
-        case .navigation, .view, .row: return 38
+        case let .row(row):
+            return (row.name.isEmpty ? 38 : 54) + (compactSidebar || stories.text(for: row.key).isEmpty ? 0 : 16)
+        case .navigation, .view: return 38
         }
     }
 
@@ -459,7 +487,8 @@ extension WorkspaceWindowController {
                 ?? WorkspaceRowCellView()
             cell.show(row, muteGlyph: glyphs.mute, closing: row.embeddedRuntimeSessionID.map { closing[$0] != nil } ?? false,
                       sessionKey: sessionKey(of: row.key), bell: row.embeddedRuntimeSessionID.map(ringingSessions.contains) ?? false,
-                      away: Item.isAway(at: line, in: items), projectFirstLine: sidebarGrouping == .compact, now: now())
+                      away: Item.isAway(at: line, in: items), projectFirstLine: sidebarGrouping == .compact,
+                      story: compactSidebar ? "" : stories.text(for: row.key), now: now())
             if compactSidebar {
                 configureCompactTabs(in: cell, for: row)
             } else {

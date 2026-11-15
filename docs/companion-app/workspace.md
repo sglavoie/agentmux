@@ -72,6 +72,13 @@ attention lead the list.
   **Compact list** keep the state count chips above the sessions. Clicking a
   chip goes to its first session, expanding its project if needed, as
   **Reveal in Sidebar** (⌘J) does. Group buttons retain their waiting counts.
+- Waiting prompt rows show a short summary of what the agent is asking when the
+  prompt can be parsed. Completed turns show the first non-empty line of the
+  agent's last message, cleaned up and shortened to 140 characters. This extra
+  line disappears when the state or prompt changes. Text is read on demand and
+  kept in memory only; it is never written to disk or included in notifications.
+  ASL questions, unrecognized prompts, and the compact sidebar have no story
+  line. Working and idle rows keep their existing layout.
 - Working session details show the tool name and elapsed busy time, then the
   branch: `Bash · 1:35 · main`, or `Working · 1:35` when no tool is reported.
   The clock updates each second while the window is visible and a working row

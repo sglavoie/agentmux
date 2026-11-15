@@ -31,6 +31,9 @@ struct SecretText: Codable, Equatable, Hashable, ExpressibleByStringLiteral,
     /// or is about to leave the process on the daemon socket.
     func reveal() -> String { value }
 
+    /// Transform prose without exposing an unwrapped value to the caller.
+    func map(_ transform: (String) -> String) -> SecretText { SecretText(transform(value)) }
+
     var isEmpty: Bool { value.isEmpty }
     /// Whether nothing but whitespace was typed.
     var isBlank: Bool { value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

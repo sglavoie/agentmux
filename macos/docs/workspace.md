@@ -98,7 +98,16 @@ ASL answer panel work the same either way.
 - **Sidebar.** `Model/WorkspaceSidebar.swift` builds it as data: one group per
   project, sorted by name, and under it one row per session labeled with its
   profile, sorted by profile. A row uses a 13-point semibold title and small,
-  regular secondary detail: state phrase, branch, and age. Working rows instead
+  regular secondary detail: state phrase, branch, and age. Waiting prompt rows
+  add a one-line parsed question summary; completed turns add the cleaned first
+  non-empty line of the last assistant message (at most 140 characters). Stories
+  are read on demand once per state/source revision and kept only in memory as
+  `SecretText`; they never enter daemon state, notifications, or menus. A reason
+  or source change clears the old line immediately, including prompt-kind changes
+  with unchanged icons and timestamps. Unparsed prompts, failed reads, ASL
+  questions, and compact rows show no story. Disconnected feeds start no reads.
+  `WorkspaceStories` guards obsolete completions; its callback refreshes only
+  the affected row and its height (16 extra points). Working rows instead
   show the current tool name (or **Working**), elapsed busy time, and branch,
   for example `Bash · 1:35 · main`. The time measures the uninterrupted busy
   stretch, not the individual tool call. It uses `M:SS` below one hour, `hMM`

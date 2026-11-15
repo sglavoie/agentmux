@@ -19,6 +19,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     private let nameHeading = NSStackView()
     private let titleHeading = NSStackView()
     let detailLabel = WorkspaceSidebarLabel(labelWithString: "")
+    let storyLabel = WorkspaceSidebarLabel(labelWithString: "")
     let closeButton = NSButton(title: "", target: nil, action: nil)
     /// `⌘1`: the key that goes to the session, empty when it has none.
     let keyLabel = WorkspaceSidebarLabel(labelWithString: "")
@@ -74,10 +75,16 @@ final class WorkspaceRowCellView: NSTableCellView {
         detailLabel.font = WorkspaceNavigationButton.detailFont
         detailLabel.textColor = .secondaryLabelColor
         detailLabel.lineBreakMode = .byTruncatingTail
+        storyLabel.font = WorkspaceNavigationButton.detailFont
+        storyLabel.textColor = .secondaryLabelColor
+        storyLabel.lineBreakMode = .byTruncatingTail
+        storyLabel.maximumNumberOfLines = 1
+        storyLabel.cell?.usesSingleLineMode = true
+        storyLabel.isHidden = true
         // Not the cell's textField: the source list restyles that outlet,
         // drawing it dark on the selected line's pill in a dark appearance
         // and faded on a session's color, whatever color the line sets.
-        let text = NSStackView(views: [nameHeading, titleHeading, detailLabel])
+        let text = NSStackView(views: [nameHeading, titleHeading, detailLabel, storyLabel])
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
@@ -209,6 +216,8 @@ final class WorkspaceRowCellView: NSTableCellView {
     override func prepareForReuse() {
         super.prepareForReuse()
         isHovered = false
+        storyLabel.stringValue = ""
+        storyLabel.isHidden = true
         stateImage.show("")
         setStateGlyphOutsidePill(false)
         showCompactTerminals([], selectedID: nil)
@@ -238,13 +247,14 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// detail, key, and × there are the label color, a little muted.
     /// `chip` puts the text on that color, the detail and key dark gray.
     func setTabText(_ color: NSColor?, selected: Bool = false, chip: NSColor? = nil) {
-        [glyphLabel, nameLabel, titleLabel, detailLabel, keyLabel].forEach { $0.chip = chip }
+        [glyphLabel, nameLabel, titleLabel, detailLabel, storyLabel, keyLabel].forEach { $0.chip = chip }
         nameLabel.textColor = color ?? .labelColor
         glyphLabel.textColor = color ?? .labelColor
         titleLabel.textColor = color ?? .labelColor
         let muted = color?.withAlphaComponent(0.8) ?? (chip != nil ? Self.highlightedDetailColor : nil)
             ?? (selected ? Self.selectedDetailColor : nil)
         detailLabel.textColor = muted ?? .secondaryLabelColor
+        storyLabel.textColor = muted ?? .secondaryLabelColor
         closeButton.contentTintColor = muted ?? .tertiaryLabelColor
         keyLabel.textColor = muted ?? .secondaryLabelColor
     }
@@ -260,6 +270,8 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// `progress` is what its program last reported of its progress.
     func show(_ view: WorkspaceUtilityView, session: String? = nil, program: String? = nil, bell: Bool = false,
               progress: Ghostty.Progress? = nil) {
+        storyLabel.stringValue = ""
+        storyLabel.isHidden = true
         nameLabel.stringValue = ""
         nameLabel.isHidden = true
         nameHeading.isHidden = true
@@ -292,7 +304,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// `away` says the line is listed under Pinned or Needs attention rather
     /// than its project; nil reads it from the row, as where it would be listed.
     func show(_ row: WorkspaceRow, muteGlyph: String, closing: Bool = false, sessionKey: String? = nil, bell: Bool = false,
-              away: Bool? = nil, projectFirstLine: Bool = false, now: Date = Date()) {
+              away: Bool? = nil, projectFirstLine: Bool = false, story: String = "", now: Date = Date()) {
         nameLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         titleLabel.lineBreakMode = row.qualifier.isEmpty ? .byTruncatingTail : .byTruncatingMiddle
         nameLabel.stringValue = row.namedLabel
@@ -314,9 +326,11 @@ final class WorkspaceRowCellView: NSTableCellView {
         titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
         titleLabel.font = .systemFont(ofSize: 13, weight: row.name.isEmpty ? .semibold : .regular)
         detailLabel.stringValue = closing ? Self.closingDetail : row.sidebarDetail(now: now)
-        toolTip = row.displayName + " · " + row.toolTip
+        storyLabel.stringValue = story
+        storyLabel.isHidden = story.isEmpty
+        toolTip = row.displayName + " · " + row.toolTip + (story.isEmpty ? "" : " · " + story)
         keyLabel.stringValue = sessionKey.map { "⌘\($0)" } ?? ""
-        setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell))
+        setAccessibilityLabel(Self.accessibilityLabel(row, closing: closing, sessionKey: sessionKey, bell: bell, story: story))
         closeButton.isHidden = row.embeddedRuntimeSessionID == nil || closing
         closeButton.toolTip = "End \(row.displayName)…"
         closeButton.setAccessibilityLabel("End session \(row.displayName)")
@@ -340,7 +354,7 @@ final class WorkspaceRowCellView: NSTableCellView {
     /// words. A session asked to close is said to be closing instead of its
     /// detail, as the line shows it.
     nonisolated static func accessibilityLabel(_ row: WorkspaceRow, closing: Bool = false, sessionKey: String? = nil,
-                                   bell: Bool = false) -> String {
+                                   bell: Bool = false, story: String = "") -> String {
         var spoken = (row.name.isEmpty ? [] : [row.namedLabel]) + [row.project, row.sessionLabel]
         if row.pinned { spoken.append("pinned") }
         if row.muted { spoken.append("muted") }
@@ -349,6 +363,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         if bell { spoken.append("bell") }
         if closing { spoken.append("ending session") } else if !row.detail.isEmpty { spoken.append(row.detail) }
         if let sessionKey { spoken.append("Command \(sessionKey)") }
+        if !story.isEmpty { spoken.append(story) }
         return spoken.joined(separator: ", ")
     }
 }
