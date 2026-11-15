@@ -33,16 +33,16 @@ Checkout review and worktree actions additionally need Git.
    are available. If no compatible download is listed, use the source
    installation below.
 2. Expand the ZIP, move **Agent Mux.app** to **Applications**, and open it.
-3. Choose **Set Up First Project…**. The native sheet shows detected agent
+3. Choose **Set up first project…**. The native sheet shows detected agent
    CLIs and recent project directories. Keep the suggested choices or select
-   another CLI or **Choose Another Folder…**. The visible **Sync Agent Mux hooks
+   another CLI or **Choose another folder…**. The visible **Sync Agent Mux hooks
    into &lt;home&gt; (needed for live status)** checkbox starts checked; review the
-   home and click **Set Up**. Detection does not check authentication.
+   home and click **Set up**. Detection does not check authentication.
 4. After setup, choose **Start Daemon** if offered, then **Launch Project** and
    select your project. The agent opens in the embedded terminal; the sidebar
    shows when it needs you. Setup itself never launches an agent.
 
-**Set Up Manually…** in the sheet opens the embedded wizard for custom profile
+**Set up manually…** in the sheet opens the embedded wizard for custom profile
 homes and other choices. If setup fails, the sheet stays open with the command's
 message. If configuration was saved but hook sync failed, follow its hook-sync
 retry instructions; do not repeat setup.
@@ -150,7 +150,7 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | See every live pane | `F2` or `amx overview` |
 | Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, native Conversation History with `⌘Y` in the app, or `amx past-sessions` |
 | Follow work across agents | **Continued from/in** in History and the Session inspector, thread groups in Briefing, or `amx session thread <harness>:<id>` |
-| Continue work with a different agent | **Continue with Another Agent…** in the app’s Session menu, History, or Briefing |
+| Continue work with a different agent | **Continue with another agent…** in the app’s Session menu, History, or Briefing |
 | Remember where a conversation left off | Automatic [conversation recaps](docs/conversation-recaps.md) in the app's Session inspector and History, or `amx session recap <harness>:<id>` |
 | Read an action failure | `:` → **Show Action Feedback**; notices remain until dismissed |
 | Work with plans and worktrees | `:` → **Search Plans** or **Manage Worktrees** |

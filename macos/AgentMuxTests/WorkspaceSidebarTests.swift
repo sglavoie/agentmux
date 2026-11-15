@@ -232,7 +232,7 @@ final class WorkspaceSidebarTests: XCTestCase {
         XCTAssertEqual(web.sidebarDetail, "Working · — · main*")
         XCTAssertTrue(web.working)
         XCTAssertFalse(web.attention)
-        XCTAssertTrue(web.toolTip.contains("web · codex · work · working · main*"))
+        XCTAssertTrue(web.toolTip.contains("web · codex · work · Working · main*"))
         reasoned[0].harnessIcon = ""
         XCTAssertEqual(WorkspaceSidebar.row(reasoned[0], now: now, glyphs: .fallback).sidebarDetail,
                        "Working · — · main*", "working rows reserve the detail for tool, elapsed time, and branch")

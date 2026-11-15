@@ -147,10 +147,10 @@ struct ProjectCatalog: Equatable {
 
     static func guidance(_ state: FetchState<[ProjectEntry]>, unavailable: String?) -> String {
         if let unavailable { return unavailable }
-        if state.errorCode == "config_missing" { return "Welcome to Agent Mux. Set Up First Project guides you through your agent profile, project directory, hooks, and launch destination." }
+        if state.errorCode == "config_missing" { return "Welcome to Agent Mux. Choose Set up first project to select an agent and project folder." }
         if let error = state.error { return "Could not refresh projects: \(error). Choose Launch Project to try again." }
         guard let entries = state.value else { return "Loading configured projects…" }
-        if entries.isEmpty { return "No projects configured. Set Up First Project guides you through your agent profile, project directory, hooks, and launch destination." }
+        if entries.isEmpty { return "No projects configured. Choose Set up first project to select an agent and project folder." }
         return "Choose a configured project to start, or return to a past conversation."
     }
 

@@ -282,7 +282,7 @@ enum WorkspaceSidebar {
     static func feedNotice(_ feed: FeedState) -> String? {
         switch feed {
         case .live: return nil
-        case .connecting: return "Connecting to the daemon…"
+        case .connecting: return "Connecting…"
         case .notRunning: return "Daemon not running"
         case .daemonTooOld: return "Daemon too old — \(MenuBuilder.restartHint)"
         case let .reconnecting(reason): return "Reconnecting… (\(reason))"
@@ -329,18 +329,18 @@ enum WorkspaceSidebar {
         switch feed {
         case .live: return nil
         case .connecting:
-            return (notice, "Sessions are listed once the daemon answers.", action)
+            return (notice, "Your sessions will appear when the connection is ready.", action)
         case .notRunning:
-            return (notice, "Nothing is listed until the daemon runs. Starting it starts no agent.", action)
+            return (notice, "Choose Start Daemon to load your sessions. This does not launch a session.", action)
         case .daemonTooOld:
-            return (notice, "This daemon cannot list sessions for the workspace. Restarting it ends no agent.", action)
+            return (notice, "Choose Restart Daemon to update the session list. Your sessions will keep running.", action)
         case .reconnecting:
             // Said only with nothing listed: the daemon has no sessions to
             // hold, so the list fills when it answers.
             if action == .restart {
-                return ("Reconnecting…", "Waiting may not help: the daemon stopped answering, or sends what this app cannot read. Restarting it ends no agent.", action)
+                return ("Reconnecting…", "The session list could not be updated. Choose Restart Daemon to reconnect. Your sessions will keep running.", action)
             }
-            return ("Reconnecting…", "The daemon is reconnecting. Sessions are listed once it answers; any that are running keep running meanwhile.", action)
+            return ("Reconnecting…", "Reconnecting to your sessions. They will appear here when the connection returns; running sessions are unaffected.", action)
         }
     }
 }

@@ -110,13 +110,13 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         for dark in [false, true] {
             for width in [CGFloat(660), CGFloat(860)] {
                 try await render(WorkspaceHandoffView(model: model, cancel: {}), name: "handoff-\(Int(width))-\(dark)", width: width, height: 740, dark: dark,
-                                 expected: ["Continue with Another Agent", "Receiving agent", "Context to pass along", "Next instruction", "Launch Agent", "Read Source Conversation"])
+                                 expected: ["Continue with another agent", "Receiving agent", "Context to pass along", "Next instruction", "Launch Agent", "Read Source Conversation"])
             }
         }
         let failed = WorkspaceHandoffModel(source: .init(harness: "claude", sessionID: "source-one"), command: { nil }, runner: PreviewRunner())
         failed.load()
         try await render(WorkspaceHandoffView(model: failed, cancel: {}), name: "handoff-unavailable", width: 660, height: 740,
-                         expected: ["Continue with Another Agent", "Retry Preview", "Cancel", "Launch Agent"])
+                         expected: ["Continue with another agent", "Retry Preview", "Cancel", "Launch Agent"])
     }
 
     func testMergedBriefingPopulatedSections() async throws {
@@ -139,7 +139,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         model.open(project: "API"); model.refresh()
         for dark in [false, true] {
             try await render(WorkspaceBriefingView(model: model), name: "briefing-populated-\(dark)", width: 1000, height: 1000, dark: dark,
-                expected: ["Waiting now", "Answer", "Since you last looked", "Turn finished", "Agent reports", "Mark Read", "Recent conversations"])
+                expected: ["Waiting now", "Answer", "Since you last looked", "Turn finished", "Agent reports", "Mark read", "Recent conversations"])
         }
         model.close()
     }
@@ -215,7 +215,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
                                  dark: dark, expected: ["Flight Log", "Launches", "State changes", "Activity calendar"])
             }
         }
-        for (tab, expected) in [("sessions", ["rs-flight", "Open Conversation"]), ("milestones", ["First Flight", "Frequent Flyer"])] {
+        for (tab, expected) in [("sessions", ["rs-flight", "Open conversation"]), ("milestones", ["First Flight", "Frequent Flyer"])] {
             try await render(WorkspaceFlightLogView(model: model, initialTab: tab), name: "flight-log-\(tab)-minimum", width: 780, height: 500,
                              expected: expected)
         }
@@ -435,7 +435,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         model.search()
         XCTAssertEqual(model.entries.count, 2)
         XCTAssertEqual(model.transcript?.messages.count, 2)
-        try await render(WorkspaceHistoryView(model: model), name: "history", expected: ["pagination", "Focus Live Session"])
+        try await render(WorkspaceHistoryView(model: model), name: "history", expected: ["pagination", "Focus live session"])
         try await render(WorkspaceHistoryView(model: model), name: "history-dark-minimum", width: 720, height: 450, dark: true, expected: ["pagination", "Fork"])
     }
 
@@ -459,7 +459,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             try await render(WorkspaceHistoryView(preferences: preferences, model: history), name: "daily-history-large-\(dark)",
                              width: 720, height: 450, dark: dark, expected: ["Resume", "Fork", "Review the existing workflow"])
             try await render(WorkspaceActivityView(preferences: preferences, model: activity), name: "daily-activity-large-\(dark)",
-                             width: 760, height: 480, dark: dark, expected: ["Mark Read", "Undo", "Supporting output"])
+                             width: 760, height: 480, dark: dark, expected: ["Mark read", "Undo", "Supporting output"])
             let inspector = WorkspaceInspectorView(preferences: preferences)
             let row = WorkspaceWaitingRow(key: .embedded("one"), title: "API · deployment review", detail: "Question · 2m", glyph: "?", toolTip: "",
                 answer: .asl(.init(runID: "run-one", planDir: "/plans/api")), category: .question)
@@ -646,7 +646,7 @@ extension WorkspaceWorkflowPreviewTests {
                 try await render(WorkspaceChangesView(model: changes), name: "changes-\(suffix)", width: 720, height: 450, dark: dark,
                                  expected: ["Checkout Changes", "Compare"] + notice + (state == "initial-failure" ? ["Comparison could not be loaded"] : state == "empty" ? ["No changes"] : ["pagination_controller_test.go"]))
                 try await render(WorkspaceActivityView(model: activity), name: "activity-\(suffix)", width: 760, height: 480, dark: dark,
-                                 expected: ["Since Last Looked", "Mark Read"] + notice + (state == "initial-failure" ? ["Activity could not be loaded"] : state == "empty" ? ["All caught up"] : ["Supporting output"]))
+                                 expected: ["Since you last looked", "Mark read"] + notice + (state == "initial-failure" ? ["Activity could not be loaded"] : state == "empty" ? ["All caught up"] : ["Supporting output"]))
                 try await render(WorkspaceRunsView(model: runs, plan: plan), name: "runs-\(suffix)", width: 780, height: 500, dark: dark,
                                  expected: ["ASL Runs", "Run a Plan"] + notice + (state == "initial-failure" ? ["Runs could not be loaded"] : state == "empty" ? ["No active runs"] : state == "failed" ? ["Inspect Failed Check"] : ["Resume", "Abort"]))
             }
@@ -772,7 +772,7 @@ extension WorkspaceWorkflowPreviewTests {
             runs.inspectFailedCheck()
             runs.layout.collapsed = true
             try await render(WorkspaceRunsView(model: runs, plan: plan), name: "usability-inspected-check-\(dark)", width: 780, height: 500, dark: dark,
-                             expected: ["Recorded outcomes only", "Unit tests: failed", "Session 9", "Open Session"])
+                             expected: ["Recorded outcomes only", "Unit tests: failed", "Session 9", "Open session"])
             runs.layout.collapsed = false
             runs.select(runs.selection)
             try await render(WorkspaceStatus(loading: true, retained: true, refreshedAt: Date().addingTimeInterval(-125),

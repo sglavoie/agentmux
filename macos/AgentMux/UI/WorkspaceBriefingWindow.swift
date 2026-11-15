@@ -33,7 +33,7 @@ struct WorkspaceBriefingView: View {
                 Button("Refresh") { model.refresh() }.disabled(model.briefing.acting)
             }
             if !model.briefing.feedLive {
-                Label("Live status is unavailable. Session actions and recap generation will return when the daemon reconnects.", systemImage: "wifi.slash")
+                Label("Live status is unavailable. Session actions and recap generation will be available when the connection returns.", systemImage: "wifi.slash")
                     .font(.callout).foregroundStyle(.secondary)
             }
             ScrollView {
@@ -56,7 +56,7 @@ struct WorkspaceBriefingView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Waiting now · \(model.briefing.waiting.count)").font(.headline)
             if model.briefing.waiting.isEmpty {
-                Text(model.briefing.feedLive ? "No questions, approvals, or other attention are waiting." : "Waiting status cannot be checked yet.")
+                Text(model.briefing.feedLive ? "Nothing is waiting on you." : "Waiting status cannot be checked yet.")
                     .foregroundStyle(.secondary).font(.callout)
             }
             ForEach(model.briefing.waiting, id: \.key) { row in
@@ -70,7 +70,7 @@ struct WorkspaceBriefingView: View {
                     if row.answer != nil {
                         Button("Answer…") { model.briefing.answer(row.key) }.disabled(!model.briefing.feedLive || model.briefing.acting)
                     }
-                    Button("Open Session") { model.briefing.focus(row.key) }.disabled(!model.briefing.feedLive || model.briefing.acting)
+                    Button("Open session") { model.briefing.focus(row.key) }.disabled(!model.briefing.feedLive || model.briefing.acting)
                 }.padding(10).background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
             }
         }
@@ -101,7 +101,7 @@ struct WorkspaceBriefingConversationsView: View {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(row.displayName).font(.callout.weight(.semibold))
                         Text(row.detail).font(.caption).foregroundStyle(.secondary)
-                        if row.conversation == nil { Text("Conversation identity not available yet.").font(.caption).foregroundStyle(.secondary) }
+                        if row.conversation == nil { Text("This session’s conversation is not available yet.").font(.caption).foregroundStyle(.secondary) }
                     }
                     Spacer()
                     Button("Focus") { model.focus(row.key) }.disabled(!model.feedLive || model.acting)
@@ -113,8 +113,8 @@ struct WorkspaceBriefingConversationsView: View {
     private var conversationCards: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent conversations").font(.headline)
-            DisclosureGroup("About this briefing") {
-                Text("Includes live conversations, the ten most recent, and their recorded continuations. Outcomes use saved recaps; generating a recap is an explicit action. Older unfinished work may be outside this briefing.")
+            DisclosureGroup("About Briefing") {
+                Text("Includes conversations from live sessions, the ten most recent conversations, and their linked history. Outcomes use saved recaps; choose Generate recap to create one. Older unfinished work may be outside Briefing.")
                     .font(.caption).foregroundStyle(.secondary)
             }.font(.caption)
             if model.total > 10 {
@@ -136,7 +136,7 @@ struct WorkspaceBriefingConversationsView: View {
                 }.padding(thread.conversations.count > 1 ? 10 : 0)
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.secondary.opacity(thread.conversations.count > 1 ? 0.25 : 0)))
             }
-            Text("Each recap describes its own conversation. Older unfinished work may be outside this briefing; open Conversation History to explore further.")
+            Text("Each recap describes its own conversation. Older unfinished work may be outside Briefing; open Conversation History to explore further.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -177,12 +177,12 @@ struct WorkspaceBriefingConversationsView: View {
     }
 
     @ViewBuilder private func conversationActions(_ item: RecentConversation) -> some View {
-        Button(model.liveRows(for: item).isEmpty ? "Resume" : "Focus Session") { model.continueConversation(item) }
+        Button(model.liveRows(for: item).isEmpty ? "Resume" : "Focus session") { model.continueConversation(item) }
             .disabled(!model.feedLive || model.acting)
         Button("Fork") { model.fork(item) }.disabled(!model.feedLive || model.acting || model.onFork == nil)
         Button(WorkspaceHandoffModel.title) { model.onHandoff?(item) }
             .disabled(!model.feedLive || model.acting || model.onHandoff == nil)
-        Button("Read Conversation") { model.onConversation?(item.identity, nil) }.disabled(model.acting)
+        Button("Read conversation") { model.onConversation?(item.identity, nil) }.disabled(model.acting)
     }
 }
 

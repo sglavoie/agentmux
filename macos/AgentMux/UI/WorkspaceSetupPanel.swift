@@ -7,13 +7,13 @@ struct WorkspaceSetupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Set Up First Project").font(.title2.bold())
+            Text("Set up first project").font(.title2.bold())
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if model.loading { ProgressView("Looking for agent CLIs and recent projects…").controlSize(.small) }
+                    if model.loading { ProgressView("Looking for installed agents and recent projects…").controlSize(.small) }
                     if model.detection != nil {
                         if model.choices.isEmpty {
-                            Text("No agent CLI or profile home found. Looked for: \(model.searchedCLIs). Install and authenticate an agent CLI, or set up manually.")
+                            Text("No installed agent or saved profile found. Looked for: \(model.searchedCLIs). Install and authenticate an agent CLI, or set up manually.")
                         } else {
                             if model.choices.count > 1 {
                                 Picker("Agent CLI", selection: $model.harness) {
@@ -23,7 +23,7 @@ struct WorkspaceSetupView: View {
                                 Text("Found \(selected.name)").font(.headline)
                             }
                             if let selected = model.selected {
-                                Text(selected.cliAvailable ? (selected.cliPath ?? selected.harness) : "Profile home found; install \(selected.harness) before launching.")
+                                Text(selected.cliAvailable ? (selected.cliPath ?? selected.harness) : "Saved profile found; install \(selected.harness) before launching.")
                                     .font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                             }
                             Text("Project directory").font(.headline)
@@ -34,10 +34,10 @@ struct WorkspaceSetupView: View {
                                     ForEach(model.directories, id: \.self) { Text($0).tag($0) }
                                 }.pickerStyle(.radioGroup).labelsHidden()
                             }
-                            Button("Choose Another Folder…", action: chooseDirectory)
+                            Button("Choose another folder…", action: chooseDirectory)
                             Toggle("Sync Agent Mux hooks into \(model.selected?.home ?? "the profile home") (needed for live status)", isOn: $model.syncHooks)
                                 .toggleStyle(.checkbox)
-                            Text("Authentication is not checked. Setup saves configuration; launch your project from the workspace when ready.")
+                            Text("Setup saves your project. Before launching it from the workspace, sign in to your agent if you have not already.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         ForEach(model.detection?.warnings ?? [], id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
@@ -51,14 +51,14 @@ struct WorkspaceSetupView: View {
             }
             if model.saving { ProgressView("Saving project and hook choices…").controlSize(.small) }
             HStack {
-                Button("Set Up Manually…") { model.manual() }.disabled(model.saving)
+                Button("Set up manually…") { model.manual() }.disabled(model.saving)
                 if model.detection == nil && !model.loading {
-                    Button("Retry Detection") { model.detect() }.disabled(model.submitted)
+                    Button("Retry detection") { model.detect() }.disabled(model.submitted)
                 }
                 Spacer()
                 Button(model.saved ? "Close" : "Cancel", action: cancel)
                     .keyboardShortcut(.cancelAction).disabled(model.saving)
-                Button("Set Up") { model.setUp() }.keyboardShortcut(.defaultAction).disabled(!model.canSetUp)
+                Button("Set up") { model.setUp() }.keyboardShortcut(.defaultAction).disabled(!model.canSetUp)
             }
         }.padding(20).frame(width: 600, height: 470)
     }
@@ -80,7 +80,7 @@ final class WorkspaceSetupPanel {
 
     init(model: WorkspaceSetupModel) {
         self.model = model
-        panel.title = "Set Up First Project"
+        panel.title = "Set up first project"
         panel.isReleasedWhenClosed = false
         panel.contentView = NSHostingView(rootView: WorkspaceSetupView(model: model, cancel: { [weak self] in self?.close() }))
         if let content = panel.contentView { panel.setContentSize(content.fittingSize) }

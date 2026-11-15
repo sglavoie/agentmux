@@ -24,20 +24,20 @@ Dock icon and a main menu (`UI/WorkspaceMenu.swift`); closing it returns the
 app to the menu bar accessory. The status item, the global shortcuts, and the
 ASL answer panel work the same either way.
 
-- **First project.** **Set Up First Project…** opens `WorkspaceSetupPanel`, a
+- **First project.** **Set up first project…** opens `WorkspaceSetupPanel`, a
   native sheet backed by `WorkspaceSetupModel`. It uses the resolved `AMXCommand`
   (including the bundled CLI), without requiring a daemon, to read
   `amx config setup --detect --json`. Detected CLIs or existing homes appear as
   choices; multiple choices use a picker. Recent directories appear as a list,
-  with **Choose Another Folder…** for a different project. The checked **Sync
+  with **Choose another folder…** for a different project. The checked **Sync
   Agent Mux hooks into &lt;home&gt; (needed for live status)** checkbox makes the write
-  destination explicit. **Set Up** passes the chosen harness, home, directory,
+  destination explicit. **Set up** passes the chosen harness, home, directory,
   `--backend keep`, and optionally `--sync-hooks` to non-interactive setup.
   Successful save calls `workspaceSetupFinished()` to refresh the project catalog
   and backend readiness, then closes the sheet. The placeholder offers **Start
   Daemon** or **Launch Project**; each still requires the operator's click.
   Detection does not verify authentication. No detection results lists the CLIs
-  searched. **Set Up Manually…** always remains available and opens the existing
+  searched. **Set up manually…** always remains available and opens the existing
   `.setup` utility wizard, whose completion still refreshes the workspace.
   Failures keep the sheet open with the command message. A saved configuration
   with failed hooks refreshes readiness but blocks repeat setup and shows the
@@ -53,7 +53,7 @@ ASL answer panel work the same either way.
   runtime session (conversation identity when runtime identity is absent), with
   cached outcomes, supporting output, retained-data errors, focus/conversation
   actions, and completed-session checkout review. Reading and scope changes do
-  not acknowledge events. Mark Read writes only loaded visible IDs; Undo preserves
+  not acknowledge events. Mark read writes only loaded visible IDs; Undo preserves
   other reader acknowledgements. Since journal records have no project field,
   project membership uses live runtime IDs plus all pages of the CLI's canonical
   project-filtered conversation list. Unknown membership stays in All projects;
@@ -217,7 +217,7 @@ ASL answer panel work the same either way.
   size, and of a new backing scale, only once it is shown, so tmux is never
   sized for a grid nobody sees.
 - **Placeholder actions.** Return or keypad Enter activates the primary button
-  in the selected pane, including **Reopen**, **Reattach**, and **Try Again**.
+  in the selected pane, including **Reopen**, **Reattach**, and **Try again**.
   This works with the sidebar shown or hidden. Text fields, the Waiting reader,
   and live terminals keep their own Enter behavior, including in split panes.
 - **Accessibility.** A terminal is a text area to VoiceOver
@@ -273,8 +273,7 @@ ASL answer panel work the same either way.
   daemon line under them; the selection and every terminal stay as they are,
   since tmux holds the sessions and `amx attach` does not need the daemon.
   The first snapshot after the reconnect then decides what is still there.
-  The daemon line is `WorkspaceSidebar.feedNotice` (`Connecting to the
-  daemon…`, `Daemon not running`, `Daemon too old — choose Restart Daemon`,
+  The daemon line is `WorkspaceSidebar.feedNotice` (`Connecting…`, `Daemon not running`, `Daemon too old — choose Restart Daemon`,
   `Reconnecting… (reason)`). Under it, whatever is listed, the sidebar offers
   **Start Daemon** when it is not running (`workspaceStartDaemon`, the menu's
   `amx daemon start`) and **Restart Daemon** when it is too old, or when it is
@@ -507,6 +506,19 @@ never a command line, and amx decides the program and removes every session
   session in the workspace.
 
 ### Waiting header and answer queue
+
+Session states use sentence case across the sidebar, inspector, peek, and header:
+**Working**, **Idle**, **Running a subagent**, **Compacting**, **Warning**, and
+**Error**, alongside **Turn complete**, **Needs permission**, and **Waiting for
+your answer**. A live agent is a session; its saved history is a conversation.
+Catch-up messages use **Briefing**. Flight Log keeps its themed vocabulary within
+its own window; its Briefing link opens a plain session/event filter.
+
+Connection messages explain when sessions will reappear. They name the daemon
+when a **Start Daemon** or **Restart Daemon** action is needed. Recovery messages
+say whether a session is still running and name the next action. Setup controls
+and Briefing actions use sentence case, while destination names retain their
+names, including **Conversation History**, **Dashboard**, and **Flight Log**.
 
 The session header stays 24 pt high across state changes. A waiting session shows
 its state symbol and status in the attention color, a prominent **Answer…**

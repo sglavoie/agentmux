@@ -180,12 +180,12 @@ struct WorkspaceRunsView: View {
                         .buttonStyle(.borderedProminent).fontWeight(.semibold)
                         .disabled(model.inspectionUnavailable != nil)
                         .help(model.inspectionUnavailable ?? "Show the failed check in recorded verification (⌘⇧I)")
-                    Button("Open Session") { model.onFocus?(row) }.buttonStyle(.link).help("Open session (⌘Return)")
+                    Button("Open session") { model.onFocus?(row) }.buttonStyle(.link).help("Open session (⌘Return)")
                 } else if model.nextAction == .focus {
-                    Button("Focus Session") { model.onFocus?(row) }
+                    Button("Focus session") { model.onFocus?(row) }
                         .buttonStyle(.borderedProminent).fontWeight(.semibold).help("Focus session (⌘Return)")
                 } else {
-                    Button("Focus Session") { model.onFocus?(row) }.help("Focus session (⌘Return)")
+                    Button("Focus session") { model.onFocus?(row) }.help("Focus session (⌘Return)")
                 }
             }
             HStack(alignment: .top) {

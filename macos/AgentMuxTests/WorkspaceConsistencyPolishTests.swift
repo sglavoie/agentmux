@@ -63,7 +63,7 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
     func testBranchQualifierDoesNotRemoveMatchingStatusOrAge() {
         let now = Date(timeIntervalSince1970: 1_000)
         for state in ["bolt", ""] {
-            for branch in ["Working", "idle", "now", "Bash", "0:00"] {
+            for branch in ["Working", "Idle", "now", "Bash", "0:00"] {
                 for icon in ["", "🦊"] {
                     var one = WorkspaceFixture.tmux(1, project: "api", icon: state, changedAtMS: 1_000_000)
                     one.branch = branch
@@ -77,7 +77,7 @@ final class WorkspaceConsistencyPolishTests: XCTestCase {
                     XCTAssertEqual(row.qualifier, branch)
                     let expected = state == "bolt"
                         ? "\(one.activeTool.isEmpty ? "Working" : one.activeTool) · 0:00"
-                        : (icon.isEmpty ? "idle · claude · now" : "idle · now")
+                        : (icon.isEmpty ? "Idle · claude · now" : "Idle · now")
                     XCTAssertEqual(row.sidebarDetail, expected)
                 }
             }

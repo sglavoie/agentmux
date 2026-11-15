@@ -50,7 +50,7 @@ extension WorkspaceInspectorView {
     nonisolated static let nothingWaiting = "Nothing is waiting on you."
     nonisolated static let noSession = "No session is shown."
     nonisolated static let unavailableForSession = "This session cannot use this action."
-    nonisolated static let waitForDaemon = "Available once the daemon answers again."
+    nonisolated static let waitForDaemon = "Available when the connection returns."
 
     func view(for line: WorkspaceInspectorLine) -> NSView {
         switch line {

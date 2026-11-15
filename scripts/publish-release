@@ -278,7 +278,7 @@ publish_downloads() {
         echo "### Install the macOS app"
         echo
         echo "Download \`Agent-Mux-$version-macos-$arch.zip\`, expand it, and move Agent Mux.app to /Applications. Requires macOS 14 or later on $arch."
-        echo "Open the app and choose **Set Up First Project**. Use an installed, authenticated Claude, Codex, or Copilot CLI."
+        echo "Open the app and choose **Set up first project**. Use an installed, authenticated Claude, Codex, or Copilot CLI."
         echo "After setup, choose **Start Daemon** if offered, then **Launch Project**."
         echo "The app includes amx and tmux; Go, Xcode, Homebrew, and a separate amx installation are not required."
         echo "To update, quit the app, replace it in /Applications, and reopen it. Running agents stay on the private session server."

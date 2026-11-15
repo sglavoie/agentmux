@@ -67,12 +67,12 @@ app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configur
 
 An empty workspace offers **Launch Project…**, **Conversation History**, and
 **Open Dashboard**, and names the effective launch destination. With no configured
-projects it offers **Set Up First Project…**, opening a native sheet with detected
-agent CLIs, recent project directories, and **Choose Another Folder…**. Review the
-checked hook-sync option and click **Set Up**. Success refreshes projects and the
+projects it offers **Set up first project…**, opening a native sheet with detected
+agent CLIs, recent project directories, and **Choose another folder…**. Review the
+checked hook-sync option and click **Set up**. Success refreshes projects and the
 effective launch destination; errors keep the sheet open. A saved configuration
 with failed hook sync shows retry instructions and blocks repeat setup.
-**Set Up Manually…** opens the embedded wizard for profile, directory, hooks, and
+**Set up manually…** opens the embedded wizard for profile, directory, hooks, and
 backend choices; press Return after its summary to refresh the workspace.
 Setup never launches an agent. Pending configuration reads, failed reads, and
 daemon recovery remain distinct from an empty configuration.
@@ -105,7 +105,7 @@ labels; raw protocol reasons remain in the session inspector.
 
 ### Continue with another agent
 
-**Session › Continue with Another Agent…**, a session's right-click menu, and
+**Session › Continue with another agent…**, a session's right-click menu, and
 its command-palette entry open a native handoff preview. The action is also
 available for the selected conversation in History and on Briefing's
 conversation cards.
@@ -215,13 +215,13 @@ that project's recent conversations. The command palette opens the same window.
 
 **Waiting now** lists sessions with questions, permission requests, or other
 attention. **Answer…** opens the existing answer panel where available, including
-its continue-to-next queue; **Open Session** focuses the session. Submitted answers
+its continue-to-next queue; **Open session** focuses the session. Submitted answers
 stay out of the queue while their matching waiting state is still acknowledged.
 
 **Since you last looked** groups retained activity by session, with saved outcomes,
-exact event details, supporting output, **Open Conversation**, **Focus Live Session**,
+exact event details, supporting output, **Open conversation**, **Focus live session**,
 and **Review changes** for completed live sessions. The unread filter, look-back
-period, **Mark Read**, and **Undo** work as described below.
+period, **Mark read**, and **Undo** work as described below.
 Opening, refreshing, and switching scope never mark events read. Project scope
 matches live runtime identities and the CLI's paginated project conversation list;
 events without a known project remain available under **All projects**. Membership
@@ -232,7 +232,7 @@ section for the exact session and event kind, with read events included and a
 **Recent conversations** appears only for a project. It gathers live conversations
 and the ten most recent across agents and profiles, including automated and
 unclassified sessions, with saved outcomes and next steps. **Resume**, **Fork**,
-**Continue with Another Agent…**, and **Read Conversation** remain available.
+**Continue with another agent…**, and **Read conversation** remain available.
 **Goal, sources & recap controls** expands the goal, provenance, supporting-message
 links, and generation controls. **Conversation details** holds identifiers,
 timestamps, handoff links, and the handoff action. Saved-context warnings remain
@@ -247,14 +247,14 @@ An unavailable transcript does not remove the recorded relationship. Threads
 reflect recorded handoffs; similar topics are not automatically merged.
 
 Opening the briefing and **Refresh** (⌘R) read saved recaps without starting
-model requests. **Generate Recap** or **Regenerate** on a conversation explicitly
+model requests. **Generate recap** or **Regenerate** on a conversation explicitly
 uses the configured recap profile and its service/quota. Generation is disabled
 while that conversation has a working agent, or live status is unavailable.
 Missing, stale, and failed recaps remain visible as such. A failed refresh keeps
 the last loaded conversations and recaps with a readable error.
 
-**Focus Session** returns to an existing agent; **Resume** continues the exact
-closed conversation through History's existing launch path. **Read Conversation**
+**Focus session** returns to an existing agent; **Resume** continues the exact
+closed conversation through History's existing launch path. **Read conversation**
 and supporting-message links open History; closing it returns to the briefing
 when that window is still open. Live state follows daemon updates; refresh
 explicitly to reload recent history and saved recaps. Offline state labels the
@@ -277,17 +277,17 @@ conversations, and consume that profile's service/quota. Choose a different
 profile/model or disable generation in `[defaults.recaps]`. See
 [conversation recaps](../conversation-recaps.md) for configuration and limits.
 
-### Since Last Looked
+### Since you last looked
 
 Briefing's **Since you last looked** section shows recorded state transitions, process exits,
 and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
 Select an event for details and the last timestamped assistant output at or before
-it; **Load Earlier Messages** searches further back for supporting output.
+it; **Load earlier messages** searches further back for supporting output.
 Opening its conversation goes to that recorded location, briefly highlights it,
 and returns focus to Briefing when closed. Missing evidence is explained; a failed
 read can retry the same event. You can also focus the matching live session.
 
-**Mark Read** offers **Mark Selected Read** and **Mark All N Results Read**, including
+**Mark read** offers **Mark selected read** and **Mark all N results read**, including
 loaded rows below the viewport but excluding records omitted by the query limit.
 **Undo** restores the last successful acknowledgement and prior selection when
 still in scope. Failed saves and Undo retain current markers and report the failure.
@@ -308,7 +308,7 @@ The sidebar button or **⌘⌥S** hides the run list and restores focus to it on
 heading names the failed check; **Inspect Failed Check** (⌘⇧I) expands recorded
 verification and scrolls to the highlighted failure in the selected session's
 latest completed attempt. This is recorded outcome evidence, not command output;
-**Open Session** remains a separate action for investigation. Missing or unreadable
+**Open session** remains a separate action for investigation. Missing or unreadable
 evidence disables inspection and explains why. A later successful attempt cannot
 present an old failure as current. When only the attempt summary was retained,
 the action says **Inspect Verification** and explains the missing individual checks.

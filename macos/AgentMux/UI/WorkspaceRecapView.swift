@@ -12,7 +12,7 @@ struct WorkspaceRecapView: View {
                 if model.loading { ProgressView().controlSize(.small) }
                 Button { model.refresh() } label: {
                     if model.automaticallyGenerate { Image(systemName: "arrow.clockwise") }
-                    else { Text(model.report?.recap == nil ? "Generate Recap" : "Regenerate") }
+                    else { Text(model.report?.recap == nil ? "Generate recap" : "Regenerate") }
                 }
                     .buttonStyle(.borderless).disabled(model.loading || !model.canGenerate || model.report?.status == "disabled")
                     .accessibilityLabel(model.report?.recap == nil ? "Generate conversation recap" : "Regenerate conversation recap")

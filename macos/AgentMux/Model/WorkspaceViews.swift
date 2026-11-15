@@ -246,7 +246,7 @@ struct WorkspaceUtilityView: Equatable, Codable {
         return target.isEmpty ? detail : target
     }
 
-    static let setup = WorkspaceUtilityView(kind: .setup, target: "", title: "Set Up First Project")
+    static let setup = WorkspaceUtilityView(kind: .setup, target: "", title: "Set up first project")
     static let dashboard = WorkspaceUtilityView(kind: .dashboard, target: "", title: "Dashboard")
     static let overview = WorkspaceUtilityView(kind: .overview, target: "", title: "Overview")
     static let keybindings = WorkspaceUtilityView(kind: .keybindings, target: "", title: "Keybindings")

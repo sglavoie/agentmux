@@ -38,7 +38,7 @@ extension WorkspaceViewsWindowTests {
 
         app.viewProblem = "Temporarily unavailable"
         workspace.showView("dashboard")
-        XCTAssertEqual(workspace.placeholder.button.title, "Try Again")
+        XCTAssertEqual(workspace.placeholder.button.title, "Try again")
         app.viewProblem = nil
         workspace.window.sendEvent(returnKey())
         XCTAssertEqual(workspace.content, .view(id: "dashboard"))

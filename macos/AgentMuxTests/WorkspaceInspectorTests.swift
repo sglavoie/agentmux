@@ -36,6 +36,30 @@ final class WorkspaceInspectorTests: XCTestCase {
 
     // MARK: Data
 
+    func testStateWordsAgreeAcrossSessionSurfaces() {
+        let states = ["": "Idle", "bolt": "Working", "stop": "Turn complete",
+                      "key": "Needs permission", "question": "Waiting for your answer",
+                      "subagent": "Running a subagent", "compact": "Compacting",
+                      "warning": "Warning", "error": "Error", "future_state": "Future state"]
+        for (icon, word) in states {
+            var session = F.tmux(1, project: "api", icon: icon, attention: true)
+            XCTAssertEqual(WorkspaceInspector.word(for: icon), word)
+            let row = WorkspaceSidebar.row(session, now: now, glyphs: .fallback)
+            XCTAssertTrue(row.detail.hasPrefix(word), row.detail)
+            let context = WorkspaceSessionContext(key: row.key, row: row, session: session,
+                                                 content: .empty, current: true)
+            XCTAssertEqual(context.status, word)
+            let inspection = WorkspaceInspector.inspection(session, now: now)
+            XCTAssertEqual(inspection.sections.first?.fields.first?.value, word)
+            XCTAssertTrue(WorkspaceInspector.waiting([session], now: now)[0].detail.hasPrefix(word))
+            if !icon.isEmpty {
+                session.reason = icon
+                XCTAssertTrue(WorkspaceInspector.waiting([session], now: now)[0].detail.hasPrefix(word),
+                              "Reason-based states must use the same words as icon-based states")
+            }
+        }
+    }
+
     func testWaitingCardsFollowSessionColorsWithoutReplacingTheirContext() throws {
         var live = sessions
         let key = AttentionCycler.Key.embedded(F.runtimeID(2))
@@ -358,7 +382,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         XCTAssertEqual(idle.title, "api — work")
         XCTAssertTrue(idle.embedded)
         XCTAssertEqual(idle.sections.map(\.title), ["Status", "Identity"], "a session with no branch has no Git section")
-        XCTAssertEqual(idle.sections[0].fields, [.init(label: "State", value: "idle"), .init(label: "Evidence", value: "Nothing has reported it yet")])
+        XCTAssertEqual(idle.sections[0].fields, [.init(label: "State", value: "Idle"), .init(label: "Evidence", value: "Nothing has reported it yet")])
         XCTAssertEqual(idle.sections[1].fields, [
             .init(label: "Project", value: "api"),
             .init(label: "Profile", value: "work"),
@@ -383,7 +407,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let inspection = WorkspaceInspector.inspection(session, now: now, glyphs: .fallback)
         XCTAssertTrue(inspection.muted)
         XCTAssertEqual(inspection.sections[0].fields, [
-            .init(label: "State", value: "working"),
+            .init(label: "State", value: "Working"),
             .init(label: "Reason", value: "Tool"),
             .init(label: "Evidence", value: "Nothing has reported it yet"),
             .init(label: "Since", value: "5m"),
@@ -538,7 +562,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         workspace.select(.embedded(F.runtimeID(2)))
         XCTAssertEqual(workspace.inspector.model.inspection?.title, "api — personal")
         var buttons = workspace.inspector.actionButtons
-        XCTAssertEqual(buttons.map(\.title), ["Name…", "Color…", "Icon…", "Mute", "Clear Markers", "Mark Active", "Changes…"])
+        XCTAssertEqual(buttons.map(\.title), ["Name…", "Color…", "Icon…", "Mute", "Clear markers", "Mark active", "Changes…"])
         XCTAssertTrue(buttons.allSatisfy(\.isEnabled))
         buttons[3].performClick(nil)
         buttons[0].performClick(nil)
@@ -598,7 +622,7 @@ final class WorkspaceInspectorTests: XCTestCase {
         let later = WorkspaceWaitingRow(key: row.key, title: row.title, detail: "stopped · 2m", glyph: "", toolTip: "")
         XCTAssertTrue(Line.sameLines(
             [.title("a", toolTip: "a"), .heading("Status"), .field(reason), .waiting(row), .actions(muted: false, embedded: true)],
-            [.title("b", toolTip: "b"), .heading("Status"), .field(WorkspaceInspection.Field(label: "Reason", value: "idle")),
+            [.title("b", toolTip: "b"), .heading("Status"), .field(WorkspaceInspection.Field(label: "Reason", value: "Idle")),
              .waiting(later), .actions(muted: true, embedded: false)]
         ))
         XCTAssertFalse(Line.sameLines([.heading("Status")], [.heading("Git")]))

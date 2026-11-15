@@ -53,7 +53,7 @@ final class WorkspaceResumeTests: XCTestCase {
         app.store.onChange = { workspace.refresh() }
         workspace.openForTesting()
         app.store.apply(snapshot: WorkspaceFixture.snapshot([]))
-        XCTAssertEqual(workspace.placeholder.button.title, "Set Up First Project…")
+        XCTAssertEqual(workspace.placeholder.button.title, "Set up first project…")
         workspace.placeholder.press()
         XCTAssertTrue(workspace.window.attachedSheet === workspace.setupPanel?.panel)
         XCTAssertTrue(app.madeViews.isEmpty)
@@ -80,7 +80,7 @@ final class WorkspaceResumeTests: XCTestCase {
         workspace.openForTesting()
         app.store.apply(health: .notRunning)
         workspace.refresh()
-        XCTAssertEqual(workspace.placeholder.button.title, "Set Up First Project…")
+        XCTAssertEqual(workspace.placeholder.button.title, "Set up first project…")
         workspace.placeholder.press()
         XCTAssertTrue(workspace.window.attachedSheet === workspace.setupPanel?.panel)
         XCTAssertTrue(app.madeViews.isEmpty)

@@ -153,6 +153,12 @@ harness and profile, the Git branch with its `*` dirty marker, the working
 directory, the watchdog reading, and the pane's live output. `i` shows and hides
 it, and `tab` moves the keys between the two panes.
 
+The inspector's state line includes elapsed time only when its starting time is
+known, and shows the harness once when the profile has the same name. For example,
+an untimed permission request using the `claude` profile reads
+`Needs permission · claude`. Missing values in labelled metadata keep their
+explicit unknown marker; the output pane keeps its measured layout.
+
 The branch is what tells two managed worktrees of one repository apart. Because
 it is drawn once for the selected row rather than in a column every row reserves,
 a long branch such as `amx/feature-name` is drawn whole instead of truncated. An

@@ -132,7 +132,7 @@ log show --last 5m --predicate 'subsystem == "io.github.sglavoie.agentmux"'
 
 ### Recorded activity
 
-View › Since Last Looked uses `amx session activity --json --days N --limit 1000`.
+Briefing’s Since you last looked section uses `amx session activity --json --days N --limit 1000`.
 The command projects actual daemon journal transitions, settled process exits,
 and accepted ASL lifecycle records; unchanged, suppressed, and duplicate reducer
 records are omitted before limiting. Stable record IDs survive journal rereads.

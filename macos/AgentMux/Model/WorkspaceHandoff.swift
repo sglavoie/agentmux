@@ -5,7 +5,7 @@ import Combine
 /// the operator's edited text, even if the source conversation has advanced.
 @MainActor
 final class WorkspaceHandoffModel: ObservableObject {
-    static let title = "Continue with Another Agent…"
+    static let title = "Continue with another agent…"
     let source: ConversationIdentity
     let preferredProfile: String
     @Published var profile = ""

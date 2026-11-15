@@ -229,7 +229,7 @@ struct WorkspaceCopyFeedback: Equatable {
 struct WorkspaceNotice: View {
     let message: String
     var kind: Kind = .information
-    var actionTitle = "Try Again"
+    var actionTitle = "Try again"
     var action: (() -> Void)?
     enum Kind { case information, warning, error }
     private var color: Color { kind == .error ? WorkspaceReviewColors.failure : kind == .warning ? WorkspaceReviewColors.warning : .secondary }

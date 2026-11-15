@@ -183,7 +183,7 @@ extension WorkspaceWindowTests {
         XCTAssertEqual(workspace.items, [.section("Workspace"), .view(.dashboard)])
         workspace.setShowOverviewInSidebar(true)
         XCTAssertEqual(workspace.items, [.section("Workspace"), .view(.dashboard), .view(.overview)])
-        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting to the daemon…")
+        XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Connecting…")
 
         app.store.apply(snapshot: F.snapshot(sessions))
         XCTAssertEqual(workspace.sidebar.numberOfRows, 9)
@@ -352,7 +352,7 @@ extension WorkspaceWindowTests {
         workspace.activate(work)
         var items = workspace.contextMenuItems(forRow: try index(of: personal.key))
         XCTAssertEqual(items.map(\.title), ["Peek at Session", "Name Session…", "Color…", "Icon…", "Mute", "Pin to Top", "", "New Terminal Below",
-                                            "New Session Below…", "Continue with Another Agent…", "Copy Runtime Session ID", "", "End Session…", "", "Mark Accounted For", "Edit Session Note…", "Undo Annotation"])
+                                            "New Session Below…", "Continue with another agent…", "Copy Runtime Session ID", "", "End Session…", "", "Mark Accounted For", "Edit Session Note…", "Undo Annotation"])
         let naming = try XCTUnwrap(items.first { $0.title == "Name Session…" })
         _ = try XCTUnwrap(naming.target).perform(try XCTUnwrap(naming.action), with: naming)
         XCTAssertEqual(asked.map(\.0), [personal])

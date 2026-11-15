@@ -6,7 +6,7 @@ struct WorkspaceHandoffView: View {
     let cancel: () -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Continue with Another Agent").font(.title2.bold())
+            Text("Continue with another agent").font(.title2.bold())
             HStack {
                 Text("From " + model.source.encoded).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                 Spacer()
@@ -58,7 +58,7 @@ final class WorkspaceHandoffPanel: NSObject, NSWindowDelegate {
         super.init()
         panel.delegate = self
         panel.isReleasedWhenClosed = false
-        panel.title = "Continue with Another Agent"
+        panel.title = "Continue with another agent"
         panel.contentView = NSHostingView(rootView: WorkspaceHandoffView(model: model, cancel: { [weak self] in self?.close() }))
         panel.minSize = NSSize(width: 660, height: 640)
     }

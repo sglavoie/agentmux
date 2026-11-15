@@ -31,6 +31,7 @@ enum WorkspaceWording {
             "elicitation": "Waiting for your answer", "question": "Waiting for your answer",
             "request_user_input": "Waiting for your answer", "unanswered_confirmation": "Waiting for your answer",
             "done": "Turn complete", "stop": "Turn complete", "completed": "Turn complete",
+            "bolt": "Working", "subagent": "Running a subagent", "compact": "Compacting",
             "running": "Running", "complete": "Complete", "paused": "Paused",
             "pending": "Pending", "empty": "Not started", "verification-failed": "Verification failed",
             "waiting_for_input": "Waiting for your answer", "waiting-for-input": "Waiting for your answer"

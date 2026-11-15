@@ -13,16 +13,16 @@ If no compatible download is listed, build from source below.
 
 The bundle includes `amx`, tmux, and Ghostty. You do not need Go, Xcode,
 Homebrew, or a separately installed `amx` to run it. On a fresh installation,
-the workspace opens with **Set Up First Project…** before a daemon is needed.
+the workspace opens with **Set up first project…** before a daemon is needed.
 Its native sheet detects agent CLIs and existing profile homes, and lists recent
 project directories. Select a CLI when several are found, keep the suggested
-project or use **Choose Another Folder…**, and review the checked **Sync Agent
-Mux hooks into &lt;home&gt; (needed for live status)** option. Click **Set Up** to save
+project or use **Choose another folder…**, and review the checked **Sync Agent
+Mux hooks into &lt;home&gt; (needed for live status)** option. Click **Set up** to save
 configuration with the existing tmux default. Unchecking the box skips hook sync.
 Then choose **Start Daemon** if offered and **Launch Project**. Setup never
 starts an agent or verifies authentication.
 
-**Set Up Manually…** is always available in the sheet and opens the embedded
+**Set up manually…** is always available in the sheet and opens the embedded
 wizard for custom homes, profile names, and other choices. When nothing is
 found, the sheet lists the CLIs it looked for: `claude`, `codex`, and `copilot`.
 Command failures stay visible in the sheet. A saved configuration with failed
@@ -57,7 +57,7 @@ mode. A hook failure returns a nonzero exit with `saved: true` in the JSON
 result; retry hook sync instead of setup. See the
 [setup contract](../operations.md#first-project-setup) for defaults, existing
 profile selection, and JSON fields. The embedded wizard
-remains available through **Set Up Manually…** or `amx workspace-view setup`.
+remains available through **Set up manually…** or `amx workspace-view setup`.
 
 ### Building from source
 

@@ -146,7 +146,7 @@ final class WorkspaceWelcomeTests: XCTestCase {
         XCTAssertEqual(model.title, "Answer sent")
         model.observe(waiting: 0, working: 3, live: true, celebrate: true)
         XCTAssertEqual(model.title, "All caught up")
-        XCTAssertEqual(model.detail, "3 agents are still working.")
+        XCTAssertEqual(model.detail, "3 sessions are still working.")
         expiries[0].perform()
         XCTAssertEqual(model.title, "All caught up", "An older receipt cannot dismiss the newer one")
         model.observe(waiting: 1, working: 2, live: true, celebrate: true)

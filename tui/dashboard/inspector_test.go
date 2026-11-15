@@ -126,6 +126,40 @@ func TestInspectorUnknownFactsDoNotSpendOutputRows(t *testing.T) {
 	}
 }
 
+func TestInspectorStateLineOmitsMissingTimeAndDuplicateHarness(t *testing.T) {
+	for _, tc := range []struct {
+		name, state, profile, want string
+		changed                    time.Time
+	}{
+		{"same name", "key", "claude", "Needs permission · claude", time.Time{}},
+		{"same name ignoring case", "key", "Claude", "Needs permission · claude", time.Time{}},
+		{"distinct profile", "key", "work", "Needs permission · claude · work", time.Time{}},
+		{"known time", "key", "claude", "Needs permission · 0:42 · claude", inspectorNow.Add(-42 * time.Second)},
+		{"unknown state", "future-state", "claude", "Status unavailable · claude", time.Time{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := session.RunningSession{Base: "api", State: tc.state, Harness: harness.Claude,
+				Profile: tc.profile, PresentationChangedAt: tc.changed}
+			lines := renderInspectorLines(t, InspectorInput{Content: InspectorReady, Session: s})
+			if lines[1] != tc.want {
+				t.Fatalf("state line = %q, want %q", lines[1], tc.want)
+			}
+		})
+	}
+}
+
+func TestInspectorMissingClockKeepsToolAndLabelledUnknown(t *testing.T) {
+	s := inspectorSession()
+	s.BusySince = time.Time{}
+	s.ActiveTool = "Bash"
+	if got := ansi.Strip(styledStatusLine(s, activeGroup, inspectorNow, styleDim)); got != "Working · Bash" {
+		t.Fatalf("missing clock = %q", got)
+	}
+	if got := ansi.Strip(inspectorLabelled(40, "Dir", "")); !strings.HasSuffix(got, inspectorUnknown) {
+		t.Fatalf("labelled unknown was removed: %q", got)
+	}
+}
+
 // TestInspectorSeparatesLoadingFromEmpty is the distinction the pane it replaces
 // could not draw: an empty string is the evidence that cannot tell "nothing has
 // come back" from "this session has printed nothing".

@@ -17,7 +17,7 @@ final class WorkspaceDailyPolishTests: XCTestCase {
     }
 
     func testProjectGuidanceDistinguishesSetupLoadingFailureAndReady() {
-        XCTAssertTrue(ProjectCatalog.guidance(.init(value: []), unavailable: nil).contains("Set Up First Project"))
+        XCTAssertTrue(ProjectCatalog.guidance(.init(value: []), unavailable: nil).contains("Set up first project"))
         XCTAssertTrue(ProjectCatalog.offersSetup(.init(value: []), unavailable: nil))
         XCTAssertFalse(ProjectCatalog.offersSetup(.init(), unavailable: nil))
         XCTAssertFalse(ProjectCatalog.offersSetup(.init(value: [], loading: true), unavailable: nil))

@@ -196,7 +196,11 @@ func inspectorMetaLines(in InspectorInput) []string {
 	}
 	s := in.Session
 	group := StateGroup(s, in.LastActivity, in.IdleThreshold)
-	identity := joinDetailTokens(harnessLabel(s.Harness), s.EffectiveProfile())
+	harness, profile := harnessLabel(s.Harness), s.EffectiveProfile()
+	if strings.EqualFold(harness, profile) {
+		profile = ""
+	}
+	identity := joinDetailTokens(harness, profile)
 	status := inspectorStatusLine(in, s, group)
 	inlineIdentity := identity != "" && layout.StyledWidth(status+metaSeparator+identity) <= in.Width
 	if inlineIdentity {
@@ -261,14 +265,17 @@ func styledStatusLine(s session.RunningSession, group int, now time.Time, style 
 	}
 	status := StatusText(s, group)
 	if status == "" {
-		line += styleDim.Render(inspectorUnknown)
+		line += styleDim.Render("Status unavailable")
 	} else {
 		line += style.Render(status)
 	}
 	if group == activeGroup && s.ActiveTool != "" {
 		line += styleDim.Render(metaSeparator + s.ActiveTool)
 	}
-	return line + styleDim.Render(metaSeparator+ElapsedText(s, group, now))
+	if elapsed := ElapsedText(s, group, now); elapsed != "" && elapsed != inspectorUnknown {
+		line += styleDim.Render(metaSeparator + elapsed)
+	}
+	return line
 }
 
 // inspectorLabelled draws one labelled metadata line: a dim label in its fixed

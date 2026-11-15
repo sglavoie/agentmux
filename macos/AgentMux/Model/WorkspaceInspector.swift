@@ -94,8 +94,8 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
         case .color: return "Color…"
         case .icon: return "Icon…"
         case .mute: return muted ? "Unmute" : "Mute"
-        case .clearState: return "Clear Markers"
-        case .markActive: return "Mark Active"
+        case .clearState: return "Clear markers"
+        case .markActive: return "Mark active"
         case .reviewChanges: return "Changes…"
         }
     }
@@ -124,13 +124,13 @@ enum WorkspaceInspectorAction: CaseIterable, Equatable {
 enum WorkspaceInspector {
     /// A state in words, for the states the palette draws as glyphs.
     static let stateWords = [
-        "bolt": "working", "stop": "Turn complete", "key": "Needs permission", "warning": "warning",
-        "error": "error", "subagent": "running a subagent", "compact": "compacting", "question": "Waiting for your answer",
+        "bolt": "Working", "stop": "Turn complete", "key": "Needs permission", "warning": "Warning",
+        "error": "Error", "subagent": "Running a subagent", "compact": "Compacting", "question": "Waiting for your answer",
     ]
-    static let idle = "idle"
+    static let idle = "Idle"
 
     static func word(for iconState: String) -> String {
-        iconState.isEmpty ? idle : stateWords[iconState] ?? iconState
+        iconState.isEmpty ? idle : stateWords[iconState] ?? WorkspaceWording.status(iconState)
     }
 
     /// The states in which a session shows a prompt a key can answer.

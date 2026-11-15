@@ -105,7 +105,7 @@ final class ASLQuestionFlow: ObservableObject {
         reset()
     }
 
-    /// Try Again, after the panel could not open: reads the run afresh.
+    /// Try again, after the panel could not open: reads the run afresh.
     func retry() {
         guard case .refused = phase, let target = answering else { return }
         open(target)
@@ -428,7 +428,7 @@ struct ASLQuestionView: View {
             }
             Spacer()
             if case .refused = flow.phase {
-                Button("Try Again") { flow.retry() }
+                Button("Try again") { flow.retry() }
             }
             // An answer on its way keeps the panel open until it is known.
             Button("Close", action: onClose).keyboardShortcut(.cancelAction)

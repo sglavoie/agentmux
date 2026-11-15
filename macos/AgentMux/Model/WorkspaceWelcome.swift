@@ -73,7 +73,7 @@ final class WorkspaceWelcomeModel: ObservableObject {
 
     func allCaughtUp() {
         showReceipt("All caught up", detail: working == 0 ? "Nothing waiting on you." :
-            "\(working) \(working == 1 ? "agent is" : "agents are") still working.")
+            "\(working) \(working == 1 ? "session is" : "sessions are") still working.")
     }
 
     func answerSent() {

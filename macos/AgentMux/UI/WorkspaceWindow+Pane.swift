@@ -384,7 +384,7 @@ extension WorkspaceWindowController {
             if state.rows.isEmpty {
                 placeholder.show(title: "No live sessions",
                     message: [delegate?.workspaceProjectGuidance ?? "", delegate?.workspaceLaunchDescription ?? ""].joined(separator: "\n\n"),
-                    button: delegate?.workspaceOffersSetup == true ? "Set Up First Project…" : "Launch Project…", secondary: [
+                    button: delegate?.workspaceOffersSetup == true ? "Set up first project…" : "Launch Project…", secondary: [
                         ("Conversation History", { [weak self] in self?.delegate?.workspacePerform(.history) }),
                         ("Open Dashboard", { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }),
                     ]) { [weak self] in
@@ -403,19 +403,19 @@ extension WorkspaceWindowController {
             let name = views.view(id)?.displayName ?? "This view"
             placeholder.show(
                 title: "\(name) closed",
-                message: "It is no longer running. No session was affected: the agents keep running.",
+                message: "Reopen this view to use it again. Your sessions are still running.",
                 button: "Reopen",
                 isDefault: true
             ) { [weak self] in self?.restartView(id) }
         case let .viewUnavailable(id, message):
-            placeholder.show(title: "No terminal yet", message: message, button: "Try Again") { [weak self] in
+            placeholder.show(title: "No terminal yet", message: message, button: "Try again") { [weak self] in
                 self?.restartView(id)
             }
         case let .viewRendererFailed(id):
             let name = views.view(id)?.displayName ?? "This view"
             placeholder.show(
                 title: "The terminal stopped drawing",
-                message: "\(name)'s renderer failed, so it can no longer be seen here. No session was affected; restarting ends its program and starts it in a new terminal.",
+                message: "\(name) can no longer display its output. Restart to open it in a new terminal; this ends its current program.",
                 button: "Restart",
                 isDefault: true
             ) { [weak self] in self?.restartViewAfterRendererFailure(id) }
@@ -426,7 +426,7 @@ extension WorkspaceWindowController {
                let action = down.action {
                 placeholder.show(
                     title: down.title,
-                    message: "The window comes back to the session it was on once the daemon lists it. \(down.message)",
+                    message: "The window will return to your previous session when it is available. \(down.message)",
                     button: action.title,
                     isDefault: true
                 ) { [weak self] in self?.performDaemonAction(action) }
@@ -436,7 +436,7 @@ extension WorkspaceWindowController {
                 title: "Restoring",
                 message: state.current
                     ? "Checking that the session this window was on is still running."
-                    : "Waiting for the daemon to say whether the session this window was on is still running. Nothing is started meanwhile.",
+                    : "Waiting for the connection to check your previous session. No session will be started automatically.",
                 button: "Open Dashboard"
             ) { [weak self] in self?.showView(WorkspaceUtilityView.dashboard.id) }
         case let .gone(_, status):
@@ -445,7 +445,7 @@ extension WorkspaceWindowController {
             let notice = status?.notice(for: name, resumable: conversation != nil)
                 ?? ("No longer listed", status == nil
                     ? "\(name) is no longer running. Checking what became of it."
-                    : "\(name) is no longer listed by the daemon. Nothing was restarted.")
+                    : "\(name) is no longer in the session list. It has not been restarted.")
             guard let conversation else {
                 placeholder.show(title: notice.0, message: notice.1, button: "Open Dashboard") { [weak self] in
                     self?.showView(WorkspaceUtilityView.dashboard.id)
@@ -460,20 +460,20 @@ extension WorkspaceWindowController {
         case let .detached(id):
             placeholder.show(
                 title: "Detached",
-                message: "This window let go of the session. The agent is still running; reattach when you want to use it here.",
+                message: "This session is still running. Choose Reattach to use it in this window.",
                 button: "Reattach",
                 isDefault: true
             ) { [weak self] in self?.reattach(id) }
         case let .unavailable(id, message):
-            placeholder.show(title: "No terminal yet", message: message, button: "Try Again") { [weak self] in
+            placeholder.show(title: "No terminal yet", message: message, button: "Try again") { [weak self] in
                 self?.reattach(id)
             }
         case .closing:
-            placeholder.show(title: "Ending", message: "This session's agent is being ended.")
+            placeholder.show(title: "Ending", message: "Ending this session…")
         case let .rendererFailed(id):
             placeholder.show(
                 title: "The terminal stopped drawing",
-                message: "Its renderer failed, so what the agent shows can no longer be seen here. The agent is still running; reattaching makes a new terminal for it.",
+                message: "This session can no longer display its output here. It is still running; choose Reattach to open a new terminal.",
                 button: "Reattach",
                 isDefault: true
             ) { [weak self] in self?.reattachAfterRendererFailure(id) }

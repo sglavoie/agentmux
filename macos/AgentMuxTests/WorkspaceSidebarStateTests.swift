@@ -6,7 +6,7 @@ extension WorkspaceSidebarTests {
         XCTAssertNil(WorkspaceSidebar.feedNotice(.live))
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.notRunning), "Daemon not running")
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.reconnecting("no heartbeat")), "Reconnecting… (no heartbeat)")
-        XCTAssertEqual(WorkspaceSidebar.feedNotice(.connecting), "Connecting to the daemon…")
+        XCTAssertEqual(WorkspaceSidebar.feedNotice(.connecting), "Connecting…")
         XCTAssertEqual(WorkspaceSidebar.feedNotice(.daemonTooOld), "Daemon too old — choose Restart Daemon")
         XCTAssertTrue(WorkspaceSidebar.feedNotice(.daemonTooOld)?.contains(MenuBuilder.restartHint) ?? false,
                       "it names the Restart Daemon offered with it, as the menu bar does")

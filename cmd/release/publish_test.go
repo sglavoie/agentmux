@@ -147,7 +147,7 @@ esac
 			}
 			if method == "create" {
 				notes := string(read("notes.md"))
-				if !strings.Contains(notes, "Set Up First Project") || !strings.Contains(notes, "--ignore-missing SHA256SUMS") {
+				if !strings.Contains(notes, "Set up first project") || !strings.Contains(notes, "--ignore-missing SHA256SUMS") {
 					t.Fatal("release notes omit the first-session or checksum instructions")
 				}
 			}

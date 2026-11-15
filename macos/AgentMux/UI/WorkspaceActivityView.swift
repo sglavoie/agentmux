@@ -4,7 +4,7 @@ import SwiftUI
 struct WorkspaceActivityView: View {
     @ObservedObject var preferences: WorkspaceReadingPreferences = .shared
     @ObservedObject var model: WorkspaceActivityModel
-    var title = "Since Last Looked"
+    var title = "Since you last looked"
     var grouped = false
     var outcomes: [String: WorkspaceRecapModel] = [:]
     var sessionRows: [WorkspaceRow] = []
@@ -36,9 +36,9 @@ struct WorkspaceActivityView: View {
                 Spacer()
                 Button { refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .help("Refresh activity (⌘R)").accessibilityLabel("Refresh activity").disabled(model.loading)
-                Menu("Mark Read") {
-                    Button("Mark Selected Read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
-                    Button("Mark All \(model.visible.count) Results Read") { model.markVisibleRead() }
+                Menu("Mark read") {
+                    Button("Mark selected read") { model.markSelectedRead() }.disabled(!model.canMarkSelectedRead)
+                    Button("Mark all \(model.visible.count) results read") { model.markVisibleRead() }
                         .disabled(model.unreadResultCount == 0 || model.loading || model.error != nil)
                 }.fixedSize()
                 Button("Undo") { model.undoMarkRead() }.disabled(!model.canUndoRead).help("Undo the last activity read acknowledgement")
@@ -47,7 +47,7 @@ struct WorkspaceActivityView: View {
                 Text(model.report.map { "\(model.visible.count) shown · \($0.entries.count) loaded" } ?? "Recorded activity")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Menu("About This Activity") {
+                Menu("About this activity") {
                     Text("Opening this view does not mark events read.")
                     Text(model.readState.lastMarkedAt.map { "Last marked read: " + $0.formatted() } ?? "No events marked read yet")
                     Text("Retained history starts " + (model.report.flatMap { WorkspaceActivityEntry.date($0.earliestAvailable) }?.formatted() ?? "at an unknown time"))
@@ -60,11 +60,11 @@ struct WorkspaceActivityView: View {
                                  loading: model.scopeLoading, retry: { model.setProject(model.project, rows: sessionRows) })
             if let session = model.flightSession {
                 HStack {
-                    Text("Flight Log: \(session.title) · \(model.flightKind == "all" ? "all events" : FlightEvent.stateName(model.flightKind))").font(.caption)
+                    Text("Session: \(session.title) · \(model.flightKind == "all" ? "all events" : WorkspaceInspector.word(for: model.flightKind))").font(.caption)
                     Spacer()
                     Button("Clear session filter") { model.clearFlightFilter() }
                 }
-                Text("Activity is limited to retained journal history. Flight Log totals may include older events.").font(.caption).foregroundStyle(.secondary)
+                Text("Only saved events are shown. Older events may no longer be available.").font(.caption).foregroundStyle(.secondary)
             }
             WorkspaceReviewSplit(layout: $model.layout, title: "Events", minimum: 220, detailMinimum: 360) {
                 List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
@@ -96,9 +96,9 @@ struct WorkspaceActivityView: View {
                             Text(entry.detail).font(.system(size: preferences.effectiveProseSize)).textSelection(.enabled)
                             HStack {
                                 if entry.conversation != nil || !entry.runtimeSessionID.isEmpty {
-                                    Button("Focus Live Session") { model.onFocus?(entry) }.help("Focus Live Session (⌘Return)")
+                                    Button("Focus live session") { model.onFocus?(entry) }.help("Focus live session (⌘Return)")
                                 }
-                                if entry.conversation != nil { Button("Open Conversation") { model.openConversation() }.help("Open Conversation (⌘⇧Return)") }
+                                if entry.conversation != nil { Button("Open conversation") { model.openConversation() }.help("Open conversation (⌘⇧Return)") }
                             }
                             if let recap = outcomes[entry.groupID] { WorkspaceReturnOutcome(model: recap) }
                             if let row = sessionRows.first(where: { !$0.key.runtimeSessionID.isEmpty && $0.key.runtimeSessionID == entry.runtimeSessionID }), row.iconState == "stop", let onReview {
@@ -112,9 +112,9 @@ struct WorkspaceActivityView: View {
                                 Text("Last recorded assistant message at or before this event · \(excerpt.timestamp ?? "")").font(.caption).foregroundStyle(.secondary)
                                 WorkspaceTranscriptText(text: excerpt.text.reveal(), terms: [], preferences: preferences)
                             } else if !model.reading && model.transcriptError == nil {
-                                Text(entry.conversation == nil ? "This event has no recorded conversation identity." : "No timestamped assistant output at or before this event is available in the loaded messages.").foregroundStyle(.secondary)
+                                Text(entry.conversation == nil ? "No conversation is linked to this event." : "No timestamped assistant output at or before this event is available in the loaded messages.").foregroundStyle(.secondary)
                             }
-                            if model.canLoadEarlier { Button("Load Earlier Messages") { model.loadEarlier() } }
+                            if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier() } }
                             Divider()
                             Text("Recorded event: \(entry.event)").font(.caption).textSelection(.enabled)
                             if !entry.runID.isEmpty { Text("Run: \(entry.runID)").font(.caption).textSelection(.enabled) }
