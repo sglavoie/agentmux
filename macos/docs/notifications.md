@@ -161,6 +161,9 @@ two `amx send` invocations and shows what they answer:
 
 1. `amx send <runtime-session-id> --look --json` reads the screen. It runs
    when the panel opens, on **Look Again**, and 0.6 seconds after every key.
+   Its JSON may include `prompt` with `question`, `summary`, and `options`
+   (`key`, `label`, `selected`) on blocked screens. The object is absent when
+   numbered options cannot be read with certainty or the screen is not blocked.
 2. `amx send <runtime-session-id> --key <name> --json` presses one key.
 
 The rules are in `Model/PromptAnswer.swift`:

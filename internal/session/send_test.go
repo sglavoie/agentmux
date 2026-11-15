@@ -314,3 +314,58 @@ func TestSendRejectsAnOperationIDItCouldNotRecord(t *testing.T) {
 		}
 	}
 }
+
+// lookScreenTerminal supplies a captured screen; any attempt to write calls
+// the nil embedded terminal, so these tests also enforce read-only behavior.
+type lookScreenTerminal struct {
+	SendTerminal
+	record runtimesession.Record
+	text   string
+}
+
+func (term lookScreenTerminal) Discover() ([]backend.Pane, error) {
+	return []backend.Pane{{
+		Ref:  backend.PaneID(term.record.Target.Ref),
+		Vars: map[string]string{RuntimeSessionVar: string(term.record.ID)},
+	}}, nil
+}
+
+func (term lookScreenTerminal) Observe(ref backend.Ref) (backend.Screen, error) {
+	return backend.Screen{Instance: term.record.Target.Instance, Pane: ref, Text: term.text, CapturedAt: time.Now()}, nil
+}
+
+func TestLookParsesOnlyBlockedScreenTail(t *testing.T) {
+	const options = "Allow?\n> 1. Yes\n2. No"
+	for _, tt := range []struct {
+		name, text             string
+		state                  screenstate.State
+		recognized, wantPrompt bool
+	}{
+		{"blocked", options, screenstate.Blocked, true, true},
+		{"working", options, screenstate.Working, true, false},
+		{"idle", options, screenstate.Terminal, true, false},
+		{"unknown", options, screenstate.Unknown, true, false},
+		{"no adapter", options, screenstate.Blocked, false, false},
+		{"unreadable options", "Allow?\n1. Yes\n3. No", screenstate.Blocked, true, false},
+		{"outside tail", options + strings.Repeat("\nother text", SendLookLines), screenstate.Blocked, true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			record := runtimesession.Record{ID: "rs-look", Target: &runtimesession.Target{Ref: "%1"}}
+			term := lookScreenTerminal{record: record, text: tt.text + "\n  \n"}
+			got, err := Look(term, SendRequest{Record: record, Now: time.Now(), Classify: func(string, string) (screenstate.State, bool) {
+				return tt.state, tt.recognized
+			}})
+			if err != nil || (got.Prompt != nil) != tt.wantPrompt {
+				t.Fatalf("Look = %+v, %v", got, err)
+			}
+			if got.Prompt != nil && (got.Prompt.Question != "Allow?" || len(got.Prompt.Options) != 2 || !got.Prompt.Options[0].Selected) {
+				t.Fatalf("prompt = %+v", got.Prompt)
+			}
+			wantLines := strings.Split(tt.text, "\n")
+			wantLines = wantLines[max(0, len(wantLines)-SendLookLines):]
+			if strings.Join(got.Lines, "\n") != strings.Join(wantLines, "\n") {
+				t.Fatalf("lines = %q; want %q", got.Lines, wantLines)
+			}
+		})
+	}
+}

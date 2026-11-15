@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -532,5 +534,115 @@ func TestSendLookSearchContextIsReadOnlyAndCannotBeUsedWithInput(t *testing.T) {
 	}
 	if w.operation(t) != before {
 		t.Fatal("refused input wrote a receipt")
+	}
+}
+
+// Unimplemented methods panic if looking tries to send or record input.
+type promptLookTerminal struct {
+	sendTerminal
+	record runtimesession.Record
+	text   string
+}
+
+func (term promptLookTerminal) Discover() ([]backend.Pane, error) {
+	return []backend.Pane{{
+		Ref:  backend.PaneID(term.record.Target.Ref),
+		Vars: map[string]string{session.RuntimeSessionVar: string(term.record.ID)},
+	}}, nil
+}
+
+func (term promptLookTerminal) Observe(ref backend.Ref) (backend.Screen, error) {
+	return backend.Screen{Instance: term.record.Target.Instance, Pane: ref, Text: term.text, CapturedAt: time.Now()}, nil
+}
+
+func TestSendLookPromptJSONAndUnchangedText(t *testing.T) {
+	previousJSON, previousSearch, previousClassify := sendJSON, sendSearchContext, sendClassify
+	t.Cleanup(func() {
+		sendJSON, sendSearchContext, sendClassify = previousJSON, previousSearch, previousClassify
+	})
+	sendSearchContext = false
+	for _, tt := range []struct {
+		file, harness, question, summary, first string
+	}{
+		{"claude_permission_prompt.txt", "claude", "Do you want to create perm-demo.txt?", "Do you want to create perm-demo.txt?", "Yes"},
+		{"codex_prompt_command_approval.txt", "codex", "Would you like to run the following command?", "rm -f /tmp/amx-fixture-capture/perm-demo.txt", "Yes, proceed (y)"},
+		{"copilot_permission_prompt.txt", "copilot", "Do you want to run this command?", "rm -f notes.txt", "Yes"},
+		{"claude_idle_completed.txt", "claude", "", "", ""},
+		{"codex_working.txt", "codex", "", "", ""},
+		{"unreadable choices", "", "", "", ""},
+	} {
+		t.Run(tt.file, func(t *testing.T) {
+			text := "Allow?\n1. Yes\n3. No"
+			sendClassify = func(string, string) (screenstate.State, bool) { return screenstate.Blocked, true }
+			if tt.harness != "" {
+				data, err := os.ReadFile(filepath.Join("..", "..", "internal", "screenstate", "testdata", tt.file))
+				if err != nil {
+					t.Fatal(err)
+				}
+				text = string(data)
+				adapter, ok := screenstate.For(tt.harness)
+				if !ok {
+					t.Fatalf("no adapter for %s", tt.harness)
+				}
+				sendClassify = func(_, screen string) (screenstate.State, bool) { return adapter.Classify(screen).State, true }
+			}
+			record := runtimesession.Record{ID: "rs-look", Project: "api", Target: &runtimesession.Target{Ref: "%1"}}
+			term := promptLookTerminal{record: record, text: text}
+			var output bytes.Buffer
+			cmd := &cobra.Command{}
+			cmd.SetOut(&output)
+			sendJSON = true
+			if err := runSendLook(cmd, term, record); err != nil {
+				t.Fatal(err)
+			}
+			var envelope struct {
+				Data struct {
+					Screen string          `json:"screen"`
+					Lines  []string        `json:"lines"`
+					Prompt json.RawMessage `json:"prompt"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if tt.first == "" {
+				if envelope.Data.Prompt != nil {
+					t.Fatalf("prompt must be omitted: %s", output.String())
+				}
+			} else {
+				// Decode independently of the production payload tags.
+				var prompt struct {
+					Question string `json:"question"`
+					Summary  string `json:"summary"`
+					Options  []struct {
+						Key      string `json:"key"`
+						Label    string `json:"label"`
+						Selected *bool  `json:"selected"`
+					} `json:"options"`
+				}
+				if err := json.Unmarshal(envelope.Data.Prompt, &prompt); err != nil {
+					t.Fatal(err)
+				}
+				if envelope.Data.Screen != "blocked" || prompt.Question != tt.question || prompt.Summary != tt.summary || len(prompt.Options) != 3 {
+					t.Fatalf("payload = %s", output.String())
+				}
+				for i, option := range prompt.Options {
+					if option.Key != string(rune('1'+i)) || option.Selected == nil || *option.Selected != (i == 0) {
+						t.Fatalf("option %d = %+v", i+1, option)
+					}
+				}
+				if prompt.Options[0].Label != tt.first {
+					t.Fatalf("first label = %q", prompt.Options[0].Label)
+				}
+			}
+			output.Reset()
+			sendJSON = false
+			if err := runSendLook(cmd, term, record); err != nil {
+				t.Fatal(err)
+			}
+			if want := strings.Join(envelope.Data.Lines, "\n") + "\n"; output.String() != want {
+				t.Fatalf("plain text = %q; want %q", output.String(), want)
+			}
+		})
 	}
 }

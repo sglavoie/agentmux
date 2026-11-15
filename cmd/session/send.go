@@ -94,9 +94,12 @@ stays "accepted". The text itself is never logged or recorded.
 
 --look sends nothing: it prints the last rows of the agent's screen, and with
 --json reports {runtime_session_id, backend, project, screen, lines}, where
-screen is the word a send would report. It is what a surface shows before a
-key is pressed, and it is refused where a send would be for a session that is
-gone or a screen that cannot be read. With --search-context, the current
+screen is the word a send would report. A blocked screen can also include
+prompt: {question, summary, options: [{key, label, selected}]}. It is absent
+whenever the numbered options cannot be read with certainty. Plain-text output
+is unchanged. It is what a surface shows before a key is pressed, and it is
+refused where a send would be for a session that is gone or a screen that
+cannot be read. With --search-context, the current
 terminal search scope and query are included in either output format.`,
 	Example: `  amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f "run the tests again"
   git diff | amx send rs-4f1c0b9e2a7d4c3b8e6f1a2b3c4d5e6f --stdin --no-enter
@@ -152,8 +155,21 @@ type sendLookData struct {
 	Backend          string              `json:"backend"`
 	Project          string              `json:"project"`
 	// Screen is blocked, working, idle, or unknown.
-	Screen string   `json:"screen"`
-	Lines  []string `json:"lines"`
+	Screen string          `json:"screen"`
+	Lines  []string        `json:"lines"`
+	Prompt *sendLookPrompt `json:"prompt,omitempty"`
+}
+
+type sendLookPrompt struct {
+	Question string           `json:"question"`
+	Summary  string           `json:"summary"`
+	Options  []sendLookOption `json:"options"`
+}
+
+type sendLookOption struct {
+	Key      string `json:"key"`
+	Label    string `json:"label"`
+	Selected bool   `json:"selected"`
 }
 
 // sendTerminal is what sending needs from the tmux backend.
@@ -306,10 +322,19 @@ func runSendLook(cmd *cobra.Command, term sendTerminal, record runtimesession.Re
 		search = &value
 	}
 	if sendJSON {
+		var prompt *sendLookPrompt
+		if look.Prompt != nil {
+			prompt = &sendLookPrompt{Question: look.Prompt.Question, Summary: look.Prompt.Summary}
+			for _, option := range look.Prompt.Options {
+				prompt.Options = append(prompt.Options, sendLookOption{
+					Key: option.Key, Label: option.Label, Selected: option.Selected,
+				})
+			}
+		}
 		return cli.WriteJSON(cmd, sendLookData{
 			Search:           search,
 			RuntimeSessionID: string(record.ID), Backend: string(record.Target.Instance.Kind), Project: record.Project,
-			Screen: look.Screen, Lines: look.Lines,
+			Screen: look.Screen, Lines: look.Lines, Prompt: prompt,
 		})
 	}
 	if search != nil {

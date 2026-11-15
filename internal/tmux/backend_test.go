@@ -1,6 +1,7 @@
 package tmux
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -477,19 +478,22 @@ exit $rc
 
 func TestPartialLaunchFailureLeavesNothing(t *testing.T) {
 	cases := []struct {
-		name    string
-		action  string
-		timeout time.Duration
+		name        string
+		action      string
+		wantTimeout bool
 	}{
 		// The server created the session but the client reported failure.
-		{"client_fails_after_create", "echo injected failure >&2; exit 1", 0},
+		{"client_fails_after_create", "echo injected failure >&2; exit 1", false},
 		// The server created the session but the client never answered.
-		{"client_hangs_after_create", "exec sleep 30", 700 * time.Millisecond},
+		{"client_hangs_after_create", "exec sleep 30", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			wrapper := faultyTmux(t, tc.action)
-			f := newFixture(t, Options{Binary: wrapper, Timeout: tc.timeout})
+			// Keep the normal client deadline: Timeout also bounds cleanup and
+			// discovery, which must survive contention from other test packages.
+			// The injected 30s sleep still exceeds the default 5s deadline.
+			f := newFixture(t, Options{Binary: wrapper})
 			survivor := f.launch(t, "survivor", echoArgv("survivor"), nil)
 			before := f.tmux(t, "list-sessions", "-F", "#{session_id}")
 			if before != survivor.Group.ID {
@@ -502,6 +506,9 @@ func TestPartialLaunchFailureLeavesNothing(t *testing.T) {
 			})
 			if err == nil {
 				t.Fatal("Launch reported success")
+			}
+			if got := errors.Is(err, context.DeadlineExceeded); got != tc.wantTimeout {
+				t.Errorf("Launch timeout = %v, want %v: %v", got, tc.wantTimeout, err)
 			}
 			if !strings.Contains(err.Error(), "partial session") || !strings.Contains(err.Error(), "removed") {
 				t.Errorf("Launch err = %v, want it to report the removed partial session", err)

@@ -272,6 +272,8 @@ type SendLook struct {
 	// Lines is the tail of the screen, without the blank rows below the
 	// program's last one.
 	Lines []string
+	// Prompt is present only for a blocked screen with readable numbered choices.
+	Prompt *screenstate.Prompt
 }
 
 // SendLookLines is how many rows of a screen Look returns.
@@ -310,7 +312,13 @@ func Look(term SendTerminal, req SendRequest) (SendLook, error) {
 	if len(lines) > SendLookLines {
 		lines = lines[len(lines)-SendLookLines:]
 	}
-	return SendLook{Screen: sendScreenWord(state), Lines: lines}, nil
+	look := SendLook{Screen: sendScreenWord(state), Lines: lines}
+	if look.Screen == SendScreenBlocked {
+		if prompt, ok := screenstate.ParsePrompt(lines); ok {
+			look.Prompt = &prompt
+		}
+	}
+	return look, nil
 }
 
 // readSendScreen reads the pane's screen fresh and classifies it. The last

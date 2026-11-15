@@ -274,5 +274,11 @@ journal.
 **Looking first.** `amx send ID --look` sends nothing and prints the last
 rows of the agent's screen; with `--json` it reports `{runtime_session_id,
 backend, project, screen, lines}`, where `screen` is the word a send would
-report. It is what Agent Mux.app shows when a permission banner's Answer… is
-chosen, so the prompt is read before a key is pressed.
+report. On a blocked screen, an optional `prompt` object contains `question`,
+`summary`, and an `options` array with `key`, `label`, and `selected` for each
+choice. It is absent
+when the screen is not blocked or the numbered options cannot be read with
+certainty. Question, summary, and labels are limited to 200 characters each;
+plain-text output is unchanged. It is what Agent Mux.app shows when a
+permission banner's Answer… is chosen, so the prompt is read before a key is
+pressed.
