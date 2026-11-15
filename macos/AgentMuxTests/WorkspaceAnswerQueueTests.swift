@@ -148,6 +148,47 @@ final class WorkspaceAnswerQueueTests: XCTestCase {
         XCTAssertNil(workspace.welcome.receipt, "A new unanswered question clears the caught-up receipt")
     }
 
+    func testUnchangedPromptRefreshedByScreenProbeStillAdvances() throws {
+        load(2)
+        var snapshot = try XCTUnwrap(terminals.store.snapshot)
+        snapshot.sessions[0].harness = "codex"
+        snapshot.sessions[0].reason = "command_approval"
+        snapshot.sessions[0].presentationChangedAtMS = 1_794_759_288_867
+        snapshot.sessions[0].lastEventAt = 1_794_759_290
+        apply(snapshot)
+        try open(1)
+        reads.drain()
+        let original = try XCTUnwrap(workspace.allWaitingRows.first { $0.key == .embedded(F.runtimeID(1)) })
+
+        // The real Codex probe keeps presentation and prompt kind stable,
+        // but refreshes last_event_at every two seconds while we read it.
+        for _ in 0..<3 {
+            snapshot.sessions[0].lastEventAt += 2
+            apply(snapshot)
+        }
+        prompt.press(PromptKey.digits[1]); presses.drain()
+        XCTAssertTrue(workspace.inspector.answerWasSent(original))
+        XCTAssertEqual(workspace.inspector.sentAnswers.count, 1)
+        XCTAssertTrue(app.promptPanel!.isVisible)
+        XCTAssertEqual(prompt.state?.target.runtimeSessionID, F.runtimeID(2))
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(2)))
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(2)))
+        XCTAssertFalse(workspace.window.firstResponder === terminal)
+        XCTAssertFalse(NSApp.keyWindow === workspace.window)
+        XCTAssertFalse(prompt.state?.canPress == true)
+        prompt.press(PromptKey.digits[1]); presses.drain()
+        XCTAssertEqual(service.keys.count, 1, "Only the next session's own look can authorize its keys")
+        reads.drain()
+        XCTAssertEqual(prompt.state?.look.project, F.runtimeID(2))
+        XCTAssertTrue(prompt.state?.canPress == true)
+        prompt.press(PromptKey.digits[1]); presses.drain()
+        XCTAssertEqual(service.keys.map { $0[1] }, [F.runtimeID(1), F.runtimeID(2)])
+        XCTAssertEqual(workspace.inspector.sentAnswers.count, 2)
+        XCTAssertNil(prompt.state)
+        XCTAssertFalse(app.promptPanel!.isVisible)
+        XCTAssertEqual(workspace.welcome.receipt?.title, "All caught up")
+    }
+
     func testPromptToASLToPromptDoesNotCloseNewPanelOrKeepSentDraft() throws {
         load(3, aslIndex: 2)
         try open(1); sendPrompt()
@@ -239,7 +280,7 @@ final class WorkspaceAnswerQueueTests: XCTestCase {
         load(2); try open(1); reads.drain()
         prompt.press(PromptKey.digits[1])
         var snapshot = try XCTUnwrap(terminals.store.snapshot)
-        snapshot.sessions[0].lastEventAt += 1
+        snapshot.sessions[0].presentationChangedAtMS += 1
         apply(snapshot)
         presses.drain()
         XCTAssertTrue(workspace.inspector.sentAnswers.isEmpty)
@@ -250,6 +291,38 @@ final class WorkspaceAnswerQueueTests: XCTestCase {
         presses.drain()
         XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
         XCTAssertEqual(prompt.state?.target.runtimeSessionID, F.runtimeID(1))
+    }
+
+    func testChangedPromptKindDoesNotMarkSentOrAdvance() throws {
+        load(2)
+        var snapshot = try XCTUnwrap(terminals.store.snapshot)
+        snapshot.sessions[0].harness = "codex"
+        snapshot.sessions[0].reason = "command_approval"
+        snapshot.sessions[0].presentationChangedAtMS = 1_794_759_288_867
+        apply(snapshot)
+        try open(1); reads.drain(); prompt.press(PromptKey.digits[1])
+        // Both kinds use the key icon, so presentation time need not change.
+        snapshot.sessions[0].reason = "permission_grant"
+        apply(snapshot)
+        presses.drain()
+        XCTAssertTrue(workspace.inspector.sentAnswers.isEmpty)
+        XCTAssertEqual(prompt.state?.target.runtimeSessionID, F.runtimeID(1))
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
+    }
+
+    func testChangedASLQuestionDoesNotMarkSentOrAdvance() throws {
+        load(2, aslIndex: 1)
+        try open(1)
+        var snapshot = try XCTUnwrap(terminals.store.snapshot)
+        snapshot.asl.waiting[0].latestQuestionID = "q-api-2"
+        apply(snapshot)
+        let flow = app.aslPanel!.flow
+        flow.setDraft("Proceed")
+        flow.submit(try XCTUnwrap(flow.state.buttons.first))
+        XCTAssertEqual(asl.actions.count, 1)
+        XCTAssertTrue(workspace.inspector.sentAnswers.isEmpty)
+        XCTAssertNil(prompt.state)
+        XCTAssertEqual(workspace.state.selection, .embedded(F.runtimeID(1)))
     }
 
     func testLateSubmissionUsesOriginalQuestionAndDoesNotMoveNewPanel() throws {

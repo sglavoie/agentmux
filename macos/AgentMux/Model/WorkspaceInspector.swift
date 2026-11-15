@@ -172,7 +172,10 @@ enum WorkspaceInspector {
                 iconState: row.iconState,
                 category: WorkspaceWaitingFilter.category(icon: session.iconState, answer: answer),
                 changedAt: session.changedAt,
-                contextVersion: "\(session.lastEventAt):\(runs[row.key]?.latestQuestionID ?? ""):\(runs[row.key]?.unanswered ?? 0)",
+                // Screen probes refresh lastEventAt even for the same prompt.
+                // changedAt tracks presentation; reason distinguishes prompt
+                // kinds that share an icon (for example two Codex approvals).
+                contextVersion: "\(session.iconState):\(session.reason):\(runs[row.key]?.latestQuestionID ?? ""):\(runs[row.key]?.unanswered ?? 0)",
                 tabColor: row.tabColor
             )
         }

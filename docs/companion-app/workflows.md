@@ -21,7 +21,9 @@ answer panel takes the keyboard; its terminal never takes focus. A prompt panel
 must read that session's own prompt before accepting any key. When no answerable
 items remain, the panel closes with an **All caught up** receipt. If the waiting
 context changes before the submission receipt arrives, the panel stays on its
-original session; use **Next Waiting Session** to continue explicitly.
+original session; use **Next Waiting Session** to continue explicitly. Routine
+screen refreshes of an unchanged Codex prompt preserve its place in the queue;
+a changed presentation, prompt kind, or supervisor question invalidates it.
 
 Turn off **Continue to the next waiting session after answering** in Settings ›
 Workspace to keep the existing single-session panel behavior. Typing directly

@@ -534,6 +534,11 @@ collapsed or the next session already in the other split pane. Each prompt
 requires its own completed look reporting a prompt before accepting keys. Old
 submission callbacks retain their question identity and cannot move a newer
 panel. When the queue is empty the panel closes and shows **All caught up**.
+Waiting-question identity follows presentation time, icon and prompt kind, plus
+the supervisor question ID and unanswered count. Routine activity refreshes of
+the same Codex prompt do not invalidate an answer; a changed question still
+prevents marking or advancing. Older snapshots without presentation time retain
+the last-event fallback.
 
 With the preference off, panels retain their single-session behavior. Direct
 terminal input never advances; new waiting snapshots never start the queue.
