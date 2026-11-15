@@ -12,6 +12,8 @@ struct WorkspaceActivityView: View {
     var onReview: ((AttentionCycler.Key) -> Void)?
     private enum Focus: Hashable { case list, details }
     @FocusState private var focus: Focus?
+    @State private var expanded: Set<String> = []
+    @State private var expansionGeneration = 0
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -29,10 +31,10 @@ struct WorkspaceActivityView: View {
                 WorkspaceReadingMenu(preferences: preferences)
             }
             HStack {
-                Toggle("Unread only", isOn: $model.unreadOnly).onChange(of: model.unreadOnly) { _, _ in model.filterChanged() }
+                Toggle("Unread only", isOn: $model.unreadOnly).onChange(of: model.unreadOnly) { _, _ in model.cancelReveal(); model.filterChanged() }
                 Picker("Look back", selection: $model.days) {
                     Text("1 day").tag(1); Text("7 days").tag(7); Text("30 days").tag(30); Text("90 days").tag(90)
-                }.frame(width: 180).onChange(of: model.days) { _, _ in refresh() }
+                }.frame(width: 180).onChange(of: model.days) { _, _ in model.cancelReveal(); refresh() }
                 Spacer()
                 Button { refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .help("Refresh activity (⌘R)").accessibilityLabel("Refresh activity").disabled(model.loading)
@@ -67,14 +69,30 @@ struct WorkspaceActivityView: View {
                 Text("Only saved events are shown. Older events may no longer be available.").font(.caption).foregroundStyle(.secondary)
             }
             WorkspaceReviewSplit(layout: $model.layout, title: "Events", minimum: 220, detailMinimum: 360) {
-                List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
+                List(selection: Binding(get: { model.selection }, set: { model.select($0, origin: .explicit) })) {
                     if grouped {
                         ForEach(model.groups) { group in
                             Section {
-                                ForEach(group.entries) { entry in eventRow(entry) }
+                                if expanded.contains(group.id) {
+                                    ForEach(group.entries) { entry in eventRow(entry) }
+                                }
                             } header: {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(groupTitle(group)).font(.headline)
+                                    HStack {
+                                        Button {
+                                            if !expanded.insert(group.id).inserted { expanded.remove(group.id) }
+                                        } label: {
+                                            Image(systemName: expanded.contains(group.id) ? "chevron.down" : "chevron.right")
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .accessibilityLabel(expanded.contains(group.id) ? "Hide events" : "Show events")
+                                        .accessibilityIdentifier("activity-disclosure-" + group.id)
+                                        Text(groupTitle(group)).font(.headline)
+                                        Spacer(minLength: 0)
+                                        let unread = group.entries.filter { model.readState.read[$0.id] == nil }.count
+                                        if unread > 0 { Text("\(unread) unread").font(.caption).foregroundStyle(.secondary) }
+                                    }
+                                    Text(group.summary(now: Date())).font(.caption).foregroundStyle(.secondary)
                                     if let recap = outcomes[group.id] { WorkspaceReturnOutcome(model: recap) }
                                 }
                             }
@@ -92,8 +110,10 @@ struct WorkspaceActivityView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if let entry = model.selected {
                             Text(entry.title).font(.title2)
-                            Text(entry.date?.formatted() ?? entry.at).foregroundStyle(.secondary)
-                            Text(entry.detail).font(.system(size: preferences.effectiveProseSize)).textSelection(.enabled)
+                            Text("\(relativeAge(entry)) · \(entry.date?.formatted() ?? entry.at)").foregroundStyle(.secondary)
+                            if !entry.transition.isEmpty {
+                                Text(entry.transition).font(.system(size: preferences.effectiveProseSize)).textSelection(.enabled)
+                            }
                             HStack {
                                 if entry.conversation != nil || !entry.runtimeSessionID.isEmpty {
                                     Button("Focus live session") { model.onFocus?(entry) }.help("Focus live session (⌘Return)")
@@ -116,9 +136,15 @@ struct WorkspaceActivityView: View {
                             }
                             if model.canLoadEarlier { Button("Load earlier messages") { model.loadEarlier() } }
                             Divider()
-                            Text("Recorded event: \(entry.event)").font(.caption).textSelection(.enabled)
-                            if !entry.runID.isEmpty { Text("Run: \(entry.runID)").font(.caption).textSelection(.enabled) }
-                            if !entry.traceID.isEmpty { Text("Trace: \(entry.traceID)").font(.caption).textSelection(.enabled) }
+                            DisclosureGroup("Diagnostics") {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(entry.detail).textSelection(.enabled)
+                                    Text("Recorded event: \(entry.event)").textSelection(.enabled)
+                                    if !entry.runID.isEmpty { Text("Run: \(entry.runID)").textSelection(.enabled) }
+                                    if !entry.traceID.isEmpty { Text("Trace: \(entry.traceID)").textSelection(.enabled) }
+                                }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+                            }.id(entry.id)
+                                .accessibilityIdentifier("activity-diagnostics")
                         }
                     }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
                 }.focusable().focused($focus, equals: .details)
@@ -131,7 +157,10 @@ struct WorkspaceActivityView: View {
                     .frame(minWidth: 360, maxWidth: .infinity)
             }
         }.padding(12)
-            .onAppear { focus = model.layout.collapsed ? .details : .list }
+            .onAppear { focus = model.layout.collapsed ? .details : .list; revealRequestedEvent() }
+            .onChange(of: model.explicitReveal) { _, _ in revealRequestedEvent() }
+            .onChange(of: model.visible.map(\.id)) { _, _ in revealRequestedEvent() }
+            .onChange(of: model.presentationGeneration) { _, _ in revealRequestedEvent() }
             .background(WorkspaceReviewShortcuts(handle: handleShortcut).frame(width: 0, height: 0))
     }
     private func refresh() { if let onRefresh { onRefresh() } else { model.refresh() } }
@@ -145,10 +174,27 @@ struct WorkspaceActivityView: View {
                 }
                 Text(entry.title).font(.headline)
             }
-            Text(entry.date?.formatted() ?? entry.at).font(.caption).foregroundStyle(.secondary)
-            Text([entry.harness, entry.profile].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption)
-            Text(entry.detail).font(.caption).lineLimit(2)
+            Text(relativeAge(entry)).font(.caption).foregroundStyle(.secondary)
+            if !grouped { Text([entry.harness, entry.profile].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption) }
+            if !entry.transition.isEmpty { Text(entry.transition).font(.caption).lineLimit(2) }
         }.padding(.vertical, 3).tag(entry.id)
+            .help(entry.date?.formatted() ?? entry.at)
+            .accessibilityIdentifier("activity-event-" + entry.id)
+    }
+    private func relativeAge(_ entry: WorkspaceActivityEntry) -> String {
+        entry.date.map { AgeFormatter.string(since: $0, now: Date(), style: .sentence) } ?? entry.at
+    }
+    private func revealRequestedEvent() {
+        // A close and a new link may arrive in the same SwiftUI update.
+        // Reset once, before consuming that presentation's reveal.
+        if expansionGeneration != model.presentationGeneration {
+            expanded.removeAll()
+            expansionGeneration = model.presentationGeneration
+        }
+        guard let request = model.explicitReveal,
+              let entry = model.visible.first(where: { $0.id == request.entryID }) else { return }
+        if grouped { expanded.insert(entry.groupID) }
+        model.consumeReveal(request)
     }
     private func groupTitle(_ group: WorkspaceActivityModel.SessionGroup) -> String {
         guard let entry = group.entries.first else { return "Session" }

@@ -234,8 +234,11 @@ attention. **Answer…** opens the existing answer panel where available, includ
 its continue-to-next queue; **Open session** focuses the session. Submitted answers
 stay out of the queue while their matching waiting state is still acknowledged.
 
-**Since you last looked** groups retained activity by session, with saved outcomes,
-exact event details, supporting output, **Open conversation**, **Focus live session**,
+**Since you last looked** opens with one collapsed summary per session: counts of
+permission requests, questions, finished turns, errors, exits, and run updates,
+plus the latest event, its relative age, unread count, and any saved outcome.
+**Show events** reveals the session's event log, with supporting output,
+**Open conversation**, **Focus live session**,
 and **Review changes** for completed live sessions. The unread filter, look-back
 period, **Mark read**, and **Undo** work as described below.
 Opening, refreshing, and switching scope never mark events read. Project scope
@@ -297,11 +300,24 @@ profile/model or disable generation in `[defaults.recaps]`. See
 
 Briefing's **Since you last looked** section shows recorded state transitions, process exits,
 and ASL lifecycle events from the retained journal. Choose 1, 7, 30, or 90 days.
-Select an event for details and the last timestamped assistant output at or before
-it; **Load earlier messages** searches further back for supporting output.
+Expand a session with **Show events**, then select an event for details and the
+last timestamped assistant output at or before it; **Load earlier messages** searches further back for supporting output.
 Opening its conversation goes to that recorded location, briefly highlights it,
 and returns focus to Briefing when closed. Missing evidence is explained; a failed
 read can retry the same event. You can also focus the matching live session.
+
+Event rows show relative ages; hover for the absolute date, also shown in the
+detail pane. Transitions omit internal reducer reasons. **Diagnostics**, collapsed
+by default below supporting output, retains the full original detail, recorded
+event, run, and trace. ASL lifecycle titles describe the event without repeating
+the internal reason.
+
+Opening Briefing automatically selects an event for the detail pane while keeping
+all session groups collapsed. Explicit event navigation reveals its group, even
+when the report is still loading or the same event is linked again. You can
+collapse it again; automatic refresh, filtering, and read/undo selection changes
+preserve your expansion choices. Flight Log's session/kind filter alone does not
+expand a group. Opening, selecting, and disclosing never mark anything read.
 
 **Mark read** offers **Mark selected read** and **Mark all N results read**, including
 loaded rows below the viewport but excluding records omitted by the query limit.

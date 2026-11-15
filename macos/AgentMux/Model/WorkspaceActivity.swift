@@ -22,6 +22,16 @@ struct WorkspaceActivityEntry: Decodable, Identifiable, Equatable {
         if !runtimeSessionID.isEmpty { return "runtime:" + runtimeSessionID }
         return conversation.map { "conversation:" + $0.encoded } ?? "event:" + id
     }
+    /// Presentation only: preserve the original projector evidence for Diagnostics.
+    var transition: String {
+        switch event {
+        case "AgentSessionLoopFinished", "AgentSessionLoopPaused", "AgentSessionLoopStarted",
+             "AgentSessionLoopWaitStarted", "AgentSessionLoopVerificationFinished": return ""
+        default: break
+        }
+        let first = detail.components(separatedBy: " · ").first ?? detail
+        return first.contains("→") ? first : detail
+    }
     var conversation: ConversationIdentity? { ConversationIdentity(encoded: "\(harness):\(sessionID)") }
     var date: Date? { Self.date(at) }
     static func date(_ text: String) -> Date? {
@@ -88,6 +98,14 @@ final class WorkspaceActivityModel: ObservableObject {
     @Published private(set) var transcriptRefreshedAt: Date?
     @Published private(set) var report: WorkspaceActivityReport?
     @Published private(set) var readState = WorkspaceActivityReadState()
+    enum SelectionOrigin { case automatic, explicit }
+    struct RevealRequest: Equatable {
+        let entryID: String
+        let token: UInt64
+    }
+    @Published private(set) var explicitReveal: RevealRequest?
+    @Published private(set) var presentationGeneration = 0
+    private var revealToken: UInt64 = 0
     @Published private(set) var selection: String?
     @Published private(set) var transcript: WorkspaceTranscript?
     @Published private(set) var loading = false
@@ -152,6 +170,27 @@ final class WorkspaceActivityModel: ObservableObject {
     struct SessionGroup: Identifiable {
         let id: String
         var entries: [WorkspaceActivityEntry]
+
+        func summary(now: Date) -> String {
+            var parts: [String] = []
+            for (kind, singular, plural) in [
+                ("permission", "permission request", "permission requests"),
+                ("question", "question", "questions"),
+                ("completed", "turn finished", "turns finished"),
+                ("error", "error", "errors"),
+                ("exit", "", ""),
+                ("run", "run update", "run updates")
+            ] {
+                let count = entries.filter { $0.kind == kind }.count
+                if count > 0 { parts.append(kind == "exit" ? "agent exited" : "\(count) \(count == 1 ? singular : plural)") }
+            }
+            if parts.isEmpty { parts.append("\(entries.count) state change\(entries.count == 1 ? "" : "s")") }
+            if let latest = entries.max(by: { ($0.date ?? .distantPast) < ($1.date ?? .distantPast) }) {
+                let age = latest.date.map { AgeFormatter.string(since: $0, now: now, style: .sentence) } ?? latest.at
+                parts.append("latest: \(latest.title), \(age)")
+            }
+            return parts.joined(separator: " · ")
+        }
     }
     var groups: [SessionGroup] {
         var groups: [SessionGroup] = [], indices: [String: Int] = [:]
@@ -165,6 +204,7 @@ final class WorkspaceActivityModel: ObservableObject {
     /// Activity has no project field. Resolve archived conversation membership
     /// using the CLI's canonical project filter, including all result pages.
     func setProject(_ name: String, rows: [WorkspaceRow]) {
+        if project != name { cancelReveal() }
         scopeGeneration += 1
         project = name; scopeError = nil; scopeLoading = false
         scopeRuntimes = Set(rows.filter { $0.project == name }.map { $0.key.runtimeSessionID })
@@ -205,9 +245,10 @@ final class WorkspaceActivityModel: ObservableObject {
     }
 
     func filterFlightSession(_ session: FlightSession, kind: String) {
+        cancelReveal()
         flightSession = session; flightKind = kind; unreadOnly = false; days = 90; filterChanged(); refresh()
     }
-    func clearFlightFilter() { flightSession = nil; flightKind = "all"; filterChanged() }
+    func clearFlightFilter() { cancelReveal(); flightSession = nil; flightKind = "all"; filterChanged() }
     var selected: WorkspaceActivityEntry? { report?.entries.first { $0.id == selection } }
     var canLoadEarlier: Bool { !reading && (transcript?.total ?? 0) > (transcript?.messages.count ?? 0) }
     var excerpt: WorkspaceTranscript.Message? {
@@ -237,12 +278,26 @@ final class WorkspaceActivityModel: ObservableObject {
             case let .success(report), let .partial(report, _):
                 self.reportRefreshedAt = Date()
                 self.report = report
-                if !self.visible.contains(where: { $0.id == self.selection }) { self.select(self.visible.first?.id) }
+                self.filterChanged()
             }
         }
     }
 
-    func filterChanged() { if !visible.contains(where: { $0.id == selection }) { select(visible.first?.id) } }
+    func filterChanged() {
+        // A link can precede both the activity report and project membership.
+        if let request = explicitReveal, visible.contains(where: { $0.id == request.entryID }) {
+            select(request.entryID, origin: .automatic)
+        } else if !visible.contains(where: { $0.id == selection }) {
+            select(visible.first?.id, origin: .automatic)
+        }
+    }
+
+    func cancelReveal() { explicitReveal = nil }
+
+    func consumeReveal(_ request: RevealRequest) {
+        guard explicitReveal == request else { return }
+        explicitReveal = nil
+    }
 
     func markVisibleRead(now: Date = Date()) {
         markRead(visible.map(\.id), now: now)
@@ -290,12 +345,16 @@ final class WorkspaceActivityModel: ObservableObject {
             readUndo = nil
             canUndoRead = false
             readError = nil
-            if let id = undo.selection, visible.contains(where: { $0.id == id }) { select(id) }
+            if let id = undo.selection, visible.contains(where: { $0.id == id }) { select(id, origin: .automatic) }
             else { filterChanged() }
         } catch { readError = "Read markers could not be restored: \(error.localizedDescription). Try Undo again." }
     }
 
-    func select(_ id: String?) {
+    func select(_ id: String?, origin: SelectionOrigin) {
+        if origin == .explicit {
+            revealToken += 1
+            explicitReveal = id.map { RevealRequest(entryID: $0, token: revealToken) }
+        }
         selection = id
         transcript = nil
         transcriptRefreshedAt = nil
@@ -328,6 +387,8 @@ final class WorkspaceActivityModel: ObservableObject {
     }
 
     func close() {
+        cancelReveal()
+        presentationGeneration += 1
         scopeGeneration += 1; scopeLoading = false
         generation += 1
         transcriptGeneration += 1
