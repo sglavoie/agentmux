@@ -443,3 +443,24 @@ never a command line, and amx decides the program and removes every session
 - **The dashboard shortcut.** It shows the workspace's Dashboard.
   **Launch Project** runs `amx project launch --backend tmux` and shows the
   session in the workspace.
+
+### Waiting header and answer queue
+
+The session header stays 24 pt high across state changes. A waiting session shows
+its state symbol and status in the attention color, a prominent **Answer…**
+button, and **N more waiting** when other sessions need attention. Answer… opens
+the same panel as the inspector, including from the inactive split pane.
+
+With `amxContinueToNextWaiting` on (the default, in Settings › Workspace), a
+successful prompt or ASL panel submission opens the next answerable, unsent
+waiting row in sidebar order, wrapping after the last row. The pane follows the
+panel without making its terminal first responder, including with the sidebar
+collapsed or the next session already in the other split pane. Each prompt
+requires its own completed look reporting a prompt before accepting keys. Old
+submission callbacks retain their question identity and cannot move a newer
+panel. When the queue is empty the panel closes and shows **All caught up**.
+
+With the preference off, panels retain their single-session behavior. Direct
+terminal input never advances; new waiting snapshots never start the queue.
+⌘⇧A remains the explicit focus command. Queue, inspector, and the shortcut share
+the configured sidebar sorting.

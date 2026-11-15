@@ -18,8 +18,8 @@ final class WorkspacePaneLayout: NSSplitView, NSSplitViewDelegate {
             updateHeaderHeight()
         }
 
-        func showContext(_ context: WorkspaceSessionContext?, canAnswer: Bool) {
-            sessionContext.show(context, canAnswer: canAnswer)
+        func showContext(_ context: WorkspaceSessionContext?, canAnswer: Bool, otherWaiting: Int = 0) {
+            sessionContext.show(context, canAnswer: canAnswer, otherWaiting: otherWaiting)
             updateHeaderHeight()
         }
 

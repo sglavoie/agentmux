@@ -22,6 +22,7 @@ struct AppPreferences: Equatable {
         static let launchBackend = "amxLaunchBackend"
         static let openWorkspaceAtLaunch = "amxOpenWorkspaceAtLaunch"
         static let showWelcomeBack = "amxShowWelcomeBack"
+        static let continueToNextWaiting = "amxContinueToNextWaiting"
         static let defaultFontSize = "amxDefaultFontSize"
         static let sidebarZoomPercent = "amxSidebarZoomPercent"
         static let sidebarGrouping = "amxSidebarGrouping"
@@ -37,7 +38,7 @@ struct AppPreferences: Equatable {
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, environment,
             launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, sidebarSort, dashboardPlace, terminalTheme, workspaceShortcuts,
-            confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar,
+            confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar, continueToNextWaiting,
         ]
     }
 
@@ -77,6 +78,8 @@ struct AppPreferences: Equatable {
     var openWorkspaceAtLaunch = false
     /// Opt in to the unread activity summary when opening the workspace.
     var showWelcomeBack = false
+    /// Continue panel submissions through the unanswered waiting sessions.
+    var continueToNextWaiting = true
     /// Ask before closing a utility program or ending a session; applies live.
     var confirmationPolicy: WorkspaceConfirmationPolicy = .followCLI
     /// Compatibility with callers and the old stored Boolean. New UI exposes
@@ -120,6 +123,7 @@ struct AppPreferences: Equatable {
         preferences.launchBackend = LaunchBackendPreference.stored(defaults.string(forKey: Key.launchBackend))
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
         preferences.showWelcomeBack = bool(defaults, Key.showWelcomeBack) ?? false
+        preferences.continueToNextWaiting = bool(defaults, Key.continueToNextWaiting) ?? true
         if let raw = defaults.string(forKey: Key.confirmationPolicy), let policy = WorkspaceConfirmationPolicy(rawValue: raw) {
             preferences.confirmationPolicy = policy
         } else if let legacy = bool(defaults, Key.confirmBeforeClosing) {
@@ -159,6 +163,7 @@ struct AppPreferences: Equatable {
         defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
         defaults.set(showWelcomeBack, forKey: Key.showWelcomeBack)
+        defaults.set(continueToNextWaiting, forKey: Key.continueToNextWaiting)
         defaults.set(confirmationPolicy.rawValue, forKey: Key.confirmationPolicy)
         defaults.removeObject(forKey: Key.confirmBeforeClosing)
         DefaultFontSize.save(defaultFontSize, to: defaults)

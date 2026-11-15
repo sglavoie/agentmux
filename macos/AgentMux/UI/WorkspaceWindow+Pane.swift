@@ -62,7 +62,7 @@ extension WorkspaceWindowController {
     /// Clicking an inactive terminal promotes its container and selection
     /// together. The physical terminal stays under the pointer.
     @discardableResult
-    func focusOtherPane() -> Bool {
+    func focusOtherPane(answering: Bool = false) -> Bool {
         guard isOpen, let next = otherPlace else { return false }
         let previous = place
         let previousContent = content
@@ -83,7 +83,7 @@ extension WorkspaceWindowController {
         case .review: reviewSelected = true
         }
         syncSidebarSelection()
-        updateContent(focus: true)
+        updateContent(focus: !answering, answering: answering)
         return true
     }
 
@@ -259,7 +259,7 @@ extension WorkspaceWindowController {
 
     /// Shows the selected session's pane. Terminals exist only while the
     /// window is open, so a closed window shows nothing.
-    func updateContent(focus: Bool, retry: Bool = false) {
+    func updateContent(focus: Bool, retry: Bool = false, answering: Bool = false) {
         guard isOpen else { return }
         notePlace()
         let wanted = wantedContent(retry: retry)
@@ -299,7 +299,11 @@ extension WorkspaceWindowController {
         showLink((shown as? Ghostty.SurfaceView)?.hoveredLink)
         syncOverlays()
 
-        if let shown, focus {
+        if answering {
+            // Even a hidden sidebar or the other split pane must not hand
+            // the next agent a stray key when an answer panel moves on.
+            window.makeFirstResponder(isSidebarCollapsed ? paneLayout.active.sessionContext : sidebar)
+        } else if let shown, focus {
             if !window.makeFirstResponder(shown) { window.makeFirstResponder(nil) }
         } else if window.firstResponder === window
                     || (window.firstResponder as? NSView)?.isHiddenOrHasHiddenAncestor == true {
@@ -333,7 +337,8 @@ extension WorkspaceWindowController {
                 guard let self, let answer = self.contextAnswer(for: key) else { return }
                 self.delegate?.workspaceAnswer(answer)
             }
-            host.showContext(context, canAnswer: answers.first { $0.key == key }?.answer != nil)
+            host.showContext(context, canAnswer: answers.first { $0.key == key }?.answer != nil,
+                             otherWaiting: answers.filter { $0.key != key }.count)
         }
     }
 

@@ -51,7 +51,7 @@ final class PromptAnswerFlow: ObservableObject {
     /// the notice says how it went.
     var onLateResult: (_ notice: String) -> Void = { _ in }
     /// A successful submission is a receipt, not evidence that waiting cleared.
-    var onAnswerSent: (PromptAnswerTarget) -> Void = { _ in }
+    var onAnswerSent: (PromptAnswerTarget, _ isCurrent: Bool) -> Void = { _, _ in }
 
     private let service: PromptAnswerService
     /// Looks, including the settle pause after a key: concurrent, so a new
@@ -134,21 +134,24 @@ final class PromptAnswerFlow: ObservableObject {
             lastSeq = max(lastSeq, seq)
             // The arguments name a session and a key, never screen text.
             Self.logger.notice("press \(arguments.joined(separator: " "), privacy: .public)")
+            let answerSent = onAnswerSent
             presses.run({ service.press(arguments: arguments) }) { [weak self] result in
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     if case let .failure(error) = result {
                         Self.logger.notice("press \(target.runtimeSessionID, privacy: .public): \(error.message, privacy: .public)")
                     }
+                    let isCurrent = self.state?.target == target && self.state?.seq == seq
                     switch result {
                     case .success, .partial:
-                        if arguments.count > 3, !["up", "down"].contains(arguments[3]) { self.onAnswerSent(target) }
+                        if arguments.count > 3, !["up", "down"].contains(arguments[3]) { answerSent(target, isCurrent) }
                     case .failure: break
                     }
                     guard var current = self.state, current.target == target, current.seq == seq else {
                         // The panel moved to another session or was closed:
                         // the key may have reached the agent all the same.
-                        return self.onLateResult(Self.lateNotice(key: arguments, title: title, result))
+                        if !isCurrent { self.onLateResult(Self.lateNotice(key: arguments, title: title, result)) }
+                        return
                     }
                     let next = current.pressed(seq: seq, result)
                     self.state = current
@@ -291,6 +294,7 @@ struct PromptAnswerView: View {
 final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
     let flow: PromptAnswerFlow
     private var panel: ASLPanel?
+    var isVisible: Bool { panel?.isVisible == true }
     /// The workspace window's frame while it is open, to open on its screen.
     var workspaceFrame: () -> CGRect? = { nil }
     private let frames: PanelFrameStore
@@ -318,6 +322,14 @@ final class PromptAnswerPanelController: NSObject, NSWindowDelegate {
         // Typing a key needs the app active as well as the panel key.
         NSApp.activate()
         panel.makeKey()
+    }
+
+    /// A successful queue submission retires this panel without returning
+    /// the keyboard to a terminal between answer panels.
+    func dismissForQueue() {
+        flow.cancel()
+        keyboardReturn = KeyboardReturn()
+        panel?.orderOut(nil)
     }
 
     /// The operator dragged the panel: it opens there next time.

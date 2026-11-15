@@ -50,7 +50,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     var isTerminating = false
     /// Session status questions asked before amx was resolved.
     var statusQuestions: [(String, @MainActor (WorkspaceSessionStatus) -> Void)] = []
-    let preferencesModel = PreferencesModel()
+    let preferencesModel: PreferencesModel
+
+    override convenience init() {
+        self.init(preferencesModel: PreferencesModel())
+    }
+
+    init(preferencesModel: PreferencesModel) {
+        self.preferencesModel = preferencesModel
+        super.init()
+    }
     var dashboardHotKey: HotKeyCenter?
     var attentionHotKey: HotKeyCenter?
     var cycler = AttentionCycler()

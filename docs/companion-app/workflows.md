@@ -20,9 +20,19 @@ summary never marks activity read and never generates a recap.
 Successful prompt submissions and accepted supervisor answers show **Answer sent**
 on the waiting item until its question changes. That item cannot be answered
 again from Waiting while acknowledgment is pending. **Next waiting · N remaining**
-and the reader's N key skip submitted questions. Advancing is always explicit;
-the terminal's focus and draft stay where you left them. A live waiting count of
-zero produces a brief **All caught up** receipt showing how many agents still work.
+and the reader's N key skip submitted questions. By default, sending an answer
+from a prompt or supervisor panel continues to the next unanswered session in
+sidebar order, wrapping to earlier items as needed. Its pane appears and its
+answer panel takes the keyboard; its terminal never takes focus. A prompt panel
+must read that session's own prompt before accepting any key. When no answerable
+items remain, the panel closes with an **All caught up** receipt.
+
+Turn off **Continue to the next waiting session after answering** in Settings ›
+Workspace to keep the existing single-session panel behavior. Typing directly
+into a terminal never advances, and waiting snapshots never open the queue by
+themselves. ⌘⇧A still focuses the next waiting session explicitly. A live waiting
+count of zero also produces the **All caught up** receipt showing how many agents
+still work.
 Disconnected status never implies that questions were resolved.
 
 Palette entrances, hover feedback, and sidebar/inspector disclosure respect

@@ -257,7 +257,7 @@ final class PromptAnswerTests: XCTestCase {
                            .success(PromptSent(delivery: "accepted"))]
         let (flow, _) = flow(service)
         var receipts: [PromptAnswerTarget] = []
-        flow.onAnswerSent = { receipts.append($0) }
+        flow.onAnswerSent = { target, _ in receipts.append(target) }
         flow.open(target)
         flow.press(PromptKey.navigation[0])
         XCTAssertTrue(receipts.isEmpty, "Moving the prompt selection is not an answer")

@@ -6,8 +6,14 @@ import Combine
 /// the terminal. After navigation settles, reads saved recaps only.
 @MainActor
 final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
+    // A stable keyboard resting place while a queue panel owns input, even
+    // when the sidebar is hidden and a later snapshot refreshes the pane.
+    override var acceptsFirstResponder: Bool { true }
+
     let status = NSTextField(labelWithString: "")
-    let question = NSButton(title: "View question", target: nil, action: nil)
+    let stateSymbol = WorkspaceStateImageView()
+    let moreWaiting = NSTextField(labelWithString: "")
+    let question = NSButton(title: "Answer…", target: nil, action: nil)
     let outcome = NSButton(title: "Last outcome", target: nil, action: nil)
     let recap: WorkspaceRecapModel
     private(set) var context: WorkspaceSessionContext?
@@ -35,13 +41,17 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
         }
         question.action = #selector(showQuestion)
+        question.bezelColor = .systemOrange
+        question.font = .systemFont(ofSize: NSFont.smallSystemFontSize, weight: .semibold)
+        moreWaiting.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        moreWaiting.textColor = .secondaryLabelColor
         outcome.action = #selector(showOutcome)
         outcome.cell?.lineBreakMode = .byTruncatingTail
         outcome.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         outcome.widthAnchor.constraint(lessThanOrEqualToConstant: 240).isActive = true
         outcome.widthAnchor.constraint(greaterThanOrEqualToConstant: 80).isActive = true
         outcome.toolTip = "Read the saved conversation outcome"
-        let stack = NSStackView(views: [status, outcome, question])
+        let stack = NSStackView(views: [stateSymbol, status, outcome, question, moreWaiting])
         stack.orientation = .horizontal
         stack.spacing = 10
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -62,7 +72,7 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    func show(_ context: WorkspaceSessionContext?, canAnswer: Bool) {
+    func show(_ context: WorkspaceSessionContext?, canAnswer: Bool, otherWaiting: Int = 0) {
         let changed = context?.key != self.context?.key || context?.conversation != self.context?.conversation
             || context?.revision != self.context?.revision
         if context?.key != self.context?.key || context?.conversation != self.context?.conversation {
@@ -74,6 +84,12 @@ final class WorkspaceSessionContextView: NSView, NSPopoverDelegate {
         status.stringValue = context?.status ?? ""
         status.toolTip = context?.status
         question.isHidden = !canAnswer
+        let waitingState = canAnswer ? context?.iconState ?? "" : ""
+        stateSymbol.show(waitingState)
+        stateSymbol.isHidden = !canAnswer
+        status.textColor = canAnswer ? WorkspaceStateSymbol.color(for: waitingState) : .secondaryLabelColor
+        moreWaiting.stringValue = "\(otherWaiting) more waiting"
+        moreWaiting.isHidden = !canAnswer || otherWaiting == 0
         outcome.isHidden = context?.conversation == nil
         if changed {
             previewRead?.cancel()

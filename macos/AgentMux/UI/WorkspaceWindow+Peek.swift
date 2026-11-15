@@ -3,7 +3,7 @@ import AppKit
 extension WorkspaceWindowController {
     var allWaitingRows: [WorkspaceWaitingRow] {
         guard let store = delegate?.store else { return [] }
-        return WorkspaceInspector.waiting(store.sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping)
+        return WorkspaceInspector.waiting(store.sessions, asl: store.snapshot?.asl.waiting ?? [], now: now(), glyphs: glyphs, order: order, grouping: sidebarGrouping, sorting: sidebarSort)
     }
 
     func showSessionPeek(_ key: AttentionCycler.Key, from anchor: NSView? = nil) {

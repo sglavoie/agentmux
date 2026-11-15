@@ -57,12 +57,16 @@ final class WorkspaceWelcomeModel: ObservableObject {
             return
         }
         if celebrate, let previousWaiting, previousWaiting > 0, waiting == 0 {
-            showReceipt("All caught up", detail: working == 0 ? "Nothing waiting on you." :
-                "\(working) \(working == 1 ? "agent is" : "agents are") still working.")
-        } else if waiting > 0, receipt?.title == "All caught up" {
+            allCaughtUp()
+        } else if remainingWaiting > 0, receipt?.title == "All caught up" {
             receipt = nil
         }
         previousWaiting = waiting
+    }
+
+    func allCaughtUp() {
+        showReceipt("All caught up", detail: working == 0 ? "Nothing waiting on you." :
+            "\(working) \(working == 1 ? "agent is" : "agents are") still working.")
     }
 
     func answerSent() {

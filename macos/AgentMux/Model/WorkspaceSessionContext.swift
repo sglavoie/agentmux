@@ -7,6 +7,7 @@ struct WorkspaceSessionContext: Equatable {
     let title: String
     let location: String
     let status: String
+    let iconState: String
     let conversation: ConversationIdentity?
     let revision: String
     let current: Bool
@@ -20,6 +21,7 @@ struct WorkspaceSessionContext: Equatable {
         conversation = row?.conversation
         revision = String(session?.presentationChangedAtMS ?? 0) + (session?.iconState ?? "")
         self.current = current
+        iconState = current ? session?.iconState ?? "" : ""
         switch content {
         case .detached: status = "Detached · agent keeps running"
         case .closing: status = "Ending session…"

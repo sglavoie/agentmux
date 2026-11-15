@@ -166,7 +166,7 @@ final class WorkspaceExperienceTests: XCTestCase {
         var opened: [AttentionCycler.Key] = []
         inspector.onWaiting = { opened.append($0) }
         inspector.markAnswerSent(first)
-        XCTAssertTrue(opened.isEmpty, "Submission never auto-advances")
+        XCTAssertTrue(opened.isEmpty, "With continuation off, marking an answer sent stays passive; only app orchestration may advance")
         let view = try XCTUnwrap(inspector.lines.compactMap { $0 as? WorkspaceWaitingRowView }.first { $0.row.key == first.key })
         XCTAssertEqual(view.answerButton?.title, "Answer sent")
         XCTAssertEqual(view.answerButton?.isEnabled, false)

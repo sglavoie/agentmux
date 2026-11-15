@@ -50,7 +50,7 @@ final class ASLQuestionFlow: ObservableObject {
     /// The form closed itself: its last answer was accepted, or the run
     /// resumed. The notice says so.
     var onClose: (_ notice: String?) -> Void = { _ in }
-    var onAnswerSent: (String) -> Void = { _ in }
+    var onAnswerSent: (String, _ isCurrent: Bool) -> Void = { _, _ in }
     /// A submission sent before the operator closed the form, or opened
     /// another run, has answered; the notice says how it went.
     var onLateResult: (_ notice: String) -> Void = { _ in }
@@ -255,6 +255,7 @@ final class ASLQuestionFlow: ObservableObject {
             Self.logger.notice("asl_action \(params.description, privacy: .public)")
             let open = openSeq
             let label = state.target.label
+            let answerSent = onAnswerSent
             runner.run({ service.act(params) }) { [weak self] result in
                 MainActor.assumeIsolated {
                     switch result {
@@ -264,15 +265,17 @@ final class ASLQuestionFlow: ObservableObject {
                         Self.logger.notice("asl_action \(params.operationID, privacy: .public): \(error.description, privacy: .public)")
                     }
                     guard let self else { return }
+                    let isCurrent = open == self.openSeq && self.phase == .open
+                    let next = isCurrent ? self.state.actionFinished(seq: seq, result) : nil
                     if case let .success(operation) = result, ASLResponse.answered(operation.status) {
-                        self.onAnswerSent(params.runID)
+                        answerSent(params.runID, isCurrent)
                     }
                     guard open == self.openSeq else {
-                        self.lateResult(params, label: label, result)
+                        if !isCurrent { self.lateResult(params, label: label, result) }
                         return
                     }
                     guard self.phase == .open else { return }
-                    if let next = self.state.actionFinished(seq: seq, result) { self.perform(next) }
+                    if let next { self.perform(next) }
                 }
             }
         case .questionClosed:
@@ -568,6 +571,7 @@ enum PlainTextEditing {
 final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
     let flow: ASLQuestionFlow
     private var panel: ASLPanel?
+    var isVisible: Bool { panel?.isVisible == true }
     /// The form closed itself, its answer accepted; `notice` says so, and
     /// the menu should be refreshed.
     var onFinish: (_ notice: String?) -> Void = { _ in }
@@ -595,6 +599,14 @@ final class ASLQuestionPanelController: NSObject, NSWindowDelegate {
         panel.orderFrontRegardless()
         NSApp.activate()
         panel.makeKey()
+    }
+
+    /// A successful queue submission retires this panel without returning
+    /// the keyboard to a terminal between answer panels.
+    func dismissForQueue() {
+        flow.cancel()
+        keyboardReturn = KeyboardReturn()
+        panel?.orderOut(nil)
     }
 
     /// The operator dragged the panel: it opens there next time.

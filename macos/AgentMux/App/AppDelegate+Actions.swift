@@ -62,7 +62,9 @@ extension AppDelegate {
             if case let .asl(answer)? = $0.answer { return answer.runID == target.runID }
             return false
         }
-        controller.flow.onAnswerSent = { [weak self] run in self?.workspaceAnswerSent(runID: run, question: question) }
+        controller.flow.onAnswerSent = { [weak self] run, isCurrent in
+            self?.workspaceAnswerSent(runID: run, question: question, continueQueue: isCurrent)
+        }
         if aslPanel == nil {
             controller.onFinish = { [weak self] notice in self?.finishAnswer(notice) }
             controller.workspaceFrame = { [weak self] in self?.openWorkspaceFrame }
@@ -87,7 +89,7 @@ extension AppDelegate {
         statusItem?.rebuildMenu()
     }
 
-    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil, question: WorkspaceWaitingRow? = nil) {
+    func workspaceAnswerSent(runtimeSessionID: String? = nil, runID: String? = nil, question: WorkspaceWaitingRow? = nil, continueQueue: Bool = true) {
         if let session = store.managedSessions.first(where: {
             (runtimeSessionID != nil && $0.embeddedRuntimeSessionID == runtimeSessionID)
                 || (runID?.isEmpty == false && $0.aslRunID == runID)
@@ -96,15 +98,35 @@ extension AppDelegate {
                            grouping: preferencesModel.preferences.sidebarGrouping, sorting: preferencesModel.preferences.sidebarSort)
         }
         guard let workspace, workspace.isOpen else { return }
-        if let row = workspace.allWaitingRows.first(where: { row in
+        let waiting = workspace.allWaitingRows
+        let answered = waiting.first(where: { row in
             guard row.answer != nil, question?.sameContext(as: row) == true else { return false }
             if let runtimeSessionID { return row.key.runtimeSessionID == runtimeSessionID }
             if case let .asl(target)? = row.answer { return target.runID == runID }
             return false
-        }) { workspace.inspector.markAnswerSent(row) }
+        })
+        if let answered { workspace.inspector.markAnswerSent(answered) }
         workspace.welcome.pendingAnswers = workspace.inspector.sentAnswers.count
         workspace.welcome.answerSent()
         workspace.showNotice("Answer sent")
+        guard preferencesModel.preferences.continueToNextWaiting, continueQueue,
+              workspace.state.current, let answered,
+              let index = waiting.firstIndex(where: { $0.key == answered.key }) else { return }
+        // Start after the submission, wrapping to earlier unanswered rows.
+        let ordered = Array(waiting.dropFirst(index + 1)) + Array(waiting.prefix(index))
+        let next = ordered.first { $0.answer != nil && !workspace.inspector.answerWasSent($0) }
+        if let next, let answer = next.answer {
+            // Retire a different panel type before opening the new one. A
+            // same-type transition resets its target and invalidates old work.
+            if case .prompt = answered.answer, case .asl = answer { promptPanel?.dismissForQueue() }
+            if case .asl = answered.answer, case .prompt = answer { aslPanel?.dismissForQueue() }
+            workspace.select(next.key, answering: true)
+            workspaceAnswer(answer)
+        } else {
+            if case .prompt = answered.answer { promptPanel?.dismissForQueue() }
+            if case .asl = answered.answer { aslPanel?.dismissForQueue() }
+            workspace.welcome.allCaughtUp()
+        }
     }
 
     // MARK: Actions

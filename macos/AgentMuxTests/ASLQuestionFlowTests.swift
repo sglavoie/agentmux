@@ -72,7 +72,7 @@ final class ASLQuestionFlowTests: XCTestCase {
         service.bodies["q-api-1"] = .success(ASLFixtures.body(row, "q-api-1", "Run the backfill now?"))
         let flow = flow()
         var receipts: [String] = []
-        flow.onAnswerSent = { receipts.append($0) }
+        flow.onAnswerSent = { target, _ in receipts.append(target) }
 
 		flow.open(ASLAnswerTarget(runID: "run-reply"))
         XCTAssertEqual(flow.phase, .open)

@@ -46,6 +46,11 @@ final class WorkspaceSessionContextTests: XCTestCase {
         XCTAssertEqual(strip.context?.location, "api-service / fix/oauth-callback")
         XCTAssertEqual(strip.status.stringValue, "Needs permission")
         XCTAssertFalse(strip.question.isHidden)
+        XCTAssertEqual(strip.question.title, "Answer…")
+        XCTAssertEqual(strip.status.textColor, .systemOrange)
+        XCTAssertEqual(strip.stateSymbol.iconState, "key")
+        XCTAssertEqual(strip.question.bezelColor, .systemOrange)
+        XCTAssertTrue(strip.moreWaiting.isHidden)
         strip.question.performClick(nil)
         XCTAssertEqual(app.answers, [.prompt(runtimeSessionID: F.runtimeID(1))])
         XCTAssertTrue(workspace.window.firstResponder === terminal)
@@ -55,6 +60,8 @@ final class WorkspaceSessionContextTests: XCTestCase {
         workspace.window.contentView?.layoutSubtreeIfNeeded()
         XCTAssertEqual(terminal.bounds, bounds)
         XCTAssertTrue(strip.question.isHidden)
+        XCTAssertTrue(strip.stateSymbol.isHidden)
+        XCTAssertEqual(strip.status.textColor, .secondaryLabelColor)
         strip.onQuestion?() // A previously queued click must recheck live state.
         XCTAssertEqual(app.answers.count, 1)
         XCTAssertTrue(workspace.window.firstResponder === terminal)
@@ -64,6 +71,25 @@ final class WorkspaceSessionContextTests: XCTestCase {
         XCTAssertTrue(strip.question.isHidden)
         workspace.window.contentView?.layoutSubtreeIfNeeded()
         XCTAssertEqual(terminal.bounds, bounds)
+    }
+
+    func testOtherWaitingCountTracksLiveRowsWithoutResizingTerminal() throws {
+        app.store.apply(snapshot: F.snapshot([session(), session(2)]))
+        workspace.select(.embedded(F.runtimeID(1)), focus: true)
+        workspace.window.layoutIfNeeded()
+        let terminal = try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1)))
+        let bounds = terminal.bounds
+        let strip = workspace.paneLayout.active.sessionContext
+        XCTAssertEqual(strip.moreWaiting.stringValue, "1 more waiting")
+        XCTAssertFalse(strip.moreWaiting.isHidden)
+        XCTAssertEqual(strip.bounds.height, 24)
+        app.store.apply(snapshot: F.snapshot([session(), session(2), session(3)]))
+        workspace.window.layoutIfNeeded()
+        XCTAssertEqual(strip.moreWaiting.stringValue, "2 more waiting")
+        XCTAssertEqual(terminal.bounds, bounds)
+        app.store.apply(.disconnected(.heartbeatLost, retryIn: 0.5))
+        XCTAssertTrue(strip.moreWaiting.isHidden)
+        XCTAssertTrue(strip.stateSymbol.isHidden)
     }
 
     func testSplitContextsFollowTheirSessionAndUtilityHidesContext() {

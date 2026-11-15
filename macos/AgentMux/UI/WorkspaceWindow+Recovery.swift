@@ -302,17 +302,17 @@ extension WorkspaceWindowController {
     /// Selects a listed session and shows what there is to show for it. With
     /// `focus`, keyboard focus moves into its terminal when it has one.
     @discardableResult
-    func select(_ key: AttentionCycler.Key?, focus: Bool = false) -> Bool {
+    func select(_ key: AttentionCycler.Key?, focus: Bool = false, answering: Bool = false) -> Bool {
         let interval = WorkspaceResponsiveness.begin("Session switch")
         defer { WorkspaceResponsiveness.end("Session switch", interval) }
-        if let key, otherPlace == .session(key) { return focusOtherPane() }
+        if let key, otherPlace == .session(key) { return focusOtherPane(answering: answering) }
         guard state.select(key) else { return false }
         reviewSelected = false
         viewSelection = nil
         awaited = nil
         leaveRecovery()
         syncSidebarSelection()
-        updateContent(focus: focus)
+        updateContent(focus: focus, answering: answering)
         return true
     }
 
