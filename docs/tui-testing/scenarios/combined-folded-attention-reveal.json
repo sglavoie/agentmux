@@ -46,6 +46,10 @@
     },
     {
       "type": "contains_text",
+      "text": "\u2502\u2022 Done \u00b7 claude \u00b7 work"
+    },
+    {
+      "type": "excludes_text",
       "text": "\u2502\u2022 Done \u00b7 \u2014"
     },
     {

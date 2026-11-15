@@ -213,7 +213,7 @@ final class WorkspaceRecoveryTests: XCTestCase {
         workspace.restore(.session(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(workspace.content, .restoring(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(workspace.placeholder.titleLabel.stringValue, "Restoring")
-        XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.contains("Nothing is started"))
+        XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.contains("No session will be started automatically."))
         XCTAssertEqual(app.asked, [], "nothing is asked before the daemon lists the session")
         XCTAssertEqual(app.made, [])
 
@@ -240,7 +240,7 @@ final class WorkspaceRecoveryTests: XCTestCase {
         app.store.apply(.disconnected(.notRunning, retryIn: 0.5))
         XCTAssertEqual(workspace.content, .restoring(runtimeSessionID: F.runtimeID(2)))
         XCTAssertEqual(workspace.placeholder.button.title, "Start Daemon")
-        XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.contains("once the daemon lists it"))
+        XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.contains("The window will return to your previous session when it is available."))
         workspace.placeholder.press()
         XCTAssertEqual(app.daemonStarts, 1)
         XCTAssertEqual(workspace.content, .restoring(runtimeSessionID: F.runtimeID(2)), "starting the daemon keeps the restore")

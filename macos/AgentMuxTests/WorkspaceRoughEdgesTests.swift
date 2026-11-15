@@ -212,7 +212,8 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         let work = try row("api", "work")
         workspace.activate(work)
         workspace.terminalEnded(try XCTUnwrap(workspace.terminalView(for: F.runtimeID(1))))
-        XCTAssertTrue(workspace.placeholder.messageLabel.stringValue.hasPrefix("This window let go of the session"))
+        XCTAssertEqual(workspace.placeholder.messageLabel.stringValue,
+                       "This session is still running. Choose Reattach to use it in this window.")
         XCTAssertTrue(WorkspaceWindowController.conversationKept.hasSuffix("resumed from Conversation History (⌘Y)."))
     }
 

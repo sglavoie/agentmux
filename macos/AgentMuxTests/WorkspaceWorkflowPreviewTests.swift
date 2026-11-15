@@ -153,7 +153,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
             summary: WorkspaceReturnSummary(command: { nil }))
         for dark in [false, true] {
             try await render(WorkspaceBriefingView(model: model), name: "briefing-empty-\(dark)", width: 780, height: 740, dark: dark,
-                expected: ["Briefing", "All projects", "Waiting now", "No questions", "Since you last looked", "All caught up"])
+                expected: ["Briefing", "All projects", "Waiting now", "Nothing is waiting on you.", "Since you last looked", "All caught up"])
         }
     }
 
