@@ -186,7 +186,7 @@ class Acceptance:
         summary = self.run(self.binary, *setup_arguments, input=answers + ("\n" if self.workspace_setup else ""))
         assert "Hooks: synced" in summary
         if self.workspace_setup:
-            assert "choose Start Daemon if offered" in summary and "then choose Launch Project" in summary, summary
+            assert "choose Start Daemon if offered" in summary and "then choose Launch project…" in summary, summary
             assert "run amx, press l" not in summary, summary
             self.passed("workspace setup establishes hosted context and returns to native launch controls")
         self.install_fixture()
