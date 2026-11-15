@@ -462,6 +462,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
 }
 
 extension AppDelegate: GhosttyAppDelegate {
+    nonisolated func ghosttyAppDidChangeConfig(_ app: Ghostty.App) {
+        Ghostty.onMain { [weak self] in
+            MainActor.assumeIsolated { self?.workspace?.refreshTerminalAppearance() }
+        }
+    }
+
     /// A `quit` binding typed into a terminal closes nothing: the companion
     /// and its other terminals outlive any one of them.
     nonisolated func ghosttyAppDidRequestQuit(_ app: Ghostty.App) {

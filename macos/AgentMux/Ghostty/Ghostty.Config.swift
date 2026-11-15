@@ -91,6 +91,12 @@ extension Ghostty {
             config = Self.load(userConfig: userConfig, overrides: overrides)
         }
 
+        /// Own the applied config beyond the runtime callback's lifetime.
+        init?(cloning config: ghostty_config_t) {
+            guard let copy = ghostty_config_clone(config) else { return nil }
+            self.config = copy
+        }
+
         deinit {
             config = nil
         }

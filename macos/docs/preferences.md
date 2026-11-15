@@ -95,6 +95,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxSidebarGrouping` | `stateThenProject` | `stateThenProject`, `projectThenState`, `project`, `compact`, or `projectThenBranch`; changes apply immediately. |
 | `amxSidebarSort` | `manual` | `manual` or `recentlyVisited`, independent of grouping. Flat drag order and visit history use `amxWorkspaceFlatSessionOrder` and `amxWorkspaceVisitedSessions`; existing per-project drag order is preserved. |
 | `amxTerminalTheme` | none | The Ghostty `theme` every terminal uses, as Ghostty writes it: `Name` or `light:Name,dark:Name`; unset uses the Ghostty config. Changes recolor all open terminals. |
+| `amxMatchWindowToTerminal` | true | Settings › Appearance › Terminal appearance: **Match the window to the terminal theme**. Uses the configured terminal background for the workspace title bar, pane headers, and both sidebars, with light or dark controls chosen for legibility. Updates on theme changes, config reloads, and system light/dark changes; ignores program OSC 11 colors. Off restores stock window chrome and system appearance. Other windows keep system appearance. |
 
 Preferences › Workspace also shows the backend setup, read from
 `amx backend status --json` each time amx is resolved

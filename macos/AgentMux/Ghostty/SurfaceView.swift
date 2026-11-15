@@ -347,7 +347,7 @@ extension Ghostty {
 
         /// Reports the system appearance so a `theme = light:…,dark:…` config
         /// and color-scheme queries (mode 2031) follow it.
-        private func syncColorScheme() {
+        func syncColorScheme() {
             guard let surface else { return }
             let scheme = Ghostty.colorScheme(for: NSApp.effectiveAppearance)
             guard scheme != appliedColorScheme else { return }

@@ -35,6 +35,7 @@ extension AppDelegate {
     }
 
     func preferencesChanged(from old: AppPreferences, to new: AppPreferences) {
+        workspace?.matchWindowToTerminal = new.matchWindowToTerminal
         workspace?.confirmBeforeClosing = new.confirmBeforeClosing
         if old.showWelcomeBack != new.showWelcomeBack {
             workspace?.welcome.isEnabled = new.showWelcomeBack

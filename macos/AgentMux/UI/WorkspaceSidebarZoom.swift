@@ -16,6 +16,10 @@ final class WorkspaceSidebarZoomView: NSView {
     var zoom: CGFloat = 1 {
         didSet { needsLayout = true }
     }
+    /// Both sidebars share the terminal background when window matching is on.
+    var fillColor: NSColor? {
+        didSet { updateFill() }
+    }
     /// Paints pure white over the source-list material in the light
     /// appearance, so the left sidebar matches the inspector; the dark
     /// appearance keeps the material.
@@ -46,7 +50,7 @@ final class WorkspaceSidebarZoomView: NSView {
     private func updateFill() {
         let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         wantsLayer = true
-        layer?.backgroundColor = opaqueInLight && !dark ? NSColor.white.cgColor : nil
+        layer?.backgroundColor = fillColor?.cgColor ?? (opaqueInLight && !dark ? NSColor.white.cgColor : nil)
     }
 
     override func layout() {

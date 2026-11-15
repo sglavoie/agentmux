@@ -169,6 +169,7 @@ struct PreferencesView: View {
                     Divider()
                     ForEach(model.themeChoices, id: \.self) { Text($0).tag(String?.some($0)) }
                 }
+                Toggle("Match the window to the terminal theme", isOn: $model.preferences.matchWindowToTerminal)
                 Toggle("Use another theme in Dark Mode", isOn: $model.separateDarkTheme)
                     .disabled(model.themeName == nil)
                 if model.separateDarkTheme {

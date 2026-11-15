@@ -8,6 +8,11 @@ protocol GhosttyAppDelegate: AnyObject {
     /// A `quit` binding fired in a terminal. Agent Mux.app outlives its
     /// terminals, so nothing quits unless the delegate does it.
     func ghosttyAppDidRequestQuit(_ app: Ghostty.App)
+    func ghosttyAppDidChangeConfig(_ app: Ghostty.App)
+}
+
+extension GhosttyAppDelegate {
+    func ghosttyAppDidChangeConfig(_ app: Ghostty.App) {}
 }
 
 extension Ghostty {
@@ -92,8 +97,12 @@ extension Ghostty {
             // appearance, reported once now and on every change.
             appearanceObserver = NSApplication.shared.observe(\.effectiveAppearance, options: [.initial, .new]) {
                 [weak self] application, _ in
-                guard let app = self?.app else { return }
+                guard let self, let app = self.app else { return }
                 ghostty_app_set_color_scheme(app, Ghostty.colorScheme(for: application.effectiveAppearance))
+                // A workspace appearance override can hide system changes
+                // from viewDidChangeEffectiveAppearance, including on hidden
+                // surfaces. Their conditional themes still follow the system.
+                for surface in self.surfaces { surface.syncColorScheme() }
             }
 
             readiness = .ready
@@ -175,8 +184,9 @@ extension Ghostty {
                 return false
             }
             // Ghostty clones what it keeps, so the old config can go.
-            ghostty_app_update_config(app, cfg)
             config = fresh
+            // The callback replaces this with the applied conditional theme.
+            withExtendedLifetime(fresh) { ghostty_app_update_config(app, cfg) }
             if resetFontSize {
                 for surface in surfaces { surface.resetZoom(nil) }
             }
@@ -276,11 +286,11 @@ extension Ghostty {
                 return view.perform(action)
 
             case .app:
-                return performAppAction(app, action: action)
+                return performAppAction(app, target: target, action: action)
             }
         }
 
-        private static func performAppAction(_ app: ghostty_app_t, action: ghostty_action_s) -> Bool {
+        private static func performAppAction(_ app: ghostty_app_t, target: ghostty_target_s, action: ghostty_action_s) -> Bool {
             switch action.tag {
             case GHOSTTY_ACTION_QUIT:
                 guard let state = appState(from: app) else { return false }
@@ -302,8 +312,18 @@ extension Ghostty {
                 return true
 
             case GHOSTTY_ACTION_CONFIG_CHANGE:
-                // Only an app-targeted change replaces the app config; a
-                // surface's own change is that surface's business.
+                // This is the resolved conditional theme, including changes
+                // driven by NSApplication's system appearance. Surface config
+                // and OSC color changes never recolor the workspace chrome.
+                guard target.tag == GHOSTTY_TARGET_APP else { return true }
+                guard let state = appState(from: app),
+                      let raw = action.action.config_change.config,
+                      let applied = Config(cloning: raw) else { return false }
+                Ghostty.onMain { [weak state] in
+                    guard let state else { return }
+                    state.config = applied
+                    state.delegate?.ghosttyAppDidChangeConfig(state)
+                }
                 return true
 
             default:

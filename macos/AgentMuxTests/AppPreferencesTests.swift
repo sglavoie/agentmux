@@ -49,6 +49,7 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.environment, [:])
         XCTAssertEqual(preferences.launchBackend, .workspace)
         XCTAssertFalse(preferences.showWelcomeBack)
+        XCTAssertTrue(preferences.matchWindowToTerminal)
         XCTAssertTrue(preferences.continueToNextWaiting)
         XCTAssertFalse(preferences.showOverviewInSidebar)
         XCTAssertFalse(preferences.openWorkspaceAtLaunch)
@@ -74,6 +75,7 @@ final class AppPreferencesTests: XCTestCase {
         preferences.launchBackend = .workspace
         preferences.openWorkspaceAtLaunch = true
         preferences.showWelcomeBack = true
+        preferences.matchWindowToTerminal = false
         preferences.continueToNextWaiting = false
         preferences.showOverviewInSidebar = true
         defaults.set("unsupported", forKey: "amxDashboardPlace")
@@ -90,6 +92,8 @@ final class AppPreferencesTests: XCTestCase {
 
         defaults.set("ghostty", forKey: "amxLaunchBackend")
         defaults.set("yes", forKey: "amxOpenWorkspaceAtLaunch")
+        defaults.set("yes", forKey: AppPreferences.Key.matchWindowToTerminal)
+        XCTAssertTrue(AppPreferences.load(from: defaults).matchWindowToTerminal)
         defaults.set("yes", forKey: AppPreferences.Key.continueToNextWaiting)
         XCTAssertTrue(AppPreferences.load(from: defaults).continueToNextWaiting)
         defaults.set("yes", forKey: "amxShowWelcomeBack")
@@ -107,7 +111,7 @@ final class AppPreferencesTests: XCTestCase {
             "amxBinaryPath", "amxLaunchAtLogin", "amxHotKeyDashboard", "amxHotKeyNextAttention", "amxStatusStyle",
             "amxShowWorkingCount", "amxRecentDays", "amxRecentLimit", "amxUseAppNotifications", "amxSnoozeUntil",
             "amxEnvironment", "amxLaunchBackend", "amxOpenWorkspaceAtLaunch", "amxDefaultFontSize",
-            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy", "amxShowWelcomeBack", "amxShowOverviewInSidebar", "amxContinueToNextWaiting",
+            "amxSidebarZoomPercent", "amxCompactSidebar", "amxSidebarGrouping", "amxSidebarSort", "amxDashboardPlace", "amxTerminalTheme", "amxMatchWindowToTerminal", "amxWorkspaceShortcuts", "amxConfirmBeforeClosing", "amxConfirmationPolicy", "amxShowWelcomeBack", "amxShowOverviewInSidebar", "amxContinueToNextWaiting",
         ])
     }
 

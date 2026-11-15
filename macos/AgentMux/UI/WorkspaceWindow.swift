@@ -246,6 +246,14 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     var canHideOtherPane: Bool { isSplit && (otherPlace != .review || reviewCanClose()) }
 
     private(set) lazy var window: NSWindow = makeWindow()
+    /// Refreshing chrome must not instantiate a closed, never-shown window.
+    weak var constructedWindow: NSWindow?
+    var terminalBackground: () -> NSColor? = { nil }
+    var matchWindowToTerminal = true {
+        didSet {
+            if oldValue != matchWindowToTerminal { refreshTerminalAppearance() }
+        }
+    }
     /// Where the window's frame is saved; tests name their own or none.
     var frameAutosaveName: NSWindow.FrameAutosaveName? = AppDelegate.isRunningTests ? nil : "AgentMuxWorkspace"
 

@@ -1,5 +1,16 @@
 # Workspace implementation
 
+The workspace title bar and pane headers match the terminal's configured
+background by default. Both sidebars share that color, and title text and
+controls use a light or dark appearance chosen from its luminance. Settings ›
+Appearance › Terminal appearance › **Match the window to the terminal theme**
+turns this off and restores stock window chrome. Theme preferences, Ghostty
+config reloads, and system light/dark changes update the window immediately;
+program OSC 11 background changes do not. Conditional themes follow system
+appearance even when the workspace's own appearance differs. Other windows
+keep the system appearance. If Ghostty cannot supply a background, the
+workspace uses stock chrome.
+
 [Back to the macOS development guide](../README.md)
 
 ## Workspace

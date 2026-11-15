@@ -547,6 +547,28 @@ final class GhosttySurfaceTests: XCTestCase {
         XCTAssertNotNil(waitForCorner(hidden, "the hidden view's Mocha background", near: mocha))
     }
 
+    func testConditionalThemeRepaintsSurfacesWithFixedWindowAppearance() throws {
+        let oldAppearance = NSApp.appearance
+        defer { NSApp.appearance = oldAppearance; window.appearance = nil }
+        NSApp.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentView = nil
+        view = nil
+        ghostty.shutdown()
+        ghostty = Ghostty.App {
+            Ghostty.Config(userConfig: nil, overrides: .init(theme: "light:Catppuccin Mocha,dark:Dracula"))
+        }
+        view = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        let hidden = try XCTUnwrap(ghostty.makeSurface(Self.cat))
+        defer { hidden.close() }
+        window.contentView = view
+        XCTAssertNotNil(waitForCorner(view, "the light conditional branch", near: [0x1E, 0x1E, 0x2E]))
+        NSApp.appearance = NSAppearance(named: .darkAqua)
+        XCTAssertNotNil(waitForCorner(view, "the dark conditional branch under fixed window chrome", near: [0x28, 0x2A, 0x36]))
+        window.contentView = hidden
+        XCTAssertNotNil(waitForCorner(hidden, "the hidden surface's conditional theme", near: [0x28, 0x2A, 0x36]))
+    }
+
     func testAPerSurfaceFontSizeOverridesTheAppConfiguration() throws {
         var large = Self.cat
         large.fontSize = 30

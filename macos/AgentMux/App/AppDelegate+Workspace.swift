@@ -31,6 +31,8 @@ extension AppDelegate {
     func workspaceController() -> WorkspaceWindowController {
         if let workspace { return workspace }
         let controller = WorkspaceWindowController(delegate: self)
+        controller.matchWindowToTerminal = preferencesModel.preferences.matchWindowToTerminal
+        controller.terminalBackground = { [weak self] in self?.terminalRuntime()?.config.backgroundColor }
         controller.confirmBeforeClosing = preferencesModel.preferences.confirmBeforeClosing
         controller.welcome.isEnabled = preferencesModel.preferences.showWelcomeBack
         controller.setSidebarZoom(percent: preferencesModel.preferences.sidebarZoomPercent)

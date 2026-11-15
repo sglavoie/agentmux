@@ -31,13 +31,14 @@ struct AppPreferences: Equatable {
         static let showOverviewInSidebar = "amxShowOverviewInSidebar"
         static let dashboardPlace = "amxDashboardPlace"
         static let terminalTheme = "amxTerminalTheme"
+        static let matchWindowToTerminal = "amxMatchWindowToTerminal"
         static let confirmationPolicy = "amxConfirmationPolicy"
         static let confirmBeforeClosing = "amxConfirmBeforeClosing"
 
         static let all = [
             binaryPath, launchAtLogin, hotKeyDashboard, hotKeyNextAttention, statusStyle, showWorkingCount,
             recentDays, recentLimit, useAppNotifications, snoozeUntil, environment,
-            launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, sidebarSort, dashboardPlace, terminalTheme, workspaceShortcuts,
+            launchBackend, openWorkspaceAtLaunch, defaultFontSize, sidebarZoomPercent, compactSidebar, sidebarGrouping, sidebarSort, dashboardPlace, terminalTheme, matchWindowToTerminal, workspaceShortcuts,
             confirmBeforeClosing, confirmationPolicy, showWelcomeBack, showOverviewInSidebar, continueToNextWaiting,
         ]
     }
@@ -103,6 +104,7 @@ struct AppPreferences: Equatable {
     /// `amxTerminalTheme`: the Ghostty theme every terminal uses; nil uses
     /// the Ghostty config's.
     var terminalTheme: TerminalTheme?
+    var matchWindowToTerminal = true
 
     init() {}
 
@@ -123,6 +125,7 @@ struct AppPreferences: Equatable {
         preferences.launchBackend = LaunchBackendPreference.stored(defaults.string(forKey: Key.launchBackend))
         preferences.openWorkspaceAtLaunch = bool(defaults, Key.openWorkspaceAtLaunch) ?? false
         preferences.showWelcomeBack = bool(defaults, Key.showWelcomeBack) ?? false
+        preferences.matchWindowToTerminal = bool(defaults, Key.matchWindowToTerminal) ?? true
         preferences.continueToNextWaiting = bool(defaults, Key.continueToNextWaiting) ?? true
         if let raw = defaults.string(forKey: Key.confirmationPolicy), let policy = WorkspaceConfirmationPolicy(rawValue: raw) {
             preferences.confirmationPolicy = policy
@@ -163,6 +166,7 @@ struct AppPreferences: Equatable {
         defaults.set(launchBackend.rawValue, forKey: Key.launchBackend)
         defaults.set(openWorkspaceAtLaunch, forKey: Key.openWorkspaceAtLaunch)
         defaults.set(showWelcomeBack, forKey: Key.showWelcomeBack)
+        defaults.set(matchWindowToTerminal, forKey: Key.matchWindowToTerminal)
         defaults.set(continueToNextWaiting, forKey: Key.continueToNextWaiting)
         defaults.set(confirmationPolicy.rawValue, forKey: Key.confirmationPolicy)
         defaults.removeObject(forKey: Key.confirmBeforeClosing)

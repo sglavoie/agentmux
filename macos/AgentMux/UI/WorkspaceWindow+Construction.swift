@@ -193,7 +193,33 @@ extension WorkspaceWindowController {
         summaryButton.target = self
         summaryButton.action = #selector(showReturnSummary(_:))
         window.addTitlebarAccessoryViewController(WorkspaceWindowChrome.titlebarAccessory(summaryButton, at: .trailing))
+        constructedWindow = window
+        refreshTerminalAppearance()
         return window
+    }
+
+    func refreshTerminalAppearance() {
+        guard let window = constructedWindow else { return }
+        let background = matchWindowToTerminal ? terminalBackground() : nil
+        window.titlebarAppearsTransparent = background != nil
+        window.backgroundColor = background ?? .windowBackgroundColor
+        window.appearance = background.flatMap { NSAppearance(named: Self.appearance(for: $0)) }
+        // The headers and both sidebars draw over the same configured color.
+        // Keep the stock light sidebar correction only when matching is off
+        // or Ghostty could not supply a color.
+        sidebarZoomView?.fillColor = background
+        inspectorZoomView?.fillColor = background
+        for host in [paneLayout.active, paneLayout.other] {
+            host.wantsLayer = true
+            host.layer?.backgroundColor = background?.cgColor
+        }
+    }
+
+    /// The same sRGB luminance threshold as Ghostty's window-theme = auto.
+    static func appearance(for background: NSColor) -> NSAppearance.Name {
+        guard let rgb = background.usingColorSpace(.sRGB) else { return .darkAqua }
+        let luminance = 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
+        return luminance > 0.5 ? .aqua : .darkAqua
     }
 }
 
