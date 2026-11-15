@@ -40,6 +40,14 @@ local) ;;
 	;;
 esac
 
+# Hosted tests need the logged-in GUI bootstrap session. Background shells
+# (including automation workers) can otherwise crash Xcode's app launcher.
+# Remote routing above still takes precedence; this also handles the remote
+# shell if that Mac's launch context needs the same local GUI bridge.
+if [ "$(launchctl managername)" != Aqua ]; then
+	exec python3 "$script_dir/run-in-gui.py" "$script_dir/test-app.sh" "$@"
+fi
+
 configuration="${1:-Debug}"
 case "$configuration" in
 Debug)

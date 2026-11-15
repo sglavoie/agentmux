@@ -12,6 +12,13 @@ run hosted inside the app. When the app sees XCTest in its environment, it
 skips the single-instance check and the status item, and it never spawns
 `amx`. This means `just mac-test` works while the installed app is running.
 
+Local hosted tests require a logged-in desktop session. When invoked from a
+background automation shell, `test-app.sh` uses a temporary LaunchAgent in the
+same user's GUI session to avoid Xcode's `childPID > 0` launch failure. Arguments,
+environment, working directory, and exit status are preserved; the temporary job
+is removed afterward. If no GUI login is available, log in to this Mac's desktop
+and retry. Explicit remote routing still takes precedence.
+
 `WorkspaceWorkflowPreviewTests` captures fixture windows in light and dark
 appearances using ScreenCaptureKit's current-process window API (macOS 14.4 or
 newer). It verifies the requested window dimensions and recognizes visible

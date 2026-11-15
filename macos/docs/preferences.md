@@ -91,7 +91,7 @@ An absent, mistyped, or out-of-range value reads as its default.
 | `amxRecentDays` | 7 | How far back the Recent submenu looks (1–90). |
 | `amxRecentLimit` | 15 | How many conversations it lists (1–50). |
 | `amxUseAppNotifications` | true | Offers the app as the daemon's notification backend. |
-| `amxPlaySounds` | true | Settings › General: **Play a sound when an agent needs you or finishes**. Distinct Glass and softer Pop sounds obey mute, snooze, visible-session suppression, reconnect baselines, and a shared two-second limit. Permission and question app banners are silent while this is on; off restores their default banner sound. |
+| `amxPlaySounds` | true | Settings › General: **Play a sound when an agent needs you or finishes**. Agent Mux's own two-note attention sound and softer single-note completion sound obey mute, snooze, visible-session suppression, reconnect baselines, and a shared two-second limit. Permission and question app banners are silent while this is on; off restores their default banner sound. |
 | `amxSnoozeUntil` | none | The last snooze the daemon reported, re-applied after a daemon restart (see Menu actions). The daemon owns the snooze, and Preferences shows the daemon's while the feed is live. |
 | `amxEnvironment` | empty | Values amx runs with instead of the login shell's, for `PATH`, `XDG_*`, and `AMX_*`. |
 | `amxLaunchBackend` | `workspace` | `workspace` uses tmux; `follow-cli` reads the CLI configuration before project launches and Recent conversation resumes. A stored legacy `automatic` migrates to `workspace`. Unknown or missing values use `workspace`. |

@@ -47,9 +47,11 @@ within 3 seconds, or reports a failure, the daemon withdraws it and Alerter
 shows it instead. Quitting the app falls back to Alerter at once.
 
 Settings › General › **Play a sound when an agent needs you or finishes** is on
-by default. Permission requests, questions, and errors use Glass; completed turns
-use a softer Pop. Muted or snoozed sessions and sessions visible in the key
-workspace window stay silent. Launch and reconnect establish a silent baseline,
+by default. Permission requests, questions, and errors use Agent Mux's own
+two-note attention sound; completed turns use a softer single-note sound.
+If a bundled sound is missing or unreadable, its system sound fallback is used.
+Muted or snoozed sessions and sessions visible in the key workspace window stay
+silent. Launch and reconnect establish a silent baseline,
 and at most one sound plays every two seconds. Permission/question app banners
 are silent while this setting is on; turning it off restores their banner sound.
 

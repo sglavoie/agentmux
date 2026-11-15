@@ -235,9 +235,17 @@ extension GhosttyInteractionTests {
         view.mouseMoved(with: try XCTUnwrap(NSEvent.mouseEvent(
             with: .mouseMoved, location: inside, modifierFlags: [], timestamp: 0, windowNumber: window.windowNumber,
             context: nil, eventNumber: 0, clickCount: 0, pressure: 0)))
+        // A default event source inherits live modifiers; Shift makes AppKit
+        // turn vertical wheel deltas into horizontal ones. Isolate this input
+        // from whoever is using the Mac without changing their keyboard state.
+        let source = try XCTUnwrap(CGEventSource(stateID: .privateState))
         func turn(_ lines: Int32) throws {
-            let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0, wheel3: 0))
-            view.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: wheel)))
+            let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: source, units: .line, wheelCount: 1, wheel1: lines, wheel2: 0, wheel3: 0))
+            wheel.flags = []
+            let event = try XCTUnwrap(NSEvent(cgEvent: wheel))
+            XCTAssertEqual(event.scrollingDeltaX, 0)
+            XCTAssertEqual(event.scrollingDeltaY, CGFloat(lines))
+            view.scrollWheel(with: event)
         }
         try turn(3)
         ghosttyWait("a wheel-up report: have \(received.debugDescription)", timeout: 5) { self.received.hasPrefix("\u{1b}[<64;") }

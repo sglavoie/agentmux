@@ -14,6 +14,8 @@ final class WorkspaceSound {
             self == .needsYou ? WorkspaceSound.needsYouSound : WorkspaceSound.finishedSound
         }
 
+        var resource: String { self == .needsYou ? "needs-you" : "finished" }
+
         var volume: Float { self == .needsYou ? 0.7 : 0.35 }
 
         init?(iconState: String) {
@@ -55,7 +57,10 @@ final class WorkspaceSound {
     }
 
     private static func play(_ kind: Kind) {
-        guard let sound = NSSound(named: NSSound.Name(kind.name)) else { return }
+        let url = Bundle.main.url(forResource: kind.resource, withExtension: "wav", subdirectory: nil)
+            ?? Bundle.main.url(forResource: kind.resource, withExtension: "wav", subdirectory: "Sounds")
+        let bundled = url.flatMap { NSSound(contentsOf: $0, byReference: true) }
+        guard let sound = bundled ?? NSSound(named: NSSound.Name(kind.name)) else { return }
         sound.volume = kind.volume
         sound.play()
     }

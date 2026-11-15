@@ -218,14 +218,22 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
     }
 
     func testTheMainMenuHasTheStandardItems() throws {
+        let savedMain = NSApp.mainMenu
         let savedServices = NSApp.servicesMenu
         let savedWindows = NSApp.windowsMenu
         defer {
+            NSApp.mainMenu = savedMain
             NSApp.servicesMenu = savedServices
             NSApp.windowsMenu = savedWindows
         }
         let delegate = try XCTUnwrap(NSApp.delegate as? AppDelegate)
-        let menu = WorkspaceMenu.make(target: delegate)
+        // Check the production installation, including its already-installed
+        // path. AppKit retains the installed Services menu; a detached menu
+        // made for inspection is not necessarily its registered instance.
+        WorkspaceMenu.install(target: delegate)
+        let menu = try XCTUnwrap(NSApp.mainMenu)
+        WorkspaceMenu.install(target: delegate)
+        XCTAssertTrue(NSApp.mainMenu === menu, "Installing twice keeps the existing main menu")
         let appMenu = try XCTUnwrap(menu.item(withTitle: "Agent Mux")?.submenu)
         XCTAssertEqual(appMenu.item(withTitle: "About Agent Mux")?.action, #selector(NSApplication.orderFrontStandardAboutPanel(_:)))
         let services = try XCTUnwrap(appMenu.item(withTitle: "Services")?.submenu)

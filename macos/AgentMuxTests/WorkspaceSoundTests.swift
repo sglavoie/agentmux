@@ -24,6 +24,19 @@ final class WorkspaceSoundTests: XCTestCase {
                          onScreen: Set(visible.map { .embedded(WorkspaceFixture.runtimeID($0)) }))
     }
 
+    func testBundledSoundResourcesLoad() throws {
+        XCTAssertEqual(WorkspaceSound.Kind.needsYou.resource, "needs-you")
+        XCTAssertEqual(WorkspaceSound.Kind.finished.resource, "finished")
+        for kind in [WorkspaceSound.Kind.needsYou, .finished] {
+            let url = try XCTUnwrap(
+                Bundle.main.url(forResource: kind.resource, withExtension: "wav", subdirectory: nil)
+                    ?? Bundle.main.url(forResource: kind.resource, withExtension: "wav", subdirectory: "Sounds"),
+                "Missing app-bundle sound: \(kind.resource)"
+            )
+            XCTAssertNotNil(NSSound(contentsOf: url, byReference: true))
+        }
+    }
+
     func testDistinctSystemSoundsForNeedsYouAndFinished() {
         for icon in ["key", "question", "error"] {
             transition(["bolt"], [icon])
