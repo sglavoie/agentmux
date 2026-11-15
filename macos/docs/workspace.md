@@ -120,7 +120,9 @@ ASL answer panel work the same either way.
   selection, pin, and dragged order are preserved. The temporary section
   always stays expanded, names each session's project, and cannot be dragged.
   Small sidebar changes animate sessions into their new sections, retaining
-  selection, keyboard focus, and scroll position. Hover, menu, and drag holds
+  selection, keyboard focus, and scroll position. The same update refreshes
+  command digits and inherited session names and profile markers, including
+  on lines that stay in place. Hover, menu, and drag holds
   still keep physical targets steady until reordering is released. Large changes
   (more than 12 row operations), forced refreshes, detached tables, and Reduce
   Motion use an immediate reload.

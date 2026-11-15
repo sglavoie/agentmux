@@ -115,11 +115,12 @@ extension WorkspaceWindowController {
             // whose ⌘ digit or session name moved is one of them, though
             // its own item is the same: a session started above it, in a
             // collapsed project, or the session beside it was renamed.
+            let changedDecorations = IndexSet(decorations.indices.filter {
+                $0 >= drawnDecorations.count || decorations[$0] != drawnDecorations[$0]
+            })
             var changed = force ? nil : Self.changedLines(from: items, to: wanted)
             changed?.formUnion(ended)
-            if changed != nil, decorations.count == drawnDecorations.count {
-                changed?.formUnion(IndexSet(decorations.indices.filter { decorations[$0] != drawnDecorations[$0] }))
-            }
+            changed?.formUnion(changedDecorations)
             let previous = items
             let changes = changed == nil && !force && sidebarMotionEnabled() && sidebar.window != nil
                 ? Item.structuralChanges(from: previous, to: wanted) : nil
@@ -131,7 +132,7 @@ extension WorkspaceWindowController {
             if let changed {
                 if !changed.isEmpty { reload(changed) }
             } else if let changes, !changes.isEmpty, changes.count <= 12 {
-                animateSidebar(from: previous, to: wanted, changes: changes)
+                animateSidebar(from: previous, to: wanted, changes: changes, changedDecorations: changedDecorations)
             } else {
                 applying = true
                 sidebar.reloadData()
@@ -168,13 +169,15 @@ extension WorkspaceWindowController {
         }
     }
 
-    private func animateSidebar(from previous: [Item], to wanted: [Item], changes: [Item.Change]) {
+    private func animateSidebar(from previous: [Item], to wanted: [Item], changes: [Item.Change],
+                                changedDecorations: IndexSet) {
         let position = sidebar.enclosingScrollView?.contentView.bounds.origin
         // A row can inherit a different project label after a move even when
-        // its own content is unchanged. Refresh shifted rows and group counts.
+        // its own content is unchanged. Refresh shifted rows, group counts,
+        // and decorations compared before the drawn snapshot was replaced.
         let changed = IndexSet(wanted.indices.filter { index in
             index >= previous.count || previous[index] != wanted[index]
-        })
+        }).union(changedDecorations)
         sidebarAnimations += 1
         NSAnimationContext.runAnimationGroup { context in
             context.duration = WorkspaceMotion.disclosure

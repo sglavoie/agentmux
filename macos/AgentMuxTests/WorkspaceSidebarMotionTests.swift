@@ -88,6 +88,55 @@ final class WorkspaceSidebarMotionTests: XCTestCase {
         XCTAssertEqual(displayedLines(), rendered, "AppKit's cells match the final model, including labels and digits")
     }
 
+    func testAnimatedUpdateRedrawsChangedDecorations() async throws {
+        var live = [F.tmux(1, project: "api", icon: "stop")]
+        live[0].tabColor = "#112233"
+        app.store.apply(snapshot: F.snapshot(live))
+        workspace.select(.embedded(F.runtimeID(1)), focus: false)
+        workspace.openTerminalBesideSession()
+        workspace.open(WorkspaceViewRequest(kind: "pager", runtimeSessionID: F.runtimeID(1), title: "api"))
+        let pager = try XCTUnwrap(workspace.items.firstIndex {
+            if case let .view(view) = $0 { return view.id == "pager:\(F.runtimeID(1))" }
+            return false
+        })
+        let terminal = try XCTUnwrap(workspace.items.firstIndex {
+            if case let .view(view) = $0 { return view.besideRuntimeSessionID == F.runtimeID(1) }
+            return false
+        })
+        func terminalColor() throws -> NSColor {
+            let row = try XCTUnwrap(table.rowView(atRow: terminal, makeIfNecessary: true) as? WorkspaceRowView)
+            return try XCTUnwrap(row.tabColor)
+        }
+        let oldColor = try terminalColor()
+        let before = workspace.items[pager]
+        let terminalBefore = workspace.items[terminal]
+        let oldText = displayedLines()[pager]
+        XCTAssertTrue(oldText.contains("api — work"))
+        workspace.sidebarMotionEnabled = { true }
+        table.reset()
+
+        // Naming an unnamed session replaces its line (and changes its height),
+        // while the pager's item and position stay unchanged.
+        live[0].name = "release notes"
+        live[0].tabColor = "#445566"
+        app.store.apply(snapshot: F.snapshot(live))
+        XCTAssertEqual(workspace.items[pager], before)
+        XCTAssertEqual(workspace.items[terminal], terminalBefore)
+        XCTAssertEqual(table.fullReloads, 0)
+        XCTAssertGreaterThan(table.insertions, 0)
+        XCTAssertGreaterThan(table.removals, 0)
+        XCTAssertGreaterThan(workspace.sidebarAnimations, 0)
+        try await settle()
+        let rendered = displayedLines()
+        let color = try terminalColor()
+        XCTAssertNotEqual(color, oldColor)
+        XCTAssertTrue(rendered[pager].contains("Scrollback · release notes"))
+        XCTAssertNotEqual(rendered[pager], oldText)
+        workspace.reloadSidebar(force: true, allowReorder: true)
+        XCTAssertEqual(displayedLines(), rendered, "animated decorations match a forced reload")
+        XCTAssertEqual(try terminalColor(), color, "inherited profile markers match a forced reload")
+    }
+
     func testInsertRemoveAndRapidSnapshotsKeepTheLatestOrder() async throws {
         var live = [F.tmux(1, project: "api", icon: "stop"), F.tmux(2, project: "web", icon: "bolt")]
         app.store.apply(snapshot: F.snapshot(live))
