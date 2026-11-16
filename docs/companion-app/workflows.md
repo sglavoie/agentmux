@@ -82,8 +82,10 @@ opens **Launch projects in**. Following CLI configuration distinguishes an expli
 `config.toml` choice from the tmux default. Preferences lists resolved
 app, CLI, and plan destinations; **Follow CLI** aligns the app with CLI configuration.
 
-An empty workspace offers **Launch project…**, **Conversation History**, and
-**Open Dashboard**, and names the effective launch destination. With no configured
+An empty workspace lists up to five configured **Projects** and three **Recent
+conversations** for one-click launch or resume, alongside **Launch project…**,
+**Conversation History**, and **Open Dashboard**. It names the effective launch
+destination and refreshes the lists when shown; nothing launches until you choose it. With no configured
 projects it offers **Set up first project…**, opening a native sheet with detected
 agent CLIs, recent project directories, and **Choose another folder…**. Review the
 checked hook-sync option and click **Set up**. Success refreshes projects and the

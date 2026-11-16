@@ -137,15 +137,38 @@ struct Recorder {
         guard result == .success else { throw DemoError.message("Could not press \(identifier): \(result.rawValue)") }
     }
 
-    static func pressButton(_ description: String, pid: pid_t) throws {
-        guard let button = find(AXUIElementCreateApplication(pid), matching: {
+    static func button(_ description: String, in root: AXUIElement) -> AXUIElement? {
+        find(root, matching: {
             attribute($0, kAXRoleAttribute) as? String == kAXButtonRole &&
                 attribute($0, kAXEnabledAttribute) as? Bool == true &&
                 (attribute($0, kAXDescriptionAttribute) as? String == description ||
                  attribute($0, kAXTitleAttribute) as? String == description)
-        }), AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else {
+        })
+    }
+
+    static func answerPanel(pid: pid_t) -> AXUIElement? {
+        find(AXUIElementCreateApplication(pid), matching: {
+            attribute($0, kAXRoleAttribute) as? String == kAXWindowRole &&
+                attribute($0, kAXTitleAttribute) as? String == "Agent Mux — Answer a Prompt"
+        })
+    }
+
+    static func pressButton(_ description: String, in root: AXUIElement) throws {
+        guard let button = button(description, in: root),
+              AXUIElementPerformAction(button, kAXPressAction as CFString) == .success else {
             throw DemoError.message("Could not press demo button: \(description)")
         }
+    }
+
+    static func pressButton(_ description: String, pid: pid_t) throws {
+        try pressButton(description, in: AXUIElementCreateApplication(pid))
+    }
+
+    static func pressOption(pid: pid_t) throws {
+        guard let panel = answerPanel(pid: pid) else {
+            throw DemoError.message("Expected the prompt answer panel before answering")
+        }
+        try pressButton("Option 1: Yes", in: panel)
     }
 
     static func attribute(_ element: AXUIElement, _ key: String) -> CFTypeRef? {
@@ -284,7 +307,7 @@ struct Recorder {
                 let scene: String
                 switch second {
                 case 0:
-                    scene = "Working sidebar row with live tool and elapsed time"
+                    scene = "Sidebar story lines with live tool and elapsed time"
                 case 4:
                     try type("r", pid: app.processIdentifier)
                     scene = "API service moves to Needs attention"
@@ -292,16 +315,16 @@ struct Recorder {
                     try pressButton("Answer…", pid: app.processIdentifier)
                     scene = "Answer queue: api-service prompt"
                 case 12:
-                    try pressButton("y", pid: app.processIdentifier)
+                    try pressOption(pid: app.processIdentifier)
                     scene = "Answer sent; queue advances to documentation"
                 case 16:
-                    try pressButton("y", pid: app.processIdentifier)
+                    try pressOption(pid: app.processIdentifier)
                     try await pause(1.5)
                     try pressButton("Toggle Inspector", pid: app.processIdentifier)
                     scene = "Second answer sent; all caught up"
                 case 20:
                     try pressMenu("showBriefing:", pid: app.processIdentifier)
-                    scene = "Briefing: retained activity across projects"
+                    scene = "Briefing: collapsed session summaries across projects"
                 default:
                     try key(13, flags: .maskCommand, pid: app.processIdentifier)
                     try pressButton("Toggle Inspector", pid: app.processIdentifier)
@@ -343,13 +366,15 @@ struct Recorder {
                 guard title.hasPrefix(expectedTitle) else {
                     throw DemoError.message("Wrong scene after \(scene): \(title)")
                 }
-                let panel = find(axApp, matching: { attribute($0, kAXRoleAttribute) as? String == kAXWindowRole &&
-                    attribute($0, kAXTitleAttribute) as? String == "Agent Mux — Answer a Prompt" })
+                let panel = answerPanel(pid: app.processIdentifier)
                 if second == 8 || second == 12 {
                     guard let panel,
-                          find(panel, matching: { attribute($0, kAXDescriptionAttribute) as? String == "y" &&
-                              attribute($0, kAXEnabledAttribute) as? Bool == true }) != nil else {
+                          button("Option 1: Yes", in: panel) != nil else {
                         throw DemoError.message("Expected an authorized answer panel for \(expectedTitle)")
+                    }
+                    // The generic y control exists only inside expanded More keys.
+                    guard button("y", in: panel) == nil else {
+                        throw DemoError.message("More keys must stay collapsed")
                     }
                 } else if second >= 16, panel != nil {
                     throw DemoError.message("Answer queue did not close")

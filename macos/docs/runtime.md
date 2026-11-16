@@ -14,9 +14,9 @@
 | `AgentMux/Model/` | Pure state: the session store, glyphs, attention cycler, the workspace sidebar and its selection, the Go to… list, project and recent catalogs, snooze, and the ASL response rules. |
 | `AgentMux/Shell/` | macOS integration: hotkeys, preferences storage, notification presenter, and the `config.toml` watcher. |
 | `AgentMux/UI/` | The status item, menu builder, daemon line, workspace window and its main menu, Preferences window, and ASL answer panel. |
-| `AgentMux/Resources/` | `Info.plist` and the asset catalog; `internal/palette/icons.json` is bundled from the repository. |
+| `AgentMux/Resources/` | `Info.plist`, the asset catalog, and generated `Sounds/*.wav`; `internal/palette/icons.json` is bundled from the repository. |
 | `AgentMuxTests/` | XCTest suites, with a fake stream server standing in for the daemon. |
-| `scripts/` | `build-ghosttykit.sh`, `build-tmux.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `uninstall-app.sh`, `app-lib.sh`, `test-app.sh`, `remote-ui.sh`, `make-icons.swift`. |
+| `scripts/` | `build-ghosttykit.sh`, `build-tmux.sh`, `generate-project.sh`, `build-app.sh`, `sign.sh`, `install-app.sh`, `uninstall-app.sh`, `app-lib.sh`, `test-app.sh`, `remote-ui.sh`, `run-in-gui.py`, `make-icons.swift`, `make-sounds.py`. |
 | `GHOSTTY_VERSION`, `patches/ghostty/`, `NOTICE-ghostty` | The GhosttyKit pins, the build patches, and Ghostty's license notice. |
 | `GhosttyHarness/` | The Session 2 feasibility harness: a separate app with the wrapper as first ported, linking the same vendored GhosttyKit. Not part of any recipe. |
 

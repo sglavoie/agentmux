@@ -51,8 +51,8 @@ def waiting():
     question = ("Would you like to run the following command?" if harness == "codex"
                 else "Do you want to proceed?" if harness == "claude"
                 else "Do you want to run this command?")
+    print("│ $ make check   (scripted; no command is executed)")
     print(f"│ {question}")
-    print("│ make check   (scripted; no command is executed)")
     print("│ ❯ 1. Yes")
     print("│   2. No")
     print("│ Press enter to confirm · y to approve", flush=True)
@@ -97,7 +97,8 @@ def message(role, text):
 
 message("user", "Prepare this project for release.")
 message("assistant", "Reviewed the release changes. The health endpoint and regression test are ready for checkout review."
-        if harness == "claude" else "Reviewed the release changes; checks need approval.")
+        if harness == "claude" else "Release page ready for review."
+        if harness == "codex" else "Reviewed the release changes; checks need approval.")
 hook("SessionStart", source="startup")
 hook("UserPromptSubmit", prompt="Prepare this project for release.")
 heading()

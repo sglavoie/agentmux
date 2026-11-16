@@ -162,8 +162,9 @@ mirror, and request descriptions are all redacted, so the logs (category
 A permission banner never approves anything: the operator has to see the
 prompt before answering it. For a session on the private tmux server the
 banner can offer to show it. Its **Answer…** opens a floating panel
-(`UI/PromptAnswerPanel.swift`) with the tail of the session's screen and a
-strip of keys, and the workspace does not have to come forward or attach.
+(`UI/PromptAnswerPanel.swift`) with the tail of the session's screen. Recognizable
+prompts show their question and numbered option buttons; other screens show the
+full key strip. The workspace does not have to come forward or attach.
 
 The panel decides nothing about whether a session may be written to. It runs
 two `amx send` invocations and shows what they answer:
@@ -182,9 +183,14 @@ The rules are in `Model/PromptAnswer.swift`:
 - Keys are enabled only while the look says the screen is asking something.
   `amx send` checks the same thing again when it writes, so a prompt that
   went away in between is a refusal and not a stray key.
-- The strip is `1`–`9`, `↑` `↓` `↩`, and `y` `n` `esc`. Typing a digit, `y`,
-  `n`, or Return in the panel presses that key; Escape closes the panel, so
-  the session's Escape is the `esc` button.
+- A parsed blocked prompt with at least two supported digit options shows one
+  full-width button per choice, with the selected choice prominent. Each presses
+  its digit through the same guarded flow. The raw screen stays visible; **More
+  keys** starts collapsed on every opening and reveals `1`–`9`, `↑` `↓` `↩`, and
+  `y` `n` `esc`. Without usable options that strip is visible immediately.
+- Typing a digit, `y`, `n`, Up, Down, or Return still presses that key in either
+  layout. Escape closes the panel; the separate **esc** button sends it to the
+  session. Parsed questions, summaries, and labels remain memory-only `SecretText`.
 - A session running an agent-session-loop run answers the first press with
   "press the key again to confirm"; the second carries `--yes`. A different
   key is asked about afresh.

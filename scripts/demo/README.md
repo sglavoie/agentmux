@@ -120,15 +120,17 @@ reliably communicate the app's exit status.
 The recorder captures only the demo app and its floating panels in a fixed
 1280 × 800 region. A continuous
 ScreenCaptureKit stream captures display updates at up to 30 fps. The tour is
-scheduled over 32 seconds; UI reads and validation can extend it: the working sidebar tool/timer, a move into Needs attention, two answers
-through the native queue, Briefing, then checkout review beside the agent. The
+scheduled over 32 seconds; UI reads and validation can extend it: sidebar story
+lines and the working tool/timer, a move into Needs attention, two answers using
+parsed option buttons through the native queue, collapsed Briefing summaries,
+then checkout review beside the agent. The
 changed-file list is hidden for readability. The stand-ins accept single-key
 answers like real terminal agents; the api-service stand-in’s `r` key triggers
 its scripted permission request.
 Input targets the demo process; reserve the chosen desktop for the duration.
 Each scene checks the foreground app and expected view, and queue stages require
-an enabled answer panel for the next session or a closed panel after the second
-answer. Scene screenshots and accessibility trees are saved for review. A failed
+an enabled **Option 1: Yes** button scoped to the answer panel for each session,
+then a closed panel after the second answer. **More keys** stays collapsed. Scene screenshots and accessibility trees are saved for review. A failed
 control action or scene check aborts the capture.
 `capture.mov` contains the source video; `recording.json` lists the actions,
 captured update count, and elapsed time. `scene-N.png` and `scene-N.json` retain
@@ -150,6 +152,12 @@ capture alone does not prove that every UI action succeeded.
 
 ## Encode and review
 
+Before replacing either artifact, save its SHA-256 for the review record:
+
+```sh
+shasum -a 256 docs/media/desktop-demo.gif docs/media/desktop-demo.mp4
+```
+
 After reviewing the captured frames, encode locally:
 
 ```sh
@@ -170,12 +178,56 @@ ffprobe -v error -select_streams v:0 \
 ```
 
 Keep the GIF below 8 MB and at least 10 fps. Trim duration or reduce dimensions
-before considering a frame-rate change; retain all five required tour stages.
+before considering a frame-rate change; retain all seven review scenes below.
 The MP4 must be 30 fps. The stream records real motion during transitions;
 constant-rate encoding repeats stationary frames when the display does not change.
 
-Inspect the resulting animation before copying selected media to `docs/media/`
-and embedding it in the README. Label the agent output as scripted demo data.
+Review both final encoded files themselves with playback and decoded frames at
+each scene boundary. Source screenshots and accessibility checks alone do not
+establish that the encoded crop, timing, and text are legible. Confirm the story
+lines, Needs attention, real option buttons for **api-service** and
+**documentation**, advancement after the first answer, closure and **All caught
+up** after the second, Briefing's collapsed session summaries with no expanded
+event rows, and checkout review. Keep **More keys** collapsed. Re-encode and
+repeat the review if any scene is hidden or unreadable.
+
+Copy accepted files to `docs/media/` and commit `desktop-demo-review.json` there.
+The schema is version 1 with these required fields:
+
+- `schema_version`: `1`; `reviewer`: the person or executing agent that inspected
+  both encoded files; `reviewed_at`: ISO 8601 timestamp including timezone;
+  `app_source_revision`: the full 40-character Git revision used to build the app.
+- `artifacts`: exactly two objects, with `path` equal to
+  `docs/media/desktop-demo.gif` or `docs/media/desktop-demo.mp4`, `old_sha256`
+  saved before replacement, `new_sha256` of the reviewed encoding, integer
+  `byte_size`, and `frame_rate` as a rational string such as `10/1` or `30/1`.
+- Each artifact's `scenes` contains these IDs in order: `story-lines`,
+  `needs-attention`, `first-option`, `second-option`, `all-caught-up`,
+  `briefing-collapsed`, `checkout-review`. Each has `timestamp_seconds`, a
+  zero-based decoded `frame_index`, `result: "pass"`, and nonempty `observations`
+  describing what was actually seen. Identify the agents and their option
+  labels, queue advancement/closure, and the visible collapsed Briefing summaries.
+  Timestamps and frame indices must increase and identify the same encoded frame.
+
+Use ffprobe to locate decoded frame timestamps, then extract that exact frame:
+
+```sh
+ffprobe -v error -select_streams v:0 -show_frames \
+  -show_entries frame=best_effort_timestamp_time -of csv=p=0 docs/media/desktop-demo.gif
+# Replace FRAME_INDEX with the zero-based frame number selected above.
+ffmpeg -i docs/media/desktop-demo.gif -vf 'select=eq(n,FRAME_INDEX)' \
+  -frames:v 1 /tmp/desktop-review-frame.png
+python3 scripts/demo/check-desktop-review.py docs/media/desktop-demo-review.json
+python3 -m unittest discover -s scripts/demo/tests -v
+```
+
+Repeat frame inspection for the MP4; its indices differ from the GIF's. The
+validator uses Python's standard library and ffprobe to check schema, changed
+hashes, current sizes/rates, scene ordering and bounds. It checks freshness and
+completeness, not visual truth. Re-encoding invalidates the review until visual
+inspection and the evidence hashes are refreshed. Link the evidence and summarize
+the measured recording facts in `docs/media/README.md`. Keep agent output labeled
+as scripted demo data; never fabricate a pass when media cannot be inspected.
 Do not commit raw frame directories, the temporary world, or capture logs.
 
 ## Stop

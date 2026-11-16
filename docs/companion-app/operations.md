@@ -40,10 +40,11 @@ which shows it through Notification Center. Clicking it shows the tmux session i
 opening the window if it is closed; the banner's actions mute the session, snooze for an
 hour, or open the ASL answer panel. A permission prompt's banner offers no
 approval. For a session in the workspace it offers **Answer…**, which opens a
-small panel showing the session's screen: you read the prompt there and press
-the key that answers it (`1`–`9`, `y`, `n`, arrows, Return, or the `esc`
-button), without bringing the workspace forward. If the app does not confirm delivery
-within 3 seconds, or reports a failure, the daemon withdraws it and Alerter
+small panel showing the session's screen and, for recognizable prompts, the
+question and numbered option buttons. Read the prompt and choose its answer;
+**More keys** reveals the generic key row, and **esc** sends Escape. Unrecognized
+prompts show the full key row directly. The workspace need not come forward.
+If the app does not confirm delivery within 3 seconds, or reports a failure, the daemon withdraws it and Alerter
 shows it instead. Quitting the app falls back to Alerter at once.
 
 Settings › General › **Play a sound when an agent needs you or finishes** is on

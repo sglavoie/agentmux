@@ -144,8 +144,8 @@ as needed without duplicating TOML table headers. Then continue from step 3.
 | Task | Entry point |
 | --- | --- |
 | Find sessions needing input | Dashboard, or `F4` while attached |
-| Answer several waiting agents | **Answer…** in the workspace header or Waiting inspector; successful panel answers continue to the next prompt |
-| Catch up on waiting sessions, activity, and conversations | **View → Briefing…** (⌘⇧U), **Open Briefing** in the welcome-back card, or **Briefing** in the command palette |
+| Answer several waiting agents | **Answer…** in the workspace header or Waiting inspector; read the prompt, choose a numbered option, and continue to the next waiting agent |
+| Catch up on waiting sessions, activity, and conversations | **View → Briefing…** (⌘⇧U) or **Open Briefing** in the welcome-back card; scan one collapsed summary per session and expand **Show events** for details |
 | Explore statistics and milestones | **Flight Log…** in the app's View menu, **Show Flight Log** in the dashboard command palette, or `amx session flight-log` |
 | See every live pane | `F2` or `amx overview` |
 | Resume or fork a conversation | `s` for project history, `S` for all history; straight there with `ctrl+shift+y`, native Conversation History with `⌘Y` in the app, or `amx past-sessions` |
@@ -174,7 +174,11 @@ Agent Mux.app shows sessions in a native workspace with embedded terminals,
 conversation history, checkout changes, and run controls. Closing the app
 leaves agents running. Settings controls the answer queue (Workspace), agent
 sounds (General), and matching window chrome to the terminal theme (Appearance).
-All three start enabled; the welcome-back card is optional. See
+All three start enabled; review windows and answer panels follow the terminal's
+light or dark appearance too. Waiting and completed sidebar rows add a short
+story line. Attention and completion use distinct bundled sounds, and a newly
+earned Flight Log milestone can appear in the **All caught up** receipt. The
+welcome-back card is optional. See
 [the companion guide](docs/companion-app.md) for setup and [macOS build instructions](macos/README.md) for development.
 
 ## Maintenance and reference

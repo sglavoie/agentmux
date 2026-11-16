@@ -56,7 +56,12 @@ ASL answer panel work the same either way.
   queue, and pending-answer identities. Activity groups exact journal events by
   runtime session (conversation identity when runtime identity is absent), with
   cached outcomes, supporting output, retained-data errors, focus/conversation
-  actions, and completed-session checkout review. Reading and scope changes do
+  actions, and completed-session checkout review. Each session starts collapsed
+  with event counts, latest event, relative age, unread count, and saved outcome.
+  **Show events** reveals individual rows; **Diagnostics** in the detail pane
+  holds original reducer reasons and event/run/trace identifiers. Explicit event
+  links expand only their target group; ordinary refresh and read/undo preserve
+  expansion choices. Reading and scope changes do
   not acknowledge events. Mark read writes only loaded visible IDs; Undo preserves
   other reader acknowledgements. Since journal records have no project field,
   project membership uses live runtime IDs plus all pages of the CLI's canonical
@@ -535,7 +540,8 @@ Session states use sentence case across the sidebar, inspector, peek, and header
 **Error**, alongside **Turn complete**, **Needs permission**, and **Waiting for
 your answer**. A live agent is a session; its saved history is a conversation.
 Catch-up messages use **Briefing**. Flight Log keeps its themed vocabulary within
-its own window; its Briefing link opens a plain session/event filter.
+its own window, except for a newly earned milestone in the **All caught up**
+receipt described below; its Briefing link opens a plain session/event filter.
 
 Connection messages explain when sessions will reappear. They name the daemon
 when a **Start Daemon** or **Restart Daemon** action is needed. Recovery messages
