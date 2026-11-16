@@ -145,7 +145,7 @@ func newFlightLogAction(action string, deps flightLogDependencies) *cobra.Comman
 	}
 	if action == "settings" {
 		cmd.Flags().BoolVar(&enabled, "enabled", true, "record new activity (false pauses tracking)")
-		cmd.Flags().BoolVar(&celebrations, "celebrations", true, "show newly unlocked milestone banners")
+		cmd.Flags().BoolVar(&celebrations, "celebrations", true, "show newly unlocked milestone banners and milestones in the All caught up receipt")
 	}
 	return cmd
 }
