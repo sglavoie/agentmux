@@ -26,6 +26,33 @@ final class WorkspaceWelcomeTests: XCTestCase {
         return ["entries": entries, "since": "2026-10-30T00:00:00Z", "earliest_available": "", "truncated": true, "corrupt_lines": 0, "matched": 8]
     }
 
+    func testMilestoneAttachesOnlyToCaughtUpAndRestartsExpiry() {
+        let model = WorkspaceWelcomeModel(command: { nil })
+        let milestone = WorkspaceMilestoneWatch.Milestone(id: "first-flight", title: "First Flight")
+        var scheduled: [(TimeInterval, DispatchWorkItem)] = []
+        var caughtUp = 0
+        model.schedule = { scheduled.append(($0, $1)) }
+        model.onCaughtUp = { caughtUp += 1; XCTAssertEqual(model.receipt?.title, "All caught up") }
+        model.milestoneUnlocked(milestone)
+        XCTAssertNil(model.receipt)
+        model.answerSent()
+        model.milestoneUnlocked(milestone)
+        XCTAssertNil(model.receipt?.milestone)
+        XCTAssertEqual(scheduled.count, 1)
+        model.allCaughtUp()
+        XCTAssertEqual(caughtUp, 1)
+        XCTAssertEqual(scheduled.last?.0, 6)
+        model.milestoneUnlocked(milestone)
+        XCTAssertEqual(model.receipt?.milestone, milestone)
+        XCTAssertEqual(scheduled.last?.0, 10)
+        scheduled[1].1.perform()
+        XCTAssertEqual(model.receipt?.milestone, milestone)
+        scheduled[2].1.perform()
+        XCTAssertNil(model.receipt)
+        model.milestoneUnlocked(milestone)
+        XCTAssertNil(model.receipt)
+    }
+
     func testWelcomeIsOptInAndCanBeEnabledLater() {
         let runner = WelcomeRunner()
         let amx = command { _ in self.report() }

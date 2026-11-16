@@ -1,0 +1,62 @@
+[
+  {
+    "celebration_eligible": false,
+    "id": "first-flight",
+    "title": "First Flight",
+    "description": "Launch your first session",
+    "progress": 2,
+    "target": 1,
+    "unlocked_at": "2026-10-26T10:00:15Z",
+    "session_key": "rs-first"
+  },
+  {
+    "id": "frequent-flyer",
+    "title": "Frequent Flyer",
+    "description": "Reach 100 successful launches",
+    "progress": 2,
+    "target": 100,
+    "session_key": ""
+  },
+  {
+    "id": "thousand-signals",
+    "title": "A Thousand Signals",
+    "description": "Observe 1,000 state changes",
+    "progress": 0,
+    "target": 1000,
+    "session_key": ""
+  },
+  {
+    "id": "picking-up",
+    "title": "Picking Up the Thread",
+    "description": "Resume 25 conversations",
+    "progress": 0,
+    "target": 25,
+    "session_key": ""
+  },
+  {
+    "celebration_eligible": true,
+    "id": "branching-out",
+    "title": "Branching Out",
+    "description": "Fork your first conversation",
+    "progress": 1,
+    "target": 1,
+    "unlocked_at": "2026-10-26T10:00:25Z",
+    "session_key": "rs-fork"
+  },
+  {
+    "id": "across-fleet",
+    "title": "Across the Fleet",
+    "description": "Finish a turn with each configured harness",
+    "progress": 0,
+    "target": 1,
+    "session_key": ""
+  },
+  {
+    "id": "loop-closed",
+    "title": "Loop Closed",
+    "description": "Finish your first ASL run",
+    "progress": 0,
+    "target": 1,
+    "session_key": ""
+  }
+]

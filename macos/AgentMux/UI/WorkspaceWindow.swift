@@ -138,6 +138,9 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     lazy var sessionPeek = WorkspaceSessionPeekModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() })
     var presentingPeek = false
     let peekPopover = WorkspaceContextPopover()
+    var milestoneWatch = WorkspaceMilestoneWatch()
+    var milestoneRunner: ASLWorkRunner = QueueWorkRunner.concurrent()
+    private var milestoneCheck = 0
     lazy var welcome = WorkspaceWelcomeModel(command: { [weak self] in self?.delegate?.workspaceRecapCommand() }, defaults: AppDelegate.isRunningTests ? nil : .standard)
     lazy var welcomeView: WorkspaceSidebarHostingView<WorkspaceWelcomeView> = {
         let host = WorkspaceSidebarHostingView(rootView: WorkspaceWelcomeView(model: welcome))
@@ -433,12 +436,27 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
             guard let self, self.isOpen, receipt.title == "All caught up" else { return }
             self.showNotice(receipt.title + " · " + receipt.detail)
         }
+        welcome.onCaughtUp = { [weak self] in self?.checkCaughtUpMilestones() }
         welcome.onAction = { [weak self] command in self?.delegate?.workspacePerform(command) }
         inspector.onSource = { [weak self] identity in self?.delegate?.workspaceOpenHandoffSource(identity) }
         inspector.threads.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
         inspector.recap.command = { [weak self] in self?.delegate?.workspaceRecapCommand() }
         inspector.recap.onEvidence = { [weak self] identity, message in
             self?.delegate?.workspaceRecapEvidence(identity, message: message)
+        }
+    }
+
+    /// A receipt is the only trigger; no timer or Flight Log window is needed.
+    private func checkCaughtUpMilestones() {
+        guard let command = delegate?.workspaceRecapCommand() else { return }
+        milestoneCheck += 1
+        let check = milestoneCheck
+        milestoneRunner.run({ command.json(FlightReport.self, ["session", "flight-log", "--period", "all", "--json"]) }) { [weak self] result in
+            guard let self, check == self.milestoneCheck else { return }
+            guard case let .success(report) = result else { return }
+            if let milestone = self.milestoneWatch.newlyUnlocked(in: report).first {
+                self.welcome.milestoneUnlocked(milestone)
+            }
         }
     }
 

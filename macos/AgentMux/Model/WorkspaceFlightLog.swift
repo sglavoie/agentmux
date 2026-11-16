@@ -82,9 +82,11 @@ struct FlightAchievement: Decodable, Identifiable {
     let id, title, description, sessionKey: String
     let progress, target: Int
     let unlockedAt: String?
+    let celebrationEligible: Bool?
     enum CodingKeys: String, CodingKey {
         case id, title, description, progress, target
         case sessionKey = "session_key", unlockedAt = "unlocked_at"
+        case celebrationEligible = "celebration_eligible"
     }
 }
 

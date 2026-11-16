@@ -17,12 +17,23 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type Store struct{ Path string }
+type Store struct {
+	Path  string
+	clock func() time.Time
+}
+
+func (s Store) now() time.Time {
+	if s.clock != nil {
+		return s.clock().UTC()
+	}
+	return time.Now().UTC()
+}
 
 type header struct {
-	SchemaVersion int       `json:"schema_version"`
-	TrackingSince time.Time `json:"tracking_since"`
-	Settings      Settings  `json:"settings"`
+	CelebrationHistory CelebrationHistory `json:"celebration_history,omitempty"`
+	SchemaVersion      int                `json:"schema_version"`
+	TrackingSince      time.Time          `json:"tracking_since"`
+	Settings           Settings           `json:"settings"`
 }
 
 func DefaultStore() (Store, error) {
@@ -69,7 +80,9 @@ func (s Store) withLock(ctx context.Context, fn func() error) error {
 }
 
 func defaultHeader(now time.Time) header {
-	return header{SchemaVersion: SchemaVersion, TrackingSince: now.UTC(), Settings: Settings{Enabled: true, Celebrations: true}}
+	settings := Settings{Enabled: true, Celebrations: true}
+	return header{SchemaVersion: SchemaVersion, TrackingSince: now.UTC(), Settings: settings,
+		CelebrationHistory: []CelebrationSetting{celebrationSetting(now, settings)}}
 }
 
 func (s Store) readHeader() (header, error) {
@@ -98,6 +111,11 @@ func readHeader(reader *bufio.Reader) (header, error) {
 
 func (s Store) initialize(now time.Time) (header, error) {
 	h, err := s.readHeader()
+	if err == nil && h.CelebrationHistory == nil {
+		// Migration uses wall time, never the timestamp of a queued/imported event.
+		h.CelebrationHistory = []CelebrationSetting{celebrationSetting(s.now(), h.Settings)}
+		return h, s.replaceHeader(h, nil)
+	}
 	if !errors.Is(err, os.ErrNotExist) {
 		return h, err
 	}
@@ -120,7 +138,7 @@ func (s Store) Append(ctx context.Context, events ...Event) error {
 		return nil
 	}
 	return s.withLock(ctx, func() error {
-		started := time.Now()
+		started := s.now()
 		for _, event := range events {
 			if !event.Partial && !event.At.IsZero() && event.At.Before(started) {
 				started = event.At
@@ -224,7 +242,7 @@ func decodeSnapshot(ctx context.Context, source io.Reader) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	snapshot := Snapshot{SchemaVersion: h.SchemaVersion, TrackingSince: h.TrackingSince, Settings: h.Settings, Events: []Event{}}
+	snapshot := Snapshot{SchemaVersion: h.SchemaVersion, TrackingSince: h.TrackingSince, Settings: h.Settings, CelebrationHistory: h.CelebrationHistory, Events: []Event{}}
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(make([]byte, 4096), 1<<20)
 	for scanner.Scan() {
@@ -245,44 +263,56 @@ func decodeSnapshot(ctx context.Context, source io.Reader) (Snapshot, error) {
 // lock. Reset is explicit; corrupt authoritative data is never auto-rebuilt.
 func (s Store) Configure(ctx context.Context, enabled, celebrations *bool) error {
 	return s.withLock(ctx, func() error {
-		h, err := s.initialize(time.Now())
+		h, err := s.initialize(s.now())
 		if err != nil {
 			return err
 		}
-		changedTracking := enabled != nil && h.Settings.Enabled != *enabled
+		previous := h.Settings
 		if enabled != nil {
 			h.Settings.Enabled = *enabled
 		}
 		if celebrations != nil {
 			h.Settings.Celebrations = *celebrations
 		}
-		f, err := os.Open(s.Path)
-		if err != nil {
-			return err
+		if previous == h.Settings {
+			return nil
 		}
-		defer func() { _ = f.Close() }()
-		r := bufio.NewReader(f)
-		if _, err = r.ReadBytes('\n'); err != nil {
-			return err
+		now := s.now()
+		h.CelebrationHistory = append(h.CelebrationHistory, celebrationSetting(now, h.Settings))
+		var extra []byte
+		if previous.Enabled != h.Settings.Enabled {
+			event, _ := json.Marshal(Event{ID: diagnostics.NewTraceID(), At: now, Kind: "gap", Name: "Tracking preference changed"})
+			extra = append(event, '\n')
 		}
-		data, err := json.Marshal(h)
-		if err != nil {
-			return err
-		}
-		rest, err := io.ReadAll(r)
-		if err != nil {
-			return err
-		}
-		if changedTracking {
-			if len(rest) > 0 && rest[len(rest)-1] != '\n' {
-				rest = append(rest, '\n')
-			}
-			event, _ := json.Marshal(Event{ID: diagnostics.NewTraceID(), At: time.Now().UTC(), Kind: "gap", Name: "Tracking preference changed"})
-			rest = append(rest, append(event, '\n')...)
-		}
-		data = append(append(data, '\n'), rest...)
-		return atomicfile.Write(s.Path, data, 0o600)
+		return s.replaceHeader(h, extra)
 	})
+}
+
+// Called only under withLock. Preserve even corrupt event bytes during migration
+// and settings changes; the history and current settings share one atomic write.
+func (s Store) replaceHeader(h header, extra []byte) error {
+	f, err := os.Open(s.Path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	r := bufio.NewReader(f)
+	if _, err = r.ReadBytes('\n'); err != nil {
+		return err
+	}
+	data, err := json.Marshal(h)
+	if err != nil {
+		return err
+	}
+	rest, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+	if len(extra) > 0 && len(rest) > 0 && rest[len(rest)-1] != '\n' {
+		rest = append(rest, '\n')
+	}
+	data = append(append(append(data, '\n'), rest...), extra...)
+	return atomicfile.Write(s.Path, data, 0o600)
 }
 
 func (s Store) Reset(ctx context.Context, now time.Time) error {
@@ -295,6 +325,7 @@ func (s Store) Reset(ctx context.Context, now time.Time) error {
 		next := defaultHeader(now)
 		if err == nil {
 			next.Settings = h.Settings
+			next.CelebrationHistory = []CelebrationSetting{celebrationSetting(now, h.Settings)}
 		}
 		data, err := json.Marshal(next)
 		if err != nil {

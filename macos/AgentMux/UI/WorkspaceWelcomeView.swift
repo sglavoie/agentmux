@@ -2,6 +2,7 @@ import SwiftUI
 
 /// Lives at the bottom of the right inspector, never over terminal output or input.
 struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: WorkspaceWelcomeModel
     var width: CGFloat?
     var zoom: CGFloat = 1
@@ -14,6 +15,22 @@ struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
                     .scaleEffect(zoom, anchor: .topLeading)
             }
         }
+    }
+
+    private func milestoneRow(_ milestone: WorkspaceMilestoneWatch.Milestone) -> some View {
+        HStack(spacing: 6) {
+            WorkspaceMissionPatch(id: milestone.id, title: milestone.title, project: "", shippedAt: "", compact: true)
+                .scaleEffect(0.5).frame(width: 35, height: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Milestone unlocked").font(.caption).foregroundStyle(.secondary)
+                Text(milestone.title).font(.caption.weight(.semibold))
+                Button("Open Flight Log") { model.onAction(.flightLog) }
+                    .buttonStyle(.link).font(.caption)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Milestone unlocked: \(milestone.title)")
+        .accessibilityAction(named: "Open Flight Log") { model.onAction(.flightLog) }
     }
 
     private var card: some View {
@@ -30,6 +47,9 @@ struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
             Text(model.detail).font(.system(size: 11)).foregroundStyle(.secondary)
                 .lineLimit(3).help(model.detail)
                 .fixedSize(horizontal: false, vertical: true)
+            if let milestone = model.receipt?.milestone {
+                milestoneRow(milestone).transition(.opacity)
+            }
             if model.receipt?.title != "All caught up" {
                 Text(model.attentionText).font(.system(size: 11, weight: .medium))
                     .lineLimit(2).help(model.attentionText)
@@ -42,6 +62,7 @@ struct WorkspaceWelcomeView: WorkspaceSidebarHostedContent {
             Button("Open Briefing") { model.onAction(.briefing) }
                 .buttonStyle(.link).font(.system(size: 11)).fixedSize()
         }
+        .animation(reduceMotion ? nil : .easeIn(duration: 0.2), value: model.receipt?.milestone)
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))

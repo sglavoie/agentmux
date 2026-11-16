@@ -27,6 +27,15 @@ original session; use **Next Waiting Session** to continue explicitly. Routine
 screen refreshes of an unchanged Codex prompt preserve its place in the queue;
 a changed presentation, prompt kind, or supervisor question invalidates it.
 
+The **All caught up** receipt also checks Flight Log once for newly unlocked
+milestones. An eligible milestone adds its badge, title, and **Open Flight Log**
+for ten seconds. The first check establishes a baseline; mission patches stay
+in Flight Log. The Flight Log celebration setting also controls this receipt.
+Milestones unlocked while tracking or celebrations were off are never announced
+later, including across restarts. Unlocks with unknown historical settings from
+older ledgers or CLI payloads remain visible in Flight Log but are not announced
+in receipts. Seen milestone IDs and the tracking period are saved locally.
+
 Turn off **Continue to the next waiting session after answering** in Settings ›
 Workspace to keep the existing single-session panel behavior. Typing directly
 into a terminal never advances, and waiting snapshots never open the queue by

@@ -67,7 +67,7 @@ func (s Store) Compact(ctx context.Context) error {
 		out = uniqueEvents(out, time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC))
 		var data bytes.Buffer
 		encoder := json.NewEncoder(&data)
-		if err := encoder.Encode(header{SchemaVersion: snapshot.SchemaVersion, TrackingSince: snapshot.TrackingSince, Settings: snapshot.Settings}); err != nil {
+		if err := encoder.Encode(header{SchemaVersion: snapshot.SchemaVersion, TrackingSince: snapshot.TrackingSince, Settings: snapshot.Settings, CelebrationHistory: snapshot.CelebrationHistory}); err != nil {
 			return err
 		}
 		for _, e := range out {

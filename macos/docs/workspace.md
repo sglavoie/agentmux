@@ -570,7 +570,15 @@ panel. An ASL run with multiple open questions stays in its panel through the
 remaining questions. Its Waiting row is marked **Answer sent** and the queue
 advances only after its last question is answered, even while the snapshot still
 lists the earlier unanswered count. When the queue is empty the panel closes
-and shows **All caught up**.
+and shows **All caught up**. That receipt triggers one background Flight Log
+report read. `WorkspaceMilestoneWatch` remembers unlocked IDs and the tracking
+period in UserDefaults, establishing a silent baseline on first use or reset.
+Only ordinary milestones with explicit historical `celebration_eligible: true`
+can add a half-size badge, title, and **Open Flight Log** link to the receipt;
+mission patches and unknown or disabled-period unlocks never appear there.
+Current tracking and celebration settings also gate the receipt. The milestone
+restarts receipt expiry at ten seconds, fades in unless Reduce Motion is on,
+and leaves terminal focus unchanged.
 Waiting-question identity follows presentation time, icon and prompt kind, plus
 the supervisor question ID and unanswered count. Routine activity refreshes of
 the same Codex prompt do not invalidate an answer; a changed question still

@@ -7,6 +7,7 @@ final class WorkspaceWelcomeModel: ObservableObject {
     struct Receipt: Equatable {
         let title: String
         let detail: String
+        var milestone: WorkspaceMilestoneWatch.Milestone?
     }
     @Published private(set) var receipt: Receipt?
     @Published private(set) var summary: String?
@@ -25,6 +26,7 @@ final class WorkspaceWelcomeModel: ObservableObject {
     }
     var command: () -> AMXCommand?
     var onReceipt: (Receipt) -> Void = { _ in }
+    var onCaughtUp: () -> Void = {}
     var onAction: (WorkspaceCommand) -> Void = { _ in }
     private let runner: ASLWorkRunner
     private let readStore: WorkspaceActivityReadStore
@@ -74,6 +76,14 @@ final class WorkspaceWelcomeModel: ObservableObject {
     func allCaughtUp() {
         showReceipt("All caught up", detail: working == 0 ? "Nothing waiting on you." :
             "\(working) \(working == 1 ? "session is" : "sessions are") still working.")
+        onCaughtUp()
+    }
+
+    func milestoneUnlocked(_ milestone: WorkspaceMilestoneWatch.Milestone) {
+        guard var value = receipt, value.title == "All caught up" else { return }
+        value.milestone = milestone
+        receipt = value
+        expire(value, after: 10)
     }
 
     func answerSent() {
@@ -88,11 +98,16 @@ final class WorkspaceWelcomeModel: ObservableObject {
         let value = Receipt(title: title, detail: detail)
         receipt = value; dismissed = false
         onReceipt(value)
+        expire(value, after: 6)
+    }
+
+    private func expire(_ value: Receipt, after delay: TimeInterval) {
+        expiry?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard self?.receipt == value else { return }
             self?.receipt = nil
         }
-        expiry = work; schedule(6, work)
+        expiry = work; schedule(delay, work)
     }
 
     /// The app retains this model with its workspace controller across closes.

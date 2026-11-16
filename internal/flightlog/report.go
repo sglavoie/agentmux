@@ -42,6 +42,12 @@ func Build(snapshot Snapshot, filters Filters, now time.Time, configuredHarnesse
 	r.Totals = aggregate(selected, r.Since, now)
 	r.Lifetime = aggregate(all, time.Time{}, now)
 	r.Achievements = achievements(events, configuredHarnesses)
+	for i := range r.Achievements {
+		a := &r.Achievements[i]
+		if a.UnlockedAt != nil {
+			a.CelebrationEligible = celebrationEligibility(snapshot.CelebrationHistory, *a.UnlockedAt)
+		}
+	}
 	start := midnight(now.AddDate(-1, 0, 0))
 	r.Days = calendarDays(selected, start, now)
 	r.Recap = recap(selected, periodStart("week", now), now)
@@ -528,4 +534,31 @@ func Label(icon string) string {
 	default:
 		return strings.ReplaceAll(icon, "_", " ")
 	}
+}
+
+// History is authoritative only when complete and ordered. Validate all of it,
+// even records after the unlock, rather than inferring evidence from settings.
+func celebrationEligibility(history []CelebrationSetting, at time.Time) *bool {
+	for i, record := range history {
+		if record.EffectiveAt.IsZero() || record.Enabled == nil || record.Celebrations == nil ||
+			(i > 0 && record.EffectiveAt.Before(history[i-1].EffectiveAt)) {
+			return nil
+		}
+	}
+	var eligible *bool
+	boundaryDisabled := false
+	for _, record := range history {
+		if record.EffectiveAt.After(at) {
+			break
+		}
+		value := *record.Enabled && *record.Celebrations
+		// All changes at exactly the unlock instant participate; a disabled
+		// setting at that boundary vetoes a subsequent same-time enable.
+		if record.EffectiveAt.Equal(at) {
+			boundaryDisabled = boundaryDisabled || !value
+			value = value && !boundaryDisabled
+		}
+		eligible = &value
+	}
+	return eligible
 }

@@ -83,6 +83,18 @@ The app can show a dismissible banner for a milestone unlocked while Flight
 Log is open. Opening historical data does not replay celebrations. There are
 no required daily streaks, XP penalties, or rewards for errors or approvals.
 
+When the workspace shows **All caught up**, it checks for milestones unlocked
+since its last check. A new milestone adds its badge, title, and **Open Flight
+Log** to the receipt for ten seconds. The first check and each new tracking
+period establish a baseline without announcing old unlocks. Mission patches
+remain in Flight Log and never appear in these receipts.
+
+The Flight Log celebration setting also controls this receipt. Unlocks earned
+while tracking or celebrations were off are never announced later, even if
+both settings are enabled again before the next check. Older ledgers and older
+CLI payloads can lack historical settings evidence; those milestones remain
+visible in Flight Log but are not announced in receipts.
+
 Weekly recaps describe launches, resumes, turns, the project with the most
 permission requests, observed concurrency, and finished ASL runs. They use
 the selected project/harness/profile filters and the current calendar week.
@@ -173,3 +185,22 @@ references, and status history are stored locally in the Flight Log ledger
 and included in exports. Compaction preserves missions; reset deletes missions
 and patches along with the rest of Flight Log. Enable tracking before creating
 or changing missions.
+
+## JSON eligibility evidence
+
+Ordinary unlocked entries in `achievements` may include the optional boolean
+`celebration_eligible`. `true` means tracking and celebrations were enabled at
+`unlocked_at`; explicit `false` means either was disabled. An absent field means
+unknown evidence, or a locked achievement or `mission:` patch. Report filters
+and current settings do not change this historical value. Late imports use the
+unlock timestamp, never the time the report is fetched.
+
+The ledger header and exported snapshot carry optional `celebration_history`:
+ordered `{effective_at, enabled, celebrations}` records. Intervals include their
+start and exclude the next start; a disabled record among equal-time changes
+vetoes eligibility at that exact boundary. Missing, invalid, or out-of-order
+history is unknown. Legacy ledgers start history at migration on their next
+initialize, append, or configure operation, using the pre-change settings;
+earlier settings are never inferred. Reports themselves do not migrate data.
+Reset starts fresh history with the preserved preferences. Header replacements,
+including settings changes, mission updates, and compaction, retain this history.

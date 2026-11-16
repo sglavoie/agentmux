@@ -117,7 +117,7 @@ func (s Store) SaveMission(ctx context.Context, m Mission, now time.Time) (Missi
 		snap.Events = append(snap.Events, Event{ID: diagnostics.NewTraceID(), At: now, Kind: "mission", Mission: &m})
 		var data bytes.Buffer
 		encoder := json.NewEncoder(&data)
-		if err := encoder.Encode(header{SchemaVersion: snap.SchemaVersion, TrackingSince: snap.TrackingSince, Settings: snap.Settings}); err != nil {
+		if err := encoder.Encode(header{SchemaVersion: snap.SchemaVersion, TrackingSince: snap.TrackingSince, Settings: snap.Settings, CelebrationHistory: snap.CelebrationHistory}); err != nil {
 			return err
 		}
 		for _, event := range snap.Events {

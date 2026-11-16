@@ -4,7 +4,10 @@
 // projections; only Store writes data, under a stable process-shared lock.
 package flightlog
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 const SchemaVersion = 1
 
@@ -44,12 +47,60 @@ type Settings struct {
 	Celebrations bool `json:"celebrations"`
 }
 
+// CelebrationSetting records settings effective from this instant. Pointers
+// distinguish missing historical evidence from an explicit disabled setting.
+type CelebrationSetting struct {
+	invalidHistory json.RawMessage
+	EffectiveAt    time.Time `json:"effective_at"`
+	Enabled        *bool     `json:"enabled"`
+	Celebrations   *bool     `json:"celebrations"`
+}
+
+// CelebrationHistory keeps malformed metadata unknown without making the event
+// report unreadable. Preserve the original metadata on subsequent header writes.
+type CelebrationHistory []CelebrationSetting
+
+func (h *CelebrationHistory) UnmarshalJSON(data []byte) error {
+	var records []CelebrationSetting
+	if err := json.Unmarshal(data, &records); err != nil || len(records) == 0 {
+		*h = CelebrationHistory{{invalidHistory: append(json.RawMessage(nil), data...)}}
+		return nil //nolint:nilerr // Invalid optional evidence must not hide otherwise readable events.
+	}
+	*h = records
+	return nil
+}
+
+func (h CelebrationHistory) MarshalJSON() ([]byte, error) {
+	if len(h) == 1 && h[0].invalidHistory != nil {
+		return h[0].invalidHistory, nil
+	}
+	if len(h) > 1 && h[0].invalidHistory != nil {
+		// Keep malformed evidence as an invalid entry when appending a change.
+		// A later decode still fails closed and retains all transition bytes.
+		records := []json.RawMessage{h[0].invalidHistory}
+		for _, record := range h[1:] {
+			data, err := json.Marshal(record)
+			if err != nil {
+				return nil, err
+			}
+			records = append(records, data)
+		}
+		return json.Marshal(records)
+	}
+	return json.Marshal([]CelebrationSetting(h))
+}
+
+func celebrationSetting(at time.Time, settings Settings) CelebrationSetting {
+	return CelebrationSetting{EffectiveAt: at.UTC(), Enabled: &settings.Enabled, Celebrations: &settings.Celebrations}
+}
+
 type Snapshot struct {
-	SchemaVersion int       `json:"schema_version"`
-	TrackingSince time.Time `json:"tracking_since"`
-	Settings      Settings  `json:"settings"`
-	Events        []Event   `json:"events"`
-	CorruptLines  int       `json:"corrupt_lines"`
+	CelebrationHistory CelebrationHistory `json:"celebration_history,omitempty"`
+	SchemaVersion      int                `json:"schema_version"`
+	TrackingSince      time.Time          `json:"tracking_since"`
+	Settings           Settings           `json:"settings"`
+	Events             []Event            `json:"events"`
+	CorruptLines       int                `json:"corrupt_lines"`
 }
 
 type Metrics struct {
@@ -105,13 +156,14 @@ type Day struct {
 }
 
 type Achievement struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Description string     `json:"description"`
-	Progress    int        `json:"progress"`
-	Target      int        `json:"target"`
-	UnlockedAt  *time.Time `json:"unlocked_at,omitempty"`
-	SessionKey  string     `json:"session_key"`
+	CelebrationEligible *bool      `json:"celebration_eligible,omitempty"`
+	ID                  string     `json:"id"`
+	Title               string     `json:"title"`
+	Description         string     `json:"description"`
+	Progress            int        `json:"progress"`
+	Target              int        `json:"target"`
+	UnlockedAt          *time.Time `json:"unlocked_at,omitempty"`
+	SessionKey          string     `json:"session_key"`
 }
 
 type Filters struct {
