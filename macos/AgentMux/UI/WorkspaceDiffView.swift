@@ -26,6 +26,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentInsets = NSEdgeInsetsZero
         let text = WorkspaceDiffTextView(frame: scroll.contentView.bounds)
+        text.configureSourceDisplay()
         text.isEditable = false
         text.isSelectable = true
         text.isRichText = true
@@ -97,7 +98,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 state.preparing = request
                 state.preparedPosition = position
                 state.preparedAnchor = anchor
-                let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
+                let rendered = state.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
                 let digits = max(3, String(diff.lines.compactMap { max($0.old ?? 0, $0.new ?? 0) }.max() ?? 0).count)
                 let gutter = CGFloat(digits * 2 + 3) * fontSize * 0.61
                 let width = wrapLines ? max(1, container.bounds.width - gutter - text.textContainerInset.width * 2) : CGFloat.greatestFiniteMagnitude
@@ -141,6 +142,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
                 let hadFocus = text.window?.firstResponder === text
                 let replacement = WorkspaceDiffTextView(frame: NSRect(x: 0, y: 0, width: scroll.contentSize.width,
                     height: max(scroll.contentSize.height, prepared.height + 20)), textContainer: prepared.container)
+                replacement.configureSourceDisplay()
                 replacement.isEditable = false
                 replacement.isSelectable = true
                 replacement.isRichText = true
@@ -171,7 +173,7 @@ struct WorkspaceDiffView: NSViewRepresentable {
             }
             scroll.tile()
             if contentChanged || prepared != nil {
-                let rendered = Self.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
+                let rendered = state.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
                 state.hunkRanges = rendered.hunks
                 text.diff = diff
                 text.lineRanges = rendered.lines
@@ -268,6 +270,27 @@ struct WorkspaceDiffView: NSViewRepresentable {
     }
 
     final class Coordinator {
+        private struct RenderKey: Equatable {
+            let diff: WorkspaceDiff
+            let fontSize: CGFloat
+            let compactMetadata: Bool
+        }
+        private var renderKey: RenderKey?
+        private var rendered: (text: NSAttributedString, hunks: [NSRange], lines: [NSRange])?
+
+        // Width, wrapping and file identity change layout, not attributed text.
+        // Keep only the current content's render, including its source ranges,
+        // so preparing and attaching a new TextKit graph do not render it twice.
+        func render(_ diff: WorkspaceDiff, fontSize: CGFloat, compactMetadata: Bool)
+            -> (text: NSAttributedString, hunks: [NSRange], lines: [NSRange]) {
+            let key = RenderKey(diff: diff, fontSize: fontSize, compactMetadata: compactMetadata)
+            if renderKey == key, let rendered { return rendered }
+            let result = WorkspaceDiffView.render(diff, fontSize: fontSize, compactMetadata: compactMetadata)
+            renderKey = key
+            rendered = result
+            return result
+        }
+
         var focusRequest: UUID?
         weak var gutter: WorkspaceDiffGutter?
         private var observer: NSObjectProtocol?
@@ -347,6 +370,15 @@ struct WorkspaceDiffView: NSViewRepresentable {
 }
 
 final class WorkspaceDiffTextView: NSTextView {
+    func configureSourceDisplay() {
+        // Read-only source needs selection and copying, not prose services.
+        // Completion and Writing Tools are separate from text-checking flags;
+        // leaving them enabled initializes text-generation services on main.
+        enabledTextCheckingTypes = 0
+        isAutomaticTextCompletionEnabled = false
+        if #available(macOS 15.0, *) { writingToolsBehavior = .none }
+    }
+
     var diff = WorkspaceDiff("")
     var lineRanges: [NSRange] = []
     var onCopy: ((WorkspaceCopyFeedback) -> Void)?

@@ -62,6 +62,31 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         XCTAssertTrue(args.contains("codex:exact"))
     }
 
+    func testDiffRenderReusePreservesRangesAndInvalidatesContentAndStyle() {
+        let state = WorkspaceDiffView.Coordinator()
+        let diff = WorkspaceDiff("diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new")
+        let first = state.render(diff, fontSize: 12, compactMetadata: true)
+        let repeated = state.render(diff, fontSize: 12, compactMetadata: true)
+        XCTAssertTrue(first.text === repeated.text)
+        XCTAssertEqual(first.lines, repeated.lines)
+        XCTAssertEqual(first.hunks, repeated.hunks)
+        let expanded = state.render(diff, fontSize: 12, compactMetadata: false)
+        XCTAssertFalse(first.text === expanded.text)
+        XCTAssertTrue(expanded.text.string.contains("diff --git"))
+        let larger = state.render(diff, fontSize: 18, compactMetadata: false)
+        XCTAssertFalse(expanded.text === larger.text)
+        XCTAssertEqual((larger.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize, 18)
+        let changed = WorkspaceDiff("@@ -1 +1 @@\n-old\n+replacement 🦊")
+        let replacement = state.render(changed, fontSize: 18, compactMetadata: false)
+        XCTAssertTrue(replacement.text.string.hasSuffix("+replacement 🦊"))
+        XCTAssertEqual(replacement.lines.count, changed.lines.count)
+        XCTAssertFalse(larger.text === replacement.text)
+        let returned = state.render(diff, fontSize: 12, compactMetadata: true)
+        XCTAssertFalse(first.text === returned.text, "Only the current render is retained")
+        XCTAssertEqual(first.text, returned.text)
+        XCTAssertEqual(first.lines, returned.lines)
+    }
+
     func testLargeDiffRenderAndLayoutMeasurements() throws {
         // Real attributed text and TextKit layout, separate from background parsing.
         // Fixed fixture keeps before/after measurements comparable; no live files.
@@ -150,6 +175,9 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         window.contentView = host; window.orderFront(nil)
         try await Task.sleep(for: .milliseconds(100))
         let text = try XCTUnwrap(find(host))
+        XCTAssertEqual(text.enabledTextCheckingTypes, 0)
+        XCTAssertFalse(text.isAutomaticTextCompletionEnabled)
+        if #available(macOS 15.0, *) { XCTAssertEqual(text.writingToolsBehavior, .none) }
         let scroll = try XCTUnwrap(text.enclosingScrollView)
         let middle = try XCTUnwrap(text.lineRect(3000))
         scroll.contentView.scroll(to: NSPoint(x: 0, y: middle.minY))
@@ -167,6 +195,9 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         host.rootView = view(wrap: true)
         try await waitForLayout(host)
         let wrappedText = try XCTUnwrap(find(host))
+        XCTAssertEqual(wrappedText.enabledTextCheckingTypes, 0)
+        XCTAssertFalse(wrappedText.isAutomaticTextCompletionEnabled)
+        if #available(macOS 15.0, *) { XCTAssertEqual(wrappedText.writingToolsBehavior, .none) }
         XCTAssertEqual(wrappedText.readingAnchor()?.line.text, before.line.text)
         XCTAssertEqual(wrappedText.selectedRange(), selection, "Wrapping preserves a source selection")
         let saved = scroll.contentView.bounds.origin.y
@@ -240,7 +271,9 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         }
         try await Task.sleep(for: .milliseconds(50))
         for _ in 0..<100 {
-            if let value = container(view), !value.preparing { return }
+            if let value = container(view), !value.preparing,
+               let text = value.scroll.documentView as? WorkspaceDiffTextView,
+               !text.lineRanges.isEmpty { return }
             try await Task.sleep(for: .milliseconds(20))
         }
         XCTFail("Diff restoration did not settle")

@@ -458,6 +458,10 @@ binary status, and untracked status; selecting one loads its unified diff, bound
 to 2 MiB with an explicit truncation notice. **Open in editor** uses the configured
 editor in a workspace utility view. Git external diff drivers and textconv do not
 run. Changes belong to the checkout, which can be shared by multiple agents.
+Large patches retain their source selection and reading position across wrapping,
+resizing, and repeated file returns. The diff reuses unchanged text styling while
+preparing new geometry off the main thread. Automatic spelling, grammar, completion
+and Writing Tools are disabled in this read-only source view.
 
 Managed checkouts additionally show their source branch, ahead/behind counts,
 landing verdict, and warnings. **Compare with source** uses the recorded merge base.
