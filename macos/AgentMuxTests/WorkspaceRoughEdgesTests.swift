@@ -230,6 +230,10 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         // Check the production installation, including its already-installed
         // path. AppKit retains the installed Services menu; a detached menu
         // made for inspection is not necessarily its registered instance.
+        // Start with a fresh installed menu: restoring shared menu fixtures in
+        // earlier tests can accumulate AppKit's Dictation and Emoji items.
+        // Keep checking every shortcut in this menu, including system items.
+        NSApp.mainMenu = nil
         WorkspaceMenu.install(target: delegate)
         let menu = try XCTUnwrap(NSApp.mainMenu)
         WorkspaceMenu.install(target: delegate)
@@ -254,14 +258,18 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
                        #selector(AppDelegate.toggleWorkspaceInspector(_:)))
 
         // No two items claim the same key.
-        func keys(_ menu: NSMenu) -> [String] {
-            menu.items.flatMap { item -> [String] in
-                let own = item.keyEquivalent.isEmpty ? [] : ["\(item.keyEquivalentModifierMask.rawValue):\(item.keyEquivalent)"]
-                return own + (item.submenu.map(keys) ?? [])
+        func keys(_ menu: NSMenu, path: String = "") -> [(key: String, path: String)] {
+            menu.items.flatMap { item -> [(key: String, path: String)] in
+                let itemPath = path + "/" + item.title
+                let own: [(key: String, path: String)] = item.keyEquivalent.isEmpty ? [] : [
+                    ("\(item.keyEquivalentModifierMask.rawValue):\(item.keyEquivalent)", itemPath),
+                ]
+                return own + (item.submenu.map { keys($0, path: itemPath) } ?? [])
             }
         }
         let all = keys(menu)
-        XCTAssertEqual(all.count, Set(all).count, "a key equivalent is listed twice")
+        let duplicates = Dictionary(grouping: all, by: \.key).filter { $0.value.count > 1 }
+        XCTAssertTrue(duplicates.isEmpty, "duplicate key equivalents: \(duplicates)")
     }
 
     // MARK: VoiceOver
