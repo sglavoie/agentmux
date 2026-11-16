@@ -204,3 +204,5 @@ initialize, append, or configure operation, using the pre-change settings;
 earlier settings are never inferred. Reports themselves do not migrate data.
 Reset starts fresh history with the preserved preferences. Header replacements,
 including settings changes, mission updates, and compaction, retain this history.
+Malformed history remains unknown after these writes and later event appends;
+changing settings cannot turn malformed metadata into eligibility evidence.

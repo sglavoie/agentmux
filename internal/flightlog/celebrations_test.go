@@ -249,7 +249,7 @@ func TestConcurrentConfigureAppendRetainsCelebrationHistory(t *testing.T) {
 }
 
 func TestMalformedCelebrationHistoryIsUnknownAndPreserved(t *testing.T) {
-	for _, raw := range []string{`null`, `[]`, `{}`, `[{"effective_at":"invalid","enabled":true,"celebrations":true}]`, `[{"effective_at":"2026-10-26T10:00:00Z","enabled":"true","celebrations":true}]`, `[{"effective_at":"2026-10-26T10:00:00Z","enabled":true}]`} {
+	for _, raw := range []string{`null`, `[]`, `{}`, `{"effective_at":"2026-10-26T10:00:00Z","enabled":true,"celebrations":true}`, `[{"effective_at":"invalid","enabled":true,"celebrations":true}]`, `[{"effective_at":"2026-10-26T10:00:00Z","enabled":"true","celebrations":true}]`, `[{"effective_at":"2026-10-26T10:00:00Z","enabled":true}]`} {
 		t.Run(raw, func(t *testing.T) {
 			ctx := context.Background()
 			store := Store{Path: filepath.Join(t.TempDir(), "flight.jsonl"), clock: func() time.Time { return at(20) }}
@@ -261,22 +261,56 @@ func TestMalformedCelebrationHistoryIsUnknownAndPreserved(t *testing.T) {
 			if err := os.WriteFile(store.Path, append([]byte(headerJSON), append(eventJSON, '\n')...), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			for range 2 {
+			initial, err := store.Load(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			preserveRaw := initial.CelebrationHistory[0].invalidHistory != nil
+			assertUnknown := func() {
+				t.Helper()
+				snap, err := (Store{Path: store.Path}).Load(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				report := Build(snap, Filters{}, at(30), nil)
+				if report.Lifetime.Launches == 0 {
+					t.Fatal("malformed history hid the launch")
+				}
+				requireEligibility(t, report, "first-flight", nil)
+				requireEligibility(t, report, "branching-out", nil)
+				if preserveRaw {
+					data, err := os.ReadFile(store.Path)
+					if err != nil || !bytes.Contains(data, []byte(raw)) {
+						t.Fatalf("malformed metadata lost: %s (read error: %v)", data, err)
+					}
+				}
+			}
+			assertUnknown()
+			for i := range 2 {
 				off, on := false, true
 				if err := store.Configure(ctx, nil, &off); err != nil {
 					t.Fatal(err)
 				}
+				assertUnknown()
 				if err := store.Configure(ctx, nil, &on); err != nil {
 					t.Fatal(err)
 				}
-				snap, err := store.Load(ctx)
+				assertUnknown()
+				fork := event(fmt.Sprintf("fork-%d", i), "rs-fork", "launch", "", 25)
+				fork.Operation = "fork"
+				if err := store.Append(ctx, fork); err != nil {
+					t.Fatal(err)
+				}
+				assertUnknown()
+				_, err := store.SaveMission(ctx, Mission{Title: "Ship", Project: "API", Status: "shipped"}, at(27))
 				if err != nil {
 					t.Fatal(err)
 				}
-				requireEligibility(t, Build(snap, Filters{}, at(30), nil), "first-flight", nil)
+				assertUnknown()
 				if err := store.Compact(ctx); err != nil {
 					t.Fatal(err)
 				}
+				assertUnknown()
 			}
 		})
 	}

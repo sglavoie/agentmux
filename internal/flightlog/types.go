@@ -75,9 +75,10 @@ func (h CelebrationHistory) MarshalJSON() ([]byte, error) {
 		return h[0].invalidHistory, nil
 	}
 	if len(h) > 1 && h[0].invalidHistory != nil {
-		// Keep malformed evidence as an invalid entry when appending a change.
-		// A later decode still fails closed and retains all transition bytes.
-		records := []json.RawMessage{h[0].invalidHistory}
+		// An invalid top-level object may be a valid individual record. Keep
+		// an array-valued sentinel so decoding still fails closed, preserving
+		// the original metadata and all subsequent transition bytes.
+		records := []json.RawMessage{json.RawMessage(`[]`), h[0].invalidHistory}
 		for _, record := range h[1:] {
 			data, err := json.Marshal(record)
 			if err != nil {
