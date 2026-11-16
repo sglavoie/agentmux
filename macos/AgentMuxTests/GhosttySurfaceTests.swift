@@ -248,7 +248,7 @@ final class GhosttySurfaceTests: XCTestCase {
         view = nil
         view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", "printf 'first\\nsecond\\nthird\\n'; exec cat"])))
+            arguments: ["-c", "printf '\\033[2J\\033[Hfirst\\nsecond\\nthird\\n'; exec cat"])))
         window.contentView = view
         ghosttyWait("the text to be drawn") {
             view.performBindingAction("select_all")
@@ -262,12 +262,13 @@ final class GhosttySurfaceTests: XCTestCase {
 
     /// VoiceOver reads a terminal as a text area holding the screen's text,
     /// with the selection.
+    // Clear any login banner so these grid coordinates belong to the fixture.
     func testATerminalIsATextAreaAssistiveTechnologiesCanRead() throws {
         window.contentView = nil
         view = nil
         view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", "printf 'first\\nsécond\\nthird\\n'; exec cat"])))
+            arguments: ["-c", "printf '\\033[2J\\033[Hfirst\\nsécond\\nthird\\n'; exec cat"])))
         window.contentView = view
         XCTAssertTrue(view.isAccessibilityElement())
         XCTAssertEqual(view.accessibilityRole(), .textArea)
@@ -305,7 +306,7 @@ final class GhosttySurfaceTests: XCTestCase {
         view = nil
         view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", "printf 'first\\nsécond 日本 😀 x\\nthird\\n'; exec cat"])))
+            arguments: ["-c", "printf '\\033[2J\\033[Hfirst\\nsécond 日本 😀 x\\nthird\\n'; exec cat"])))
         window.contentView = view
         XCTAssertTrue(window.makeFirstResponder(view))
         window.reportsKey = true

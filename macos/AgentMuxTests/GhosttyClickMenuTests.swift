@@ -12,9 +12,10 @@ final class GhosttyClickMenuTests: XCTestCase {
         let window = GhosttyTestWindow.offscreen()
         defer { window.close() }
         let enable = mouseModes.isEmpty ? "" : "printf '" + mouseModes.map { "\\033[?\($0)h" }.joined() + "'; "
+        // Keep coordinate-based assertions independent of login banners.
         let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", enable + "printf 'hello world\\n'; exec cat"])))
+            arguments: ["-c", enable + "printf '\\033[2J\\033[Hhello world\\n'; exec cat"])))
         window.contentView = view
         defer { window.contentView = nil }
         XCTAssertTrue(window.makeFirstResponder(view))

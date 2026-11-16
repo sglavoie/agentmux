@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "reviewer": "Codex executing agent; decoded images inspected with view_image and guest Safari playback inspected through Parallels screenshots",
+  "reviewed_at": "2026-11-16T16:56:24.719154+00:00",
+  "app_source_revision": "d526b878b7b5eb88e4fc939c137b482dd61f377a",
+  "playback_review": "Both final encodings played side by side in Safari inside the Parallels macOS guest. Observed matching Needs attention and Briefing playback states, MP4 completion at 38.2 seconds, and GIF looping back to the opening scene. All seven scene frames decoded independently from each final file were visually inspected at the timestamps below.",
+  "artifacts": [
+    {
+      "path": "docs/media/desktop-demo.gif",
+      "old_sha256": "344c8a97ec10eba465101199f557f3f8f7cc55c7eb99bef705f444b453c61dc4",
+      "new_sha256": "503115313a124db24fe738486771bed17b376e968d621ddb8833551e3a89b460",
+      "byte_size": 2443639,
+      "frame_rate": "10/1",
+      "scenes": [
+        {
+          "id": "story-lines",
+          "timestamp_seconds": 2,
+          "frame_index": 20,
+          "result": "pass",
+          "observations": "documentation \u2014 copilot has the legible story line \"$ make check (scripted; no command is executed)\"; release-page \u2014 codex reads \"Scripted demo data \u00b7 Release page ready for review.\" Claude is working with Bash and an elapsed timer."
+        },
+        {
+          "id": "needs-attention",
+          "timestamp_seconds": 6,
+          "frame_index": 60,
+          "result": "pass",
+          "observations": "api-service \u2014 claude has moved from Working into Needs attention above documentation and release-page. Its full scripted make check story line is readable, and the main terminal shows Do you want to proceed? with 1. Yes and 2. No."
+        },
+        {
+          "id": "first-option",
+          "timestamp_seconds": 10,
+          "frame_index": 100,
+          "result": "pass",
+          "observations": "The native Answer a Prompt panel identifies api-service / Claude and Do you want to proceed? Actual button rows read 1 Yes and 2 No. More keys has a right-pointing collapsed chevron; the raw scripted prompt remains visible."
+        },
+        {
+          "id": "second-option",
+          "timestamp_seconds": 14.5,
+          "frame_index": 145,
+          "result": "pass",
+          "observations": "The same panel has advanced to documentation / Copilot, asking Do you want to run this command? Its actual buttons read 1 Yes and 2 No, with More keys still collapsed. Answer sent is visible behind the panel; api-service is now under Working."
+        },
+        {
+          "id": "all-caught-up",
+          "timestamp_seconds": 20.4,
+          "frame_index": 204,
+          "result": "pass",
+          "observations": "The answer panel is closed. The unobstructed receipt reads All caught up \u00b7 1 session is still working. Documentation shows Release checks passed / Ready for review. The separate Waiting inspector contains only the completed release-page turn, not either permission prompt."
+        },
+        {
+          "id": "briefing-collapsed",
+          "timestamp_seconds": 25,
+          "frame_index": 250,
+          "result": "pass",
+          "observations": "Briefing is scoped to All projects and says Waiting now \u00b7 0. Three right-pointing collapsed rows are visible with no expanded event children: documentation \u2014 copilot and api-service \u2014 claude each read 1 permission request \u00b7 latest: Working, just now; release-page \u2014 codex reads 1 turn finished \u00b7 latest: Turn finished, just now. Labeled scripted supporting output is on the right."
+        },
+        {
+          "id": "checkout-review",
+          "timestamp_seconds": 32,
+          "frame_index": 320,
+          "result": "pass",
+          "observations": "Checkout Changes appears beside api-service \u2014 claude. The server.py diff legibly adds the /health path and status 200, retaining status 404. The changed-file list is hidden; the terminal still identifies scripted demo data."
+        }
+      ]
+    },
+    {
+      "path": "docs/media/desktop-demo.mp4",
+      "old_sha256": "eecf955d6c039bc826db2b9f3a79e3a1025f26d9f11739b056ef12fc822730bb",
+      "new_sha256": "bf71a7f137d3e30affb769b774046bc57c21959ea0a12b04d846d5181836e011",
+      "byte_size": 723247,
+      "frame_rate": "30/1",
+      "scenes": [
+        {
+          "id": "story-lines",
+          "timestamp_seconds": 2,
+          "frame_index": 60,
+          "result": "pass",
+          "observations": "documentation \u2014 copilot has the legible story line \"$ make check (scripted; no command is executed)\"; release-page \u2014 codex reads \"Scripted demo data \u00b7 Release page ready for review.\" Claude is working with Bash and an elapsed timer."
+        },
+        {
+          "id": "needs-attention",
+          "timestamp_seconds": 6,
+          "frame_index": 180,
+          "result": "pass",
+          "observations": "api-service \u2014 claude has moved from Working into Needs attention above documentation and release-page. Its full scripted make check story line is readable, and the main terminal shows Do you want to proceed? with 1. Yes and 2. No."
+        },
+        {
+          "id": "first-option",
+          "timestamp_seconds": 10,
+          "frame_index": 300,
+          "result": "pass",
+          "observations": "The native Answer a Prompt panel identifies api-service / Claude and Do you want to proceed? Actual button rows read 1 Yes and 2 No. More keys has a right-pointing collapsed chevron; the raw scripted prompt remains visible."
+        },
+        {
+          "id": "second-option",
+          "timestamp_seconds": 14.5,
+          "frame_index": 435,
+          "result": "pass",
+          "observations": "The same panel has advanced to documentation / Copilot, asking Do you want to run this command? Its actual buttons read 1 Yes and 2 No, with More keys still collapsed. Answer sent is visible behind the panel; api-service is now under Working."
+        },
+        {
+          "id": "all-caught-up",
+          "timestamp_seconds": 20.4,
+          "frame_index": 612,
+          "result": "pass",
+          "observations": "The answer panel is closed. The unobstructed receipt reads All caught up \u00b7 1 session is still working. Documentation shows Release checks passed / Ready for review. The separate Waiting inspector contains only the completed release-page turn, not either permission prompt."
+        },
+        {
+          "id": "briefing-collapsed",
+          "timestamp_seconds": 25,
+          "frame_index": 750,
+          "result": "pass",
+          "observations": "Briefing is scoped to All projects and says Waiting now \u00b7 0. Three right-pointing collapsed rows are visible with no expanded event children: documentation \u2014 copilot and api-service \u2014 claude each read 1 permission request \u00b7 latest: Working, just now; release-page \u2014 codex reads 1 turn finished \u00b7 latest: Turn finished, just now. Labeled scripted supporting output is on the right."
+        },
+        {
+          "id": "checkout-review",
+          "timestamp_seconds": 32,
+          "frame_index": 960,
+          "result": "pass",
+          "observations": "Checkout Changes appears beside api-service \u2014 claude. The server.py diff legibly adds the /health path and status 200, retaining status 404. The changed-file list is hidden; the terminal still identifies scripted demo data."
+        }
+      ]
+    }
+  ]
+}

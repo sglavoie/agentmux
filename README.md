@@ -13,10 +13,11 @@ and managed Git worktrees. It can also start and supervise prepared
 ![Agent Mux desktop app: follow live work, answer two waiting agents, catch up in Briefing, and review checkout changes.](docs/media/desktop-demo.gif)
 
 The real macOS workspace with scripted demo data. Follow a working session’s
-live tool and timer, watch it move to Needs attention, clear two prompts through
-the answer queue, catch up in Briefing, and review checkout changes.
+live tool, timer and sidebar story lines, watch it move to Needs attention,
+clear two prompts with real option buttons, read collapsed Briefing summaries,
+and review checkout changes.
 [Watch the full-resolution video](docs/media/desktop-demo.mp4) ·
-[Record the desktop demo](scripts/demo/README.md#desktop-recording-on-a-physical-mac)
+[Record the desktop demo](scripts/demo/README.md#desktop-recording)
 
 ## First session
 

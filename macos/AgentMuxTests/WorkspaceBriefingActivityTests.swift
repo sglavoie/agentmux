@@ -381,7 +381,7 @@ extension WorkspaceBriefingActivityTests {
     }
 
     @available(macOS 14.4, *)
-    private func visibleText(_ window: NSWindow) async throws -> [VNRecognizedTextObservation] {
+    private func visibleText(_ window: NSWindow, captureName: String) async throws -> [VNRecognizedTextObservation] {
         try await settle()
         let content = try await SCShareableContent.currentProcess
         let target = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(window.windowNumber) })
@@ -391,11 +391,18 @@ extension WorkspaceBriefingActivityTests {
         config.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
         config.ignoreShadowsSingleWindow = true; config.showsCursor = false
         let capture = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        let png = try XCTUnwrap(NSBitmapImageRep(cgImage: capture).representation(using: .png, properties: [:]))
+        let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+        attachment.name = captureName
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        try png.write(to: URL(fileURLWithPath: "/tmp/agentmux-briefing-" + captureName + ".png"))
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate; request.recognitionLanguages = ["en-US"]
         request.minimumTextHeight = 0.005
         let enlarged = CIImage(cgImage: capture).transformed(by: CGAffineTransform(scaleX: 3, y: 3))
         let ocrImage = CIContext().createCGImage(enlarged, from: enlarged.extent) ?? capture
+        try useCPUForTestOCR(request)
         try VNImageRequestHandler(cgImage: ocrImage).perform([request])
         return request.results ?? []
     }
@@ -417,21 +424,28 @@ extension WorkspaceBriefingActivityTests {
             model.refresh(); runner.release()
             let window = host(model, grouped: false)
             defer { model.close(); window.close() }
-            let before = try await visibleText(window)
+            let before = try await visibleText(window, captureName: event + "-before")
             let text = before.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
             XCTAssertTrue(text.contains(title), text)
             XCTAssertFalse(text.contains(reason), "Reason leaked before Diagnostics: \(text)")
             XCTAssertFalse(text.contains("Recorded event:"), text)
             let label = try XCTUnwrap(before.first { $0.topCandidates(1).first?.string.contains("Diagnostics") == true }, text)
             // OCR locates the real disclosure, avoiding an unavailable in-process SwiftUI AX tree.
-            let box = label.boundingBox
-            let point = NSPoint(x: box.minX * window.frame.width + 6, y: box.midY * window.frame.height)
+            // Fast and accurate OCR disagree about whether the chevron belongs
+            // to the word's box. Locate the word itself, then click its disclosure.
+            let recognized = try XCTUnwrap(label.topCandidates(1).first)
+            let range = try XCTUnwrap(recognized.string.range(of: "Diagnostics"))
+            let box = try XCTUnwrap(recognized.boundingBox(for: range)).boundingBox
+            let point = NSPoint(x: box.minX * window.frame.width - 8, y: box.midY * window.frame.height)
             let up = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0))
             let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
             NSApp.postEvent(up, atStart: true); window.sendEvent(down)
-            let after = try await visibleText(window).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+            // Wait for the disclosure's expansion before capturing its final row.
+            try await Task.sleep(for: .milliseconds(500))
+            XCTAssertEqual(model.selected?.traceID, "trace")
+            let after = try await visibleText(window, captureName: event + "-after").compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
             XCTAssertTrue(after.contains(reason), after)
             XCTAssertTrue(after.contains("Recorded event:"), after)
             XCTAssertTrue(after.contains("Trace:"), after)

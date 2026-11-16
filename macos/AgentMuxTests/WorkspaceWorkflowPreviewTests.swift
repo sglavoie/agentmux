@@ -340,7 +340,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
     }
 
     private func render<V: View>(_ view: V, name: String, width: CGFloat = 1000, height: CGFloat = 680,
-                                 dark: Bool = false, highContrast: Bool = false, expected: [String] = []) async throws {
+                                 dark: Bool = false, highContrast: Bool = false, expected: [String] = [], exactCopiedCode: [String] = []) async throws {
         guard #available(macOS 14.4, *) else { throw XCTSkip("Own-window capture requires macOS 14.4") }
         let host = NSHostingView(rootView: view)
         let style: NSWindow.StyleMask = [.titled, .resizable]
@@ -362,10 +362,21 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         XCTAssertEqual(window.frame.height, height, accuracy: 1, "Content must fit the requested window height")
         // Capture this process's fixture window directly. A separate
         // screencapture process needs permissions that this own-window API does not.
-        let content = try await SCShareableContent.currentProcess
-        let target = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(window.windowNumber)
-            && $0.owningApplication?.processID == ProcessInfo.processInfo.processIdentifier })
-        let filter = SCContentFilter(desktopIndependentWindow: target)
+        func currentFilter() async throws -> SCContentFilter {
+            let content = try await SCShareableContent.currentProcess
+            let target = try XCTUnwrap(content.windows.first { $0.windowID == CGWindowID(window.windowNumber)
+                && $0.owningApplication?.processID == ProcessInfo.processInfo.processIdentifier })
+            return SCContentFilter(desktopIndependentWindow: target)
+        }
+        // WindowServer can still report the opening animation's dimensions
+        // after AppKit has its final frame. Wait for the exact capture geometry;
+        // retain the pixel-size assertions below rather than scaling a stale crop.
+        var filter = try await currentFilter()
+        for _ in 0..<10 {
+            if abs(filter.contentRect.width - width) < 0.5 && abs(filter.contentRect.height - height) < 0.5 { break }
+            try await Task.sleep(for: .milliseconds(100))
+            filter = try await currentFilter()
+        }
         let configuration = SCStreamConfiguration()
         configuration.width = Int(filter.contentRect.width * CGFloat(filter.pointPixelScale))
         configuration.height = Int(filter.contentRect.height * CGFloat(filter.pointPixelScale))
@@ -384,11 +395,48 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         let scale = CGFloat(3)
         let enlarged = CIImage(cgImage: capture).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let ocrImage = CIContext().createCGImage(enlarged, from: enlarged.extent) ?? capture
+        try useCPUForTestOCR(recognition)
         try VNImageRequestHandler(cgImage: ocrImage).perform([recognition])
         let visible = (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         XCTAssertGreaterThan(visible.count, 40, "Capture must contain rendered content, not just a window frame")
         let read = Self.ocrFolded(visible)
-        for text in expected { XCTAssertTrue(read.contains(Self.ocrFolded(text)), "Missing visible \(text) in \(name): \(visible)") }
+        let cpuOCR = ProcessInfo.processInfo.environment["AMX_TEST_OCR_MODE"] == "cpu-fast"
+        for text in expected {
+            // Only explicitly paired code-copy checks tolerate OCR losing an
+            // underscore; ordinary labels and filenames retain exact matching.
+            let copiedIdentifier = cpuOCR && exactCopiedCode.contains(text)
+            let observed = copiedIdentifier ? read.replacingOccurrences(of: "_", with: "") : read
+            let wanted = Self.ocrFolded(text)
+            XCTAssertTrue(observed.contains(copiedIdentifier ? wanted.replacingOccurrences(of: "_", with: "") : wanted),
+                          "Missing visible \(text) in \(name): \(visible)")
+        }
+        if cpuOCR, !exactCopiedCode.isEmpty {
+            // Preserve exact identifier coverage despite OCR's punctuation loss:
+            // exercise the rendered code blocks' real Copy buttons as well.
+            func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
+            let pasteboard = NSPasteboard.general
+            let saved = (pasteboard.pasteboardItems ?? []).map { item in
+                item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
+            }
+            defer {
+                pasteboard.clearContents()
+                let items = saved.map { values in
+                    let item = NSPasteboardItem()
+                    for (type, data) in values { item.setData(data, forType: type) }
+                    return item
+                }
+                pasteboard.writeObjects(items)
+            }
+            var copied: [String] = []
+            for button in descendants(host).compactMap({ $0 as? NSButton })
+                where button.accessibilityIdentifier() == "transcript-copy-code" {
+                button.performClick(nil)
+                copied.append(pasteboard.string(forType: .string) ?? "")
+            }
+            for identifier in exactCopiedCode {
+                XCTAssertTrue(copied.contains { $0.contains(identifier) }, "Rendered code must copy exact \(identifier)")
+            }
+        }
         let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
         attachment.name = name
         attachment.lifetime = .keepAlways
@@ -523,7 +571,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         for dark in [false, true] {
             try await render(ScrollView { WorkspaceTranscriptText(text: prose, terms: ["next_cursor"]).padding(16) },
                              name: "transcript-rich-\(dark)", width: 720, height: 450, dark: dark,
-                             expected: ["Pagination review", "next_cursor", "Copy code", "return page.Cursor"])
+                             expected: ["Pagination review", "next_cursor", "Copy code", "return page.Cursor"], exactCopiedCode: ["next_cursor"])
         }
     }
 }
@@ -793,7 +841,7 @@ extension WorkspaceWorkflowPreviewTests {
                 HStack { Text("Conversation History").font(.headline); Spacer(); WorkspaceReadingMenu(preferences: preferences) }
                 ScrollView { WorkspaceTranscriptText(text: text, terms: [], preferences: preferences).padding(8) }
             }.padding(12), name: "usability-code-\(dark)", width: 720, height: 450, dark: dark,
-                expected: ["Validate a page", "Copy code", "readEvents", "Record the result", "next_cursor"])
+                expected: ["Validate a page", "Copy code", "readEvents", "Record the result", "next_cursor"], exactCopiedCode: ["next_cursor"])
         }
     }
 }

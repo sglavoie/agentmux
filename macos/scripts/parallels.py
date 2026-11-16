@@ -42,6 +42,7 @@ def main():
     commands = parser.add_subparsers(dest="operation", required=True)
     commands.add_parser("sync")
     run = commands.add_parser("run")
+    run.add_argument("--gui", action="store_true", help="Use the guest GUI session (required for clipboard tests)")
     run.add_argument("command", nargs=argparse.REMAINDER)
     get = commands.add_parser("get")
     get.add_argument("source", help="Path relative to the guest checkout")
@@ -102,6 +103,8 @@ def main():
             command = command[1:]
         if not command:
             parser.error("run requires a command")
+        if args.gui:
+            command = ["python3", "macos/scripts/run-in-gui.py", "/usr/bin/env", *command]
         # The guest's own tools and preferences; never inherit host session IDs
         # or route recursively to a different machine. Ad-hoc signing belongs
         # only to this isolated guest, not to the installed host app.
@@ -109,6 +112,11 @@ def main():
             "/usr/bin/env", "-u", "AMX_MAC_TEST_HOST", "-u", "AMX_UI_TEST_REMOTE_ONLY",
             "-u", "AMX_RUNTIME_SESSION_ID", "-u", "TMUX", "-u", "TMUX_PANE",
             "AMX_UI_REMOTE_EXECUTION=1", "AMX_CODESIGN_IDENTITY=-",
+            "LANG=en_US.UTF-8", "LC_ALL=en_US.UTF-8",
+            "GOMAXPROCS=2", "GOFLAGS=-p=1",
+            # xcodebuild forwards TEST_RUNNER_ variables to the hosted process
+            # with that prefix stripped; ordinary shell variables are filtered.
+            "TEST_RUNNER_AMX_TEST_OCR_MODE=cpu-fast",
             "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer",
             f"PATH=/usr/local/agentmux/bin:/usr/local/agentmux/go/bin:/opt/homebrew/bin:{checkout}/macos/Vendor/tmux/bin:/usr/bin:/bin:/usr/sbin:/sbin",
             *command])

@@ -28,9 +28,10 @@ final class GhosttySelectionTests: XCTestCase {
         defer { ghostty.shutdown() }
         let window = GhosttyTestWindow.offscreen()
         defer { window.close() }
+        // Keep coordinate-based assertions independent of login banners.
         let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", "printf 'LINE 2990 needle-2990\\n'; exec cat"])))
+            arguments: ["-c", "printf '\\033[2J\\033[HLINE 2990 needle-2990\\n'; exec cat"])))
         window.contentView = view
         defer { window.contentView = nil }
         XCTAssertTrue(window.makeFirstResponder(view))

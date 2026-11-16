@@ -11,14 +11,16 @@ This tooling drives and captures the real macOS workspace using deterministic
 agent stand-ins. It makes no AI requests and does not load agent credentials.
 It is local tooling; never run it in GitHub Actions.
 
-The README's desktop animation and video were recorded on a separate MacBook
-Pro over SSH. They exercise the actual desktop app; terminal responses come
+The README's desktop animation and video were recorded inside the Parallels
+macOS guest. They exercise the actual desktop app; terminal responses come
 from the clearly labeled stand-ins, not live AI services.
 
 ## Prepare without opening windows
 
 Requires macOS 14.4+, Xcode, Python 3, the repository's Go/just toolchain, and
-`ffmpeg` for encoding. Build from the repository root:
+`ffmpeg` for encoding. These are commands for the recording machine; for this
+recording, invoke them through [the Parallels route](#use-the-parallels-macos-guest)
+below. Build from that machine’s repository root:
 
 ```sh
 just build
@@ -69,6 +71,13 @@ as the guest user in its private checkout under
 `~/Library/Caches/agent-mux-parallels/`. It preserves guest build/cache and
 Vendor directories. Archives avoid Parallels shared-folder symlink traversal;
 frameworks and SDKs should likewise be archived before copying into the guest.
+Use `run --gui` for commands needing the guest pasteboard or GUI bootstrap.
+The wrapper sets UTF-8 and limits Go to one package at a time with two runtime
+threads to avoid VM process-spawn timeouts. Screenshot tests use Vision’s fast
+CPU OCR because the guest lacks the Neural Engine backend required by accurate
+OCR. Expected text and test coverage remain intact. VM OCR tolerates the
+observed underscore-to-space recognition error only with an additional exact
+identifier check through the rendered code blocks’ real Copy buttons.
 The wrapper selects the guest Xcode and provisioned tools under
 `/usr/local/agentmux/` and `/opt/homebrew/`, with ad-hoc signing. `--vm` and
 `--user` override the defaults for another explicitly selected guest.
@@ -84,7 +93,7 @@ inside the guest; host grants do not apply. For example:
 python3 macos/scripts/parallels.py run python3 macos/scripts/run-in-gui.py \
   /usr/bin/open -n -W 'macos/build/Agent Mux Demo Recorder.app' --args \
   --request-permissions /tmp/agentmux-demo-permissions.json
-python3 macos/scripts/parallels.py run just check
+python3 macos/scripts/parallels.py run --gui just check
 python3 macos/scripts/parallels.py run just mac-test
 python3 macos/scripts/parallels.py run just readme-media-check
 ```
@@ -152,7 +161,11 @@ cat /tmp/agentmux-demo-permissions.json
 ```
 
 Both values must be `true`. Launching the signed recorder through `open` keeps
-these grants associated with its app identity rather than the terminal.
+these grants associated with its app identity rather than the terminal. macOS
+may also present a direct screen-access Allow dialog on first capture; finish
+that normal OS flow before recording. If input reached the demo during setup,
+stop it and create a fresh world. Preserve the signed recorder after granting
+access; rebuilding an ad-hoc binary can invalidate its permission identity.
 
 Read `bundle_id` from `WORLD/demo.json`, then run:
 
@@ -229,6 +242,12 @@ ffprobe -v error -select_streams v:0 \
 
 Keep the GIF below 8 MB and at least 10 fps. Trim duration or reduce dimensions
 before considering a frame-rate change; retain all seven review scenes below.
+The committed 38.2-second tour adds a two-second freeze at source time 19.4 s
+so the All caught up receipt stays readable, then a four-second final hold.
+For a new capture, locate its receipt using the actual scene timestamps in
+`recording.json`; split/trim there, apply `tpad=stop_mode=clone:stop_duration=2`
+to the first part, reset both PTS values and concatenate before the final hold.
+Encode the MP4 first and derive the GIF from it so both have the same timing.
 The MP4 must be 30 fps. The stream records real motion during transitions;
 constant-rate encoding repeats stationary frames when the display does not change.
 

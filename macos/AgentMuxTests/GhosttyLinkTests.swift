@@ -36,9 +36,10 @@ final class GhosttyLinkTests: XCTestCase {
         let window = GhosttyTestWindow.offscreen()
         defer { window.close() }
         let enable = mouseModes.isEmpty ? "" : "printf '" + mouseModes.map { "\\033[?\($0)h" }.joined() + "'; "
+        // Keep coordinate-based assertions independent of login banners.
         let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", enable + "printf 'link: \(Self.link)\\n'; exec cat"])))
+            arguments: ["-c", enable + "printf '\\033[2J\\033[Hlink: \(Self.link)\\n'; exec cat"])))
         window.contentView = view
         defer { window.contentView = nil }
         XCTAssertTrue(window.makeFirstResponder(view))
@@ -132,9 +133,10 @@ final class GhosttyLinkTests: XCTestCase {
         defer { ghostty.shutdown() }
         let window = GhosttyTestWindow.offscreen()
         defer { window.close() }
+        // Keep coordinate-based assertions independent of login banners.
         let view = try XCTUnwrap(ghostty.makeSurface(Ghostty.SurfaceConfiguration(
             program: URL(fileURLWithPath: "/bin/sh"),
-            arguments: ["-c", "printf '\\033[?1002h\\033[?1006h'; printf 'LINE 2990 needle-2990\\nlink: \(Self.link)\\n'; stty raw -echo; exec cat > /dev/null"])))
+            arguments: ["-c", "printf '\\033[?1002h\\033[?1006h'; printf '\\033[2J\\033[HLINE 2990 needle-2990\\nlink: \(Self.link)\\n'; stty raw -echo; exec cat > /dev/null"])))
         window.contentView = view
         defer { window.contentView = nil }
         XCTAssertTrue(window.makeFirstResponder(view))

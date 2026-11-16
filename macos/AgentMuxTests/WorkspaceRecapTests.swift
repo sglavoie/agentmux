@@ -204,6 +204,7 @@ final class WorkspaceRecapTests: XCTestCase {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
             request.recognitionLanguages = ["en-US"]
+            try useCPUForTestOCR(request)
             try VNImageRequestHandler(cgImage: capture).perform([request])
             return (request.results ?? []).compactMap { result in
                 guard let text = result.topCandidates(1).first?.string else { return nil }

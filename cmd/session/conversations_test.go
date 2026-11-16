@@ -23,6 +23,9 @@ import (
 
 func resetSessionCommandsTestState(t *testing.T) *tmuxtest.Fixture {
 	t.Helper()
+	// Runtime conversation bindings use HOME, not XDG_STATE_HOME. Keep each
+	// command fixture independent of earlier runs and the operator's registry.
+	t.Setenv("HOME", t.TempDir())
 	fixture := tmuxtest.New(t)
 	oldTmuxBackend := cli.NewTmuxBackend
 	cli.NewTmuxBackend = func() (backend.TargetLauncher, error) { return fixture.Backend, nil }

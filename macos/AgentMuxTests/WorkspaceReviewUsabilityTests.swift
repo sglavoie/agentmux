@@ -211,6 +211,7 @@ final class WorkspaceReviewUsabilityTests: XCTestCase {
             let recognition = VNRecognizeTextRequest()
             recognition.recognitionLevel = .accurate
             recognition.recognitionLanguages = ["en-US"]
+            try useCPUForTestOCR(recognition)
             try VNImageRequestHandler(cgImage: capture).perform([recognition])
             return (recognition.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
         }
