@@ -71,9 +71,24 @@ extension WorkspaceReadingPolishTests {
             NSApp.postEvent(up, atStart: true)
             window.sendEvent(down)
         }
-        try openPicker()
-        try await Task.sleep(for: .milliseconds(200))
-        let popover = try XCTUnwrap(NSApp.windows.first { $0 !== window && $0.isVisible && ($0.firstResponder as? NSTextView)?.isFieldEditor == true })
+        func waitUntil(_ description: String, _ ready: () -> Bool) async throws {
+            let deadline = ProcessInfo.processInfo.systemUptime + 3
+            while !ready(), ProcessInfo.processInfo.systemUptime < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            XCTAssertTrue(ready(), description)
+        }
+        func openAndFindPopover() async throws -> NSWindow {
+            let visibleBefore = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
+            try openPicker()
+            func candidate() -> NSWindow? {
+                NSApp.windows.first { !visibleBefore.contains($0.windowNumber) && $0.isVisible &&
+                    ($0.firstResponder as? NSTextView)?.isFieldEditor == true }
+            }
+            try await waitUntil("Picker search must acquire keyboard focus") { candidate() != nil }
+            return try XCTUnwrap(candidate())
+        }
+        let popover = try await openAndFindPopover()
         let editor = try XCTUnwrap(popover.firstResponder as? NSTextView)
         editor.insertText("Match", replacementRange: NSRange(location: NSNotFound, length: 0))
         try await Task.sleep(for: .milliseconds(100))
@@ -83,15 +98,19 @@ extension WorkspaceReadingPolishTests {
             target.sendEvent(event)
         }
         try key("\r", code: 36, in: popover)
-        try await Task.sleep(for: .milliseconds(200))
+        // Selection changes before AppKit finishes dismissing its popover.
+        // Observe the actual close/focus transition, not a fixed animation delay.
+        try await waitUntil("Choosing an available row must close the picker and restore its opener") {
+            !popover.isVisible && (window.firstResponder as? NSView)?.isDescendant(of: host) == true
+        }
         XCTAssertEqual(selected, "good")
         XCTAssertFalse(popover.isVisible)
         XCTAssertFalse((window.firstResponder as? NSTextView)?.isFieldEditor == true)
-        try openPicker()
-        try await Task.sleep(for: .milliseconds(200))
-        let reopened = try XCTUnwrap(NSApp.windows.first { $0 !== window && $0.isVisible && ($0.firstResponder as? NSTextView)?.isFieldEditor == true })
+        let reopened = try await openAndFindPopover()
         try key("\u{1b}", code: 53, in: reopened)
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitUntil("Escape must close the picker and restore its opener") {
+            !reopened.isVisible && (window.firstResponder as? NSView)?.isDescendant(of: host) == true
+        }
         XCTAssertFalse(reopened.isVisible)
         XCTAssertEqual(selected, "good", "Escape must not change the selection")
         XCTAssertTrue((window.firstResponder as? NSView)?.isDescendant(of: host) == true)

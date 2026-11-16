@@ -6,9 +6,10 @@ final class WorkspaceHistoryWindow: ReviewWindowController {
     let model: WorkspaceHistoryModel
     private var opening: (project: String, conversation: ConversationIdentity?, eventTime: String?, recapMessage: Int?)?
 
-    init(model: WorkspaceHistoryModel) {
+    init(model: WorkspaceHistoryModel, animationBehavior: NSWindow.AnimationBehavior = .default) {
         self.model = model
-        super.init(title: "Conversation History", autosaveName: "WorkspaceHistory", size: NSSize(width: 1000, height: 680))
+        super.init(title: "Conversation History", autosaveName: "WorkspaceHistory", size: NSSize(width: 1000, height: 680),
+                   animationBehavior: animationBehavior)
         model.revealFeedback = { [weak self] in self?.reveal() }
         model.recap.onEvidence = { [weak model] _, message in model?.revealRecapMessage(message) }
     }

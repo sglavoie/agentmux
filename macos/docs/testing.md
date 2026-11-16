@@ -42,6 +42,16 @@ Run `just mac-test Release` for timings from optimized code, and avoid concurren
 builds when collecting comparison measurements. Timings are observations rather
 than machine-dependent pass/fail thresholds.
 
+Performance fixtures that measure interaction after opening a window set that
+window's `animationBehavior` to `.none` before showing it. This excludes the
+WindowServer opening transform from typing, selection, and diff-layout budgets;
+rendering, actual resize/return operations, and wall-clock thresholds stay in the
+measurement. `WorkspaceHistoryWindow` accepts the same per-window constructor
+setting; production callers retain `.default`. Do not change system animation
+preferences or substitute CPU time for these wall-clock assertions. Popover tests
+wait for observed dismissal and opener focus instead of assuming a fixed animation
+duration.
+
 For a live trace, select Agent Mux in Instruments and record Points of Interest
 from `io.github.sglavoie.agentmux`, category `Responsiveness`. `Session switch` and
 `Command palette` measure controller work through focus assignment, excluding

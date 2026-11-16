@@ -127,6 +127,8 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         let diff = WorkspaceDiff(patch)
         let host = NSHostingView(rootView: WorkspaceDiffView(diff: diff, identity: "initial", loading: false, jump: nil, jumpSequence: 0))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 450), styleMask: [.titled], backing: .buffered, defer: false)
+        // Measure diff interaction, not an in-flight WindowServer open animation.
+        window.animationBehavior = .none
         window.isReleasedWhenClosed = false; window.contentView = host; window.orderFront(nil)
         defer { window.close() }
         var lastTick = ProcessInfo.processInfo.systemUptime, longestGap = 0.0
@@ -165,6 +167,8 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
                               reviewState: WorkspaceReviewState(defaults: defaults), wrapLines: wrap)
         }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 450), styleMask: [.titled], backing: .buffered, defer: false)
+        // Measure diff interaction, not an in-flight WindowServer open animation.
+        window.animationBehavior = .none
         window.isReleasedWhenClosed = false
         defer { window.close() }
         func find(_ view: NSView) -> WorkspaceDiffTextView? {
@@ -228,6 +232,8 @@ final class WorkspaceSeamsPolishTests: XCTestCase {
         }
         let host = NSHostingView(rootView: view("one", wrap: true))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 720, height: 450), styleMask: [.titled], backing: .buffered, defer: false)
+        // Measure diff interaction, not an in-flight WindowServer open animation.
+        window.animationBehavior = .none
         window.isReleasedWhenClosed = false; window.contentView = host; window.orderFront(nil)
         defer { window.close() }
         try await waitForLayout(host)

@@ -18,15 +18,18 @@ class ReviewWindowController: NSObject, NSWindowDelegate {
     let title: String
     private let autosaveName: String
     private let initialSize: NSSize
+    private let animationBehavior: NSWindow.AnimationBehavior
     private(set) var window: NSWindow?
     var onVisibilityChanged: (Bool) -> Void = { _ in }
     private var observers: [NSObjectProtocol] = []
     private var readingLive: Bool?
 
-    init(title: String, autosaveName: String, size: NSSize) {
+    init(title: String, autosaveName: String, size: NSSize,
+         animationBehavior: NSWindow.AnimationBehavior = .default) {
         self.title = title
         self.autosaveName = autosaveName
         self.initialSize = size
+        self.animationBehavior = animationBehavior
         super.init()
         for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification] {
             observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
@@ -92,6 +95,7 @@ class ReviewWindowController: NSObject, NSWindowDelegate {
     private func makeWindow() -> NSWindow {
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: initialSize),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.animationBehavior = animationBehavior
         WorkspaceWindowChrome.adopt(window)
         window.title = title
         window.minSize = Self.minimumSize

@@ -213,7 +213,9 @@ extension WorkspaceReviewRefinementTests {
             return .finished(.init(status: 0, stdout: Data("{\"schema_version\":1,\"data\":".utf8) + payload + Data("}".utf8), stderr: Data()))
         }
         let model = WorkspaceHistoryModel(command: { amx })
-        let window = WorkspaceHistoryWindow(model: model)
+        // Keep search/result rendering in the budget, while excluding the OS
+        // window-opening transform (which may wait on WindowServer fences).
+        let window = WorkspaceHistoryWindow(model: model, animationBehavior: .none)
         // Rendering remains part of the measurement; the fixture never invokes an installed binary.
         window.show(project: "API", conversation: nil)
         defer { window.window?.close() }
@@ -221,7 +223,7 @@ extension WorkspaceReviewRefinementTests {
         model.query = "needle"; model.scheduleSearch()
         while model.loading || model.reading || model.entries.isEmpty {
             try await Task.sleep(for: .milliseconds(10))
-            if Date().timeIntervalSince(typedAt) > 3 { XCTFail("history did not settle"); return }
+            if Date().timeIntervalSince(typedAt) > 3 { XCTFail("history did not settle: loading=\(model.loading) reading=\(model.reading) entries=\(model.entries.count) error=\(model.error ?? "none") transcriptError=\(model.transcriptError ?? "none")"); return }
         }
         window.window?.layoutIfNeeded()
         let typing = Date().timeIntervalSince(typedAt) * 1000
