@@ -72,7 +72,8 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
         early.backgroundColor = .red
         defer { early.close() }
         WorkspaceWindowChrome.adopt(early)
-        XCTAssertNil(early.appearance)
+        XCTAssertNil(workspace.constructedWindow)
+        XCTAssertEqual(early.appearance?.name, .darkAqua)
 
         try assertChrome([0x1E, 0x1E, 0x2E], appearance: .darkAqua)
         XCTAssertEqual(early.appearance?.name, .darkAqua)
@@ -98,7 +99,7 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
     }
 
     func testReviewAndSetupConstructorsAdoptThemeWhileSettingsFollowsSystem() throws {
-        try assertChrome([0x1E, 0x1E, 0x2E], appearance: .darkAqua)
+        XCTAssertNil(workspace.constructedWindow)
         let review = AppearanceReviewWindow(title: "Appearance test", autosaveName: suite,
                                             size: NSSize(width: 800, height: 600))
         review.present()
@@ -121,6 +122,11 @@ final class WorkspaceWindowAppearanceTests: XCTestCase {
         for window in [reviewWindow, setup.panel] { XCTAssertEqual(window.appearance?.name, .aqua) }
         app.preferencesModel.preferences.matchWindowToTerminal = false
         for window in [reviewWindow, setup.panel, settings.window] { XCTAssertNil(window.appearance) }
+        app.preferencesModel.preferences.terminalTheme = TerminalTheme("Catppuccin Mocha")
+        for window in [reviewWindow, setup.panel] { XCTAssertNil(window.appearance) }
+        app.preferencesModel.preferences.matchWindowToTerminal = true
+        for window in [reviewWindow, setup.panel] { XCTAssertEqual(window.appearance?.name, .darkAqua) }
+        XCTAssertNil(workspace.constructedWindow, "adoption and theme changes must not build the workspace window")
     }
 
     func testInitialDarkThemeAndPreferenceChangeToLightKeepGeometryAndResponder() throws {

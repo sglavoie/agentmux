@@ -11,7 +11,8 @@ appearance even when the workspace's own appearance differs. Every other
 Agent Mux window and workspace popover follows the same light or dark appearance,
 including History, Briefing, Checkout Changes, ASL Runs, Flight Log, and answer,
 launch, resume, setup, and handoff panels. These keep their standard background
-colors. Settings keeps the system appearance. Turning matching off makes every
+colors. This also applies to windows opened from the menu bar before the workspace
+has been shown. Settings keeps the system appearance. Turning matching off makes every
 window follow the system. If Ghostty cannot supply a background, the workspace
 uses stock chrome and the other windows follow the system.
 

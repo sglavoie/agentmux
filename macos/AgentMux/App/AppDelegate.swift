@@ -253,9 +253,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, StatusItemDelegate, Wo
     /// running is reported, not replaced.
     func restoreWorkspace() {
         let restoration = WorkspaceRestoration.load()
+        // Publish the terminal appearance for menu-bar windows even when the
+        // workspace stays closed. The controller does not build its window.
+        let controller = workspaceController()
         guard launchReopensWorkspace else { return }
         Self.logger.notice("workspace: reopening at launch (was open: \(restoration.windowOpen), place: \(restoration.place?.encoded ?? "none", privacy: .public))")
-        let controller = workspaceController()
         controller.show()
         if restoration.fullScreen { controller.enterFullScreen() }
         if !controller.state.rows.isEmpty { controller.showDashboardUnlessPlaced() }

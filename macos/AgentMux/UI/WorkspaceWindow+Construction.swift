@@ -196,12 +196,13 @@ extension WorkspaceWindowController {
     }
 
     func refreshTerminalAppearance() {
-        guard let window = constructedWindow else { return }
         let background = matchWindowToTerminal ? terminalBackground() : nil
+        let appearance = background.flatMap { NSAppearance(named: Self.appearance(for: $0)) }
+        WorkspaceWindowChrome.setThemedAppearance(appearance)
+        guard let window = constructedWindow else { return }
         window.titlebarAppearsTransparent = background != nil
         window.backgroundColor = background ?? .windowBackgroundColor
-        window.appearance = background.flatMap { NSAppearance(named: Self.appearance(for: $0)) }
-        WorkspaceWindowChrome.setThemedAppearance(window.appearance)
+        window.appearance = appearance
         // The headers and both sidebars draw over the same configured color.
         // Keep the stock light sidebar correction only when matching is off
         // or Ghostty could not supply a color.

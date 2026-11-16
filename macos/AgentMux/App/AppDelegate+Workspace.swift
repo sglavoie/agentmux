@@ -47,6 +47,7 @@ extension AppDelegate {
         }
         controller.readConfirmation = { [weak self] done in self?.readWorkspaceConfirmation(done) }
         workspace = controller
+        controller.refreshTerminalAppearance()
         if !Self.isRunningTests {
             controller.onLayoutChanged = { WorkspaceRestoration.saveLayout($0) }
             controller.onGroupContextsChanged = { WorkspaceRestoration.saveGroupContexts($0) }
