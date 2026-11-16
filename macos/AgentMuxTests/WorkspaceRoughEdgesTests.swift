@@ -222,7 +222,7 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         let savedServices = NSApp.servicesMenu
         let savedWindows = NSApp.windowsMenu
         defer {
-            NSApp.mainMenu = savedMain
+            if NSApp.mainMenu !== savedMain { NSApp.mainMenu = savedMain }
             NSApp.servicesMenu = savedServices
             NSApp.windowsMenu = savedWindows
         }
@@ -230,10 +230,6 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         // Check the production installation, including its already-installed
         // path. AppKit retains the installed Services menu; a detached menu
         // made for inspection is not necessarily its registered instance.
-        // Start with a fresh installed menu: restoring shared menu fixtures in
-        // earlier tests can accumulate AppKit's Dictation and Emoji items.
-        // Keep checking every shortcut in this menu, including system items.
-        NSApp.mainMenu = nil
         WorkspaceMenu.install(target: delegate)
         let menu = try XCTUnwrap(NSApp.mainMenu)
         WorkspaceMenu.install(target: delegate)
@@ -257,7 +253,14 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
         XCTAssertEqual(view.items.first { $0.identifier == WorkspaceMenu.toggleInspectorIdentifier }?.action,
                        #selector(AppDelegate.toggleWorkspaceInspector(_:)))
 
-        // No two items claim the same key.
+        // Check every shortcut in a fresh production tree with the same
+        // preferences applied by install. The shared installed menu above
+        // also contains AppKit's Dictation and Emoji items, which accumulate
+        // when earlier tests restore menu fixtures; those are not items made
+        // by WorkspaceMenu. Keep the registered Services identity check on
+        // the installed menu rather than replacing it with this detached tree.
+        let shortcutMenu = WorkspaceMenu.make(target: delegate)
+        WorkspaceShortcut.apply(AppPreferences.load(), to: shortcutMenu)
         func keys(_ menu: NSMenu, path: String = "") -> [(key: String, path: String)] {
             menu.items.flatMap { item -> [(key: String, path: String)] in
                 let itemPath = path + "/" + item.title
@@ -267,7 +270,7 @@ final class WorkspaceRoughEdgesTests: XCTestCase {
                 return own + (item.submenu.map { keys($0, path: itemPath) } ?? [])
             }
         }
-        let all = keys(menu)
+        let all = keys(shortcutMenu)
         let duplicates = Dictionary(grouping: all, by: \.key).filter { $0.value.count > 1 }
         XCTAssertTrue(duplicates.isEmpty, "duplicate key equivalents: \(duplicates)")
     }
