@@ -2,10 +2,10 @@
 
 The README embeds `docs/media/desktop-demo.gif` and links to the full-resolution
 `docs/media/desktop-demo.mp4`. Both show the real macOS workspace with scripted
-agent data. Follow [Desktop recording on a physical Mac](#desktop-recording-on-a-physical-mac)
+agent data. Follow [Desktop recording](#desktop-recording)
 to reproduce them.
 
-## Desktop recording on a physical Mac
+## Desktop recording
 
 This tooling drives and captures the real macOS workspace using deterministic
 agent stand-ins. It makes no AI requests and does not load agent credentials.
@@ -43,6 +43,56 @@ stand-ins emit real managed hooks and receive terminal input through tmux.
 Their terminal output and saved transcripts explicitly identify themselves as
 scripted demo data. Recap generation is disabled in the demo configuration;
 Briefing reads these synthetic transcripts and real local activity records.
+
+## Use the Parallels macOS guest
+
+For session 9, the operator selected the running `macOS` Parallels guest
+(UUID `854c91e2-d015-4367-9693-dea2bde7c75d`), user `sglavoie`. All tests,
+media checks and UI actions must run there. Keep the host's
+`macos/build/.demo-remote-only` marker in place.
+
+`macos/scripts/parallels.py` uses guest tools and the shared Home folder; SSH
+is unnecessary. It never falls back to executing a command on the host.
+Provision Xcode, Go, just, uv, golangci-lint and ffmpeg/ffprobe inside the guest.
+Pinned GhosttyKit/tmux products can be transferred with the initial sync:
+
+```sh
+python3 macos/scripts/parallels.py sync
+python3 macos/scripts/parallels.py run just build
+python3 macos/scripts/parallels.py run just mac-app
+python3 macos/scripts/parallels.py run sh scripts/demo/build-recorder.sh
+python3 macos/scripts/parallels.py run python3 scripts/demo/world.py prepare
+```
+
+Every `run` refreshes source files, including Git metadata, before executing
+as the guest user in its private checkout under
+`~/Library/Caches/agent-mux-parallels/`. It preserves guest build/cache and
+Vendor directories. Archives avoid Parallels shared-folder symlink traversal;
+frameworks and SDKs should likewise be archived before copying into the guest.
+The wrapper selects the guest Xcode and provisioned tools under
+`/usr/local/agentmux/` and `/opt/homebrew/`, with ad-hoc signing. `--vm` and
+`--user` override the defaults for another explicitly selected guest.
+
+Prefix **every** remaining command in this guide with
+`python3 macos/scripts/parallels.py run`, including encoding and validation.
+Use the world path returned by the guest. To launch UI in its logged-in GUI
+session, pass `python3 macos/scripts/run-in-gui.py` before `open` or the
+`world.py launch-app` command. Privacy permissions must be granted normally
+inside the guest; host grants do not apply. For example:
+
+```sh
+python3 macos/scripts/parallels.py run python3 macos/scripts/run-in-gui.py \
+  /usr/bin/open -n -W 'macos/build/Agent Mux Demo Recorder.app' --args \
+  --request-permissions /tmp/agentmux-demo-permissions.json
+python3 macos/scripts/parallels.py run just check
+python3 macos/scripts/parallels.py run just mac-test
+python3 macos/scripts/parallels.py run just readme-media-check
+```
+
+Retrieve new artifacts with `python3 macos/scripts/parallels.py get
+RELATIVE_GUEST_PATH LOCAL_DIRECTORY`. Retrieve generated media before the next
+`run`, which refreshes tracked files from the host. Stop the isolated guest
+world with `run python3 scripts/demo/world.py stop WORLD` when finished.
 
 ## Use a separate Mac over SSH
 
@@ -158,7 +208,7 @@ Before replacing either artifact, save its SHA-256 for the review record:
 shasum -a 256 docs/media/desktop-demo.gif docs/media/desktop-demo.mp4
 ```
 
-After reviewing the captured frames, encode locally:
+After reviewing the captured frames, encode on the selected recording guest or Mac:
 
 ```sh
 # Preserve the whole capture and hold checkout review for four more seconds.

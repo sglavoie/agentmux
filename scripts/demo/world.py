@@ -206,7 +206,9 @@ def launch_app(root, data):
         run(["defaults", "write", data["bundle_id"], key, "-string", value])
     for key, value in {"amxUseAppNotifications": "false", "amxOpenWorkspaceAtLaunch": "true"}.items():
         run(["defaults", "write", data["bundle_id"], key, "-bool", value])
-    run(["defaults", "write", data["bundle_id"], "amxWorkspaceSidebarWidth", "-float", "320"])
+    run(["defaults", "write", data["bundle_id"], "amxWorkspaceSidebarWidth", "-float", "420"])
+    layout = json.dumps({"preferredWidth": 550, "collapsed": False}).encode().hex()
+    run(["defaults", "write", data["bundle_id"], "amxReview.activityLayout", "-data", layout])
     run(["defaults", "write", data["bundle_id"], "amxEnvironment", "-dict",
          *[item for pair in environment(root).items() for item in pair]])
     with (root / "logs/app.log").open("a") as log:

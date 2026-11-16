@@ -164,6 +164,15 @@ struct Recorder {
         try pressButton(description, in: AXUIElementCreateApplication(pid))
     }
 
+    @MainActor static func waitForButton(_ description: String, pid: pid_t) async throws {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            if button(description, in: AXUIElementCreateApplication(pid)) != nil { return }
+            try await pause(0.1)
+        }
+        throw DemoError.message("Timed out waiting for demo button: \(description)")
+    }
+
     static func pressOption(pid: pid_t) throws {
         guard let panel = answerPanel(pid: pid) else {
             throw DemoError.message("Expected the prompt answer panel before answering")
@@ -327,10 +336,12 @@ struct Recorder {
                     scene = "Briefing: collapsed session summaries across projects"
                 default:
                     try key(13, flags: .maskCommand, pid: app.processIdentifier)
+                    try await pause(0.8)
+                    try await waitForButton("Toggle Inspector", pid: app.processIdentifier)
                     try pressButton("Toggle Inspector", pid: app.processIdentifier)
                     try await selectProject("api-service", pid: app.processIdentifier)
                     try pressMenu("splitWorkspaceChanges:", pid: app.processIdentifier)
-                    try await pause(0.5)
+                    try await waitForButton("Hide changed files", pid: app.processIdentifier)
                     try pressButton("Hide changed files", pid: app.processIdentifier)
                     scene = "Review checkout changes beside the agent"
                 }
@@ -389,7 +400,7 @@ struct Recorder {
                 }
                 CGImageDestinationAddImage(destination, image, nil)
                 guard CGImageDestinationFinalize(destination) else { throw DemoError.message("Could not finish scene frame") }
-                events.append(["second": second, "scene": scene, "foreground": app.isActive, "window_title": title])
+                events.append(["second": second, "captured_at_seconds": Date().timeIntervalSince(begin), "scene": scene, "foreground": app.isActive, "window_title": title])
                 print(scene)
             }
             let delay = 32 - Date().timeIntervalSince(begin)
