@@ -413,7 +413,10 @@ extension WorkspaceWindowController {
             }), index < self.sidebar.numberOfRows else { return }
             let indexes = IndexSet(integer: index)
             self.reload(indexes)
-            self.sidebar.noteHeightOfRows(withIndexesChanged: indexes)
+            NSAnimationContext.runAnimationGroup { context in
+                if !self.sidebarMotionEnabled() { context.duration = 0 }
+                self.sidebar.noteHeightOfRows(withIndexesChanged: indexes)
+            }
         }
         let sessions = delegate?.store.managedSessions ?? []
         let asl = MenuBuilder.waitingBySession(delegate?.store.snapshot?.asl.waiting ?? [], sessions: sessions).bySession

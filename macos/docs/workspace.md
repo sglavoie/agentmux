@@ -116,7 +116,8 @@ ASL answer panel work the same either way.
   with unchanged icons and timestamps. Unparsed prompts, failed reads, ASL
   questions, and compact rows show no story. Disconnected feeds start no reads.
   `WorkspaceStories` guards obsolete completions; its callback refreshes only
-  the affected row and its height (16 extra points). Working rows instead
+  the affected row and its height (16 extra points). Story height changes apply
+  without animation when Reduce Motion is on. Working rows instead
   show the current tool name (or **Working**), elapsed busy time, and branch,
   for example `Bash · 1:35 · main`. The time measures the uninterrupted busy
   stretch, not the individual tool call. It uses `M:SS` below one hour, `hMM`
