@@ -55,6 +55,15 @@ media checks and UI actions must run there. Keep the host's
 
 `macos/scripts/parallels.py` uses guest tools and the shared Home folder; SSH
 is unnecessary. It never falls back to executing a command on the host.
+Each invocation retains its script, atomic start claim, stdout/stderr and guest
+exit receipt under the printed `~/.cache/amx-prl/run-*` directory. Recognized
+Parallels transport failures before guest start receive up to five launch
+attempts, guarded by an atomic claim so a delayed attempt cannot run twice.
+A guest completion receipt preserves the actual command exit status, including
+test failures, even if transport loses the result. A started command without
+a receipt fails closed and is never retried: inspect its logs and the guest
+PID in `claimed/pid` before taking any further action. Output is retained during
+execution and replayed when the invocation returns.
 Provision Xcode, Go, just, uv, golangci-lint and ffmpeg/ffprobe inside the guest.
 Pinned GhosttyKit/tmux products can be transferred with the initial sync:
 

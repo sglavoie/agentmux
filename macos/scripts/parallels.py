@@ -12,27 +12,83 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 REPO = Path(__file__).resolve().parents[2]
 
 
+def write_guest_script(command, directory, shared):
+    """Claim an invocation before any side effect, and publish its real result."""
+    q = shlex.quote
+    script = directory / "command.sh"
+    script.write_text("\n".join([
+        "#!/bin/sh",
+        "cd " + q(str(shared)) + " || exit 125",
+        # mkdir is atomic even if an ambiguous transport failure launches the
+        # retained script late. A second invocation cannot execute the payload.
+        "mkdir claimed 2>/dev/null || exit 125",
+        "echo $$ > claimed/pid",
+        "trap 'code=$?; printf \"%s\\n\" \"$code\" > result.tmp; mv result.tmp result' EXIT",
+        "(" + command + "\n) > stdout 2> stderr",
+        "exit $?",
+        "",
+    ]))
+    return script
+
+
+def execute_guest(vm, directory, shared, attempts=5):
+    """Retry only a proven pre-start transport error, never a command failure."""
+    transport_errors = ("Invalid argument", "PRL_ERR_IO_STOPPED")
+    command = ["prlctl", "exec", vm, f'/bin/sh "{shared}/command.sh"']
+    for attempt in range(attempts):
+        result = subprocess.run(command, capture_output=True)
+        # Keep transport diagnostics separate from guest command output.
+        prefix = directory / f"transport-{attempt + 1}"
+        prefix.with_suffix(".stdout").write_bytes(result.stdout)
+        prefix.with_suffix(".stderr").write_bytes(result.stderr)
+        prefix.with_suffix(".status").write_text(f"{result.returncode}\n")
+        for name, stream in (("stdout", sys.stdout), ("stderr", sys.stderr)):
+            path = directory / name
+            if path.exists():
+                with path.open("rb") as output:
+                    while chunk := output.read(65536):
+                        stream.buffer.write(chunk)
+                stream.flush()
+        receipt = directory / "result"
+        if receipt.exists():
+            # The transport may fail after the command finishes. The atomic
+            # guest receipt, including nonzero test exits, is authoritative.
+            return int(receipt.read_text().strip())
+        diagnostic = result.stderr.decode(errors="replace")
+        if (directory / "claimed").exists():
+            raise RuntimeError(
+                f"Guest command started but completion is unknown; NOT retried. "
+                f"Inspect {directory} and guest PID in claimed/pid. {diagnostic}")
+        if (result.returncode == 0 or
+                not any(error in diagnostic for error in transport_errors) or
+                attempt == attempts - 1):
+            sys.stdout.buffer.write(result.stdout)
+            sys.stderr.buffer.write(result.stderr)
+            raise RuntimeError(f"Guest command did not publish a completion receipt; retained {directory}")
+        print(f"parallels: transport failed before guest start; retry {attempt + 2}/{attempts}",
+              file=sys.stderr, flush=True)
+        time.sleep(1)
+    raise AssertionError("unreachable")
+
+
 def guest(vm, command):
-    # Guest tools impose their own command parser/length limit. Pass a small
-    # script path, with all shell quoting handled by the guest's actual shell.
+    # Guest tools impose their own command parser/length limit. Keep a short
+    # script path and durable launch/result evidence on the shared filesystem.
     staging = Path.home() / ".cache/amx-prl"
     staging.mkdir(parents=True, exist_ok=True)
-    fd, filename = tempfile.mkstemp(prefix="cmd-", suffix=".sh", dir=staging)
-    shared = PurePosixPath("/Volumes/My Shared Files/Home") / Path(filename).relative_to(Path.home())
+    directory = Path(tempfile.mkdtemp(prefix="run-", dir=staging))
+    shared = PurePosixPath("/Volumes/My Shared Files/Home") / directory.relative_to(Path.home())
     if any(c in str(shared) for c in '\n\r"$`\\'):
-        os.close(fd)
-        Path(filename).unlink()
         raise ValueError("unsupported shell character in shared checkout path")
-    with os.fdopen(fd, "w") as script:
-        script.write("#!/bin/sh\ntrap " + shlex.quote("rm -f " + shlex.quote(str(shared))) + " EXIT\n" + command + "\n")
-    # Replace the coordinator process so prlctl retains its original terminal
-    # transport. The guest removes only this invocation's command file on exit.
-    os.execvp("prlctl", ["prlctl", "exec", vm, f'/bin/sh "{shared}"'])
+    write_guest_script(command, directory, shared)
+    print(f"parallels: invocation evidence: {directory}", flush=True)
+    return execute_guest(vm, directory, shared)
 
 
 def main():
