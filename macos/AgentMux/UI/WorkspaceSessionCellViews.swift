@@ -44,6 +44,21 @@ final class WorkspaceRowCellView: NSTableCellView {
     var onSelectTerminal: ((String) -> Void)?
     var onCloseTerminal: ((String) -> Void)?
     var onTerminalMenu: ((String) -> NSMenu?)?
+    /// Which line of a session group was focused last: the session's own
+    /// harness or one of its terminals. A thin bar sits to its left, so
+    /// switching away still shows where each session was left.
+    enum FocusHint: Equatable {
+        case session
+        case terminal(String)
+    }
+    /// The bar left of the item that last had focus in this line's group.
+    let focusHintBar = NSView()
+    private(set) var focusHint: FocusHint?
+    private var focusHintConstraints: [NSLayoutConstraint] = []
+    private var focusHintGap: NSLayoutConstraint?
+    private weak var focusHintAnchor: NSView?
+    private let textStack = NSStackView()
+    static let focusHintWidth: CGFloat = 2
 
     init() {
         super.init(frame: .zero)
@@ -84,7 +99,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         // Not the cell's textField: the source list restyles that outlet,
         // drawing it dark on the selected line's pill in a dark appearance
         // and faded on a session's color, whatever color the line sets.
-        let text = NSStackView(views: [nameHeading, titleHeading, detailLabel, storyLabel])
+        let text = textStack
+        [nameHeading, titleHeading, detailLabel, storyLabel].forEach(text.addArrangedSubview)
         text.orientation = .vertical
         text.alignment = .leading
         text.spacing = 1
@@ -97,7 +113,8 @@ final class WorkspaceRowCellView: NSTableCellView {
         addSubview(contentStack)
         terminalTabs.orientation = .horizontal
         terminalTabs.distribution = .fillEqually
-        terminalTabs.spacing = 2
+        // Room between tabs, and before the first, for the focus hint bar.
+        terminalTabs.spacing = 6
         terminalTabs.translatesAutoresizingMaskIntoConstraints = false
         terminalTabs.isHidden = true
         addSubview(terminalTabs)
@@ -116,6 +133,13 @@ final class WorkspaceRowCellView: NSTableCellView {
         keyLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         keyLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(keyLabel)
+        focusHintBar.wantsLayer = true
+        focusHintBar.layer?.cornerRadius = Self.focusHintWidth / 2
+        focusHintBar.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        focusHintBar.translatesAutoresizingMaskIntoConstraints = false
+        focusHintBar.setAccessibilityElement(false)
+        focusHintBar.isHidden = true
+        addSubview(focusHintBar)
         NSLayoutConstraint.activate([
             glyphLabel.widthAnchor.constraint(equalToConstant: 20),
             contentStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
@@ -132,7 +156,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         ])
         clearOfClose = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor, constant: -2)
         clearOfKey = contentStack.trailingAnchor.constraint(lessThanOrEqualTo: keyLabel.leadingAnchor, constant: -4)
-        terminalTabsLeading = terminalTabs.leadingAnchor.constraint(equalTo: contentStack.trailingAnchor, constant: 4)
+        terminalTabsLeading = terminalTabs.leadingAnchor.constraint(equalTo: contentStack.trailingAnchor, constant: 6)
         terminalTabsTrailing = terminalTabs.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28)
         compactContentWidth = contentStack.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.45)
         closeButton.alphaValue = 0
@@ -183,8 +207,52 @@ final class WorkspaceRowCellView: NSTableCellView {
         for button in compactTerminalButtons { button.isCurrent = button.terminalID == id }
     }
 
+    /// Puts the focus hint bar left of the harness's text, or of a terminal
+    /// tab shown on this line; nil hides it. A terminal this line does not
+    /// show falls back to the harness.
+    func showFocusHint(_ hint: FocusHint?) {
+        var resolved = hint
+        var anchor: NSView? = hint == nil ? nil : textStack
+        if case let .terminal(id)? = hint {
+            if let button = compactTerminalButtons.first(where: { $0.terminalID == id }) { anchor = button }
+            else { resolved = .session }
+        }
+        // Rebuilt tabs drop constraints to the old button; anchor again then.
+        guard resolved != focusHint || anchor !== focusHintAnchor || focusHintGap?.isActive == false else { return }
+        focusHint = resolved
+        focusHintAnchor = anchor
+        NSLayoutConstraint.deactivate(focusHintConstraints)
+        focusHintConstraints = []
+        focusHintGap = nil
+        focusHintBar.isHidden = anchor == nil
+        guard let anchor else { return }
+        let gap = focusHintBar.trailingAnchor.constraint(equalTo: anchor.leadingAnchor, constant: -focusHintSpacing)
+        focusHintGap = gap
+        focusHintConstraints = [
+            focusHintBar.widthAnchor.constraint(equalToConstant: Self.focusHintWidth),
+            gap,
+            focusHintBar.centerYAnchor.constraint(equalTo: anchor.centerYAnchor),
+            focusHintBar.heightAnchor.constraint(equalTo: anchor.heightAnchor, multiplier: 0.8),
+        ]
+        NSLayoutConstraint.activate(focusHintConstraints)
+    }
+
+    /// The bar sits centered in the gap before what it marks.
+    private var focusHintSpacing: CGFloat {
+        let room = focusHint == .session || focusHint == nil ? contentStack.spacing : terminalTabs.spacing
+        return max((room - Self.focusHintWidth) / 2, 1)
+    }
+
     func setStateGlyphOutsidePill(_ outside: Bool) {
         contentStack.spacing = outside ? 10 : 6
+        focusHintGap?.constant = -focusHintSpacing
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            focusHintBar.layer?.backgroundColor = NSColor.controlAccentColor.cgColor
+        }
     }
 
     private func showUtilityGlyph(_ glyph: String) {
@@ -221,6 +289,7 @@ final class WorkspaceRowCellView: NSTableCellView {
         stateImage.show("")
         setStateGlyphOutsidePill(false)
         showCompactTerminals([], selectedID: nil)
+        showFocusHint(nil)
         onSelectTerminal = nil
         onCloseTerminal = nil
         onTerminalMenu = nil

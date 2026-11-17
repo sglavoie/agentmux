@@ -190,6 +190,13 @@ ASL answer panel work the same either way.
   tabs beside their session, saving a row for each terminal. The setting is
   kept for the next launch; the regular layout remains the default. Each tab
   has a × that closes only its terminal.
+- **Focus hint.** Each session group (a session and the terminals beside it)
+  remembers which of its lines last had focus: the harness or one terminal.
+  A thin accent bar sits left of that line (the session's text, a compact
+  tab, or a terminal's own row in the regular layout), so switching to
+  another session with a click or ⌘1–⌘9 still shows where each one was left.
+  `groupFocus` keeps it for as long as the app runs; a closed terminal's
+  hint goes back to the harness.
 - **Dragging.** Press a session's row and drag it to move it among its
   project's sessions; the terminals beside it go with it. The order is a
   `WorkspaceOrder`, kept in the `amxWorkspaceSessionOrder` preference, and a

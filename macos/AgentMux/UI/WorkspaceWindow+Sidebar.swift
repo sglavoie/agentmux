@@ -58,6 +58,8 @@ extension WorkspaceWindowController {
         }
         let about = Set(views.all.compactMap(\.aboutRuntimeSessionID))
         sessionNames = sessionNames.filter { listed.contains($0.key) || about.contains($0.key) }
+        // A closed terminal's ordinal can be reused; never mark its successor.
+        groupFocus = groupFocus.filter { views.view($0.value) != nil }
         let own = views.all.filter { view in
             (showOverviewInSidebar || view.kind != .overview)
                 && (view.besideRuntimeSessionID.map { !listed.contains($0) } ?? true)
@@ -242,7 +244,9 @@ extension WorkspaceWindowController {
         for (index, item) in items.enumerated() where item == .navigation {
             (sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceNavigationCellView)?.select(viewSelection)
         }
+        noteGroupFocus()
         syncCompactTerminalTabs()
+        syncFocusHints()
         let wanted = shownLine.map { IndexSet(integer: $0) } ?? IndexSet()
         guard sidebar.selectedRowIndexes != wanted else { return }
         applying = true
@@ -257,6 +261,41 @@ extension WorkspaceWindowController {
                   let cell = sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceRowCellView
             else { continue }
             configureCompactTabs(in: cell, for: row)
+        }
+    }
+
+    /// Remembers which line of the shown session's group has focus: one of
+    /// its terminals, or the harness itself.
+    func noteGroupFocus() {
+        if let viewSelection {
+            guard let session = views.view(viewSelection)?.besideRuntimeSessionID else { return }
+            groupFocus[session] = viewSelection
+        } else if let session = state.selection?.runtimeSessionID, !reviewSelected {
+            groupFocus[session] = nil
+        }
+    }
+
+    /// Where a line's focus hint goes, if the line belongs to a session group.
+    func focusHint(for item: Item) -> WorkspaceRowCellView.FocusHint? {
+        switch item {
+        case let .row(row):
+            guard let session = row.embeddedRuntimeSessionID else { return nil }
+            guard let terminal = groupFocus[session], views.view(terminal) != nil else { return .session }
+            // A terminal listed on a line of its own carries the hint instead.
+            return compactSidebar ? .terminal(terminal) : nil
+        case let .view(view):
+            guard !compactSidebar, let session = view.besideRuntimeSessionID,
+                  groupFocus[session] == view.id else { return nil }
+            return .session
+        case .navigation, .section, .overview, .group:
+            return nil
+        }
+    }
+
+    private func syncFocusHints() {
+        for (index, item) in items.enumerated() where index < sidebar.numberOfRows {
+            (sidebar.view(atColumn: 0, row: index, makeIfNecessary: false) as? WorkspaceRowCellView)?
+                .showFocusHint(focusHint(for: item))
         }
     }
 
@@ -476,6 +515,7 @@ extension WorkspaceWindowController {
                       program: programTitles[view.id], bell: ringingViews.contains(view.id),
                       progress: progresses[view.id])
             cell.onClose = { [weak self] in self?.closeView(view.id) }
+            cell.showFocusHint(focusHint(for: items[line]))
             return cell
         case let .group(group):
             let cell = tableView.makeView(withIdentifier: WorkspaceGroupCellView.identifier, owner: nil) as? WorkspaceGroupCellView
@@ -497,6 +537,7 @@ extension WorkspaceWindowController {
             } else {
                 cell.showCompactTerminals([], selectedID: nil)
             }
+            cell.showFocusHint(focusHint(for: items[line]))
             let current = state.row(row.key) != nil
             cell.alphaValue = current ? 1 : 0.5
             cell.closeButton.isEnabled = current

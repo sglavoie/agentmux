@@ -243,6 +243,50 @@ extension WorkspaceWindowTests {
         XCTAssertTrue(expanded.compactTerminalButtons.isEmpty)
     }
 
+    /// Each session group keeps a bar beside the line it last had focus on,
+    /// harness or terminal, after the operator switches to another session.
+    func testSessionGroupsKeepAFocusHintOnTheirLastFocusedLine() throws {
+        app.store.apply(snapshot: F.snapshot(sessions))
+        let work = try row("api", "work")
+        let other = try XCTUnwrap(workspace.state.rows.first { $0.key != work.key })
+        workspace.setCompactSidebar(true)
+        workspace.activate(work)
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        XCTAssertTrue(workspace.openTerminalBesideSession())
+        let terminals = workspace.views.terminals(beside: F.runtimeID(1))
+        func cell(_ key: AttentionCycler.Key) throws -> WorkspaceRowCellView {
+            try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: try index(of: key), makeIfNecessary: true) as? WorkspaceRowCellView)
+        }
+        XCTAssertTrue(workspace.showView(terminals[1].id))
+        workspace.activate(other)
+        XCTAssertEqual(try cell(work.key).focusHint, .terminal(terminals[1].id))
+        XCTAssertFalse(try cell(work.key).focusHintBar.isHidden)
+        XCTAssertEqual(try cell(other.key).focusHint, .session, "a session never left its harness keeps the hint there")
+        workspace.window.layoutIfNeeded()
+        let marked = try cell(work.key)
+        let bar = marked.focusHintBar.convert(marked.focusHintBar.bounds, to: marked)
+        let tab = marked.compactTerminalButtons[1].convert(marked.compactTerminalButtons[1].bounds, to: marked)
+        XCTAssertLessThanOrEqual(bar.maxX, tab.minX)
+        XCTAssertGreaterThan(bar.maxX, tab.minX - 6)
+        XCTAssertGreaterThan(bar.height, 0)
+
+        workspace.activate(work)
+        workspace.activate(other)
+        XCTAssertEqual(try cell(work.key).focusHint, .session, "returning to the harness moves the hint back")
+
+        workspace.setCompactSidebar(false)
+        XCTAssertTrue(workspace.showView(terminals[0].id))
+        workspace.activate(other)
+        XCTAssertNil(try cell(work.key).focusHint, "a terminal on a line of its own carries the hint")
+        let line = try XCTUnwrap(workspace.items.firstIndex(of: .view(terminals[0])))
+        let terminalCell = try XCTUnwrap(workspace.sidebar.view(atColumn: 0, row: line, makeIfNecessary: true) as? WorkspaceRowCellView)
+        XCTAssertEqual(terminalCell.focusHint, .session)
+
+        workspace.confirmBeforeClosing = false
+        workspace.closeView(terminals[0].id)
+        XCTAssertNil(workspace.groupFocus[F.runtimeID(1)], "a closed terminal's hint is forgotten")
+    }
+
     func testCompactTerminalTabsReceiveClicksAcrossSessionStateFlashes() throws {
         workspace.setCompactSidebar(true)
         workspace.window.orderFront(nil)

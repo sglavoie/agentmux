@@ -380,6 +380,11 @@ final class WorkspaceWindowController: NSObject, NSWindowDelegate, NSTableViewDa
     /// The utility view the pane shows, by `WorkspaceUtilityView.id`. It and
     /// `state.selection` are never both set.
     var viewSelection: String?
+    /// The terminal each session's group last had focus on, by runtime
+    /// session; a session without an entry was last on its own harness.
+    /// The sidebar marks that line with a thin bar so the operator sees
+    /// where each session was left. Kept until the terminal closes.
+    var groupFocus: [String: String] = [:]
     var viewTerminals: [String: WorkspaceTerminal] = [:]
     /// The Dashboard or Overview whose program exited; remade when asked for.
     var endedViews: Set<String> = []
