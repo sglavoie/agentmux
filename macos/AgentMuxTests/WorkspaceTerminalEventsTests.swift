@@ -82,8 +82,8 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
         XCTAssertEqual(beeps, 0, "a session out of view is not heard")
         XCTAssertEqual(attention, 0)
         XCTAssertEqual(workspace.ringingSessions, [F.runtimeID(1)])
-        XCTAssertTrue(try cell("work").titleLabel.stringValue.hasSuffix(WorkspaceRowCellView.bellGlyph))
-        XCTAssertFalse(try cell("personal").titleLabel.stringValue.hasSuffix(WorkspaceRowCellView.bellGlyph))
+        XCTAssertTrue(try cell("work").titleLabel.stringValue.contains(WorkspaceRowCellView.bellGlyph))
+        XCTAssertFalse(try cell("personal").titleLabel.stringValue.contains(WorkspaceRowCellView.bellGlyph))
         XCTAssertTrue(try XCTUnwrap(cell("work").accessibilityLabel()).contains("bell"))
 
         workspace.terminalRangBell(personal, systemBell: false)
@@ -99,7 +99,7 @@ final class WorkspaceTerminalEventsTests: XCTestCase {
 
         workspace.activate(try row("work"))
         XCTAssertEqual(workspace.ringingSessions, [], "shown, the bell has been seen")
-        XCTAssertFalse(try cell("work").titleLabel.stringValue.hasSuffix(WorkspaceRowCellView.bellGlyph))
+        XCTAssertFalse(try cell("work").titleLabel.stringValue.contains(WorkspaceRowCellView.bellGlyph))
     }
 
     func testABellInAHiddenViewMarksItsLine() throws {

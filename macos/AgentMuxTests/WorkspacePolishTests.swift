@@ -72,6 +72,17 @@ final class WorkspacePolishTests: XCTestCase {
         XCTAssertEqual(cell.storyLabel.stringValue, "")
     }
 
+    func testMuteAndBellLeadTheTitleSoTruncationKeepsThem() {
+        var session = WorkspaceFixture.tmux(1, project: "Lyzma", profile: "personal")
+        session.muted = true
+        let row = WorkspaceSidebar.row(session, now: .now, glyphs: .fallback)
+        let cell = WorkspaceRowCellView()
+        cell.show(row, muteGlyph: "🔇", bell: true)
+        let title = cell.titleLabel.stringValue
+        XCTAssertTrue(title.hasPrefix("🔔 🔇 "), title)
+        XCTAssertTrue(title.hasSuffix(row.sessionLabel), title)
+    }
+
     func testStoriesGrowOnlyExpandedSessionRowsAndUseDelegateCommand() throws {
         workspace.window.close()
         let sidebar = PolishStoriesSidebar()

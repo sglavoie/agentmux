@@ -389,10 +389,9 @@ final class WorkspaceRowCellView: NSTableCellView {
         // A pinned or promoted session names the project it is away from.
         let namesProject = projectFirstLine ? row.name.isEmpty : (away ?? (row.pinned || row.needsAttention))
         let place = !row.name.isEmpty ? row.sidebarMetadata : namesProject ? "\(row.project) — \(row.sessionLabel)" : row.sessionLabel
-        let badge = row.pinned ? "★ " : ""
-        let label = badge + (row.harnessIcon.isEmpty ? place : "\(row.harnessIcon) \(place)")
-        let muted = row.muted ? "\(label) \(muteGlyph)" : label
-        titleLabel.stringValue = bell ? "\(muted) \(Self.bellGlyph)" : muted
+        // Mute and bell lead the line: at its end, truncation hid them.
+        let marks = [row.pinned ? "★" : "", bell ? Self.bellGlyph : "", row.muted ? muteGlyph : "", row.harnessIcon]
+        titleLabel.stringValue = (marks.filter { !$0.isEmpty } + [place]).joined(separator: " ")
         titleLabel.font = .systemFont(ofSize: 13, weight: row.name.isEmpty ? .semibold : .regular)
         detailLabel.stringValue = closing ? Self.closingDetail : row.sidebarDetail(now: now)
         storyLabel.stringValue = story
