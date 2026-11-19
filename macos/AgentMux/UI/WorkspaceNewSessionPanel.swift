@@ -4,6 +4,7 @@ import SwiftUI
 struct WorkspaceNewSessionView: View {
     @ObservedObject var model: WorkspaceNewSessionModel
     let cancel: () -> Void
+    let chooseDirectory: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -37,40 +38,61 @@ struct WorkspaceNewSessionView: View {
             }
         }.padding(20).frame(width: 460).fixedSize(horizontal: false, vertical: true)
     }
-
-    private func chooseDirectory() {
-        let panel = NSOpenPanel()
-        WorkspaceWindowChrome.adopt(panel)
-        panel.canChooseFiles = false; panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Choose"
-        panel.directoryURL = URL(fileURLWithPath: model.launchDirectory, isDirectory: true)
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        model.directory = url.path
-    }
 }
 
 @MainActor
 final class WorkspaceNewSessionPanel {
     let model: WorkspaceNewSessionModel
     let panel = NSPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+    private(set) var directoryPicker: NSOpenPanel?
+    private let makeDirectoryPicker: () -> NSOpenPanel
 
-    init(model: WorkspaceNewSessionModel) {
+    init(model: WorkspaceNewSessionModel, makeDirectoryPicker: @escaping () -> NSOpenPanel = { NSOpenPanel() }) {
         self.model = model
+        self.makeDirectoryPicker = makeDirectoryPicker
         WorkspaceWindowChrome.adopt(panel)
         panel.isReleasedWhenClosed = false
         panel.title = "New Session Below"
-        panel.contentView = NSHostingView(rootView: WorkspaceNewSessionView(model: model, cancel: { [weak self] in self?.close() }))
+        panel.contentView = NSHostingView(rootView: WorkspaceNewSessionView(
+            model: model,
+            cancel: { [weak self] in self?.close() },
+            chooseDirectory: { [weak self] in self?.chooseDirectory() }
+        ))
         if let content = panel.contentView { panel.setContentSize(content.fittingSize) }
     }
     func show(on window: NSWindow) {
-        guard panel.sheetParent == nil else { return }
+        guard panel.sheetParent == nil, window.attachedSheet == nil else { return }
         window.beginSheet(panel)
         model.load()
     }
     func close() {
         guard !model.launching else { return }
+        let picker = directoryPicker
+        directoryPicker = nil
+        picker?.cancel(nil)
         panel.sheetParent?.endSheet(panel)
         panel.orderOut(nil)
+    }
+
+    func chooseDirectory() {
+        guard panel.sheetParent != nil, panel.attachedSheet == nil, directoryPicker == nil,
+              !model.loading, !model.launching, !model.submitted else { return }
+        let picker = makeDirectoryPicker()
+        WorkspaceWindowChrome.adopt(picker)
+        picker.canChooseFiles = false
+        picker.canChooseDirectories = true
+        picker.allowsMultipleSelection = false
+        picker.prompt = "Choose"
+        picker.directoryURL = URL(fileURLWithPath: model.launchDirectory, isDirectory: true)
+        directoryPicker = picker
+        // The session dialog is already a sheet. Keep its picker in that sheet
+        // hierarchy and return to AppKit instead of nesting a modal run loop.
+        picker.beginSheetModal(for: panel) { [weak self, weak picker] response in
+            MainActor.assumeIsolated {
+                guard let self, let picker, self.directoryPicker === picker else { return }
+                self.directoryPicker = nil
+                if response == .OK, let url = picker.url { self.model.directory = url.path }
+            }
+        }
     }
 }

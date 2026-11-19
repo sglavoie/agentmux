@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import AgentMux
 
@@ -5,6 +6,15 @@ private final class NewSessionRunner: ASLWorkRunner {
     var pending: [() -> Void] = []
     func run<T>(_ work: @escaping () -> T, then: @escaping (T) -> Void) { pending.append { then(work()) } }
     func release() { pending.removeFirst()() }
+}
+
+private final class NewSessionDirectoryPicker: NSOpenPanel {
+    var selection: URL?
+    var completion: ((NSApplication.ModalResponse) -> Void)?
+    override var url: URL? { selection }
+    override func beginSheetModal(for window: NSWindow, completionHandler handler: @escaping (NSApplication.ModalResponse) -> Void) {
+        completion = handler
+    }
 }
 
 @MainActor
@@ -117,5 +127,102 @@ final class WorkspaceNewSessionTests: XCTestCase {
         model.load(); runner.release()
         XCTAssertFalse(model.canLaunch)
         XCTAssertEqual(model.error, "Invalid config")
+    }
+
+    func testDirectoryPickerAppearsAboveSessionSheetAndCanCancel() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let runner = NewSessionRunner()
+        let command = command { args in self.choices(args) }
+        let model = WorkspaceNewSessionModel(source: source(), command: { command }, runner: runner)
+        let dialog = WorkspaceNewSessionPanel(model: model)
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 700, height: 500),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.makeKeyAndOrderFront(nil)
+        defer { dialog.close(); window.close() }
+        dialog.show(on: window)
+        runner.release()
+        model.directory = directory.path
+        try await Task.sleep(for: .milliseconds(300))
+
+        dialog.chooseDirectory()
+        let cancelled = try XCTUnwrap(dialog.directoryPicker)
+        dialog.chooseDirectory()
+        XCTAssertTrue(dialog.directoryPicker === cancelled, "repeated clicks keep the same picker")
+        try await waitForPicker { cancelled.isVisible && cancelled.sheetParent === dialog.panel }
+        XCTAssertTrue(window.attachedSheet === dialog.panel)
+        XCTAssertFalse(cancelled.canChooseFiles)
+        XCTAssertTrue(cancelled.canChooseDirectories)
+        XCTAssertFalse(cancelled.allowsMultipleSelection)
+        cancelled.cancel(nil)
+        try await waitForPicker { dialog.directoryPicker == nil && dialog.panel.attachedSheet == nil }
+        XCTAssertEqual(model.directory, directory.path)
+        XCTAssertTrue(dialog.panel.isVisible)
+        XCTAssertTrue(model.canLaunch)
+    }
+
+    func testDirectoryPickerSelectionAndLateCompletionAfterClosing() throws {
+        let runner = NewSessionRunner()
+        let command = command { args in self.choices(args) }
+        let model = WorkspaceNewSessionModel(source: source(), command: { command }, runner: runner)
+        let picker = NewSessionDirectoryPicker()
+        let dialog = WorkspaceNewSessionPanel(model: model, makeDirectoryPicker: { picker })
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 700, height: 500),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { dialog.close(); window.close() }
+        dialog.show(on: window)
+        runner.release()
+        model.directory = "../chosen"
+        dialog.chooseDirectory()
+        XCTAssertEqual(picker.directoryURL?.path, model.launchDirectory)
+        picker.selection = URL(fileURLWithPath: "/new/project", isDirectory: true)
+        try XCTUnwrap(picker.completion)(.OK)
+        XCTAssertEqual(model.directory, "/new/project")
+        XCTAssertNil(dialog.directoryPicker)
+        XCTAssertTrue(model.canLaunch)
+
+        dialog.chooseDirectory()
+        let lateCompletion = try XCTUnwrap(picker.completion)
+        dialog.close()
+        picker.selection = URL(fileURLWithPath: "/late/project", isDirectory: true)
+        lateCompletion(.OK)
+        XCTAssertEqual(model.directory, "/new/project", "closing invalidates pending picker replies")
+    }
+
+    func testClosingSessionDialogDismissesItsDirectoryPicker() async throws {
+        let runner = NewSessionRunner()
+        let command = command { args in self.choices(args) }
+        let model = WorkspaceNewSessionModel(source: source(), command: { command }, runner: runner)
+        let dialog = WorkspaceNewSessionPanel(model: model)
+        let window = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 700, height: 500),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.makeKeyAndOrderFront(nil)
+        defer { dialog.close(); window.close() }
+        dialog.show(on: window)
+        runner.release()
+        model.directory = FileManager.default.temporaryDirectory.path
+        let original = model.directory
+        try await Task.sleep(for: .milliseconds(300))
+        dialog.chooseDirectory()
+        let picker = try XCTUnwrap(dialog.directoryPicker)
+        try await waitForPicker { picker.isVisible && picker.sheetParent === dialog.panel }
+        dialog.close()
+        try await waitForPicker { !picker.isVisible && window.attachedSheet == nil }
+        XCTAssertNil(dialog.directoryPicker)
+        XCTAssertEqual(model.directory, original)
+        dialog.chooseDirectory()
+        XCTAssertNil(dialog.directoryPicker, "a dismissed dialog cannot open a picker")
+    }
+
+    private func waitForPicker(_ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition(), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(condition(), "the directory picker did not finish its sheet transition")
     }
 }

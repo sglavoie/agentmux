@@ -252,7 +252,7 @@ final class WorkspaceWorkflowPreviewTests: XCTestCase {
         model.load()
         XCTAssertTrue(model.canLaunch)
         for dark in [false, true] {
-            try await render(WorkspaceNewSessionView(model: model, cancel: {}), name: "new-session-\(dark)",
+            try await render(WorkspaceNewSessionView(model: model, cancel: {}, chooseDirectory: {}), name: "new-session-\(dark)",
                              width: 460, height: 278, dark: dark,
                              expected: ["New Session Below", "Harness", "claude", "Directory", "Choose", "Cancel", "Launch Session"])
         }
