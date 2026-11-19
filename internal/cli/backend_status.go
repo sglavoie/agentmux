@@ -42,8 +42,12 @@ type TmuxServerStatus struct {
 	Directory string `json:"directory"`
 	Socket    string `json:"socket"`
 	Running   bool   `json:"running"`
-	// Binary is the executable the running server was started with.
+	// Binary is the executable recorded when Agent Mux started the server.
 	Binary string `json:"binary,omitempty"`
+	// Executable is the executable the server process is running, read from
+	// the kernel; empty when it cannot be read. It differs from Binary when
+	// something other than Agent Mux started the server on this socket.
+	Executable string `json:"executable,omitempty"`
 	// Generation identifies this run of the server (its PID and start time):
 	// it changes if and only if the server was replaced, which is what an
 	// installer compares before and after an update.
@@ -74,6 +78,8 @@ type BackendProbe struct {
 	Pinned    func(dir string) string
 	// Survey reads the running server: its panes and its generation.
 	Survey func() ([]backend.Pane, string, error)
+	// Executable reads the executable of the server process with pid.
+	Executable func(pid string) (string, error)
 }
 
 func (p BackendProbe) withDefaults() BackendProbe {
@@ -90,6 +96,9 @@ func (p BackendProbe) withDefaults() BackendProbe {
 	}
 	if p.Pinned == nil {
 		p.Pinned = tmux.PinnedBinary
+	}
+	if p.Executable == nil {
+		p.Executable = tmux.ServerExecutable
 	}
 	if p.Survey == nil {
 		p.Survey = func() ([]backend.Pane, string, error) {
@@ -175,12 +184,35 @@ func CollectBackendStatus(cfg *config.Config, cfgErr error, probe BackendProbe) 
 	if !status.Server.Running {
 		return status
 	}
+	panes, generation, surveyErr := probe.Survey()
+	if surveyErr == nil {
+		status.Server.Generation = generation
+		if pid, _, ok := strings.Cut(generation, "-"); ok {
+			if executable, err := probe.Executable(pid); err == nil {
+				status.Server.Executable = executable
+			}
+		}
+	}
 	switch {
+	case status.Server.Binary != "" && status.Server.Executable != "" && !tmux.SameExecutable(status.Server.Executable, status.Server.Binary):
+		pid, _, _ := strings.Cut(status.Server.Generation, "-")
+		status.Problems = append(status.Problems, BackendProblem{
+			Code:     "server_foreign_tmux",
+			Severity: "warning",
+			Message: fmt.Sprintf("The private tmux server (pid %s) runs %s, not the tmux Agent Mux started it with (%s): something else started a server on this socket, "+
+				"typically a plain `tmux` command run inside an agent pane while no server was running. Agent Mux does not control that server's configuration or working directory, and new agents on it can exit as soon as they start.",
+				pid, status.Server.Executable, status.Server.Binary),
+			Hint: "End it and its agents with `amx backend stop --yes`, then launch again: the next server starts with Agent Mux's tmux. Their conversations stay on disk and can be resumed.",
+		})
 	case status.Server.Binary == "":
+		message := "A private tmux server is running, but the tmux it was started with is not recorded or no longer exists."
+		if status.Server.Executable != "" {
+			message = fmt.Sprintf("A private tmux server is running %s, but Agent Mux has no record of starting it or the recorded tmux no longer exists.", status.Server.Executable)
+		}
 		status.Problems = append(status.Problems, BackendProblem{
 			Code:     "server_binary_unknown",
 			Severity: "warning",
-			Message:  "A private tmux server is running, but the tmux it was started with is not recorded or no longer exists.",
+			Message:  message,
 			Hint:     "Its agents keep running. They are reached with the tmux found now; if that fails, end them with `amx backend stop --yes` and launch again.",
 		})
 	case status.Tmux.Available && status.Server.Binary != status.Tmux.Path:
@@ -190,17 +222,15 @@ func CollectBackendStatus(cfg *config.Config, cfgErr error, probe BackendProbe) 
 			Message:  fmt.Sprintf("The running server keeps the tmux it was started with (%s). %s is used once its last agent has ended.", status.Server.Binary, status.Tmux.Path),
 		})
 	}
-	panes, generation, err := probe.Survey()
-	if err != nil {
+	if surveyErr != nil {
 		status.Problems = append(status.Problems, BackendProblem{
 			Code:     "server_unreadable",
 			Severity: unusable,
-			Message:  "The private tmux server is running but did not answer: " + err.Error(),
+			Message:  "The private tmux server is running but did not answer: " + surveyErr.Error(),
 			Hint:     "Run `amx backend status` again; if it keeps failing, `amx backend stop --yes` ends the server and every agent in it.",
 		})
 		return status
 	}
-	status.Server.Generation = generation
 	groups := map[string]bool{}
 	for _, pane := range panes {
 		groups[pane.Group.ID] = true

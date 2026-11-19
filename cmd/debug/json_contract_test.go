@@ -105,6 +105,8 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 	//
 	// v7 is the backend bump: `backend_tmux_unavailable` and
 	// `backend_server_unreadable` can be failures where launches go to tmux.
+	// `backend_server_foreign_tmux` came later at warning severity and, like
+	// `screenstate_override_invalid`, required no bump of its own.
 	if doctorReportSchemaVersion != 7 {
 		t.Fatalf("unexpected doctor JSON schema version %d; want 7", doctorReportSchemaVersion)
 	}
@@ -126,6 +128,7 @@ func TestDoctorJSONCommandSurfaceIsVersioned(t *testing.T) {
 		checkScreenCaptureFailing, checkTmuxClientTimeouts,
 		checkBackendPrefix + "tmux_unavailable", checkBackendPrefix + "server_unreadable",
 		checkBackendPrefix + "server_binary_unknown", checkBackendPrefix + "server_keeps_previous_tmux",
+		checkBackendPrefix + "server_foreign_tmux",
 	}
 	seen := make(map[string]bool, len(checks))
 	for _, check := range checks {

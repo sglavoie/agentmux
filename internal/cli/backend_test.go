@@ -123,6 +123,9 @@ func probe() BackendProbe {
 		Survey: func() ([]backend.Pane, string, error) {
 			return nil, "", errors.New("no server was running, so nothing may ask it for panes")
 		},
+		Executable: func(string) (string, error) {
+			return "", errors.New("no server process may be read in tests")
+		},
 	}
 }
 
@@ -204,7 +207,46 @@ func runningServer(pinned string, panes []backend.Pane, err error) BackendProbe 
 	p.Listening = func(string) bool { return true }
 	p.Pinned = func(string) string { return pinned }
 	p.Survey = func() ([]backend.Pane, string, error) { return panes, "4242-1760000000", err }
+	p.Executable = func(pid string) (string, error) {
+		if pid != "4242" || pinned == "" {
+			return "", errors.New("unknown process")
+		}
+		return pinned, nil
+	}
 	return p
+}
+
+func TestBackendStatusReportsAServerSomethingElseStarted(t *testing.T) {
+	live := runningServer("/runtime/tmux-3.7c/bin/tmux", nil, nil)
+	live.Executable = func(string) (string, error) { return "/opt/homebrew/Cellar/tmux/3.8/bin/tmux", nil }
+	status := CollectBackendStatus(configWithBackend("tmux"), nil, live)
+	if got := problemCodes(status); len(got) != 1 || got[0] != "warning:server_foreign_tmux" {
+		t.Fatalf("problems = %v", got)
+	}
+	problem := status.Problems[0]
+	for _, want := range []string{"pid 4242", "/opt/homebrew/Cellar/tmux/3.8/bin/tmux", "/runtime/tmux-3.7c/bin/tmux"} {
+		if !strings.Contains(problem.Message, want) {
+			t.Fatalf("message %q lacks %q", problem.Message, want)
+		}
+	}
+	if !strings.Contains(problem.Hint, "amx backend stop --yes") {
+		t.Fatalf("hint = %q", problem.Hint)
+	}
+	if status.Server.Executable != "/opt/homebrew/Cellar/tmux/3.8/bin/tmux" || !status.Usable() {
+		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestBackendStatusNamesTheExecutableOfAnUnrecordedServer(t *testing.T) {
+	live := runningServer("", nil, nil)
+	live.Executable = func(string) (string, error) { return "/usr/local/bin/tmux", nil }
+	status := CollectBackendStatus(nil, nil, live)
+	if got := problemCodes(status); len(got) != 1 || got[0] != "warning:server_binary_unknown" {
+		t.Fatalf("problems = %v", got)
+	}
+	if !strings.Contains(status.Problems[0].Message, "/usr/local/bin/tmux") {
+		t.Fatalf("message = %q", status.Problems[0].Message)
+	}
 }
 
 func TestBackendStatusCountsSessionsAndRunningAgents(t *testing.T) {

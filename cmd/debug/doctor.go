@@ -37,7 +37,9 @@ const doctorSuppressionWindow = 15 * time.Minute
 // `screen_capture_failing`, and `tmux_client_timeouts`. Two of them can be
 // failures (a tmux that cannot be used, or a server that does not answer,
 // where launches go to tmux), which is the case the policy below bumps for.
-// No identifier that predates v7 changed.
+// No identifier that predates v7 changed. `backend_server_foreign_tmux`
+// (warning: the running server is not the tmux Agent Mux started it with)
+// was added later without a bump, since it changes nothing --strict exits on.
 //
 // v6 adds the `asl_starting` (warning) finding, raised instead of
 // `asl_unavailable` while the daemon's bridge has not finished its first

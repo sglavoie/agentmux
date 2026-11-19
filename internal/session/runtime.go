@@ -7,8 +7,10 @@ import (
 	"maps"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 	"unicode"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/sglavoie/agentmux/internal/cachefile"
 	"github.com/sglavoie/agentmux/internal/config"
 	"github.com/sglavoie/agentmux/internal/conversation"
+	"github.com/sglavoie/agentmux/internal/diagnostics"
 	"github.com/sglavoie/agentmux/internal/harness"
 	"github.com/sglavoie/agentmux/internal/palette"
 	"github.com/sglavoie/agentmux/internal/runtimesession"
@@ -179,6 +182,7 @@ func launchTmux(rt Runtime, sess config.Session, acc config.Account, cfg *config
 	if err != nil {
 		return result, fmt.Errorf("launching session %q: %w", formattedTitle, err)
 	}
+	var launched tmuxLaunch
 	err = cachefile.WithExclusive(store.Path()+".launch", func() error {
 		panes, err := rt.Tmux.Discover()
 		if err != nil {
@@ -196,16 +200,136 @@ func launchTmux(rt Runtime, sess config.Session, acc config.Account, cfg *config
 		if err != nil {
 			return err
 		}
-		launched, err := startTmux(rt, store, sess, acc, cfg, formattedTitle, invocation, lin, activePaneLaunchIDs(panes))
+		launched, err = startTmux(rt, store, sess, acc, cfg, formattedTitle, invocation, lin, activePaneLaunchIDs(panes))
 		result.RuntimeSessionID, result.Group, result.Pane = launched.id, launched.Group, launched.Pane
 		return err
 	})
-	return result, err
+	if err != nil || result.Deduplicated {
+		return result, err
+	}
+	// Watched outside the launch lock, so a launch that settles does not
+	// hold up the next one for the whole window.
+	if exit, output := watchLaunchStart(rt.Tmux, launched.Pane); exit != nil {
+		recordHarnessLaunch(cfg, sess, acc, launched.invocation, "error", launchReasonExitedAtLaunch, launched.nativeReport)
+		failure := exitedAtLaunchError(formattedTitle, *exit, output)
+		var cleanup []error
+		if closeErr := rt.Tmux.Close(launched.Group); closeErr != nil && !errors.Is(closeErr, tmux.ErrServerNotRunning) {
+			cleanup = append(cleanup, fmt.Errorf("closing the exited session %s: %w", launched.id, closeErr))
+		}
+		if endErr := store.Update(func(registry *runtimesession.Registry) error {
+			_, err := registry.End(launched.id, time.Now())
+			return err
+		}); endErr != nil {
+			cleanup = append(cleanup, fmt.Errorf("ending runtime session %s: %w", launched.id, endErr))
+		}
+		return result, errors.Join(append([]error{failure}, cleanup...)...)
+	}
+	recordHarnessLaunch(cfg, sess, acc, launched.invocation, "success", "launched", launched.nativeReport, launchFlightIdentity{runtimeID: string(launched.id), operation: lin.operation})
+	return result, nil
 }
+
+// ErrAgentExitedAtLaunch marks a launch whose agent started and then exited
+// with a failure before the launch settled: the harness refused to run (a
+// working directory it cannot read, a missing executable, a broken login
+// shell), so there is no session to show.
+var ErrAgentExitedAtLaunch = errors.New("the agent exited as soon as it started")
+
+// launchSettle is how long a launch watches its new pane before reporting
+// success; launchSettlePoll is how often it looks. A harness that cannot
+// start (the incident this guards against: every pane of a tmux server whose
+// own working directory was deleted) exits well inside the window, while one
+// that is running keeps its pane alive past it. In a test binary it is zero
+// (one look at the pane), so the many tests that launch a long-running stub
+// do not each wait out the window; the tests of the watch itself set it.
+var (
+	launchSettle     = defaultLaunchSettle()
+	launchSettlePoll = 100 * time.Millisecond
+)
+
+func defaultLaunchSettle() time.Duration {
+	if testing.Testing() {
+		return 0
+	}
+	return 1500 * time.Millisecond
+}
+
+// exitedAtLaunchOutputLines bounds how much of the agent's last output an
+// exited-at-launch error quotes.
+const exitedAtLaunchOutputLines = 8
+
+// watchLaunchStart watches pane until it has run for launchSettle and
+// reports its exit when the agent failed before that: a non-zero status or a
+// signal. A clean exit (a print-mode run that finished) is not a failure, and
+// a pane the backend cannot read or no longer lists ends the watch without
+// one, since a launch is never failed on a guess.
+func watchLaunchStart(term backend.TargetLauncher, pane backend.Ref) (*backend.Exit, string) {
+	if term == nil || pane.ID == "" {
+		return nil, ""
+	}
+	deadline := time.Now().Add(launchSettle)
+	for {
+		panes, err := term.Discover()
+		if err != nil {
+			return nil, ""
+		}
+		i := slices.IndexFunc(panes, func(p backend.Pane) bool { return p.Ref.ID == pane.ID })
+		if i < 0 {
+			return nil, ""
+		}
+		if exit := panes[i].Exit; exit != nil {
+			if exit.Status == 0 && exit.Signal == "" {
+				return nil, ""
+			}
+			output, _ := term.Capture(pane, backend.ExtentAll)
+			return exit, lastOutputLines(output, exitedAtLaunchOutputLines)
+		}
+		if !time.Now().Before(deadline) {
+			return nil, ""
+		}
+		time.Sleep(launchSettlePoll)
+	}
+}
+
+// lastOutputLines keeps the last n non-blank lines of a captured pane,
+// without tmux's own "Pane is dead" line.
+func lastOutputLines(output string, n int) string {
+	var lines []string
+	for line := range strings.SplitSeq(output, "\n") {
+		line = strings.TrimRight(line, " \t\r")
+		if strings.TrimSpace(line) == "" || strings.HasPrefix(line, "Pane is dead") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func exitedAtLaunchError(title string, exit backend.Exit, output string) error {
+	how := fmt.Sprintf("exit status %d", exit.Status)
+	if exit.Signal != "" {
+		how = "signal " + exit.Signal
+	}
+	message := fmt.Sprintf("launching session %q: %v (%s)", title, ErrAgentExitedAtLaunch, how)
+	if output != "" {
+		message += ". Its last output:\n  " + strings.ReplaceAll(output, "\n", "\n  ")
+	}
+	message += "\nIf every launch ends this way, run `amx doctor`: the private tmux server may be broken, and `amx backend stop --yes` replaces it."
+	return &exitedAtLaunch{message: message}
+}
+
+type exitedAtLaunch struct{ message string }
+
+func (e *exitedAtLaunch) Error() string { return e.message }
+func (e *exitedAtLaunch) Unwrap() error { return ErrAgentExitedAtLaunch }
 
 type tmuxLaunch struct {
 	backend.Launched
-	id runtimesession.ID
+	id           runtimesession.ID
+	invocation   harness.Invocation
+	nativeReport diagnostics.NativeReport
 }
 
 func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc config.Account, cfg *config.Config, formattedTitle string, invocation harness.Invocation, lin lineage, active map[string]struct{}) (tmuxLaunch, error) {
@@ -298,8 +422,8 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 		}
 		return tmuxLaunch{}, errors.Join(failure, end())
 	}
-	recordHarnessLaunch(cfg, sess, acc, invocation, "success", "launched", nativeReport, launchFlightIdentity{runtimeID: string(id), operation: lin.operation})
-	return tmuxLaunch{Launched: launched, id: id}, nil
+	// Success is recorded by launchTmux once the agent has settled.
+	return tmuxLaunch{Launched: launched, id: id, invocation: invocation, nativeReport: nativeReport}, nil
 }
 
 // Journal reasons for a launch that failed. A reason is a word from a fixed
@@ -308,6 +432,9 @@ func startTmux(rt Runtime, store *runtimesession.Store, sess config.Session, acc
 const (
 	launchReasonLaunchFailed = "launch_failed"
 	launchReasonCommitFailed = "commit_failed"
+	// launchReasonExitedAtLaunch: the agent exited with a failure before
+	// the launch settled (ErrAgentExitedAtLaunch).
+	launchReasonExitedAtLaunch = "exited_at_launch"
 )
 
 // tmuxLaunchFailureReason names a failed tmux launch by its failure class.

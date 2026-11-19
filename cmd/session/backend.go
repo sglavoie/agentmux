@@ -166,6 +166,9 @@ func writeBackendStatus(w io.Writer, status cli.BackendStatus) {
 		if status.Server.Binary != "" {
 			p("server tmux: %s", status.Server.Binary)
 		}
+		if status.Server.Executable != "" && !tmux.SameExecutable(status.Server.Executable, status.Server.Binary) {
+			p("server process runs: %s", status.Server.Executable)
+		}
 	} else {
 		p("server: not running (the first tmux launch starts it)")
 	}

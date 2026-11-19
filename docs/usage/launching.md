@@ -153,6 +153,17 @@ tmux backend unavailable: no supported tmux found (need 3.5 or newer):
 Install tmux 3.5 or newer (`brew install tmux`), set [defaults.tmux] path in config.toml, or run Agent Mux.app, which bundles one.
 ```
 
+A launch also watches its agent for a moment before reporting success. When
+the harness exits with a failure in that time (it cannot read its working
+directory, its executable is missing, the login shell fails), the launch
+fails instead of the session appearing and vanishing: the message quotes the
+agent's last output, the session is closed, and the journal records
+`exited_at_launch`. A program that finishes cleanly in that time is not a
+failure. When every launch ends this way, run `amx doctor`; a private server
+that something else started (`backend_server_foreign_tmux`) or whose own
+working directory was deleted cannot start agents, and
+`amx backend stop --yes` replaces it.
+
 `amx doctor` reads the same setup, and with a daemon running adds what the
 daemon is doing for the sessions:
 
@@ -174,6 +185,7 @@ What they can raise, each under a stable identifier:
 | `backend_tmux_unavailable` | failure where launches go to tmux; warning while a server still runs; a note otherwise | No tmux can be used. The message names each place tried and the fix. |
 | `backend_server_unreadable` | failure where launches go to tmux, else warning | A server is listening but does not answer. Its agents are not counted and not given up on. |
 | `backend_server_binary_unknown` | warning | The running server's tmux is not recorded or no longer exists. |
+| `backend_server_foreign_tmux` | warning | The server process runs a different tmux than the one Agent Mux recorded starting it with: something else, usually a plain `tmux` run inside an agent pane while no server was running, started a server on the private socket. `amx backend stop --yes` replaces it. |
 | `backend_server_keeps_previous_tmux` | note | The server runs the tmux it was started with; a newer one is used after its last agent ends. |
 | `runtime_reconcile_failing` | warning | Three or more passes in a row could not read a server or the registry (`failure_class` says which: `timeout`, `command_failed`, `registry_unreadable`, ...). Agents that stop are not noticed until one succeeds. |
 | `runtime_reconcile_stale` | warning | No pass finished for thirty seconds past its due time: the daemon's maintenance loop is stalled. |
